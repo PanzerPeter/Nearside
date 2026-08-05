@@ -1,0 +1,5 @@
+STREAM-ASR/data/
+node_modules/
+dist/
+.env
+.env.local
