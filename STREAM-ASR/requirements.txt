@@ -1,0 +1,25 @@
+--extra-index-url https://download.pytorch.org/whl/cu128
+torch
+torchaudio
+sentencepiece
+jiwer
+soundfile
+numpy
+tqdm
+tensorboard
+# local demo server (Demo slice): FastAPI app + uvicorn, multipart uploads, mic WebSocket
+fastapi
+uvicorn
+python-multipart
+websockets
+loguru
+rich
+# release packaging: pickle-free weight export for the public HuggingFace artifacts
+safetensors
+pydantic
+pyyaml
+pytest
+# dev tooling (lint/format/type)
+black
+flake8
+mypy

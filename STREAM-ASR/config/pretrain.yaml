@@ -1,0 +1,26 @@
+# BEST-RQ self-supervised pretrain. Optimizer LRs come from optim.yaml; this file owns only the
+# BEST-RQ knobs and the schedule length.
+codebook_size: 8192
+codebook_dim: 16
+# Per-frame span-START probability (wav2vec2 convention): apply_span_mask draws
+# int(mask_prob*valid) starts, each extended by mask_span, so the masked fraction is
+# ~mask_prob*mask_span before overlap. 0.05 x span 10 measures ~39% masked, the designed difficulty
+# — well inside the 40-50% BEST-RQ/wav2vec2 rely on. At 0.01 only ~10% is masked, which makes the
+# infill task trivial and the learned features weak. Raise toward 0.065 (~48%) if the loss stays low.
+mask_prob: 0.05
+mask_span: 10
+noise_std: 0.1
+stack_frames: 0                # 0 = derive from encoder net subsampling (targets on its output grid)
+warmup_steps: 10000
+# BEST-RQ pretrains normally run 100k-400k steps. A 40k run plateaus only in the LOSS curve —
+# random-projection targets have an irreducible entropy floor that understates progress — nowhere
+# near a representation floor. total_steps is also the cosine anchor, so the LR reaches 0 exactly
+# here and an early stop still lands on a partially-annealed encoder rather than one near peak LR.
+total_steps: 180000
+seed: 42
+grad_clip: 5.0
+log_every: 50
+save_every: 2000
+# Looser than transducer.max_frames_per_batch (18k): the BEST-RQ forward is encoder + pred_head
+# only, with no RNN-T joiner lattice (B*T*(U+1)) to bound.
+max_frames_per_batch: 20000

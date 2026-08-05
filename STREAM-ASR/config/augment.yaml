@@ -1,0 +1,7 @@
+# SpecAugment "LD" policy, at designed strength. Full-strength masking from step 0 pins a
+# randomly-initialised model in CTC blank collapse; the shipped pipeline warm-starts the encoder
+# from BEST-RQ pretraining, which is healthy enough to take the full policy immediately.
+specaug_num_freq_masks: 2
+specaug_freq_width: 27
+specaug_time_ratio: 0.05
+specaug_max_time_masks: 10
