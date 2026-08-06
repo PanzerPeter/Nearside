@@ -13,6 +13,8 @@ import { useMessageNotifications } from './hooks/useMessageNotifications';
 import { useLastSeen } from './hooks/useLastSeen';
 import { useIdentity } from './hooks/useIdentity';
 import { syncPublicKeys } from './lib/identity-sync';
+import { isSecureStorageAvailable } from './lib/keystore';
+import { IdentitySetup } from './components/IdentitySetup';
 import { useAppBadge } from './hooks/useAppBadge';
 import { PresenceProvider } from './hooks/usePresence';
 import { initSoundUnlock } from './lib/sound';
@@ -64,7 +66,8 @@ function App() {
   useLastSeen(session);
 
   // This device's keypair, derived from a seed that never leaves it.
-  const { identity } = useIdentity(session);
+  const { identity, status: identityStatus, createIdentity, confirmIdentity, restoreIdentity } =
+    useIdentity(session);
 
   // Only the public halves, and only when they differ from what is stored.
   useEffect(() => {
@@ -164,6 +167,29 @@ function App() {
 
   if (!session) {
     return <AuthForm />;
+  }
+
+  if (identityStatus === 'loading') {
+    return (
+      <div className="h-dvh flex items-center justify-center bg-base-300">
+        <span className="loading loading-spinner loading-lg text-primary" />
+      </div>
+    );
+  }
+
+  // 'unconfirmed' must be here too: createIdentity stores the seed and flips
+  // status the moment the phrase is generated, so a gate matching only
+  // 'missing' would render the chat on that very render and the user would
+  // never see the twelve words they cannot recover the vault without.
+  if (identityStatus === 'missing' || identityStatus === 'unconfirmed') {
+    return (
+      <IdentitySetup
+        onCreate={createIdentity}
+        onConfirm={confirmIdentity}
+        onRestore={restoreIdentity}
+        secureStorage={isSecureStorageAvailable()}
+      />
+    );
   }
 
   return (
