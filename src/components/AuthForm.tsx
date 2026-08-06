@@ -19,7 +19,6 @@ export function AuthForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
-  const [inviteCode, setInviteCode] = useState('');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [loading, setLoading] = useState(false);
@@ -39,7 +38,7 @@ export function AuthForm() {
       const { data, error: signUpError } = await supabase.auth.signUp({
         email: email.trim(),
         password,
-        options: { data: { username: normalized, invite_code: inviteCode.trim() } },
+        options: { data: { username: normalized } },
       });
       setLoading(false);
 
@@ -47,19 +46,13 @@ export function AuthForm() {
         // GoTrue generally does not propagate a signup-trigger's Postgres
         // error text to the client — it collapses trigger failures to a
         // generic "Database error saving new user" and logs the real cause
-        // server-side. The invite_required/invite_invalid checks below may
-        // still match on some GoTrue versions, so they cost nothing to
-        // keep, but the fallback can't claim to know the cause: it covers
-        // both an invalid invite code and a genuine duplicate.
+        // server-side. With the invite gate gone, the remaining trigger
+        // failure is a duplicate username, so the fallback names that.
         const raw = signUpError.message;
         setError(
-          /invite_required/.test(raw)
-            ? 'An invite code is required to create an account.'
-            : /invite_invalid/.test(raw)
-              ? 'That invite code is not valid, or has already been used.'
-              : /duplicate|already|unique|database error/i.test(raw)
-                ? "Couldn't create the account. Check your invite code, or try a different username or email."
-                : raw
+          /duplicate|already|unique|database error/i.test(raw)
+            ? "Couldn't create the account. Try a different username or email."
+            : raw
         );
         return;
       }
@@ -127,44 +120,24 @@ export function AuthForm() {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {isSignUp && (
-              <>
-                <div className="form-control">
-                  <label className="label pb-1">
-                    <span className={LABEL_CLASS}>Invite code</span>
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Invite code"
-                    className={INPUT_CLASS}
-                    value={inviteCode}
-                    onChange={(e) => setInviteCode(e.target.value)}
-                    required={isSignUp}
-                    autoComplete="off"
-                  />
-                  <p className="text-xs text-base-content/55 mt-1">
-                    Ask the person who runs this Nearside for a code.
-                  </p>
-                </div>
-
-                <div className="form-control">
-                  <label className="label pb-1">
-                    <span className={LABEL_CLASS}>Username</span>
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="johndoe"
-                    className={INPUT_CLASS}
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    required={isSignUp}
-                    minLength={3}
-                    maxLength={24}
-                    pattern="[a-zA-Z0-9_]+"
-                    title="Letters, numbers, and underscores only"
-                    autoComplete="username"
-                  />
-                </div>
-              </>
+              <div className="form-control">
+                <label className="label pb-1">
+                  <span className={LABEL_CLASS}>Username</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="johndoe"
+                  className={INPUT_CLASS}
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  required={isSignUp}
+                  minLength={3}
+                  maxLength={24}
+                  pattern="[a-zA-Z0-9_]+"
+                  title="Letters, numbers, and underscores only"
+                  autoComplete="username"
+                />
+              </div>
             )}
 
             <div className="form-control">
