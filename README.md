@@ -75,6 +75,16 @@ CNAME.
 3. In Supabase **Authentication → URL Configuration**, add your site URL and
    `/*` redirect so password-reset links return to the app.
 
+   For the Android build, also add both deep-link targets to **Additional
+   Redirect URLs** — GoTrue rejects any `redirect_to` that is not on this list,
+   and the emailed link then falls back to the Site URL, which no phone can
+   open:
+
+   ```
+   app.nearside://auth/confirm
+   app.nearside://auth/recovery
+   ```
+
 4. Copy `.env.example` to `.env` and fill in your project values:
 
    ```bash

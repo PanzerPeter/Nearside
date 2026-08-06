@@ -63,6 +63,13 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
+    // Email links come back through a custom scheme on Android, and a custom
+    // scheme is not exclusive — another installed app can register
+    // `app.nearside://` and win the chooser. Under the implicit flow that
+    // hands the interceptor a refresh token, which is durable account access.
+    // PKCE puts only a short-lived code in the link, useless without the
+    // verifier this client keeps to itself.
+    flowType: 'pkce',
   },
   realtime: {
     // Tighter than the 30s default: the heartbeat is what surfaces a socket

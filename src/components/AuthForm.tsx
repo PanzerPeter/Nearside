@@ -1,5 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { authRedirectTo } from '../lib/authRedirect';
+import { subscribeToAuthLinkError } from '../lib/nativeAuthLinks';
 import { LegalFooter } from './LegalFooter';
 import { BrandMark } from './BrandMark';
 import { LogIn, UserPlus } from 'lucide-react';
@@ -23,6 +25,11 @@ export function AuthForm() {
   const [notice, setNotice] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // An emailed link that failed fails while the user is in their mail client,
+  // so the sign-in screen is where they land and the only place the reason can
+  // reach them.
+  useEffect(() => subscribeToAuthLinkError(setError), []);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
@@ -38,7 +45,10 @@ export function AuthForm() {
       const { data, error: signUpError } = await supabase.auth.signUp({
         email: email.trim(),
         password,
-        options: { data: { username: normalized } },
+        options: {
+          data: { username: normalized },
+          emailRedirectTo: authRedirectTo('confirm'),
+        },
       });
       setLoading(false);
 
@@ -83,7 +93,7 @@ export function AuthForm() {
     }
     setLoading(true);
     const { error: resetError } = await supabase.auth.resetPasswordForEmail(target, {
-      redirectTo: window.location.origin,
+      redirectTo: authRedirectTo('recovery'),
     });
     setLoading(false);
     if (resetError) setError(resetError.message);

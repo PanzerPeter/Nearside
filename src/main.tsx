@@ -9,6 +9,7 @@ import { ToastProvider } from './hooks/useToast';
 import { Toast } from './components/Toast';
 import { ConnectionBanner } from './components/ConnectionBanner';
 import { startConnectionMonitor } from './lib/connection';
+import { registerAuthLinkHandler } from './lib/nativeAuthLinks';
 import '@fontsource/inter/400.css';
 import '@fontsource/inter/500.css';
 import '@fontsource/inter/600.css';
@@ -27,6 +28,11 @@ if (Capacitor.isNativePlatform()) {
   window.addEventListener('unhandledrejection', (event) => {
     void FirebaseCrashlytics.recordException({ message: String(event.reason) });
   });
+
+  // Also outside React, and before the first render: a link tapped while the
+  // app was killed is already waiting in the launch intent, and the listener
+  // has to exist before Android delivers it.
+  registerAuthLinkHandler();
 }
 
 createRoot(document.getElementById('root')!).render(
