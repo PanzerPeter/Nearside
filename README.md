@@ -101,6 +101,36 @@ CNAME.
 | `npm run preview`   | Preview the production build|
 | `npm run typecheck` | TypeScript check, no emit   |
 | `npm run lint`      | ESLint                      |
+| `npm run android:sync` | Native build + copy into `android/` |
+| `npm run android:open` | Open `android/` in Android Studio |
+
+## Android
+
+The Play build is a Capacitor shell around the same web app (`applicationId`
+`app.nearside`). Requirements: the Android SDK (compile/target 36) and JDK 21 —
+Gradle 8.14 does not run on newer JDKs.
+
+```bash
+npm run android:sync
+cd android && ./gradlew assembleDebug
+```
+
+`android:sync` sets `NEARSIDE_NATIVE=1`, which disables the PWA service worker
+for native builds: a Workbox precache inside a WebView keeps serving the
+previous build after an app update.
+
+Two files are needed locally and are deliberately not in version control:
+`android/app/google-services.json` (Firebase project `nearside-9459c`) and
+`android/keystore.properties`, which points at the upload keystore:
+
+```properties
+storeFile=/absolute/path/to/nearside-upload.jks
+storePassword=…
+keyAlias=upload
+keyPassword=…
+```
+
+Release builds are unsigned without it; debug builds do not need it.
 
 ## Deploy (Netlify)
 
