@@ -1,0 +1,126 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Dark-only app: render native controls, scrollbars, and browser UI dark. */
+    color-scheme: dark;
+  }
+
+  html, body, #root {
+    height: 100%;
+  }
+
+  html {
+    /* Stop mobile browsers from auto-inflating text in landscape. */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  body {
+    font-family: Inter, 'SF Pro Display', -apple-system, system-ui, 'Segoe UI', Roboto, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    /* Prevent the whole app from rubber-band scrolling on touch. */
+    overscroll-behavior: none;
+  }
+
+  /* Display type takes tighter tracking than body copy, which holds near zero. */
+  h1, h2, h3 {
+    letter-spacing: -0.02em;
+  }
+
+  /* Selection uses the brand accent. */
+  ::selection {
+    background: oklch(var(--p) / 0.3);
+  }
+
+  /* Subtle press feedback on every button — touch devices have no hover. */
+  .btn:active:not(:disabled) {
+    transform: scale(0.97);
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: oklch(var(--bc) / 0.2);
+    border-radius: 9999px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: oklch(var(--bc) / 0.3);
+  }
+
+  /* Honour the OS setting: every CSS-driven transition and animation
+     collapses to an instant state change rather than being merely faster.
+     This can't reach a `behavior: 'smooth'` passed explicitly to
+     `scrollIntoView()` in JS — an explicit call always wins over this rule
+     per spec — so those call sites (ChatRoom.tsx) check the same OS setting
+     themselves via `prefersReducedMotion()` in src/lib/motion.ts. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after,
+    *::backdrop {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer utilities {
+  /* Notch inset added on top of the shared top bar's own height. */
+  .pt-safe {
+    padding-top: env(safe-area-inset-top);
+  }
+
+  @keyframes message-in {
+    from {
+      opacity: 0;
+      /* translate3d, not translateY: keeps the bubble on its own composited
+         layer for the whole run, so the text doesn't re-rasterise mid-flight. */
+      transform: translate3d(0, 6px, 0) scale(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  /* Still short — a message list animates constantly, so anything past ~200ms
+     reads as lag rather than polish. The decelerating curve (fast start, long
+     settle) is what makes this read as smooth at this duration; plain ease-out
+     over 140ms arrived more abruptly than it needed to. */
+  .animate-message-in {
+    animation: message-in 190ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+}
+
+/* emoji-mart lives in a shadow DOM, so only its exposed custom properties are
+   reachable — but CSS custom properties inherit through the shadow boundary.
+   Give the panel rounded corners, a real shadow, and the brand accent so it
+   reads as part of the app instead of a bare, square-cornered popover. */
+em-emoji-picker {
+  --border-radius: 14px;
+  --shadow: 0 12px 34px rgba(0, 0, 0, 0.5);
+  /* emoji-mart only accepts RGB triples through its shadow DOM boundary, so
+     these must stay literal — they cannot reference the theme's CSS custom
+     properties. Keep them mirrored by hand: this must match `primary` in
+     tailwind.config.js (currently #3b82f6). */
+  --rgb-accent: 59, 130, 246;
+  /* Must match `base-100` in tailwind.config.js (currently #2a2c31), and the
+     `--surface-ring` token — same surface, mirrored by hand for the same reason. */
+  --rgb-background: 42, 44, 49;
+  --font-family: Inter, system-ui, sans-serif;
+  max-height: min(435px, 60vh);
+}
