@@ -22,6 +22,7 @@ import { syncPushSubscription, storeSubscriptionJSON } from './lib/push';
 import { useConnection } from './lib/connection';
 import { useNicknameSync } from './lib/nicknames';
 import { clearAll } from './lib/outbox';
+import { clearLocalDb, openLocalDb } from './lib/localdb';
 import { LogOut, MessageSquare, Settings } from 'lucide-react';
 
 function App() {
@@ -44,6 +45,13 @@ function App() {
   useEffect(() => {
     if (!session) setUnreadTotal(0);
   }, [session]);
+
+  // Open the local mirror once, before anything tries to write to it. Every
+  // cache call is a silent no-op until the connection exists, so a missed open
+  // would not fail — it would just leave search and previews permanently empty.
+  useEffect(() => {
+    void openLocalDb();
+  }, []);
 
   const fetchMyProfile = useCallback(async () => {
     if (!session) return;
@@ -224,8 +232,11 @@ function App() {
           <button
             onClick={async () => {
               // Queued-but-unsent bodies are message content; they should not
-              // outlive the session that wrote them on a shared device.
+              // outlive the session that wrote them on a shared device. The
+              // local mirror holds decrypted text for the same reason and goes
+              // with it.
               await clearAll();
+              await clearLocalDb();
               await supabase.auth.signOut();
             }}
             className="btn btn-ghost btn-sm btn-square hover:bg-base-content/10 transition-colors"
