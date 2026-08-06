@@ -17,7 +17,9 @@ import { useToast } from '../hooks/useToast';
 import { Modal } from './Modal';
 import { Camera, Bell, Volume2 } from 'lucide-react';
 
-const USERNAME_RE = /^[a-z0-9_]{3,24}$/;
+/** Display names collide freely and keep their spaces and capitals; the only
+ *  rule left is that there is one and that it fits. See 0022_display_name. */
+const DISPLAY_NAME_MAX = 32;
 
 // functions.invoke surfaces a non-2xx as a generic "Edge Function returned a
 // non-2xx status code", which tells the user nothing. The real reason is in
@@ -40,7 +42,7 @@ interface SettingsModalProps {
 }
 
 export function SettingsModal({ session, profile, onUpdated, onClose }: SettingsModalProps) {
-  const [username, setUsername] = useState(profile.username);
+  const [display_name, setUsername] = useState(profile.display_name);
   const [avatarUrl, setAvatarUrl] = useState(profile.avatar_url ?? null);
   const toast = useToast();
   const [saving, setSaving] = useState(false);
@@ -154,45 +156,46 @@ export function SettingsModal({ session, profile, onUpdated, onClose }: Settings
       return;
     }
     setAvatarUrl(bustedUrl);
-    // Only the avatar was saved. Publishing `username` here would push the
+    // Only the avatar was saved. Publishing `display_name` here would push the
     // half-typed input up to the app shell as though it had been committed.
     onUpdated({ ...profile, avatar_url: bustedUrl });
     toast.success('Avatar updated.');
   }
 
   async function handleSaveUsername() {
-    const normalized = username.trim().toLowerCase();
-    if (normalized === profile.username) {
+    // Not lowercased: capitals are the user's to choose now.
+    const normalized = display_name.trim();
+    if (normalized === profile.display_name) {
       onClose();
       return;
     }
-    if (!USERNAME_RE.test(normalized)) {
-      toast.error('Username must be 3–24 characters: letters, numbers, or underscores.');
+    if (!normalized || normalized.length > DISPLAY_NAME_MAX) {
+      toast.error(`Enter a display name, up to ${DISPLAY_NAME_MAX} characters.`);
       return;
     }
     setSaving(true);
     const { error: updateError } = await supabase
       .from('profiles')
-      .update({ username: normalized })
+      .update({ display_name: normalized })
       .eq('id', session.user.id);
     setSaving(false);
 
     if (updateError) {
       toast.error(
         /duplicate|unique/i.test(updateError.message)
-          ? 'That username is already taken.'
+          ? 'That name could not be saved.'
           : updateError.message
       );
       return;
     }
-    onUpdated({ ...profile, username: normalized, avatar_url: avatarUrl });
-    toast.success('Username updated.');
+    onUpdated({ ...profile, display_name: normalized, avatar_url: avatarUrl });
+    toast.success('Display name updated.');
   }
 
   async function handleDeleteAccount() {
     // Re-checked here and not only on the button's `disabled`: the gate is the
     // whole point of this flow, and a disabled attribute is a hint, not a lock.
-    if (deleting || !confirmsUsername(deleteText, profile.username)) return;
+    if (deleting || !confirmsUsername(deleteText, profile.display_name)) return;
     setDeleting(true);
 
     const { error: invokeError } = await supabase.functions.invoke('delete-account');
@@ -248,7 +251,7 @@ export function SettingsModal({ session, profile, onUpdated, onClose }: Settings
               {avatarUrl ? (
                 <img src={avatarUrl} alt="avatar" className="w-full h-full object-cover" />
               ) : (
-                <span className="text-2xl font-semibold">{initial(username)}</span>
+                <span className="text-2xl font-semibold">{initial(display_name)}</span>
               )}
             </div>
           </div>
@@ -273,16 +276,16 @@ export function SettingsModal({ session, profile, onUpdated, onClose }: Settings
       <div className="form-control">
         <label className="label pb-1">
           <span className="label-text text-xs font-medium uppercase tracking-wider text-base-content/60">
-            Username
+            Display name
           </span>
         </label>
         <input
           type="text"
           className="input w-full bg-base-200/50 border border-base-content/10 focus:border-primary"
-          value={username}
+          value={display_name}
           onChange={(e) => setUsername(e.target.value)}
           minLength={3}
-          maxLength={24}
+          maxLength={DISPLAY_NAME_MAX}
           pattern="[a-zA-Z0-9_]+"
         />
         <span className="text-xs text-base-content/60 mt-1">
@@ -340,7 +343,7 @@ export function SettingsModal({ session, profile, onUpdated, onClose }: Settings
         {confirmingDelete ? (
           <>
             <p className="text-xs text-base-content/60">
-              Type <span className="font-medium text-base-content/80">{profile.username}</span> to
+              Type <span className="font-medium text-base-content/80">{profile.display_name}</span> to
               confirm. This cannot be undone.
             </p>
             <input
@@ -353,7 +356,7 @@ export function SettingsModal({ session, profile, onUpdated, onClose }: Settings
               autoCapitalize="none"
               autoCorrect="off"
               spellCheck={false}
-              aria-label="Type your username to confirm deletion"
+              aria-label="Type your display name to confirm deletion"
             />
             <div className="flex items-center gap-2">
               <button
@@ -369,7 +372,7 @@ export function SettingsModal({ session, profile, onUpdated, onClose }: Settings
               <button
                 className="btn btn-error btn-sm"
                 onClick={handleDeleteAccount}
-                disabled={deleting || !confirmsUsername(deleteText, profile.username)}
+                disabled={deleting || !confirmsUsername(deleteText, profile.display_name)}
               >
                 {deleting ? (
                   <span className="loading loading-spinner loading-sm" />

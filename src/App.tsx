@@ -57,7 +57,7 @@ function App() {
     if (!session) return;
     const { data } = await supabase
       .from('profiles')
-      .select('id, username, avatar_url, last_seen_at')
+      .select('id, display_name, avatar_url, last_seen_at')
       .eq('id', session.user.id)
       .maybeSingle();
     if (data) setMyProfile(data);
@@ -126,7 +126,7 @@ function App() {
   const openChatWith = useCallback(async (friendId: string) => {
     const { data } = await supabase
       .from('profiles')
-      .select('id, username, avatar_url, last_seen_at')
+      .select('id, display_name, avatar_url, last_seen_at')
       .eq('id', friendId)
       .maybeSingle();
     if (data) setSelectedFriend(data);
@@ -216,9 +216,9 @@ function App() {
               className="hidden sm:flex items-center gap-2 btn btn-ghost btn-sm normal-case"
               title="Profile settings"
             >
-              <Avatar username={myProfile.username} url={myProfile.avatar_url} size={24} />
+              <Avatar display_name={myProfile.display_name} url={myProfile.avatar_url} size={24} />
               <span className="text-xs text-base-content/60 hidden sm:inline truncate max-w-[120px]">
-                @{myProfile.username}
+                @{myProfile.display_name}
               </span>
             </button>
           )}

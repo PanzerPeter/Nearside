@@ -38,19 +38,19 @@ export function useMessageNotifications(
     if (!session) return;
     const me = session.user.id;
 
-    async function resolveUsername(userId: string): Promise<string> {
+    async function resolveDisplayName(userId: string): Promise<string> {
       const cached = usernameCache.current.get(userId);
       if (cached && Date.now() - cached.at < USERNAME_TTL_MS) return cached.name;
       const { data, error } = await supabase
         .from('profiles')
-        .select('username')
+        .select('display_name')
         .eq('id', userId)
         .maybeSingle();
       // On a failed lookup prefer a stale name over the "someone" placeholder,
       // and don't cache the failure.
-      if (error || !data?.username) return cached?.name ?? 'someone';
-      usernameCache.current.set(userId, { name: data.username, at: Date.now() });
-      return data.username;
+      if (error || !data?.display_name) return cached?.name ?? 'someone';
+      usernameCache.current.set(userId, { name: data.display_name, at: Date.now() });
+      return data.display_name;
     }
 
     async function showNotification(title: string, body: string, tag: string) {
@@ -96,7 +96,7 @@ export function useMessageNotifications(
       // The nickname you gave them, if you gave them one — a banner that says
       // "Bobby" while the app says "Bobby" is the point of the feature. Read
       // from the store rather than fetched: it is already loaded and live.
-      const title = nicknameFor(msg.user_id) ?? `@${await resolveUsername(msg.user_id)}`;
+      const title = nicknameFor(msg.user_id) ?? `@${await resolveDisplayName(msg.user_id)}`;
       // The body is sealed and this hook holds no key, so a banner can name the
       // kind of thing that arrived but never quote it. Previewing text would
       // mean decrypting here — a second place that opens bodies, on a code path

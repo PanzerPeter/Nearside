@@ -2,14 +2,14 @@ import { useEffect, useState } from 'react';
 import { initial } from '../lib/types';
 
 interface AvatarProps {
-  username?: string | null;
+  display_name?: string | null;
   url?: string | null;
   size?: number;
   className?: string;
 }
 
 /** Circular avatar: image when available, first-letter fallback otherwise. */
-export function Avatar({ username, url, size = 40, className = '' }: AvatarProps) {
+export function Avatar({ display_name, url, size = 40, className = '' }: AvatarProps) {
   const dimension = `${size}px`;
   const [broken, setBroken] = useState(false);
 
@@ -25,13 +25,13 @@ export function Avatar({ username, url, size = 40, className = '' }: AvatarProps
         {url && !broken ? (
           <img
             src={url}
-            alt={username ?? 'avatar'}
+            alt={display_name ?? 'avatar'}
             className="w-full h-full object-cover"
             onError={() => setBroken(true)}
           />
         ) : (
           <span className="font-semibold" style={{ fontSize: size * 0.4 }}>
-            {initial(username)}
+            {initial(display_name)}
           </span>
         )}
       </div>

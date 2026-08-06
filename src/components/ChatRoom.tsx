@@ -90,7 +90,7 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
   // because the other participant these features describe is you.
   const isSelf = isSelfChat(me, friend.id);
   const nickname = useNickname(friend.id);
-  const peerLabel = formatDisplayName(nickname, friend.username, isSelf);
+  const peerLabel = formatDisplayName(nickname, friend.display_name, isSelf);
   const friendStatus = usePresenceStatus(friend.id);
   const toast = useToast();
   const background = useChatBackground(me, friend.id);
@@ -1441,7 +1441,7 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
           <ArrowLeft className="w-5 h-5" />
         </button>
         <div className="relative shrink-0" style={{ width: 36, height: 36 }}>
-          <Avatar username={friend.username} url={friend.avatar_url} size={36} />
+          <Avatar display_name={friend.display_name} url={friend.avatar_url} size={36} />
           {isSelf && (
             <span className="absolute -bottom-0.5 -right-0.5 rounded-full bg-base-100 p-0.5">
               <NotebookPen className="w-3 h-3 text-primary" />
@@ -1460,7 +1460,7 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
             {peerLabel}
             {nickname && !isSelf && (
               <span className="ml-1.5 font-normal text-xs text-base-content/45">
-                @{friend.username}
+                @{friend.display_name}
               </span>
             )}
           </p>
@@ -1526,7 +1526,7 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
         <NicknameModal
           me={me}
           peerId={friend.id}
-          username={friend.username}
+          display_name={friend.display_name}
           isSelf={isSelf}
           onClose={() => setNicknameOpen(false)}
         />
@@ -1786,7 +1786,7 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
         replyingTo={
           replyingTo
             ? {
-                username: replyingTo.user_id === me ? 'yourself' : peerLabel,
+                display_name: replyingTo.user_id === me ? 'yourself' : peerLabel,
                 snippet: messageSnippet(replyingTo),
               }
             : null

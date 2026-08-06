@@ -41,7 +41,7 @@ export const SELF_CHAT_LABEL = 'Your vault';
 /** The minimum of a sidebar row that ordering depends on. */
 interface Orderable {
   peer_id: string;
-  username: string;
+  display_name: string;
   last_at: string | null;
 }
 
@@ -52,7 +52,7 @@ interface Orderable {
  * bottom, alphabetically among its peers. PostgREST timestamptz strings aren't
  * guaranteed to share one string shape (see the header of lib/receipts.ts), so
  * instants are compared via Date.parse rather than lexicographically. Tied
- * instants fall through to username so the comparator stays a total order — an
+ * instants fall through to display_name so the comparator stays a total order — an
  * inconsistent one (returning -1 for both a<b and b<a) leaves ties in
  * Postgres's arbitrary row order, which reshuffles the list under the cursor.
  *
@@ -69,11 +69,11 @@ export function sortConversations<T extends Orderable>(rows: T[], me: string): T
     if (a.last_at && b.last_at) {
       const diff = Date.parse(b.last_at) - Date.parse(a.last_at);
       if (diff !== 0) return diff;
-      return a.username.localeCompare(b.username);
+      return a.display_name.localeCompare(b.display_name);
     }
     if (a.last_at) return -1;
     if (b.last_at) return 1;
-    return a.username.localeCompare(b.username);
+    return a.display_name.localeCompare(b.display_name);
   });
 }
 

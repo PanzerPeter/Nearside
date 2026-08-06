@@ -6,7 +6,12 @@ import { LegalFooter } from './LegalFooter';
 import { BrandMark } from './BrandMark';
 import { LogIn, UserPlus } from 'lucide-react';
 
-const USERNAME_RE = /^[a-z0-9_]{3,24}$/;
+/** Display names are not addresses: they may collide, contain spaces and keep
+ *  their capitals. All that is enforced is that there is something there and
+ *  that it fits on a row. The old ^[a-z0-9_]{3,24}$ handle format went with the
+ *  unique constraint in 0022 — a namespace is enumerable, and that is exactly
+ *  what this product is removing. */
+const DISPLAY_NAME_MAX = 32;
 
 // Shared field styling — one source of truth for the four inputs so the focus
 // treatment (blue border + soft ring, no default outline) stays consistent.
@@ -20,7 +25,7 @@ export function AuthForm() {
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [username, setUsername] = useState('');
+  const [display_name, setUsername] = useState('');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [loading, setLoading] = useState(false);
@@ -36,9 +41,10 @@ export function AuthForm() {
     setNotice('');
 
     if (isSignUp) {
-      const normalized = username.trim().toLowerCase();
-      if (!USERNAME_RE.test(normalized)) {
-        setError('Username must be 3–24 characters: letters, numbers, or underscores.');
+      // Trimmed but not lowercased: the name is shown as the person wrote it.
+      const normalized = display_name.trim();
+      if (!normalized || normalized.length > DISPLAY_NAME_MAX) {
+        setError(`Enter a display name, up to ${DISPLAY_NAME_MAX} characters.`);
         return;
       }
       setLoading(true);
@@ -46,7 +52,7 @@ export function AuthForm() {
         email: email.trim(),
         password,
         options: {
-          data: { username: normalized },
+          data: { display_name: normalized },
           emailRedirectTo: authRedirectTo('confirm'),
         },
       });
@@ -56,12 +62,12 @@ export function AuthForm() {
         // GoTrue generally does not propagate a signup-trigger's Postgres
         // error text to the client — it collapses trigger failures to a
         // generic "Database error saving new user" and logs the real cause
-        // server-side. With the invite gate gone, the remaining trigger
-        // failure is a duplicate username, so the fallback names that.
+        // server-side. Display names no longer have to be unique, so the only
+        // remaining collision worth naming is the email.
         const raw = signUpError.message;
         setError(
           /duplicate|already|unique|database error/i.test(raw)
-            ? "Couldn't create the account. Try a different username or email."
+            ? "Couldn't create the account. That email may already be registered."
             : raw
         );
         return;
@@ -132,17 +138,17 @@ export function AuthForm() {
             {isSignUp && (
               <div className="form-control">
                 <label className="label pb-1">
-                  <span className={LABEL_CLASS}>Username</span>
+                  <span className={LABEL_CLASS}>Display name</span>
                 </label>
                 <input
                   type="text"
                   placeholder="johndoe"
                   className={INPUT_CLASS}
-                  value={username}
+                  value={display_name}
                   onChange={(e) => setUsername(e.target.value)}
                   required={isSignUp}
                   minLength={3}
-                  maxLength={24}
+                  maxLength={DISPLAY_NAME_MAX}
                   pattern="[a-zA-Z0-9_]+"
                   title="Letters, numbers, and underscores only"
                   autoComplete="username"

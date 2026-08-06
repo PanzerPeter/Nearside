@@ -62,7 +62,7 @@ function TermsBody() {
       <p>
         <span className="font-semibold text-base-content/80">Your account.</span> You are
         responsible for keeping your login credentials secure and for all activity under your
-        account. You must provide a valid email address and choose a username that does not
+        account. You must provide a valid email address and choose a display name that does not
         impersonate others or violate anyone&apos;s rights.
       </p>
       <p>
@@ -99,7 +99,7 @@ function PrivacyBody() {
       </p>
       <p>
         <span className="font-semibold text-base-content/80">What we collect.</span> Your email
-        address (for sign-in and account recovery), your chosen username, an optional profile
+        address (for sign-in and account recovery), your chosen display_name, an optional profile
         avatar, and the messages and media you send to other users.
       </p>
       <p>
@@ -116,7 +116,7 @@ function PrivacyBody() {
       </p>
       <p>
         <span className="font-semibold text-base-content/80">Your choices.</span> You can update
-        your username and avatar at any time in settings. You can permanently delete your account,
+        your display name and avatar at any time in settings. You can permanently delete your account,
         messages and media yourself at any time from Settings → Delete account.
       </p>
       <p>

@@ -43,12 +43,12 @@ describe('isSelfChat', () => {
 
 describe('sortConversations', () => {
   const C = '00000000-0000-0000-0000-00000000000c';
-  const row = (peer_id: string, username: string, last_at: string | null) => ({
+  const row = (peer_id: string, display_name: string, last_at: string | null) => ({
     peer_id,
-    username,
+    display_name,
     last_at,
   });
-  const names = (rows: { username: string }[]) => rows.map((r) => r.username);
+  const names = (rows: { display_name: string }[]) => rows.map((r) => r.display_name);
 
   it('pins the self row first even when it is the least recent', () => {
     const rows = [
@@ -87,7 +87,7 @@ describe('sortConversations', () => {
     expect(names(sortConversations(rows, A))).toEqual(['caz', 'bob']);
   });
 
-  it('breaks ties on username so the order is total', () => {
+  it('breaks ties on display_name so the order is total', () => {
     const at = '2026-01-01T00:00:00Z';
     const forward = sortConversations([row(C, 'caz', at), row(B, 'bob', at)], A);
     const reversed = sortConversations([row(B, 'bob', at), row(C, 'caz', at)], A);

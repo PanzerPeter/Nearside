@@ -30,7 +30,7 @@ interface ForwardModalProps {
 /** A row of the picker, with its name already resolved. */
 interface Target {
   peerId: string;
-  username: string;
+  display_name: string;
   avatarUrl: string | null;
   label: string;
   isSelf: boolean;
@@ -80,16 +80,16 @@ export function ForwardModal({ me, msg, fromPeerId, identity, onClose }: Forward
         const isSelf = isSelfChat(me, row.peer_id);
         return {
           peerId: row.peer_id,
-          username: row.username,
+          display_name: row.display_name,
           avatarUrl: row.avatar_url,
-          label: formatDisplayName(nicknames.get(row.peer_id), row.username, isSelf),
+          label: formatDisplayName(nicknames.get(row.peer_id), row.display_name, isSelf),
           isSelf,
         };
       });
   }, [rows, fromPeerId, me, nicknames]);
 
   const visible = useMemo(
-    () => targets.filter((t) => matchesTarget(t.label, t.username, query)),
+    () => targets.filter((t) => matchesTarget(t.label, t.display_name, query)),
     [targets, query]
   );
 
@@ -221,7 +221,7 @@ export function ForwardModal({ me, msg, fromPeerId, identity, onClose }: Forward
                     disabled={sending}
                   />
                   <div className="relative shrink-0" style={{ width: 32, height: 32 }}>
-                    <Avatar username={target.username} url={target.avatarUrl} size={32} />
+                    <Avatar display_name={target.display_name} url={target.avatarUrl} size={32} />
                     {target.isSelf && (
                       <span className="absolute -bottom-0.5 -right-0.5 rounded-full bg-base-100 p-0.5">
                         <NotebookPen className="w-2.5 h-2.5 text-primary" />
@@ -233,9 +233,9 @@ export function ForwardModal({ me, msg, fromPeerId, identity, onClose }: Forward
                     {/* The handle stays visible under a nickname for the same
                         reason it does in the sidebar: two people you renamed
                         have to be tellable apart by something they chose. */}
-                    {!target.isSelf && target.label !== `@${target.username}` && (
+                    {!target.isSelf && target.label !== `@${target.display_name}` && (
                       <span className="block truncate text-[0.7rem] text-base-content/45">
-                        @{target.username}
+                        @{target.display_name}
                       </span>
                     )}
                   </span>

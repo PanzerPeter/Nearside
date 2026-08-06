@@ -13,6 +13,10 @@ interface ConversationRowProps {
   unread: number;
   selected: boolean;
   onSelect: () => void;
+  /** The last message's text, from the local mirror. Null when this device has
+   *  never opened that message — the server no longer has a body to offer, so
+   *  there is nothing to fall back to and the row says so. */
+  lastText: string | null;
 }
 
 /** One line of the sidebar: who, what they last said, when, and how many unread. */
@@ -22,27 +26,33 @@ export function ConversationRow({
   unread,
   selected,
   onSelect,
+  lastText,
 }: ConversationRowProps) {
-  const { username, avatar_url, last_message, last_media_type, last_sender_id, last_at } =
-    conversation;
+  const { display_name, avatar_url, last_media_type, last_sender_id, last_at } = conversation;
   const isSelf = isSelfChat(me, conversation.peer_id);
   const nickname = useNickname(conversation.peer_id);
   // The nickname is the name; the handle moves to a muted suffix so it is still
   // visible (you have to be able to tell two people apart by something they did
   // not choose for each other) without being the thing you read first.
-  const title = formatDisplayName(nickname, username, isSelf);
-  const handle = nickname && !isSelf ? `@${username}` : null;
+  const title = formatDisplayName(nickname, display_name, isSelf);
+  const handle = nickname && !isSelf ? `@${display_name}` : null;
 
   const mediaLabels = { image: 'Photo', video: 'Video', audio: 'Voice message' };
-  const body = last_message?.trim() || (last_media_type ? mediaLabels[last_media_type] : '');
+  const body = lastText?.trim() || (last_media_type ? mediaLabels[last_media_type] : '');
   // "You:" on a note to yourself would be noise — every message there is yours.
   const preview = body
     ? last_sender_id === me && !isSelf
       ? `You: ${body}`
       : body
-    : isSelf
-      ? 'Notes, links, reminders — only you see this'
-      : 'No messages yet';
+    : // There IS a message here (the server gave us its timestamp) but this
+      // device has never opened it, so no plaintext exists to preview. Saying
+      // so beats a blank row that reads as broken — and it is the product
+      // working, not failing.
+      last_at
+      ? 'Encrypted message'
+      : isSelf
+        ? 'Notes, links, reminders — only you see this'
+        : 'No messages yet';
 
   return (
     <button
@@ -58,7 +68,7 @@ export function ConversationRow({
           to you, and the notebook mark is what makes the row recognisable. */}
       {isSelf ? (
         <div className="relative shrink-0" style={{ width: 40, height: 40 }}>
-          <Avatar username={username} url={avatar_url} size={40} />
+          <Avatar display_name={display_name} url={avatar_url} size={40} />
           <span className="absolute -bottom-0.5 -right-0.5 rounded-full bg-base-100 p-0.5">
             <NotebookPen className="w-3 h-3 text-primary" />
           </span>
@@ -66,7 +76,7 @@ export function ConversationRow({
       ) : (
         <AvatarWithStatus
           userId={conversation.peer_id}
-          username={username}
+          display_name={display_name}
           url={avatar_url}
           size={40}
         />

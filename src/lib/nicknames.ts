@@ -1,7 +1,7 @@
 // Private friend nicknames: the name YOU gave someone, visible only to you.
 //
 // Backed by public.friend_nicknames (0016), one row per (owner, peer). The
-// username is still the identity — a nickname is a label painted over it in
+// display_name is still the identity — a nickname is a label painted over it in
 // this user's own client, so nothing here changes how anyone is looked up.
 //
 // Why a module-level store rather than a context provider: the notification
@@ -68,19 +68,19 @@ export function normalizeNickname(raw: string): string | null {
 
 /**
  * How to name a conversation in one line: the nickname if one was given, the
- * self-chat's default label for your own notes, `@username` otherwise. Pure, so
+ * self-chat's default label for your own notes, `@display_name` otherwise. Pure, so
  * the whole fallback chain is testable without a store; `useNickname` supplies
  * the first argument.
  */
 export function formatDisplayName(
   nickname: string | null | undefined,
-  username: string | null | undefined,
+  display_name: string | null | undefined,
   selfChat = false
 ): string {
   const nick = nickname?.trim();
   if (nick) return nick;
   if (selfChat) return SELF_CHAT_LABEL;
-  const name = username?.trim();
+  const name = display_name?.trim();
   return name ? `@${name}` : 'unknown';
 }
 
@@ -119,7 +119,7 @@ async function loadNicknames(me: string): Promise<void> {
     .eq('owner_id', me);
 
   if (error) {
-    // Not fatal: without nicknames every name falls back to @username, which
+    // Not fatal: without nicknames every name falls back to @display_name, which
     // is exactly the pre-feature behaviour. Logged because a missing migration
     // (PGRST205) surfaces here first, before anyone tries to set one.
     console.error('nickname load failed', error);
@@ -246,7 +246,7 @@ export async function saveNickname(
   return null;
 }
 
-/** Remove the nickname for `peerId`, falling the name back to `@username`. */
+/** Remove the nickname for `peerId`, falling the name back to `@display_name`. */
 export async function clearNickname(me: string, peerId: string): Promise<string | null> {
   const previous = nicknames;
   if (previous.has(peerId)) {

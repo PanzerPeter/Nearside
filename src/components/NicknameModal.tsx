@@ -13,7 +13,7 @@ interface NicknameModalProps {
   me: string;
   peerId: string;
   /** The peer's real handle, shown as the thing a nickname replaces. */
-  username: string;
+  display_name: string;
   /** True when this is the self-chat, which is named rather than nicknamed. */
   isSelf?: boolean;
   onClose: () => void;
@@ -23,7 +23,7 @@ interface NicknameModalProps {
 export function NicknameModal({
   me,
   peerId,
-  username,
+  display_name,
   isSelf = false,
   onClose,
 }: NicknameModalProps) {
@@ -103,8 +103,8 @@ export function NicknameModal({
           value={value}
           onChange={(e) => setValue(e.target.value)}
           maxLength={MAX_NICKNAME_LENGTH}
-          placeholder={isSelf ? 'Note to self' : username}
-          aria-label={isSelf ? 'Name for this chat' : `Nickname for @${username}`}
+          placeholder={isSelf ? 'Note to self' : display_name}
+          aria-label={isSelf ? 'Name for this chat' : `Nickname for @${display_name}`}
           className="input input-bordered w-full bg-base-200/50 focus:border-primary"
         />
       </form>
@@ -114,8 +114,8 @@ export function NicknameModal({
           <>Only you ever see this chat, so name it whatever you like.</>
         ) : (
           <>
-            Only you see this. @{username} is not told, and their username stays{' '}
-            <span className="font-medium text-base-content/70">@{username}</span> everywhere else.
+            Only you see this. @{display_name} is not told, and their display_name stays{' '}
+            <span className="font-medium text-base-content/70">@{display_name}</span> everywhere else.
           </>
         )}
       </p>

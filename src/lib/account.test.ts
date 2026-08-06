@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { confirmsUsername } from './account';
 
 describe('confirmsUsername', () => {
-  it('accepts the exact username', () => {
+  it('accepts the exact display_name', () => {
     expect(confirmsUsername('peter', 'peter')).toBe(true);
   });
 
@@ -21,7 +21,7 @@ describe('confirmsUsername', () => {
     expect(confirmsUsername('', 'peter')).toBe(false);
   });
 
-  it('never confirms against an empty username', () => {
+  it('never confirms against an empty display_name', () => {
     expect(confirmsUsername('', '')).toBe(false);
     expect(confirmsUsername('   ', '')).toBe(false);
   });

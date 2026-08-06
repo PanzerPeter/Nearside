@@ -64,7 +64,7 @@ describe('formatDisplayName', () => {
     expect(formatDisplayName('Bobby', 'bob')).toBe('Bobby');
   });
 
-  it('falls back to @username with no nickname', () => {
+  it('falls back to @display_name with no nickname', () => {
     expect(formatDisplayName(null, 'bob')).toBe('@bob');
     expect(formatDisplayName(undefined, 'bob')).toBe('@bob');
   });

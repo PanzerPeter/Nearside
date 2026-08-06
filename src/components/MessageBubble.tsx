@@ -20,7 +20,7 @@ interface MessageBubbleProps {
   isOwn: boolean;
   me: string;
   /** How to name the other participant — a nickname if one is set,
-   *  `@username` otherwise. Formatted by the caller. */
+   *  `@display_name` otherwise. Formatted by the caller. */
   peerLabel: string;
   showHeader: boolean;
   isEditing: boolean;

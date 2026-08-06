@@ -105,10 +105,10 @@ export function isForwardable(msg: Pick<Message, 'text' | 'media_path' | 'delete
  * which is the name you would reach for if you had forgotten the nickname was
  * yours. Case- and whitespace-insensitive; an empty query matches everything.
  */
-export function matchesTarget(label: string, username: string, query: string): boolean {
+export function matchesTarget(label: string, display_name: string, query: string): boolean {
   const needle = query.trim().toLowerCase();
   if (!needle) return true;
-  return label.toLowerCase().includes(needle) || username.toLowerCase().includes(needle);
+  return label.toLowerCase().includes(needle) || display_name.toLowerCase().includes(needle);
 }
 
 /** The shape of a PostgREST error, narrowed to what the mapping below reads. */

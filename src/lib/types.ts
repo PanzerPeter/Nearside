@@ -1,6 +1,6 @@
 export interface Profile {
   id: string;
-  username: string;
+  display_name: string;
   avatar_url?: string | null;
   last_seen_at?: string | null;
 }
@@ -61,16 +61,15 @@ export interface Reaction {
 }
 
 /** Safe first-letter for avatar fallbacks. */
-export function initial(username?: string | null): string {
-  return username?.trim()?.[0]?.toUpperCase() ?? '?';
+export function initial(displayName?: string | null): string {
+  return displayName?.trim()?.[0]?.toUpperCase() ?? '?';
 }
 
 /** One row of the sidebar, as returned by the conversation_list() RPC. */
 export interface ConversationSummary {
   peer_id: string;
-  username: string;
+  display_name: string;
   avatar_url: string | null;
-  last_message: string | null;
   last_media_type: MediaType | null;
   last_sender_id: string | null;
   last_at: string | null;

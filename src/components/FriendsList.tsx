@@ -3,6 +3,7 @@ import { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { Profile, Friendship, Message, ConversationSummary } from '../lib/types';
 import { isSelfChat, sortConversations } from '../lib/conversation';
+import { cachedPreview } from '../lib/localdb';
 import { Avatar } from './Avatar';
 import { ConversationRow } from './ConversationRow';
 import { AddFriendModal } from './AddFriendModal';
@@ -39,6 +40,8 @@ export function FriendsList({
 }: FriendsListProps) {
   const me = session.user.id;
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
+  /** peer_id → last message text from the local mirror, or null if unseen here. */
+  const [previews, setPreviews] = useState<Map<string, string | null>>(new Map());
   const [pendingRequests, setPendingRequests] = useState<Friendship[]>([]);
   const [unread, setUnread] = useState<Map<string, number>>(new Map());
   const [showAddModal, setShowAddModal] = useState(false);
@@ -66,7 +69,18 @@ export function FriendsList({
     if (error) return;
     // Ordering (self pinned first, then newest activity) lives in
     // lib/conversation.ts so it can be tested without a component.
-    setConversations(sortConversations((data ?? []) as ConversationSummary[], me));
+    const rows = sortConversations((data ?? []) as ConversationSummary[], me);
+    setConversations(rows);
+
+    // Previews come from the local mirror, because 0023 took the body away
+    // from the server. Resolved after the rows are already on screen: the list
+    // must not wait on the local database to paint, and a row briefly showing
+    // "Encrypted message" before its preview lands is a better failure than a
+    // sidebar that appears a frame late.
+    const resolved = await Promise.all(
+      rows.map(async (row) => [row.peer_id, (await cachedPreview(row.peer_id))?.text ?? null] as const)
+    );
+    setPreviews(new Map(resolved));
   }, [me]);
 
   const fetchPendingRequests = useCallback(async () => {
@@ -84,7 +98,7 @@ export function FriendsList({
     const requesterIds = data.map((f) => f.requester_id);
     const { data: profiles } = await supabase
       .from('profiles')
-      .select('id, username, avatar_url')
+      .select('id, display_name, avatar_url')
       .in('id', requesterIds);
 
     setPendingRequests(
@@ -146,7 +160,7 @@ export function FriendsList({
   // list is already keeping current. Keyed on the values rather than the row
   // object, which is new on every refetch.
   const selectedRow = conversations.find((c) => c.peer_id === selectedFriendId);
-  const selectedUsername = selectedRow?.username;
+  const selectedUsername = selectedRow?.display_name;
   const selectedAvatar = selectedRow?.avatar_url;
   const selectedLastSeen = selectedRow?.last_seen_at;
   const onSelectFriendRef = useRef(onSelectFriend);
@@ -155,7 +169,7 @@ export function FriendsList({
     if (!selectedFriendId || selectedUsername === undefined) return;
     onSelectFriendRef.current({
       id: selectedFriendId,
-      username: selectedUsername,
+      display_name: selectedUsername,
       avatar_url: selectedAvatar ?? null,
       last_seen_at: selectedLastSeen ?? null,
     });
@@ -413,9 +427,9 @@ export function FriendsList({
                 className="flex items-center justify-between p-2 rounded-lg bg-base-100 border border-base-content/5"
               >
                 <div className="flex items-center gap-2 min-w-0">
-                  <Avatar username={req.profiles?.username} url={req.profiles?.avatar_url} size={28} />
+                  <Avatar display_name={req.profiles?.display_name} url={req.profiles?.avatar_url} size={28} />
                   <span className="text-sm text-base-content truncate">
-                    @{req.profiles?.username ?? 'unknown'}
+                    @{req.profiles?.display_name ?? 'unknown'}
                   </span>
                 </div>
                 <div className="flex gap-1.5 shrink-0">
@@ -448,7 +462,7 @@ export function FriendsList({
               <Users className="w-8 h-8 text-base-content/55" />
             </div>
             <p className="text-sm text-base-content/55 font-medium">No conversations yet</p>
-            <p className="text-xs text-base-content/55 mt-1">Tap + to add a friend by username</p>
+            <p className="text-xs text-base-content/55 mt-1">Tap + to add a friend by display name</p>
           </div>
         ) : (
           <ul className="p-2 sm:p-3 space-y-1">
@@ -458,11 +472,12 @@ export function FriendsList({
                   conversation={conversation}
                   me={me}
                   unread={unread.get(conversation.peer_id) ?? 0}
+                  lastText={previews.get(conversation.peer_id) ?? null}
                   selected={selectedFriendId === conversation.peer_id}
                   onSelect={() =>
                     onSelectFriend({
                       id: conversation.peer_id,
-                      username: conversation.username,
+                      display_name: conversation.display_name,
                       avatar_url: conversation.avatar_url,
                       last_seen_at: conversation.last_seen_at,
                     })
@@ -478,7 +493,7 @@ export function FriendsList({
             Repeat it under the rows while yours is the only conversation. */}
         {conversations.length > 0 && !hasFriendRows && (
           <p className="px-4 pb-4 text-xs text-base-content/55 text-center">
-            Tap + to add a friend by username
+            Tap + to add a friend by display name
           </p>
         )}
       </div>

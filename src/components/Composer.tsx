@@ -33,7 +33,7 @@ interface ComposerProps {
   onClearStaged: () => void;
   sending: boolean;
   uploading: boolean;
-  replyingTo: { username: string; snippet: string } | null;
+  replyingTo: { display_name: string; snippet: string } | null;
   onCancelReply: () => void;
   /** Surfaced by the parent as a toast (mic permission, unsupported browser). */
   onError: (message: string) => void;
@@ -296,7 +296,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
       {replyingTo && (
         <div className="flex items-center gap-2 mb-2 px-3 py-2 rounded-lg bg-base-200/70 border-l-2 border-primary">
           <div className="min-w-0 flex-1">
-            <p className="text-xs font-medium text-primary">Replying to {replyingTo.username}</p>
+            <p className="text-xs font-medium text-primary">Replying to {replyingTo.display_name}</p>
             <p className="text-xs text-base-content/60 truncate">{replyingTo.snippet}</p>
           </div>
           <button

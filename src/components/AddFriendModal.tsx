@@ -11,7 +11,7 @@ interface AddFriendModalProps {
   onClose: () => void;
 }
 
-/** Search-by-username dialog for sending a friend request. */
+/** Search-by-display_name dialog for sending a friend request. */
 export function AddFriendModal({ me, onClose }: AddFriendModalProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Profile[]>([]);
@@ -22,7 +22,7 @@ export function AddFriendModal({ me, onClose }: AddFriendModalProps) {
     const needle = searchQuery.trim().toLowerCase();
     if (needle.length < 3) {
       setSearchResults([]);
-      toast.error('Type at least 3 characters of their username.');
+      toast.error('Type at least 3 characters of their display name.');
       return;
     }
     setSearching(true);
@@ -89,11 +89,11 @@ export function AddFriendModal({ me, onClose }: AddFriendModalProps) {
         </button>
       }
     >
-      <p className="text-sm text-base-content/60 mb-4">Search by the start of their username</p>
+      <p className="text-sm text-base-content/60 mb-4">Search by the start of their display name</p>
       <div className="join w-full">
         <input
           type="text"
-          placeholder="Search username..."
+          placeholder="Search display name..."
           className="input join-item flex-1 bg-base-200/50 border border-base-content/10 focus:border-primary"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
@@ -116,8 +116,8 @@ export function AddFriendModal({ me, onClose }: AddFriendModalProps) {
             className="flex items-center justify-between p-3 rounded-xl bg-base-200/50 border border-base-content/5"
           >
             <div className="flex items-center gap-2.5 min-w-0">
-              <Avatar username={user.username} url={user.avatar_url} size={32} />
-              <span className="text-sm font-medium truncate">@{user.username}</span>
+              <Avatar display_name={user.display_name} url={user.avatar_url} size={32} />
+              <span className="text-sm font-medium truncate">@{user.display_name}</span>
             </div>
             <button
               className="btn btn-primary btn-sm gap-1 shrink-0"

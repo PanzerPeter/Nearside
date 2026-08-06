@@ -1,18 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
-import { supabase } from '../lib/supabase';
+import { searchCached } from '../lib/localdb';
 import { formatListTime } from '../lib/time';
 import { useToast } from '../hooks/useToast';
 import { Search, X } from 'lucide-react';
 
-/** Matches search_messages()'s server-side floor (0010_message_search.sql) —
- *  querying below it would only ever come back empty. */
+/** Kept from search_messages()'s server-side floor: a one-character query
+ *  matches most of a conversation and is never what someone meant. */
 const MIN_QUERY_LENGTH = 2;
 const DEBOUNCE_MS = 250;
 
 interface SearchHit {
   id: string;
   user_id: string;
-  content: string;
+  text: string;
   created_at: string;
 }
 
@@ -20,7 +20,7 @@ interface ConversationSearchProps {
   peerId: string;
   me: string;
   /** How to name the other side in this panel — a nickname if one is set,
-   *  `@username` otherwise. Formatted by the caller, which already holds it. */
+   *  `@display_name` otherwise. Formatted by the caller, which already holds it. */
   peerLabel: string;
   /** True for the self-chat, where there is no other side to name. */
   isSelf?: boolean;
@@ -92,17 +92,22 @@ export function ConversationSearch({
 
     setSearching(true);
     const id = ++requestId.current;
+    // Local, not an RPC: 0023 took message bodies away from the server, so the
+    // only place a body exists to match against is the mirror this device
+    // built as it decrypted them. A message this device has never opened is
+    // therefore not findable here — correct, and the honest consequence of the
+    // server not being able to read it either.
     const timer = setTimeout(() => {
-      supabase
-        .rpc('search_messages', { peer: peerId, q: trimmed })
-        .then(({ data, error }) => {
+      searchCached(peerId, trimmed)
+        .then((rows) => {
           if (requestId.current !== id) return; // superseded — drop this response
           setSearching(false);
-          if (error) {
-            toast.error('Search failed.');
-            return;
-          }
-          setResults((data ?? []) as SearchHit[]);
+          setResults(rows as SearchHit[]);
+        })
+        .catch(() => {
+          if (requestId.current !== id) return;
+          setSearching(false);
+          toast.error('Search failed.');
         });
     }, DEBOUNCE_MS);
 
@@ -159,7 +164,7 @@ export function ConversationSearch({
                   </span>
                 </div>
                 <p className="text-sm line-clamp-2 text-base-content/80">
-                  {highlight(hit.content, trimmedQuery)}
+                  {highlight(hit.text, trimmedQuery)}
                 </p>
               </button>
             ))}
