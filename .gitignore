@@ -3,3 +3,6 @@ node_modules/
 dist/
 .env
 .env.local
+
+# Firebase service account keys — never commit
+*-firebase-adminsdk-*.json
