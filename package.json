@@ -9,9 +9,14 @@
     "lint": "eslint .",
     "test": "vitest run",
     "preview": "vite preview",
+    "android:sync": "NEARSIDE_NATIVE=1 vite build && cap sync android",
+    "android:open": "cap open android",
     "typecheck": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.worker.json"
   },
   "dependencies": {
+    "@capacitor/android": "^8.5.0",
+    "@capacitor/cli": "^8.5.0",
+    "@capacitor/core": "^8.5.0",
     "@emoji-mart/data": "^1.2.1",
     "@emoji-mart/react": "^1.1.1",
     "@fontsource/inter": "^5.3.0",

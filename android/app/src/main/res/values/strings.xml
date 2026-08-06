@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Nearside</string>
+    <string name="title_activity_main">Nearside</string>
+    <string name="package_name">app.nearside</string>
+    <string name="custom_url_scheme">app.nearside</string>
+</resources>
