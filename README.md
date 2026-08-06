@@ -112,7 +112,16 @@ Gradle 8.14 does not run on newer JDKs.
 
 ```bash
 npm run android:sync
-cd android && ./gradlew assembleDebug
+cd android && JAVA_HOME=/usr/lib/jvm/java-21-openjdk ./gradlew assembleDebug
+```
+
+`JAVA_HOME` has to be set explicitly wherever the system default JDK is newer
+than 21 — Gradle fails at configuration time rather than with a version message.
+Gradle finds the SDK through `android/local.properties`, which is gitignored and
+holds a single line:
+
+```properties
+sdk.dir=/absolute/path/to/Android/Sdk
 ```
 
 `android:sync` sets `NEARSIDE_NATIVE=1`, which disables the PWA service worker
