@@ -22,6 +22,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { openFile } from '../lib/media-crypto';
 
 /** Lifetime asked for on each signature. */
 export const SIGNED_URL_TTL_SECONDS = 3600;
@@ -39,9 +40,21 @@ export interface SignedMedia {
   reload: () => void;
 }
 
-export function useSignedMediaUrl(path: string): SignedMedia {
+export function useSignedMediaUrl(path: string, mediaKey?: Uint8Array | null): SignedMedia {
   const [url, setUrl] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
+  // The object URL currently handed out, so it can be revoked. A decrypted
+  // attachment lives in browser memory for as long as its blob URL does, and
+  // the installed PWA stays open for days — leaking one per rendered image is
+  // how a session ends up holding every photo it has scrolled past.
+  const objectUrlRef = useRef<string | null>(null);
+
+  const releaseObjectUrl = useCallback(() => {
+    if (objectUrlRef.current) {
+      URL.revokeObjectURL(objectUrlRef.current);
+      objectUrlRef.current = null;
+    }
+  }, []);
   // Whether the one retry has been spent, for the *current* path. A ref, not
   // state: `reload` is called from an element's error handler and has to read
   // the answer synchronously, before any re-render.
@@ -61,8 +74,35 @@ export function useSignedMediaUrl(path: string): SignedMedia {
       setFailed(true);
       return;
     }
-    setUrl(data.signedUrl);
-  }, [path]);
+
+    // No key: either a row written before 0024, or one this device cannot
+    // open. Either way there is nothing to decrypt and nothing to show — a
+    // signed URL to ciphertext would render as a broken image, which reads as
+    // a lost file rather than as the encryption working.
+    if (!mediaKey) {
+      setFailed(true);
+      return;
+    }
+
+    try {
+      const response = await fetch(data.signedUrl);
+      if (!response.ok) throw new Error(String(response.status));
+      const opened = await openFile(new Uint8Array(await response.arrayBuffer()), mediaKey);
+      if (requestRef.current !== ticket) return;
+
+      // Revoke the previous one before replacing it — a re-sign after an
+      // expiry would otherwise strand the old blob for the tab's lifetime.
+      releaseObjectUrl();
+      // Copied into a fresh buffer: `opened` is a view libsodium may hand back
+      // over a larger allocation, and Blob would carry the whole thing.
+      const blobUrl = URL.createObjectURL(new Blob([opened.slice()]));
+      objectUrlRef.current = blobUrl;
+      setUrl(blobUrl);
+    } catch {
+      if (requestRef.current !== ticket) return;
+      setFailed(true);
+    }
+  }, [path, mediaKey, releaseObjectUrl]);
 
   useEffect(() => {
     setUrl(null);
@@ -81,8 +121,9 @@ export function useSignedMediaUrl(path: string): SignedMedia {
       // of itself and retire nothing.
       // eslint-disable-next-line react-hooks/exhaustive-deps
       requestRef.current++;
+      releaseObjectUrl();
     };
-  }, [sign]);
+  }, [sign, releaseObjectUrl]);
 
   const reload = useCallback(() => {
     if (retriedRef.current) {

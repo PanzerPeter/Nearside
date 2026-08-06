@@ -367,9 +367,9 @@ export function MessageBubble({
                 {msg.media_path &&
                   msg.media_type &&
                   (msg.media_type === 'audio' ? (
-                    <VoiceNote path={msg.media_path} durationMs={msg.media_duration_ms} />
+                    <VoiceNote path={msg.media_path} durationMs={msg.media_duration_ms} mediaKey={msg.media_key} />
                   ) : (
-                    <MediaAttachment path={msg.media_path} type={msg.media_type} />
+                    <MediaAttachment path={msg.media_path} type={msg.media_type} mediaKey={msg.media_key} />
                   ))}
                 {msg.text && <MessageText text={msg.text} />}
                 {/* Sealed, and this device could not open it — most likely a

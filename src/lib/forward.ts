@@ -18,7 +18,7 @@
 
 import { supabase } from './supabase';
 import { mediaPath } from './conversation';
-import { sealBody } from './sealed-body';
+import { sealBody, sealMediaKey } from './sealed-body';
 import { peerPublicKey } from './peer-keys';
 import type { Identity } from './crypto/keys';
 import type { Message } from './types';
@@ -163,6 +163,11 @@ export async function forwardMessage(
 ): Promise<ForwardResult> {
   if (!isForwardable(msg)) return { ok: false, reason: 'failed' };
 
+  // An attachment this device could not open cannot be forwarded: the bytes
+  // would copy fine and arrive unopenable. Reported as unavailable, which is
+  // what it is from the user's side.
+  if (msg.media_path && !msg.media_key) return { ok: false, reason: 'media-missing' };
+
   let copiedPath: string | null = null;
   if (msg.media_path) {
     const destination = forwardMediaPath(me, targetId, msg.media_path);
@@ -188,13 +193,24 @@ export async function forwardMessage(
   // both fail and — worse, if it ever stopped failing — put a plaintext body
   // back on the server.
   const { text, ...columns } = forwardPayload(msg, me, targetId, copiedPath);
+  const targetKey = await peerPublicKey(targetId);
   const body = text
-    ? await sealBody(identity, await peerPublicKey(targetId), me, targetId, text)
+    ? await sealBody(identity, targetKey, me, targetId, text)
     : { ciphertext: null, nonce: null };
+
+  // The copied object is the same sealed bytes under the same file key, so the
+  // key itself has to be re-sealed to whoever is receiving it now. Carrying the
+  // original message's media_key_ciphertext across instead would hand the
+  // target a key sealed to somebody else — the attachment would arrive, fail to
+  // open, and look like a corrupt file rather than a forwarding bug.
+  const mediaKey =
+    copiedPath && msg.media_key
+      ? await sealMediaKey(identity, targetKey, me, targetId, msg.media_key)
+      : { media_key_ciphertext: null, media_key_nonce: null };
 
   const { data, error } = await supabase
     .from('messages')
-    .insert({ ...columns, ...body })
+    .insert({ ...columns, ...body, ...mediaKey })
     .select('id')
     .single();
 

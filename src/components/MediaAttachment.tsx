@@ -4,6 +4,8 @@ import { ImageOff, Download } from 'lucide-react';
 
 interface MediaAttachmentProps {
   path: string;
+  /** The opened file key, from `openRows`. Without it the object is opaque. */
+  mediaKey?: Uint8Array | null;
   /** Voice notes are not routed here — see `VoiceNote`. */
   type: VisualMediaType;
 }
@@ -13,8 +15,8 @@ interface MediaAttachmentProps {
  * short-lived signed URL. Falls back gracefully when the file has been removed
  * (e.g. trimmed by the per-conversation media cap).
  */
-export function MediaAttachment({ path, type }: MediaAttachmentProps) {
-  const { url, failed, reload } = useSignedMediaUrl(path);
+export function MediaAttachment({ path, type, mediaKey }: MediaAttachmentProps) {
+  const { url, failed, reload } = useSignedMediaUrl(path, mediaKey);
 
   async function handleDownload() {
     if (!url) return;

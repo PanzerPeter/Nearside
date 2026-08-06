@@ -5,6 +5,8 @@ import { useSignedMediaUrl } from '../hooks/useSignedMediaUrl';
 
 interface VoiceNoteProps {
   path: string;
+  /** The opened file key, from `openRows`. Without it the object is opaque. */
+  mediaKey?: Uint8Array | null;
   /** Recorded length from the message row; see `Message.media_duration_ms`. */
   durationMs: number | null;
 }
@@ -16,9 +18,9 @@ interface VoiceNoteProps {
  * both bubble palettes (primary for your own messages, neutral for the
  * friend's) without being told which one it is in.
  */
-export function VoiceNote({ path, durationMs }: VoiceNoteProps) {
+export function VoiceNote({ path, durationMs, mediaKey }: VoiceNoteProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
-  const { url, failed, reload } = useSignedMediaUrl(path);
+  const { url, failed, reload } = useSignedMediaUrl(path, mediaKey);
   const [playing, setPlaying] = useState(false);
   const [positionMs, setPositionMs] = useState(0);
   // Filled in from the element only when the row has no stored duration.

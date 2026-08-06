@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { identityFromSeed } from './crypto/keys';
 import { generateMnemonic, seedFromMnemonic } from './crypto/mnemonic';
-import { openBody, sealBody } from './sealed-body';
+import { openBody, openMediaKey, sealBody, sealMediaKey } from './sealed-body';
 
 const ME = '11111111-1111-1111-1111-111111111111';
 const PEER = '22222222-2222-2222-2222-222222222222';
@@ -67,5 +67,51 @@ describe('sealed body', () => {
     const id = await identity();
     const bare = { ciphertext: null, nonce: null, user_id: ME, receiver_id: PEER };
     expect(await openBody(id, null, bare)).toBeNull();
+  });
+});
+
+describe('media keys', () => {
+  it('round-trips a file key to the recipient', async () => {
+    const me = await identity();
+    const them = await identity();
+    const fileKey = new Uint8Array(32).fill(7);
+    const cols = await sealMediaKey(me, them.boxPublic, ME, PEER, fileKey);
+    const opened = await openMediaKey(them, me.boxPublic, {
+      ...cols,
+      user_id: ME,
+      receiver_id: PEER,
+    });
+    expect(Array.from(opened ?? [])).toEqual(Array.from(fileKey));
+  });
+
+  it('round-trips a file key in the vault', async () => {
+    const me = await identity();
+    const fileKey = new Uint8Array(32).fill(9);
+    const cols = await sealMediaKey(me, null, ME, ME, fileKey);
+    const opened = await openMediaKey(me, null, { ...cols, user_id: ME, receiver_id: ME });
+    expect(Array.from(opened ?? [])).toEqual(Array.from(fileKey));
+  });
+
+  it('refuses a file key sealed to somebody else', async () => {
+    // The forwarding trap: copying media_key_ciphertext across to a new
+    // conversation instead of re-sealing gives the target a key it cannot use.
+    const me = await identity();
+    const them = await identity();
+    const stranger = await identity();
+    const cols = await sealMediaKey(me, them.boxPublic, ME, PEER, new Uint8Array(32).fill(1));
+    expect(
+      await openMediaKey(stranger, me.boxPublic, { ...cols, user_id: ME, receiver_id: PEER })
+    ).toBeNull();
+  });
+
+  it('returns null when a row carries no key at all', async () => {
+    const me = await identity();
+    const bare = {
+      media_key_ciphertext: null,
+      media_key_nonce: null,
+      user_id: ME,
+      receiver_id: PEER,
+    };
+    expect(await openMediaKey(me, null, bare)).toBeNull();
   });
 });

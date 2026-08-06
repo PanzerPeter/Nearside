@@ -1,4 +1,4 @@
-import type { Identity } from './crypto/keys';
+import { fromBase64, toBase64, type Identity } from './crypto/keys';
 import { openForSelf, openFrom, sealFor, sealForSelf } from './crypto/seal';
 import { isSelfChat } from './conversation';
 import { cacheMessage } from './localdb';
@@ -11,6 +11,13 @@ export interface BodyColumns {
 interface Readable {
   ciphertext: string | null;
   nonce: string | null;
+  user_id: string;
+  receiver_id: string;
+}
+
+interface MediaKeyed {
+  media_key_ciphertext: string | null;
+  media_key_nonce: string | null;
   user_id: string;
   receiver_id: string;
 }
@@ -55,6 +62,46 @@ export async function openBody(
 }
 
 /**
+ * Columns carrying a file's key, sealed to whoever can read the message.
+ *
+ * The key is base64'd and put through the same `sealBody` as a body, rather
+ * than growing a parallel byte-sealing path: it is 32 bytes of text as far as
+ * the crypto is concerned, and one sealing routine means one place where the
+ * self-chat/peer decision is made.
+ */
+export async function sealMediaKey(
+  identity: Identity,
+  peerPublic: Uint8Array | null,
+  me: string,
+  peerId: string,
+  key: Uint8Array
+): Promise<{ media_key_ciphertext: string; media_key_nonce: string }> {
+  const sealed = await sealBody(identity, peerPublic, me, peerId, await toBase64(key));
+  return { media_key_ciphertext: sealed.ciphertext, media_key_nonce: sealed.nonce };
+}
+
+/** The file key for a row, or null when it cannot be opened. */
+export async function openMediaKey(
+  identity: Identity,
+  peerPublic: Uint8Array | null,
+  row: MediaKeyed
+): Promise<Uint8Array | null> {
+  if (!row.media_key_ciphertext || !row.media_key_nonce) return null;
+  const text = await openBody(identity, peerPublic, {
+    ciphertext: row.media_key_ciphertext,
+    nonce: row.media_key_nonce,
+    user_id: row.user_id,
+    receiver_id: row.receiver_id,
+  });
+  if (text === null) return null;
+  try {
+    return await fromBase64(text);
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Fetched rows with their bodies opened into `text`, once, as they enter
  * state.
  *
@@ -72,7 +119,9 @@ export async function openBody(
  * `text` alone is indistinguishable from a media message with no caption —
  * and the two must not render the same way.
  */
-export async function openRows<T extends Readable & { id: string; created_at: string }>(
+export async function openRows<
+  T extends Readable & MediaKeyed & { id: string; created_at: string },
+>(
   identity: Identity | null,
   peerPublic: Uint8Array | null,
   peerId: string,
@@ -83,6 +132,9 @@ export async function openRows<T extends Readable & { id: string; created_at: st
       // No identity yet: the row is sealed and unopenable, which is exactly
       // what decrypt_failed describes.
       const text = identity ? await openBody(identity, peerPublic, row) : null;
+      // The file key opens at the same boundary as the body, so no component
+      // rendering an attachment ever has to hold an identity or a peer key.
+      const media_key = identity ? await openMediaKey(identity, peerPublic, row) : null;
       if (text !== null) {
         await cacheMessage({
           id: row.id,
@@ -92,7 +144,7 @@ export async function openRows<T extends Readable & { id: string; created_at: st
           created_at: row.created_at,
         });
       }
-      return { ...row, text, decrypt_failed: text === null };
+      return { ...row, text, media_key, decrypt_failed: text === null };
     })
   );
 }

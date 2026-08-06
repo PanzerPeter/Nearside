@@ -12,7 +12,8 @@ import {
   MAX_MESSAGE_LENGTH,
   MEDIA_MAX_BYTES,
 } from '../lib/conversation';
-import { openRows, sealBody } from '../lib/sealed-body';
+import { openRows, sealBody, sealMediaKey } from '../lib/sealed-body';
+import { sealFile } from '../lib/media-crypto';
 import { peerPublicKey } from '../lib/peer-keys';
 import type { Identity } from '../lib/crypto/keys';
 import { formatDisplayName, useNickname } from '../lib/nicknames';
@@ -466,6 +467,8 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
       nonce: null,
       media_path: null,
       media_type: null,
+      media_key_ciphertext: null,
+      media_key_nonce: null,
       media_duration_ms: null,
       reply_to_id: msg.reply_to_id,
       // The outbox only ever queues typed text; a forward is inserted directly
@@ -1271,10 +1274,24 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
     const upload =
       kind === 'image' ? await compressImage(file, { maxEdge: CHAT_IMAGE_MAX_EDGE }) : file;
 
+    // Sealed after compression, never before: compressImage decodes an image,
+    // and ciphertext does not decode. The key is minted here, travels no
+    // further than this function in the clear, and is sealed to the recipient
+    // below.
+    const peerKey = await peerPublicKey(friend.id);
+    const { blob: sealedUpload, key: fileKey } = await sealFile(
+      new Uint8Array(await upload.arrayBuffer())
+    );
+
+    // The extension is kept for the download filename only — the object itself
+    // is opaque bytes served as application/octet-stream, so the name is the
+    // last thing in Storage that still hints at the file's kind. That is a
+    // deliberate, disclosed limit rather than an oversight: the path is already
+    // visible to anyone who can list the bucket.
     const path = mediaPath(me, friend.id, `${crypto.randomUUID()}.${fileExtension(upload)}`);
     const { error: uploadError } = await supabase.storage
       .from('chat-media')
-      .upload(path, upload, { contentType: upload.type });
+      .upload(path, sealedUpload, { contentType: sealedUpload.type });
 
     if (uploadError) {
       setUploading(false);
@@ -1289,11 +1306,10 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
         user_id: me,
         receiver_id: friend.id,
         // A caption is body text like any other and is sealed like any other.
-        // The attachment itself is still a plaintext object in Storage; Task 4
-        // of this plan is where that changes.
         ...(caption
-          ? await sealBody(identity, await peerPublicKey(friend.id), me, friend.id, caption)
+          ? await sealBody(identity, peerKey, me, friend.id, caption)
           : { ciphertext: null, nonce: null }),
+        ...(await sealMediaKey(identity, peerKey, me, friend.id, fileKey)),
         media_path: path,
         media_type: kind,
         media_duration_ms: kind === 'audio' ? durationMs : null,
@@ -1361,6 +1377,9 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
             media_path: null,
             media_type: null,
             media_duration_ms: null,
+            // The file is gone, so the key that opened it describes nothing.
+            media_key_ciphertext: null,
+            media_key_nonce: null,
             // The placeholder is a body, so it is sealed like one. Written as
             // plaintext it would simply never appear: nothing reads `content`
             // any more, and the bubble would show a decrypt failure where a
@@ -1418,6 +1437,8 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
         nonce: null,
         media_path: null,
         media_type: null,
+        media_key_ciphertext: null,
+        media_key_nonce: null,
         // Cleared with the rest of it: a length left on a row that no longer
         // names a file is a fact about something that isn't there, and it is
         // the one field the media trim (`cleanupOldMedia`) already nulls.

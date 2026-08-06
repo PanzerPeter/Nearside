@@ -38,6 +38,13 @@ export interface Message {
   decrypt_failed?: boolean;
   media_path: string | null;
   media_type: MediaType | null;
+  /** The attachment's own key, sealed to whoever can read this message. Both
+   *  null for a text-only row. */
+  media_key_ciphertext: string | null;
+  media_key_nonce: string | null;
+  /** Client-only, never a column: the opened file key, set by `openRows`. Null
+   *  when there is no attachment, or when this device cannot open it. */
+  media_key?: Uint8Array | null;
   /** Recorded length of a voice note. Null for every other kind of media —
    *  stored because a WebM from MediaRecorder carries no duration header, so
    *  the bubble could not otherwise show a length before the file is fetched. */

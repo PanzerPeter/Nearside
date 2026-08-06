@@ -25,6 +25,8 @@ function message(overrides: Partial<Message> = {}): Message {
     nonce: null,
     media_path: null,
     media_type: null,
+    media_key_ciphertext: null,
+    media_key_nonce: null,
     media_duration_ms: null,
     reply_to_id: null,
     forwarded: false,
