@@ -13,6 +13,7 @@ import {
   MEDIA_MAX_BYTES,
 } from '../lib/conversation';
 import { openRows, sealBody } from '../lib/sealed-body';
+import { peerPublicKey } from '../lib/peer-keys';
 import type { Identity } from '../lib/crypto/keys';
 import { formatDisplayName, useNickname } from '../lib/nicknames';
 import { MEDIA_SCAN_LIMIT, selectStaleMedia, type MediaRow } from '../lib/media';
@@ -96,6 +97,20 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
   // `generation` bumps every time the app wakes (sleep, tab restore, network
   // return); `live` is false while realtime isn't delivering.
   const { generation, live } = useConnection();
+
+  /**
+   * The single read boundary. Every fetch and every realtime arrival passes
+   * through here to be decrypted once, on the way into state.
+   *
+   * The peer key is resolved per call rather than held in state on purpose:
+   * `peerPublicKey` caches in-module after the first fetch, so this costs one
+   * request per peer per session, and there is no window during which rows can
+   * arrive before a key-loading effect has settled and render as decrypt
+   * failures that a later re-render would have to undo.
+   */
+  async function open(rows: Message[]): Promise<Message[]> {
+    return openRows(identity, await peerPublicKey(friend.id), friend.id, rows);
+  }
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
@@ -444,9 +459,9 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
       id: msg.id,
       user_id: msg.user_id,
       receiver_id: msg.receiver_id,
-      content: msg.content,
-      // An optimistic bubble is local text that has not been sealed yet — it
-      // renders from `content` like any plaintext row.
+      // An optimistic bubble is local text that was never sealed — it has no
+      // ciphertext to open, and `text` is exactly the field the bubble reads.
+      text: msg.text,
       ciphertext: null,
       nonce: null,
       media_path: null,
@@ -503,7 +518,7 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
       .limit(PAGE_SIZE);
 
     if (loadedFor.current !== forFriend) return;
-    const rows = await openRows(identity, (data ?? []) as Message[]);
+    const rows = await open((data ?? []) as Message[]);
     // Seed before the state update lands: the render that first shows this
     // page's rows must already find them "seen," or the entrance animation
     // cascades across the whole initial page.
@@ -574,7 +589,7 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
       .order('created_at', { ascending: true })
       .order('id', { ascending: true })
       .limit(limit);
-    return openRows(identity, (data ?? []) as Message[]);
+    return open((data ?? []) as Message[]);
   }
 
   /**
@@ -667,7 +682,7 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
       .order('id', { ascending: false })
       .limit(PAGE_SIZE);
 
-    const older = await openRows(identity, (data ?? []) as Message[]);
+    const older = await open((data ?? []) as Message[]);
     if (loadedFor.current !== forFriend) {
       setLoadingOlder(false);
       return;
@@ -764,7 +779,7 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
           return;
         }
 
-        const older: Message[] = await openRows(identity, (response.data ?? []) as Message[]);
+        const older: Message[] = await open((response.data ?? []) as Message[]);
         if (older.length === 0) {
           more = false;
           break;
@@ -850,7 +865,7 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
           if (pendingRef.current.some((p) => p.id === msg.id)) {
             // Opened before it is adopted: `adoptSentRow` has to commit both
             // state updates in one tick, so it cannot await anything itself.
-            void openRows(identity, [msg]).then(([opened]) => {
+            void open([msg]).then(([opened]) => {
               adoptSentRow(opened, (prev) => prev.filter((m) => m.id !== msg.id));
             });
             // The queue entry is settled: its row exists. Left in place it
@@ -859,7 +874,7 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
             void retireQueued(msg.id);
             return;
           }
-          void openRows(identity, [msg]).then(([opened]) => {
+          void open([msg]).then(([opened]) => {
             setMessages((prev) => mergeMessages(prev, [opened]));
           });
           // Only count arrivals the user didn't just cause and isn't already
@@ -876,7 +891,7 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
         (payload) => {
           const msg = payload.new as Message;
           if (!isRelevant(msg)) return;
-          void openRows(identity, [msg]).then(([opened]) => {
+          void open([msg]).then(([opened]) => {
             setMessages((prev) => prev.map((m) => (m.id === opened.id ? opened : m)));
           });
         }
@@ -983,7 +998,7 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
       id: crypto.randomUUID(),
       user_id: me,
       receiver_id: friend.id,
-      content: trimmed,
+      text: trimmed,
       reply_to_id: replyingTo?.id ?? null,
       created_at: new Date().toISOString(),
       attempts: 0,
@@ -1023,7 +1038,7 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
           id: msg.id,
           user_id: msg.user_id,
           receiver_id: msg.receiver_id,
-          ...(await sealBody(identity, msg.user_id, msg.receiver_id, msg.content)),
+          ...(await sealBody(identity, await peerPublicKey(msg.receiver_id), msg.user_id, msg.receiver_id, msg.text)),
           reply_to_id: msg.reply_to_id,
         })
         .select('*')
@@ -1042,7 +1057,7 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
       // rather than letting it escape as an unhandled rejection.
       if (insertError || !inserted) return null;
       notifyReceiver(inserted.id);
-      const [opened] = await openRows(identity, [inserted as Message]);
+      const [opened] = await open([inserted as Message]);
       return opened;
     } catch {
       return null;
@@ -1066,7 +1081,7 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
       .eq('user_id', me)
       .maybeSingle();
     if (!data) return null;
-    const [opened] = await openRows(identity, [data as Message]);
+    const [opened] = await open([data as Message]);
     return opened;
   }
 
@@ -1273,12 +1288,12 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
       .insert({
         user_id: me,
         receiver_id: friend.id,
-        // A caption is body text like any other, so it is sealed in the vault
-        // too. The attachment itself is not — it is an object in Storage the
-        // server can read, and Plan 3 is where that changes.
+        // A caption is body text like any other and is sealed like any other.
+        // The attachment itself is still a plaintext object in Storage; Task 4
+        // of this plan is where that changes.
         ...(caption
-          ? await sealBody(identity, me, friend.id, caption)
-          : { content: null, ciphertext: null, nonce: null }),
+          ? await sealBody(identity, await peerPublicKey(friend.id), me, friend.id, caption)
+          : { ciphertext: null, nonce: null }),
         media_path: path,
         media_type: kind,
         media_duration_ms: kind === 'audio' ? durationMs : null,
@@ -1338,6 +1353,7 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
         const label = row.media_type === 'audio' ? '🎤 voice message removed' : '📎 media removed';
         byKind.set(label, [...(byKind.get(label) ?? []), row.id]);
       }
+      const peerKey = await peerPublicKey(friend.id);
       for (const [label, ids] of byKind) {
         await supabase
           .from('messages')
@@ -1345,12 +1361,11 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
             media_path: null,
             media_type: null,
             media_duration_ms: null,
-            content: label,
-            // The placeholder replaces the body, so the sealed one goes with
-            // it — left behind, `openBody` would prefer the old caption and
-            // render it over the "removed" text.
-            ciphertext: null,
-            nonce: null,
+            // The placeholder is a body, so it is sealed like one. Written as
+            // plaintext it would simply never appear: nothing reads `content`
+            // any more, and the bubble would show a decrypt failure where a
+            // "media removed" note belongs.
+            ...(await sealBody(identity, peerKey, me, friend.id, label)),
           })
           .in('id', ids);
       }
@@ -1359,7 +1374,7 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
 
   function startEdit(msg: Message) {
     setEditingId(msg.id);
-    setEditingText(msg.content ?? '');
+    setEditingText(msg.text ?? '');
   }
 
   async function saveEdit(id: string) {
@@ -1375,7 +1390,7 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
     const { error: updateError } = await supabase
       .from('messages')
       .update({
-        ...(await sealBody(identity, me, friend.id, trimmed)),
+        ...(await sealBody(identity, await peerPublicKey(friend.id), me, friend.id, trimmed)),
         edited_at: new Date().toISOString(),
       })
       .eq('id', id);
@@ -1391,6 +1406,10 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
       .from('messages')
       .update({
         deleted_at: new Date().toISOString(),
+        // Empty rather than null only because `has_body` still counts `content`
+        // as a body until 0023 drops the column. Task 3 removes this line and
+        // exempts tombstones from the rebuilt constraint instead — a deleted
+        // message is meant to have no body at all.
         content: '',
         // Cleared with the body: a tombstone that kept its ciphertext would
         // leave the sealed text sitting on the server after the user asked

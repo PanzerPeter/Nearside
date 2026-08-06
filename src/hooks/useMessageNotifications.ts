@@ -97,9 +97,13 @@ export function useMessageNotifications(
       // "Bobby" while the app says "Bobby" is the point of the feature. Read
       // from the store rather than fetched: it is already loaded and live.
       const title = nicknameFor(msg.user_id) ?? `@${await resolveUsername(msg.user_id)}`;
-      const body = msg.content?.trim()
-        ? msg.content
-        : msg.media_type === 'image'
+      // The body is sealed and this hook holds no key, so a banner can name the
+      // kind of thing that arrived but never quote it. Previewing text would
+      // mean decrypting here — a second place that opens bodies, on a code path
+      // that also runs on the lock screen. Naming the sender is the useful part
+      // and it costs nothing.
+      const body =
+        msg.media_type === 'image'
           ? '📷 Photo'
           : msg.media_type === 'video'
             ? '🎥 Video'

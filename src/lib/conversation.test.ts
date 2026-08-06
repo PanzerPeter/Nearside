@@ -185,7 +185,7 @@ describe('messageSnippet', () => {
       id: '1',
       user_id: A,
       receiver_id: B,
-      content: null,
+      text: null,
       ciphertext: null,
       nonce: null,
       media_path: null,
@@ -201,11 +201,11 @@ describe('messageSnippet', () => {
   }
 
   it('quotes the body when there is one', () => {
-    expect(messageSnippet(message({ content: 'see you at six' }))).toBe('see you at six');
+    expect(messageSnippet(message({ text: 'see you at six' }))).toBe('see you at six');
   });
 
   it('prefers a caption over the attachment it describes', () => {
-    expect(messageSnippet(message({ content: 'look', media_path: 'p.jpg', media_type: 'image' })))
+    expect(messageSnippet(message({ text: 'look', media_path: 'p.jpg', media_type: 'image' })))
       .toBe('look');
   });
 
@@ -218,7 +218,7 @@ describe('messageSnippet', () => {
   });
 
   it('never leaks the body of a deleted message', () => {
-    expect(messageSnippet(message({ content: 'oops', deleted_at: new Date().toISOString() }))).toBe(
+    expect(messageSnippet(message({ text: 'oops', deleted_at: new Date().toISOString() }))).toBe(
       'Deleted message'
     );
   });

@@ -92,9 +92,9 @@ export function MessageBubble({
   const toast = useToast();
 
   async function copyContent() {
-    if (!msg.content) return;
+    if (!msg.text) return;
     try {
-      await navigator.clipboard.writeText(msg.content);
+      await navigator.clipboard.writeText(msg.text);
       toast.success('Copied.');
     } catch {
       toast.error('Could not copy.');
@@ -127,7 +127,7 @@ export function MessageBubble({
           },
         ]
       : []),
-    ...(msg.content
+    ...(msg.text
       ? [
           {
             key: 'copy',
@@ -139,7 +139,7 @@ export function MessageBubble({
       : []),
     // Edit and delete stay own-only: you can't change a message you didn't
     // send. Media has no editable body — the caption travels with the file.
-    ...(isOwn && msg.content && !msg.media_path
+    ...(isOwn && msg.text && !msg.media_path
       ? [
           {
             key: 'edit',
@@ -371,7 +371,7 @@ export function MessageBubble({
                   ) : (
                     <MediaAttachment path={msg.media_path} type={msg.media_type} />
                   ))}
-                {msg.content && <MessageText text={msg.content} />}
+                {msg.text && <MessageText text={msg.text} />}
                 {/* Sealed, and this device could not open it — most likely a
                     vault written under a key this phone was never given. Said
                     out loud, because an empty bubble would read as a message

@@ -20,7 +20,7 @@ function message(overrides: Partial<Message> = {}): Message {
     id: 'm1',
     user_id: SOURCE,
     receiver_id: ME,
-    content: null,
+    text: null,
     ciphertext: null,
     nonce: null,
     media_path: null,
@@ -76,17 +76,17 @@ describe('forwardMediaPath', () => {
 
 describe('forwardPayload', () => {
   it('addresses the message from the forwarder to the target', () => {
-    const row = forwardPayload(message({ content: 'hi' }), ME, BOB, null);
+    const row = forwardPayload(message({ text: 'hi' }), ME, BOB, null);
     expect(row.user_id).toBe(ME);
     expect(row.receiver_id).toBe(BOB);
   });
 
   it('marks the row as forwarded', () => {
-    expect(forwardPayload(message({ content: 'hi' }), ME, BOB, null).forwarded).toBe(true);
+    expect(forwardPayload(message({ text: 'hi' }), ME, BOB, null).forwarded).toBe(true);
   });
 
   it('drops the reply, which names a message in the other conversation', () => {
-    const row = forwardPayload(message({ content: 'hi', reply_to_id: 'somewhere-else' }), ME, BOB, null);
+    const row = forwardPayload(message({ text: 'hi', reply_to_id: 'somewhere-else' }), ME, BOB, null);
     expect(row.reply_to_id).toBeNull();
   });
 
@@ -103,20 +103,20 @@ describe('forwardPayload', () => {
   });
 
   it('keeps no duration for a voice note whose file was not copied', () => {
-    const original = message({ content: '🎤 voice message removed', media_duration_ms: 4200 });
+    const original = message({ text: '🎤 voice message removed', media_duration_ms: 4200 });
     const row = forwardPayload(original, ME, BOB, null);
     expect(row.media_duration_ms).toBeNull();
     expect(row.media_type).toBeNull();
   });
 
   it('normalises an empty caption to null rather than an empty body', () => {
-    expect(forwardPayload(message({ content: '' }), ME, BOB, 'c_d/p.jpg').content).toBeNull();
+    expect(forwardPayload(message({ text: '' }), ME, BOB, 'c_d/p.jpg').text).toBeNull();
   });
 });
 
 describe('isForwardable', () => {
   it('accepts a message with a body', () => {
-    expect(isForwardable(message({ content: 'hi' }))).toBe(true);
+    expect(isForwardable(message({ text: 'hi' }))).toBe(true);
   });
 
   it('accepts media with no caption', () => {
@@ -124,13 +124,13 @@ describe('isForwardable', () => {
   });
 
   it('refuses a deleted message, whose body has been stripped', () => {
-    expect(isForwardable(message({ content: 'hi', deleted_at: new Date().toISOString() }))).toBe(
+    expect(isForwardable(message({ text: 'hi', deleted_at: new Date().toISOString() }))).toBe(
       false
     );
   });
 
   it('refuses a body that is only whitespace', () => {
-    expect(isForwardable(message({ content: '   ' }))).toBe(false);
+    expect(isForwardable(message({ text: '   ' }))).toBe(false);
   });
 });
 

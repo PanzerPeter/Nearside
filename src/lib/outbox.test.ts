@@ -7,7 +7,7 @@ function samplePending(overrides: Partial<PendingMessage> = {}): PendingMessage 
     id: 'msg-1',
     user_id: 'me',
     receiver_id: 'friend',
-    content: 'hello',
+    text: 'hello',
     reply_to_id: null,
     created_at: new Date().toISOString(),
     attempts: 0,

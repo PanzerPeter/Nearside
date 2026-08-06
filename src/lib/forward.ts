@@ -19,6 +19,7 @@
 import { supabase } from './supabase';
 import { mediaPath } from './conversation';
 import { sealBody } from './sealed-body';
+import { peerPublicKey } from './peer-keys';
 import type { Identity } from './crypto/keys';
 import type { Message } from './types';
 
@@ -70,7 +71,7 @@ export function forwardMediaPath(
  * since been trimmed away and only its placeholder text remains.
  */
 export function forwardPayload(
-  msg: Pick<Message, 'content' | 'media_type' | 'media_duration_ms'>,
+  msg: Pick<Message, 'text' | 'media_type' | 'media_duration_ms'>,
   me: string,
   targetId: string,
   mediaPath: string | null
@@ -78,7 +79,7 @@ export function forwardPayload(
   return {
     user_id: me,
     receiver_id: targetId,
-    content: msg.content || null,
+    text: msg.text || null,
     media_path: mediaPath,
     media_type: mediaPath ? msg.media_type : null,
     // Only meaningful alongside a voice note; a forward that lost its media
@@ -92,8 +93,8 @@ export function forwardPayload(
 /** Is there anything in this message to forward at all? A deleted message has
  *  had its body and media stripped, and the UI never offers the action for
  *  one — this is the belt to that braces. */
-export function isForwardable(msg: Pick<Message, 'content' | 'media_path' | 'deleted_at'>): boolean {
-  return !msg.deleted_at && (!!msg.content?.trim() || !!msg.media_path);
+export function isForwardable(msg: Pick<Message, 'text' | 'media_path' | 'deleted_at'>): boolean {
+  return !msg.deleted_at && (!!msg.text?.trim() || !!msg.media_path);
 }
 
 /**
@@ -182,14 +183,18 @@ export async function forwardMessage(
   // a message forwarded INTO the vault must land sealed like anything else
   // sent there — otherwise the one conversation that claims to be unreadable
   // has a plaintext way in.
-  const payload = forwardPayload(msg, me, targetId, copiedPath);
-  const body = payload.content
-    ? await sealBody(identity, me, targetId, payload.content)
-    : { content: null, ciphertext: null, nonce: null };
+  // `text` is destructured out rather than spread: it is the one field of the
+  // payload with no column behind it, and letting it reach `.insert()` would
+  // both fail and — worse, if it ever stopped failing — put a plaintext body
+  // back on the server.
+  const { text, ...columns } = forwardPayload(msg, me, targetId, copiedPath);
+  const body = text
+    ? await sealBody(identity, await peerPublicKey(targetId), me, targetId, text)
+    : { ciphertext: null, nonce: null };
 
   const { data, error } = await supabase
     .from('messages')
-    .insert({ ...payload, ...body })
+    .insert({ ...columns, ...body })
     .select('id')
     .single();
 

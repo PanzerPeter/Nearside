@@ -23,15 +23,17 @@ export interface Message {
   id: string;
   user_id: string;
   receiver_id: string;
-  content: string | null;
-  /** Sealed body, base64, with its nonce beside it. Both null for a plaintext
-   *  row. In state these are still the columns as fetched — `openRows` opens
-   *  them into `content` at the boundary, so everything downstream reads
-   *  `content` whether the row arrived sealed or not. */
+  /** Sealed body, base64, with its nonce beside it. These are the columns as
+   *  fetched; `openRows` opens them at the boundary. */
   ciphertext: string | null;
   nonce: string | null;
+  /** Client-only, never a column — there is no plaintext column to write it
+   *  back to, which is the point. Set by `openRows` and read by every render
+   *  site. Null means either a captionless media message or a body this device
+   *  could not open; `decrypt_failed` is what tells those two apart. */
+  text: string | null;
   /** Client-only, never a column: this row is sealed and this device could not
-   *  open it. Distinct from a null `content`, which is an ordinary captionless
+   *  open it. Distinct from a null `text`, which is an ordinary captionless
    *  media message. */
   decrypt_failed?: boolean;
   media_path: string | null;
@@ -80,7 +82,12 @@ export interface PendingMessage {
   id: string;
   user_id: string;
   receiver_id: string;
-  content: string;
+  /** Plaintext, deliberately. The outbox exists for messages that could not
+   *  reach the network; it lives in app-private storage beside the local
+   *  mirror, which already holds plaintext, and sealing at queue time would
+   *  freeze a peer key that may rotate before the flush. `attemptSend` seals
+   *  at send time instead. */
+  text: string;
   reply_to_id: string | null;
   created_at: string;
   attempts: number;

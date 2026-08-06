@@ -7,10 +7,10 @@ import type { Message } from './types';
  * caption, so it is named by kind instead of quoted as an empty string.
  */
 export function messageSnippet(
-  msg: Pick<Message, 'content' | 'media_type' | 'media_path' | 'deleted_at'>
+  msg: Pick<Message, 'text' | 'media_type' | 'media_path' | 'deleted_at'>
 ): string {
   if (msg.deleted_at) return 'Deleted message';
-  if (msg.content) return msg.content;
+  if (msg.text) return msg.text;
   if (msg.media_type === 'audio') return '🎤 Voice message';
   if (msg.media_type === 'video') return '🎬 Video';
   if (msg.media_type === 'image') return '📷 Photo';
