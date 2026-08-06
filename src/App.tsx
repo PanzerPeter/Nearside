@@ -11,6 +11,8 @@ import { supabase } from './lib/supabase';
 import { Profile } from './lib/types';
 import { useMessageNotifications } from './hooks/useMessageNotifications';
 import { useLastSeen } from './hooks/useLastSeen';
+import { useIdentity } from './hooks/useIdentity';
+import { syncPublicKeys } from './lib/identity-sync';
 import { useAppBadge } from './hooks/useAppBadge';
 import { PresenceProvider } from './hooks/usePresence';
 import { initSoundUnlock } from './lib/sound';
@@ -60,6 +62,14 @@ function App() {
 
   // Throttled writer for this device's own last_seen_at.
   useLastSeen(session);
+
+  // This device's keypair, derived from a seed that never leaves it.
+  const { identity } = useIdentity(session);
+
+  // Only the public halves, and only when they differ from what is stored.
+  useEffect(() => {
+    if (session && identity) void syncPublicKeys(session, identity);
+  }, [session, identity]);
 
   // Private friend nicknames, loaded once and kept live for the whole app —
   // the sidebar, the chat header and the notification titles all read them.
