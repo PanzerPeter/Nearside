@@ -11,6 +11,7 @@ import {
   matchesTarget,
   type ForwardFailure,
 } from '../lib/forward';
+import type { Identity } from '../lib/crypto/keys';
 import type { ConversationSummary, Message } from '../lib/types';
 import { NotebookPen, Search } from 'lucide-react';
 
@@ -21,6 +22,8 @@ interface ForwardModalProps {
   /** The conversation it is being forwarded *from* — offered as a target it
    *  would only ever mean "post this again where it already is". */
   fromPeerId: string;
+  /** Needed to seal a forward that lands in the vault. */
+  identity: Identity;
   onClose: () => void;
 }
 
@@ -43,7 +46,7 @@ interface Target {
  * too, so your notes are pinned to the top here for the same reason they are
  * there: it is the most common forward destination and it should not move.
  */
-export function ForwardModal({ me, msg, fromPeerId, onClose }: ForwardModalProps) {
+export function ForwardModal({ me, msg, fromPeerId, identity, onClose }: ForwardModalProps) {
   const [rows, setRows] = useState<ConversationSummary[] | null>(null);
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -116,7 +119,7 @@ export function ForwardModal({ me, msg, fromPeerId, onClose }: ForwardModalProps
     const failures: Array<{ label: string; reason: ForwardFailure }> = [];
 
     for (const target of chosen) {
-      const result = await forwardMessage(me, msg, target.peerId);
+      const result = await forwardMessage(me, msg, target.peerId, identity);
       if (result.ok) delivered.push(target.label);
       else failures.push({ label: target.label, reason: result.reason });
     }

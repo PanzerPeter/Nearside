@@ -24,6 +24,16 @@ export interface Message {
   user_id: string;
   receiver_id: string;
   content: string | null;
+  /** Sealed body, base64, with its nonce beside it. Both null for a plaintext
+   *  row. In state these are still the columns as fetched — `openRows` opens
+   *  them into `content` at the boundary, so everything downstream reads
+   *  `content` whether the row arrived sealed or not. */
+  ciphertext: string | null;
+  nonce: string | null;
+  /** Client-only, never a column: this row is sealed and this device could not
+   *  open it. Distinct from a null `content`, which is an ordinary captionless
+   *  media message. */
+  decrypt_failed?: boolean;
   media_path: string | null;
   media_type: MediaType | null;
   /** Recorded length of a voice note. Null for every other kind of media —

@@ -21,6 +21,8 @@ function message(overrides: Partial<Message> = {}): Message {
     user_id: SOURCE,
     receiver_id: ME,
     content: null,
+    ciphertext: null,
+    nonce: null,
     media_path: null,
     media_type: null,
     media_duration_ms: null,

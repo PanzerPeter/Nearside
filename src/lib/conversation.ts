@@ -36,7 +36,7 @@ export function isSelfChat(me: string, peerId: string | null | undefined): boole
 
 /** Default name for the self-chat, when the user has not given it their own
  *  (a nickname on the self row overrides it — see lib/nicknames.ts). */
-export const SELF_CHAT_LABEL = 'Note to self';
+export const SELF_CHAT_LABEL = 'Your vault';
 
 /** The minimum of a sidebar row that ordering depends on. */
 interface Orderable {

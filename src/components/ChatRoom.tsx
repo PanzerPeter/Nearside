@@ -12,6 +12,8 @@ import {
   MAX_MESSAGE_LENGTH,
   MEDIA_MAX_BYTES,
 } from '../lib/conversation';
+import { openRows, sealBody } from '../lib/sealed-body';
+import type { Identity } from '../lib/crypto/keys';
 import { formatDisplayName, useNickname } from '../lib/nicknames';
 import { MEDIA_SCAN_LIMIT, selectStaleMedia, type MediaRow } from '../lib/media';
 import { CHAT_IMAGE_MAX_EDGE, compressImage } from '../lib/compress';
@@ -73,10 +75,14 @@ const CATCHUP_LIMIT = 100;
 interface ChatRoomProps {
   session: Session;
   friend: Profile;
+  /** Required, not optional: this component cannot send or read a vault
+   *  message without a key, and a required prop makes that a type error
+   *  instead of a runtime branch. App renders nothing until the key exists. */
+  identity: Identity;
   onBack: () => void;
 }
 
-export function ChatRoom({ session, friend, onBack }: ChatRoomProps) {
+export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
   const me = session.user.id;
   // Your own notes: no peer, so nothing about presence, typing, receipts or
   // notifications applies. Every branch below that mentions `isSelf` exists
@@ -439,6 +445,10 @@ export function ChatRoom({ session, friend, onBack }: ChatRoomProps) {
       user_id: msg.user_id,
       receiver_id: msg.receiver_id,
       content: msg.content,
+      // An optimistic bubble is local text that has not been sealed yet — it
+      // renders from `content` like any plaintext row.
+      ciphertext: null,
+      nonce: null,
       media_path: null,
       media_type: null,
       media_duration_ms: null,
@@ -493,11 +503,12 @@ export function ChatRoom({ session, friend, onBack }: ChatRoomProps) {
       .limit(PAGE_SIZE);
 
     if (loadedFor.current !== forFriend) return;
+    const rows = await openRows(identity, (data ?? []) as Message[]);
     // Seed before the state update lands: the render that first shows this
     // page's rows must already find them "seen," or the entrance animation
     // cascades across the whole initial page.
-    markSeen((data ?? []).map((m) => m.id));
-    setMessages((prev) => mergeMessages(prev, data ?? []));
+    markSeen(rows.map((m) => m.id));
+    setMessages((prev) => mergeMessages(prev, rows));
     setHasMore((data?.length ?? 0) === PAGE_SIZE);
 
     // Messages that arrived while the app was closed reach this running
@@ -563,7 +574,7 @@ export function ChatRoom({ session, friend, onBack }: ChatRoomProps) {
       .order('created_at', { ascending: true })
       .order('id', { ascending: true })
       .limit(limit);
-    return (data ?? []) as Message[];
+    return openRows(identity, (data ?? []) as Message[]);
   }
 
   /**
@@ -656,7 +667,7 @@ export function ChatRoom({ session, friend, onBack }: ChatRoomProps) {
       .order('id', { ascending: false })
       .limit(PAGE_SIZE);
 
-    const older = data ?? [];
+    const older = await openRows(identity, (data ?? []) as Message[]);
     if (loadedFor.current !== forFriend) {
       setLoadingOlder(false);
       return;
@@ -753,7 +764,7 @@ export function ChatRoom({ session, friend, onBack }: ChatRoomProps) {
           return;
         }
 
-        const older: Message[] = response.data ?? [];
+        const older: Message[] = await openRows(identity, (response.data ?? []) as Message[]);
         if (older.length === 0) {
           more = false;
           break;
@@ -837,14 +848,20 @@ export function ChatRoom({ session, friend, onBack }: ChatRoomProps) {
           // queued counterpart is a send from another device: nothing to
           // retire, and it animates in like any other arrival.
           if (pendingRef.current.some((p) => p.id === msg.id)) {
-            adoptSentRow(msg, (prev) => prev.filter((m) => m.id !== msg.id));
+            // Opened before it is adopted: `adoptSentRow` has to commit both
+            // state updates in one tick, so it cannot await anything itself.
+            void openRows(identity, [msg]).then(([opened]) => {
+              adoptSentRow(opened, (prev) => prev.filter((m) => m.id !== msg.id));
+            });
             // The queue entry is settled: its row exists. Left in place it
             // would be re-attempted by the next flush — which the primary
             // key now makes harmless, but pointless.
             void retireQueued(msg.id);
             return;
           }
-          setMessages((prev) => mergeMessages(prev, [msg]));
+          void openRows(identity, [msg]).then(([opened]) => {
+            setMessages((prev) => mergeMessages(prev, [opened]));
+          });
           // Only count arrivals the user didn't just cause and isn't already
           // looking at — an own send is never inbound, and a reader already
           // at the bottom sees it land without needing the button.
@@ -859,7 +876,9 @@ export function ChatRoom({ session, friend, onBack }: ChatRoomProps) {
         (payload) => {
           const msg = payload.new as Message;
           if (!isRelevant(msg)) return;
-          setMessages((prev) => prev.map((m) => (m.id === msg.id ? msg : m)));
+          void openRows(identity, [msg]).then(([opened]) => {
+            setMessages((prev) => prev.map((m) => (m.id === opened.id ? opened : m)));
+          });
         }
       )
       .on(
@@ -1004,7 +1023,7 @@ export function ChatRoom({ session, friend, onBack }: ChatRoomProps) {
           id: msg.id,
           user_id: msg.user_id,
           receiver_id: msg.receiver_id,
-          content: msg.content,
+          ...(await sealBody(identity, msg.user_id, msg.receiver_id, msg.content)),
           reply_to_id: msg.reply_to_id,
         })
         .select('*')
@@ -1023,7 +1042,8 @@ export function ChatRoom({ session, friend, onBack }: ChatRoomProps) {
       // rather than letting it escape as an unhandled rejection.
       if (insertError || !inserted) return null;
       notifyReceiver(inserted.id);
-      return inserted as Message;
+      const [opened] = await openRows(identity, [inserted as Message]);
+      return opened;
     } catch {
       return null;
     }
@@ -1045,7 +1065,9 @@ export function ChatRoom({ session, friend, onBack }: ChatRoomProps) {
       .eq('id', id)
       .eq('user_id', me)
       .maybeSingle();
-    return (data as Message | null) ?? null;
+    if (!data) return null;
+    const [opened] = await openRows(identity, [data as Message]);
+    return opened;
   }
 
   /**
@@ -1251,7 +1273,12 @@ export function ChatRoom({ session, friend, onBack }: ChatRoomProps) {
       .insert({
         user_id: me,
         receiver_id: friend.id,
-        content: caption || null,
+        // A caption is body text like any other, so it is sealed in the vault
+        // too. The attachment itself is not — it is an object in Storage the
+        // server can read, and Plan 3 is where that changes.
+        ...(caption
+          ? await sealBody(identity, me, friend.id, caption)
+          : { content: null, ciphertext: null, nonce: null }),
         media_path: path,
         media_type: kind,
         media_duration_ms: kind === 'audio' ? durationMs : null,
@@ -1319,6 +1346,11 @@ export function ChatRoom({ session, friend, onBack }: ChatRoomProps) {
             media_type: null,
             media_duration_ms: null,
             content: label,
+            // The placeholder replaces the body, so the sealed one goes with
+            // it — left behind, `openBody` would prefer the old caption and
+            // render it over the "removed" text.
+            ciphertext: null,
+            nonce: null,
           })
           .in('id', ids);
       }
@@ -1338,9 +1370,14 @@ export function ChatRoom({ session, friend, onBack }: ChatRoomProps) {
       return;
     }
     setEditingId(null);
+    // Re-sealed, not written back as plaintext: an edit in the vault must
+    // leave the row exactly as unreadable as the send did.
     const { error: updateError } = await supabase
       .from('messages')
-      .update({ content: trimmed, edited_at: new Date().toISOString() })
+      .update({
+        ...(await sealBody(identity, me, friend.id, trimmed)),
+        edited_at: new Date().toISOString(),
+      })
       .eq('id', id);
     if (updateError) toast.error('Could not edit message.');
   }
@@ -1355,6 +1392,11 @@ export function ChatRoom({ session, friend, onBack }: ChatRoomProps) {
       .update({
         deleted_at: new Date().toISOString(),
         content: '',
+        // Cleared with the body: a tombstone that kept its ciphertext would
+        // leave the sealed text sitting on the server after the user asked
+        // for it to be gone, and `openBody` would still open it.
+        ciphertext: null,
+        nonce: null,
         media_path: null,
         media_type: null,
         // Cleared with the rest of it: a length left on a row that no longer
@@ -1456,6 +1498,7 @@ export function ChatRoom({ session, friend, onBack }: ChatRoomProps) {
           me={me}
           msg={forwarding}
           fromPeerId={friend.id}
+          identity={identity}
           onClose={() => setForwarding(null)}
         />
       )}
@@ -1536,8 +1579,14 @@ export function ChatRoom({ session, friend, onBack }: ChatRoomProps) {
                     <p className="text-base-content/60 text-sm">
                       Send yourself notes, links and reminders
                     </p>
+                    {/* "Your words", not "everything": the text is sealed with
+                        the vault key, but an attachment is still an object in
+                        Storage that the server can read. Claiming otherwise
+                        here would be the app's first lie about the one
+                        property it is selling. */}
                     <p className="text-base-content/50 text-xs mt-1">
-                      Photos, videos and voice messages work here too.
+                      Notes, photos and voice memos. Your words are encrypted with a key only this
+                      phone holds.
                     </p>
                   </>
                 ) : (

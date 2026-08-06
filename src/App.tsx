@@ -259,10 +259,11 @@ function App() {
             selectedFriend ? 'flex flex-col' : 'hidden lg:flex lg:flex-col'
           }`}
         >
-          {selectedFriend ? (
+          {selectedFriend && identity ? (
             <ChatRoom
               session={session}
               friend={selectedFriend}
+              identity={identity}
               onBack={() => setSelectedFriend(null)}
             />
           ) : (

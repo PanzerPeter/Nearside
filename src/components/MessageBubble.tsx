@@ -372,6 +372,13 @@ export function MessageBubble({
                     <MediaAttachment path={msg.media_path} type={msg.media_type} />
                   ))}
                 {msg.content && <MessageText text={msg.content} />}
+                {/* Sealed, and this device could not open it — most likely a
+                    vault written under a key this phone was never given. Said
+                    out loud, because an empty bubble would read as a message
+                    someone actually sent as empty. */}
+                {msg.decrypt_failed && (
+                  <p className="text-sm italic opacity-70">Can't decrypt this message</p>
+                )}
               </div>
             )}
 

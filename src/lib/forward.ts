@@ -18,6 +18,8 @@
 
 import { supabase } from './supabase';
 import { mediaPath } from './conversation';
+import { sealBody } from './sealed-body';
+import type { Identity } from './crypto/keys';
 import type { Message } from './types';
 
 /** Why a forward did not happen, in the shape the UI needs to explain it. */
@@ -155,7 +157,8 @@ export function describeForwardFailure(reason: ForwardFailure, label: string): s
 export async function forwardMessage(
   me: string,
   msg: Message,
-  targetId: string
+  targetId: string,
+  identity: Identity
 ): Promise<ForwardResult> {
   if (!isForwardable(msg)) return { ok: false, reason: 'failed' };
 
@@ -175,9 +178,18 @@ export async function forwardMessage(
     copiedPath = destination;
   }
 
+  // The payload stays pure and testable; sealing is layered over it, because
+  // a message forwarded INTO the vault must land sealed like anything else
+  // sent there — otherwise the one conversation that claims to be unreadable
+  // has a plaintext way in.
+  const payload = forwardPayload(msg, me, targetId, copiedPath);
+  const body = payload.content
+    ? await sealBody(identity, me, targetId, payload.content)
+    : { content: null, ciphertext: null, nonce: null };
+
   const { data, error } = await supabase
     .from('messages')
-    .insert(forwardPayload(msg, me, targetId, copiedPath))
+    .insert({ ...payload, ...body })
     .select('id')
     .single();
 
