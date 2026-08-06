@@ -91,7 +91,7 @@ export function SettingsModal({ session, profile, onUpdated, onClose }: Settings
       } else {
         // Permission granted but no subscription — Push isn't available here.
         toast.error(
-          'This browser can’t deliver background notifications. Add Chatly to your home screen, or keep the app open to be notified.'
+          'This browser can’t deliver background notifications. Add Nearside to your home screen, or keep the app open to be notified.'
         );
       }
     }

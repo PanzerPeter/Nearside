@@ -119,7 +119,7 @@ export function AuthForm() {
               />
               <BrandMark size={44} />
             </div>
-            <h1 className="text-2xl font-bold tracking-tight text-base-content">Chatly</h1>
+            <h1 className="text-2xl font-bold tracking-tight text-base-content">Nearside</h1>
           </div>
           <p className="text-center text-base-content/60 text-sm mb-6">
             {isSignUp ? 'Create your account' : 'Welcome back'}
@@ -142,7 +142,7 @@ export function AuthForm() {
                     autoComplete="off"
                   />
                   <p className="text-xs text-base-content/55 mt-1">
-                    Ask the person who runs this Chatly for a code.
+                    Ask the person who runs this Nearside for a code.
                   </p>
                 </div>
 

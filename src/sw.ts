@@ -1,6 +1,6 @@
 /// <reference lib="webworker" />
 //
-// Custom Chatly service worker (vite-plugin-pwa `injectManifest`).
+// Custom Nearside service worker (vite-plugin-pwa `injectManifest`).
 // Keeps the Workbox app-shell precache + SPA navigation fallback, and adds
 // Web Push handlers so messages notify the receiver even when the app is closed.
 
@@ -78,7 +78,7 @@ self.addEventListener('push', (event) => {
     },
   };
 
-  event.waitUntil(self.registration.showNotification(payload.title || 'Chatly', options));
+  event.waitUntil(self.registration.showNotification(payload.title || 'Nearside', options));
 });
 
 self.addEventListener('notificationclick', (event) => {
@@ -93,7 +93,7 @@ self.addEventListener('notificationclick', (event) => {
         includeUncontrolled: true,
       });
       for (const client of windows) {
-        // Reuse an already-open Chatly window rather than opening a new one.
+        // Reuse an already-open Nearside window rather than opening a new one.
         // A bare `focus()` used to drop the user wherever they left off; the
         // message tells the running app which conversation to open, since a
         // focused SPA won't re-read the URL on its own.

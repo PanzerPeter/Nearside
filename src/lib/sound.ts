@@ -3,7 +3,7 @@
 // with the page, so we lazily create/resume the AudioContext on the first
 // gesture and again right before playing.
 
-const MUTE_KEY = 'chatly.sound.muted';
+const MUTE_KEY = 'nearside.sound.muted';
 
 let ctx: AudioContext | null = null;
 

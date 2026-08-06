@@ -17,9 +17,9 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
       },
       manifest: {
-        name: 'Chatly',
-        short_name: 'Chatly',
-        description: 'A simple real-time chat with friends',
+        name: 'Nearside',
+        short_name: 'Nearside',
+        description: 'Private messages that stay yours.',
         theme_color: '#1a1b1e',
         background_color: '#1a1b1e',
         display: 'standalone',

@@ -1,4 +1,4 @@
-# Chatly
+# Nearside
 
 A fast, real-time direct-messaging PWA. Add friends by username and chat one-to-one
 with text, images, and video — installable on mobile and desktop.

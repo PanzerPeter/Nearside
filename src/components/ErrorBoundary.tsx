@@ -34,7 +34,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
         <div className="h-dvh flex flex-col items-center justify-center gap-4 bg-base-300 px-6 text-center">
           <p className="text-base-content font-semibold">Something went wrong.</p>
           <p className="text-base-content/55 text-sm max-w-xs">
-            Chatly hit an unexpected error. Reloading usually fixes it.
+            Nearside hit an unexpected error. Reloading usually fixes it.
           </p>
           <button
             type="button"

@@ -11,7 +11,7 @@
 
 import { PendingMessage } from './types';
 
-const DB_NAME = 'chatly-outbox';
+const DB_NAME = 'nearside-outbox';
 const DB_VERSION = 1;
 const STORE = 'pending';
 const RECEIVER_INDEX = 'receiver_id';

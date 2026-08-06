@@ -21,7 +21,7 @@ export default {
     // Discord-family cool-grey dark system with a single blue accent.
     themes: [
       {
-        chatly: {
+        nearside: {
           'color-scheme': 'dark',
 
           // Blue is the single chromatic accent (brand, CTA, focus).
@@ -79,6 +79,6 @@ export default {
         },
       },
     ],
-    darkTheme: 'chatly',
+    darkTheme: 'nearside',
   },
 };

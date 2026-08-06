@@ -56,7 +56,7 @@ function TermsBody() {
   return (
     <>
       <p>
-        Chatly is a simple real-time chat service. By creating an account or using Chatly, you
+        Nearside is a simple real-time chat service. By creating an account or using Nearside, you
         agree to these terms. If you do not agree, please do not use the service.
       </p>
       <p>
@@ -67,7 +67,7 @@ function TermsBody() {
       </p>
       <p>
         <span className="font-semibold text-base-content/80">Acceptable use.</span> Do not use
-        Chatly to send unlawful, harassing, hateful, or infringing content, to spam other users,
+        Nearside to send unlawful, harassing, hateful, or infringing content, to spam other users,
         or to attempt to disrupt or gain unauthorized access to the service. We may suspend or
         remove accounts that break these rules.
       </p>
@@ -77,7 +77,7 @@ function TermsBody() {
         for having the right to share it.
       </p>
       <p>
-        <span className="font-semibold text-base-content/80">No warranty.</span> Chatly is
+        <span className="font-semibold text-base-content/80">No warranty.</span> Nearside is
         provided &quot;as is,&quot; without warranties of any kind. We do not guarantee that the
         service will be uninterrupted, secure, or error-free, and we are not liable for any loss
         arising from your use of it, to the fullest extent permitted by law.
@@ -94,7 +94,7 @@ function PrivacyBody() {
   return (
     <>
       <p>
-        This policy explains what information Chatly collects and how it is used. We aim to collect
+        This policy explains what information Nearside collects and how it is used. We aim to collect
         only what is needed to run the service.
       </p>
       <p>

@@ -13,7 +13,7 @@
 //      case, and bfcache restores.
 //   2. `online` — the network came back.
 //   3. A wall-clock jump between watchdog ticks. This is the one that matters
-//      on desktop: sleeping a laptop with Chatly in the foreground fires *no*
+//      on desktop: sleeping a laptop with Nearside in the foreground fires *no*
 //      visibility or focus event on wake, because as far as the page is
 //      concerned it was visible and focused the whole time. Only the clock
 //      gives it away.

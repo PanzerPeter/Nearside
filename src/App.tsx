@@ -73,7 +73,7 @@ function App() {
     if (!chatOpen) return;
     if (!window.matchMedia('(max-width: 1023px)').matches) return;
 
-    window.history.pushState({ chatlyChat: true }, '');
+    window.history.pushState({ nearsideChat: true }, '');
     const onPop = () => setSelectedFriend(null);
     window.addEventListener('popstate', onPop);
 
@@ -81,7 +81,7 @@ function App() {
       window.removeEventListener('popstate', onPop);
       // Closed from the UI rather than by a back navigation: our entry is still
       // on the stack, so consume it or the next back press would be a no-op.
-      if (window.history.state?.chatlyChat) window.history.back();
+      if (window.history.state?.nearsideChat) window.history.back();
     };
   }, [chatOpen]);
 
@@ -163,7 +163,7 @@ function App() {
       <header className="navbar bg-base-100 px-4 sm:px-6 shrink-0 border-b border-base-content/5 shadow-[0_1px_3px_rgba(0,0,0,0.25)] z-20 min-h-[3.5rem] pt-safe">
         <div className="flex-1 gap-2">
           <BrandMark size={22} />
-          <span className="font-bold text-base sm:text-lg tracking-tight">Chatly</span>
+          <span className="font-bold text-base sm:text-lg tracking-tight">Nearside</span>
         </div>
         <div className="flex-none flex items-center gap-1 sm:gap-2">
           {myProfile && (
