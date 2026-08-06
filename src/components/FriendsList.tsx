@@ -58,7 +58,12 @@ export function FriendsList({
   // zone. Each depends only on `me`, which cannot change for a mounted list, so
   // the identities are stable and none of the effects below re-runs for them.
   const fetchConversations = useCallback(async () => {
-    const { data } = await supabase.rpc('conversation_list');
+    const { data, error } = await supabase.rpc('conversation_list');
+    // A read that failed is not a list that is empty. Writing `data ?? []`
+    // here turned a single transient RPC error into a sidebar with nothing in
+    // it — not even the vault, which the RPC always returns — and nothing
+    // refetches on its own, so the only way back was restarting the app.
+    if (error) return;
     // Ordering (self pinned first, then newest activity) lives in
     // lib/conversation.ts so it can be tested without a component.
     setConversations(sortConversations((data ?? []) as ConversationSummary[], me));
@@ -87,10 +92,15 @@ export function FriendsList({
     );
   }, [me]);
 
+  // `generation` for the same reason the channels below take it: after a wake
+  // — or the resume that follows a deep link back into the app — a fetch that
+  // was in flight over a dead socket never lands, and re-subscribing does not
+  // re-read anything. This is the retry that makes a failed first load
+  // temporary rather than permanent.
   useEffect(() => {
     void fetchConversations();
     void fetchPendingRequests();
-  }, [fetchConversations, fetchPendingRequests]);
+  }, [generation, fetchConversations, fetchPendingRequests]);
 
   // Live friendship updates: incoming requests, accepts, declines and removals
   // all arrive here so the list stays current without a reload. RLS scopes the

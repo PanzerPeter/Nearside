@@ -19,7 +19,7 @@ vi.mock('capacitor-secure-storage-plugin', () => ({
   },
 }));
 
-import { clearSeed, loadSeed, storeSeed } from './keystore';
+import { clearSeed, isSeedConfirmed, loadSeed, markSeedConfirmed, storeSeed } from './keystore';
 
 describe('keystore', () => {
   beforeEach(() => store.clear());
@@ -45,5 +45,23 @@ describe('keystore', () => {
   it('writes under exactly one known key', async () => {
     await storeSeed(new Uint8Array(32).fill(7));
     expect([...store.keys()]).toEqual(['nearside.identity.seed']);
+  });
+
+  it('treats a stored seed as unconfirmed until it is marked', async () => {
+    // The seed is written the moment it is generated, so "a seed exists"
+    // cannot mean "the user copied the phrase" — that was the bug that let
+    // backgrounding the app skip the confirmation screen.
+    await storeSeed(new Uint8Array(32).fill(7));
+    expect(await isSeedConfirmed()).toBe(false);
+    await markSeedConfirmed();
+    expect(await isSeedConfirmed()).toBe(true);
+  });
+
+  it('forgets the confirmation along with the seed', async () => {
+    await storeSeed(new Uint8Array(32).fill(7));
+    await markSeedConfirmed();
+    await clearSeed();
+    expect(await isSeedConfirmed()).toBe(false);
+    expect([...store.keys()]).toEqual([]);
   });
 });

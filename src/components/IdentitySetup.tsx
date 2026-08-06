@@ -4,7 +4,7 @@ interface Props {
   onCreate: () => Promise<string>;
   /** Releases the gate. The seed is already stored by the time this fires;
    *  this is the human confirming they hold a copy. */
-  onConfirm: () => void;
+  onConfirm: () => Promise<void>;
   onRestore: (phrase: string) => Promise<void>;
   secureStorage: boolean;
 }
@@ -39,12 +39,12 @@ export function IdentitySetup({ onCreate, onConfirm, onRestore, secureStorage }:
     typedWords.length === checkIndexes.length &&
     checkIndexes.every((wordIndex, slot) => typedWords[slot] === words[wordIndex]);
 
-  function finishConfirm() {
+  async function finishConfirm() {
     // Drop the phrase from React state before releasing the gate: it has served
     // its only purpose, and the shorter it lives in memory the better.
     setPhrase('');
     setTyped('');
-    onConfirm();
+    await onConfirm();
   }
 
   return (
@@ -105,7 +105,11 @@ export function IdentitySetup({ onCreate, onConfirm, onRestore, secureStorage }:
                 autoCapitalize="none"
                 autoCorrect="off"
               />
-              <button className="btn btn-primary" disabled={!confirmOk} onClick={finishConfirm}>
+              <button
+                className="btn btn-primary"
+                disabled={!confirmOk}
+                onClick={() => void finishConfirm()}
+              >
                 Done
               </button>
             </>
