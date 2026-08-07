@@ -3,6 +3,20 @@
  * brand: a Chromebook with a touchscreen and an Android phone want different
  * answers than a user-agent string would give.
  */
+import { Capacitor } from '@capacitor/core';
+
+/**
+ * Where a user has to go to undo a permission they denied.
+ *
+ * The installed app has no browser settings, and telling someone holding an
+ * APK to look in them sends them somewhere that does not exist. Every
+ * "blocked — enable it in …" string reads this instead of naming a browser.
+ */
+export function permissionSettingsLocation(): string {
+  return Capacitor.isNativePlatform()
+    ? "Android's app settings for Nearside"
+    : 'your browser settings';
+}
 
 /**
  * Whether `<input capture>` will hand off to a camera app. Desktop browsers

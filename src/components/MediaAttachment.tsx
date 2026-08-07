@@ -1,5 +1,9 @@
+import { useState } from 'react';
 import { VisualMediaType } from '../lib/types';
 import { useSignedMediaUrl } from '../hooks/useSignedMediaUrl';
+import { downloadName, saveBlob } from '../lib/download';
+import { useToast } from '../hooks/useToast';
+import { MediaLightbox } from './MediaLightbox';
 import { ImageOff, Download } from 'lucide-react';
 
 interface MediaAttachmentProps {
@@ -16,23 +20,20 @@ interface MediaAttachmentProps {
  * (e.g. trimmed by the per-conversation media cap).
  */
 export function MediaAttachment({ path, type, mediaKey }: MediaAttachmentProps) {
-  const { url, failed, reload } = useSignedMediaUrl(path, mediaKey);
+  const { url, failed, reload } = useSignedMediaUrl(path, mediaKey, type);
+  const [viewing, setViewing] = useState(false);
+  const toast = useToast();
 
   async function handleDownload() {
     if (!url) return;
     try {
-      const res = await fetch(url);
-      const blob = await res.blob();
-      const objUrl = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = objUrl;
-      a.download = path.split('/').pop() || (type === 'image' ? 'image' : 'video');
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(objUrl);
+      // The blob behind `url` is already the decrypted file, carrying the type
+      // `mimeForPath` gave it — refetching it costs nothing and keeps this
+      // function ignorant of how the hook stores its bytes.
+      const blob = await (await fetch(url)).blob();
+      await saveBlob(blob, downloadName(path, type === 'image' ? 'image' : 'video'));
     } catch {
-      /* best-effort; ignore */
+      toast.error('Could not save that file.');
     }
   }
 
@@ -55,41 +56,52 @@ export function MediaAttachment({ path, type, mediaKey }: MediaAttachmentProps) 
 
   const downloadButton = (
     <button
-      onClick={handleDownload}
+      onClick={(e) => {
+        e.stopPropagation();
+        void handleDownload();
+      }}
       className="absolute top-2 right-2 btn btn-xs btn-circle bg-base-100/70 hover:bg-base-100 border-none opacity-0 group-hover:opacity-100 transition-opacity"
-      title="Download"
+      title="Save"
     >
       <Download className="w-3.5 h-3.5" />
     </button>
   );
 
-  if (type === 'image') {
-    return (
+  return (
+    <>
       <div className="group relative inline-block">
-        <a href={url} target="_blank" rel="noreferrer">
+        {type === 'image' ? (
           <img
             src={url}
             alt="attachment"
             loading="lazy"
-            className="rounded-lg max-w-full max-h-72 object-cover"
+            className="rounded-lg max-w-full max-h-72 object-cover cursor-zoom-in"
+            onClick={(e) => {
+              e.stopPropagation();
+              setViewing(true);
+            }}
             onError={reload}
           />
-        </a>
+        ) : (
+          <video
+            src={url}
+            controls
+            preload="metadata"
+            className="rounded-lg max-w-full max-h-72"
+            onError={reload}
+          />
+        )}
         {downloadButton}
       </div>
-    );
-  }
 
-  return (
-    <div className="group relative inline-block">
-      <video
-        src={url}
-        controls
-        preload="metadata"
-        className="rounded-lg max-w-full max-h-72"
-        onError={reload}
-      />
-      {downloadButton}
-    </div>
+      {viewing && (
+        <MediaLightbox
+          url={url}
+          type={type}
+          onDownload={() => void handleDownload()}
+          onClose={() => setViewing(false)}
+        />
+      )}
+    </>
   );
 }

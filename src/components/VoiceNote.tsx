@@ -20,7 +20,9 @@ interface VoiceNoteProps {
  */
 export function VoiceNote({ path, durationMs, mediaKey }: VoiceNoteProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
-  const { url, failed, reload } = useSignedMediaUrl(path, mediaKey);
+  // 'audio' is what tells `mimeForPath` that a .webm here is a recording and
+  // not a video — the container is the same and the extension cannot say.
+  const { url, failed, reload } = useSignedMediaUrl(path, mediaKey, 'audio');
   const [playing, setPlaying] = useState(false);
   const [positionMs, setPositionMs] = useState(0);
   // Filled in from the element only when the row has no stored duration.

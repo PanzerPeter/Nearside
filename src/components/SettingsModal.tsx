@@ -15,6 +15,7 @@ import { confirmsUsername } from '../lib/account';
 import { clearAll } from '../lib/outbox';
 import { clearLocalDb } from '../lib/localdb';
 import { clearSeed } from '../lib/keystore';
+import { permissionSettingsLocation } from '../lib/device';
 import { useToast } from '../hooks/useToast';
 import { Modal } from './Modal';
 import { Camera, Bell, Volume2 } from 'lucide-react';
@@ -91,7 +92,7 @@ export function SettingsModal({ session, profile, onUpdated, onClose }: Settings
       if (subscribed) {
         toast.success('Notifications enabled.');
       } else if (permission === 'denied') {
-        toast.error('Notifications are blocked. Enable them in your browser settings.');
+        toast.error(`Notifications are blocked. Enable them in ${permissionSettingsLocation()}.`);
       } else {
         // Permission granted but no subscription — Push isn't available here.
         toast.error(
@@ -113,7 +114,7 @@ export function SettingsModal({ session, profile, onUpdated, onClose }: Settings
     : !pushSupported()
       ? 'Background push unavailable on this browser'
       : perm === 'denied'
-        ? 'Blocked in browser settings'
+        ? `Blocked in ${permissionSettingsLocation()}`
         : pushOn
           ? 'On for this device'
           : 'Get notified even when the app is closed';

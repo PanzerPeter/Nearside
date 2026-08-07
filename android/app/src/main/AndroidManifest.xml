@@ -57,4 +57,14 @@
          red flag to exactly the people this app is for. -->
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
+
+    <!-- Voice messages. getUserMedia inside the WebView reaches Capacitor's
+         BridgeWebChromeClient.onPermissionRequest, which launches a runtime
+         request for exactly these two. Android refuses to prompt for a
+         permission the manifest never declared and returns "denied"
+         immediately, which is why recording failed with no dialog and why the
+         app had no microphone toggle in its system settings at all. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
 </manifest>

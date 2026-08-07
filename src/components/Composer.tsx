@@ -12,7 +12,7 @@ import { EmojiPopover } from './EmojiPopover';
 import { AttachMenu } from './AttachMenu';
 import { MAX_MESSAGE_LENGTH } from '../lib/conversation';
 import { formatDuration, MAX_VOICE_MS, voiceRecordingSupported } from '../lib/audio';
-import { isCoarsePointer, supportsCameraCapture } from '../lib/device';
+import { isCoarsePointer, permissionSettingsLocation, supportsCameraCapture } from '../lib/device';
 import { useVoiceRecorder, type VoiceRecording } from '../hooks/useVoiceRecorder';
 
 export interface ComposerHandle {
@@ -155,9 +155,9 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
       pendingReleaseRef.current = 'none';
       onError(
         failure === 'denied'
-          ? 'Microphone access is blocked — enable it in your browser settings.'
+          ? `Microphone access is blocked — enable it in ${permissionSettingsLocation()}.`
           : failure === 'unsupported'
-            ? 'Voice messages are not supported on this browser.'
+            ? 'Voice messages are not supported on this device.'
             : 'Could not start recording.'
       );
       return;

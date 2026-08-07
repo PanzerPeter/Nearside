@@ -23,6 +23,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { openFile } from '../lib/media-crypto';
+import { keyToken, mimeForPath } from '../lib/media';
+import type { MediaType } from '../lib/types';
 
 /** Lifetime asked for on each signature. */
 export const SIGNED_URL_TTL_SECONDS = 3600;
@@ -40,9 +42,22 @@ export interface SignedMedia {
   reload: () => void;
 }
 
-export function useSignedMediaUrl(path: string, mediaKey?: Uint8Array | null): SignedMedia {
+export function useSignedMediaUrl(
+  path: string,
+  mediaKey?: Uint8Array | null,
+  kind?: MediaType | null
+): SignedMedia {
   const [url, setUrl] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
+  // The key is depended on by *value*, not by identity. `openRows` mints a
+  // fresh array on every decrypt and `mergeMessages` replaces the newest row
+  // with a freshly-decrypted copy on every poll tick, so an identity
+  // dependency re-ran this effect every few seconds — blanking a playing
+  // video, re-downloading its bytes and decrypting them again for a key that
+  // had not changed. The bytes themselves are read through a ref.
+  const token = keyToken(mediaKey);
+  const keyRef = useRef<Uint8Array | null>(mediaKey ?? null);
+  keyRef.current = mediaKey ?? null;
   // The object URL currently handed out, so it can be revoked. A decrypted
   // attachment lives in browser memory for as long as its blob URL does, and
   // the installed PWA stays open for days — leaking one per rendered image is
@@ -79,7 +94,8 @@ export function useSignedMediaUrl(path: string, mediaKey?: Uint8Array | null): S
     // open. Either way there is nothing to decrypt and nothing to show — a
     // signed URL to ciphertext would render as a broken image, which reads as
     // a lost file rather than as the encryption working.
-    if (!mediaKey) {
+    const key = keyRef.current;
+    if (!key) {
       setFailed(true);
       return;
     }
@@ -87,22 +103,35 @@ export function useSignedMediaUrl(path: string, mediaKey?: Uint8Array | null): S
     try {
       const response = await fetch(data.signedUrl);
       if (!response.ok) throw new Error(String(response.status));
-      const opened = await openFile(new Uint8Array(await response.arrayBuffer()), mediaKey);
+      const opened = await openFile(new Uint8Array(await response.arrayBuffer()), key);
       if (requestRef.current !== ticket) return;
 
       // Revoke the previous one before replacing it — a re-sign after an
       // expiry would otherwise strand the old blob for the tab's lifetime.
       releaseObjectUrl();
+      // Typed from the object name, because Storage cannot say: every sealed
+      // object is uploaded as application/octet-stream. A typeless blob is
+      // what left videos showing a blank poster instead of a first frame, and
+      // made an image opened on its own render as a page of garbage text.
+      //
       // Copied into a fresh buffer: `opened` is a view libsodium may hand back
       // over a larger allocation, and Blob would carry the whole thing.
-      const blobUrl = URL.createObjectURL(new Blob([opened.slice()]));
+      const blobUrl = URL.createObjectURL(
+        new Blob([opened.slice()], { type: mimeForPath(path, kind) })
+      );
       objectUrlRef.current = blobUrl;
       setUrl(blobUrl);
     } catch {
       if (requestRef.current !== ticket) return;
       setFailed(true);
     }
-  }, [path, mediaKey, releaseObjectUrl]);
+    // `token` is listed on purpose, and the rule is right that the body never
+    // reads it: it stands in for `keyRef.current`, which the body does read
+    // and which the rule cannot see through. Dropping it would pin this
+    // callback to the first key it ever saw. Reverting to a plain `mediaKey`
+    // dependency is what caused the bug — see the ref's declaration.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [path, token, kind, releaseObjectUrl]);
 
   useEffect(() => {
     setUrl(null);
