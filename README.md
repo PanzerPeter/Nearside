@@ -27,14 +27,32 @@ convenience; there is no hosted web deploy.
 
 - Email/password auth with a display name, editable later, and email password
   reset over an `app.nearside://` deep link
-- Friend requests by name search (accept, decline) — being replaced by QR and
-  short connect codes, after which the searchable directory goes away
+- Connecting by QR or by an eight-character code read aloud. There is no
+  directory and no name search: `search_profiles()` is gone, display names
+  collide freely, and nobody can be found by one. A code is single-use and
+  expires in ten minutes; a scan also verifies the contact, because the key
+  travelled in the QR
 - Private friend nicknames: name someone whatever you like, visible only to you
   (they are never told), used in the sidebar, the chat header and notifications
 - A note-to-self chat, pinned to the top of the list for every account — the
   full chat with media, voice notes, replies and reactions, minus the things
   that need a second person (presence, typing, ticks, notifications)
 - Real-time 1:1 messaging with typing indicators
+- Encrypted group rooms: one symmetric key per room, sealed once to each
+  member's published key, and every message signed with the sender's Ed25519
+  key. The signature is checked *before* the message is opened, and one that
+  fails renders as a warning rather than being hidden
+- Safety numbers, with a verified badge in the chat header and a blocked
+  composer when a contact's key changes under you
+- A "What the server knows" screen built from live queries against the real
+  schema, plus a page that says plainly where the protection stops and names
+  Signal for the people who should be using it instead
+- Free local pinning: a pinned attachment is decrypted and written to
+  app-private storage, and survives the server-side pruning that keeps
+  storage costs down
+- Cosmetic theme packs through RevenueCat. Nothing functional is behind a
+  purchase, and no advertising SDK is in the build — `no-ads.test.ts` fails
+  the suite if one appears
 - Message edit and delete (soft delete)
 - Image and video sharing (newest 20 media kept per conversation), with images
   re-encoded to WebP on the device before upload
@@ -51,6 +69,17 @@ convenience; there is no hosted web deploy.
   (including on desktop, where nothing fires an event), rebuilds its realtime
   subscriptions, backfills whatever it missed, and falls back to polling while
   live delivery is down — with a banner saying so
+
+## Notifications
+
+Background notifications go through OneSignal, targeted by the Supabase user
+id so a campaign reaches an account rather than a device. They carry who a
+message is from and never what it says — after `0023` the server has no body
+to read, so this is a property of the schema rather than a policy.
+
+The Web Push (VAPID) transport is gone: `0028` drops `push_subscriptions`, and
+`lib/push.ts`, `lib/vapid.ts` and the service worker's push handlers went with
+it. Two transports competing for one tray entry was the bug.
 
 ## Connectivity notes
 
@@ -90,6 +119,21 @@ CNAME.
    - `0017_self_chat.sql` — the note-to-self conversation. Widens the message
      INSERT policy to allow addressing yourself, stops your own notes counting
      as unread, and adds your own row to `conversation_list()`
+   - `0018` … `0021` — forwarding, open signup, identity keys, encrypted bodies
+   - `0022_display_name.sql`, then `0023` … `0025` — the profile rename, the
+     server losing message bodies, encrypted media, and sealed media MIME
+   - `0022b_no_directory.sql` — applied **after** `0025`, deliberately. It
+     drops `search_profiles()` and adds `connect_tokens` with its mint/redeem
+     RPCs, so it may not run until the connect flow that replaces the
+     directory works. The number records authorship order; this list records
+     apply order
+   - `0026_rooms.sql` — rooms, participants, sealed per-member keys, signed
+     room messages, and `rooms_for_me()`
+   - `0027_transparency.sql` — `public_table_names()`, so the transparency
+     screen compares itself against the real schema instead of a hard-coded
+     description that can go stale
+   - `0028_drop_web_push.sql` — drops `push_subscriptions` along with the
+     VAPID transport
    - `supabase/storage-setup.sql` — `avatars` and `chat-media` buckets + policies
 
 3. In Supabase **Authentication → URL Configuration**, add your site URL and
@@ -116,7 +160,18 @@ CNAME.
    VITE_SUPABASE_ANON_KEY=<your-anon-or-publishable-key>
    ```
 
-5. Run locally:
+5. Deploy the notification function and give it its secrets:
+
+   ```bash
+   supabase functions deploy send-push --no-verify-jwt
+   supabase secrets set ONESIGNAL_APP_ID=... ONESIGNAL_REST_API_KEY=...
+   ```
+
+   The REST key is server-side only. Vite inlines every `VITE_`-prefixed
+   variable into the bundle, so putting it in `.env` would publish it inside
+   every APK.
+
+6. Run locally:
 
    ```bash
    npm run dev
@@ -157,6 +212,12 @@ sdk.dir=/absolute/path/to/Android/Sdk
 `android:sync` sets `NEARSIDE_NATIVE=1`, which disables the PWA service worker
 for native builds: a Workbox precache inside a WebView keeps serving the
 previous build after an app update.
+
+Release builds run R8 (`minifyEnabled true`). Every Capacitor and Cordova
+plugin is reached reflectively from the WebView bridge, so R8 sees no caller
+for any of them — `android/app/proguard-rules.pro` is what keeps them, and a
+missing rule shows up as a runtime crash rather than a build failure. Test a
+release build on hardware, not just a debug one.
 
 Two files are needed locally and are deliberately not in version control:
 `android/app/google-services.json` (Firebase project `nearside-9459c`) and
