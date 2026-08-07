@@ -76,8 +76,6 @@ export async function packsFromEntitlements(): Promise<Set<string>> {
   }
 }
 
-export const ownedPacks = packsFromEntitlements;
-
 let configured = false;
 
 /**

@@ -28,7 +28,7 @@ import { pinnedObjectUrl } from '../lib/pins';
 import type { MediaType } from '../lib/types';
 
 /** Lifetime asked for on each signature. */
-export const SIGNED_URL_TTL_SECONDS = 3600;
+const SIGNED_URL_TTL_SECONDS = 3600;
 
 export interface SignedMedia {
   /** The URL to render, or null while the first signature is in flight. */

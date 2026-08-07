@@ -19,7 +19,7 @@ import { Capacitor } from '@capacitor/core';
  *  confirmed copying them — the highest-stakes unfinished action in the app,
  *  because a lost phone then destroys the vault and no support process
  *  recovers it. */
-export const RECOVERY_TAG = 'recovery_confirmed';
+const RECOVERY_TAG = 'recovery_confirmed';
 
 /** Loaded lazily and only on a device. The Cordova plugin reaches for
  *  `window.cordova` at import time, which does not exist in the browser build
@@ -97,11 +97,8 @@ export async function initNotifications(userId: string): Promise<void> {
   }
 }
 
-export async function setExternalUserId(userId: string): Promise<void> {
-  const os = await oneSignal();
-  os?.login(userId);
-}
-
+/** Unbind this device from the account, so notifications for it stop arriving
+ *  here. Called on sign-out; see App's `signOut`. */
 export async function clearExternalUserId(): Promise<void> {
   const os = await oneSignal();
   os?.logout();
@@ -175,22 +172,21 @@ export async function onNotificationOpened(
 // the app is open and focused elsewhere, and that path is unchanged by the move
 // to OneSignal.
 
-export function notificationsSupported(): boolean {
+function notificationsSupported(): boolean {
   return typeof window !== 'undefined' && 'Notification' in window;
 }
 
+/**
+ * The browser's own notification permission.
+ *
+ * An Android WebView has no `window.Notification` at all, so this answers
+ * "denied" on the platform the app actually ships to, and the foreground
+ * banner path it gates never runs there. That is the right outcome rather than
+ * a gap: on Android the tray entry comes from OneSignal, which shows it whether
+ * the app is open or not. This is here for the browser build.
+ */
 export function notificationPermission(): NotificationPermission {
   return notificationsSupported() ? Notification.permission : 'denied';
-}
-
-export async function requestNotificationPermission(): Promise<NotificationPermission> {
-  if (!notificationsSupported()) return 'denied';
-  if (Notification.permission !== 'default') return Notification.permission;
-  try {
-    return await Notification.requestPermission();
-  } catch {
-    return Notification.permission;
-  }
 }
 
 /**

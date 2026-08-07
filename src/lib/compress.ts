@@ -18,7 +18,7 @@ export const CHAT_IMAGE_MAX_EDGE = 1920;
 export const BACKGROUND_MAX_EDGE = 1920;
 export const AVATAR_MAX_EDGE = 512;
 
-export const DEFAULT_QUALITY = 0.82;
+const DEFAULT_QUALITY = 0.82;
 
 export interface CompressOptions {
   /** Longest edge of the output in pixels; the short edge scales with it. */

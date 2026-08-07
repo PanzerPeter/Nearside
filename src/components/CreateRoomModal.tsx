@@ -84,7 +84,7 @@ export function CreateRoomModal({ me, identity, onCreated, onClose }: CreateRoom
     try {
       const { roomId, skipped } = await createRoom(me, identity, trimmed, [...picked]);
       if (skipped.length > 0) {
-        toast.error(`${skipped.length} member(s) could not be added — no published key yet.`);
+        toast.error(`${skipped.length} of them could not be added. They have no published key yet.`);
       }
       onCreated(roomId);
     } catch (error) {
@@ -145,7 +145,7 @@ export function CreateRoomModal({ me, identity, onCreated, onClose }: CreateRoom
         </div>
       ) : friends.length === 0 ? (
         <p className="text-sm text-base-content/60 py-6 text-center">
-          Connect with someone first — a room can only include people you are connected to.
+          Connect with someone first. A room can only include people you are connected to.
         </p>
       ) : (
         <ul className="space-y-1 max-h-64 overflow-y-auto">

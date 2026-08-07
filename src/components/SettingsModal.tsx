@@ -122,14 +122,14 @@ export function SettingsModal({ session, profile, onUpdated, onClose }: Settings
   }
 
   const notifStatus = !native
-    ? 'Background notifications need the Android app'
+    ? 'Only the Android app can notify you in the background'
     : granted === null
       ? 'Checking…'
       : pushOn
-        ? 'On for this device — never carries what was said'
+        ? 'On. A notification names the sender and never what they said.'
         : granted
-          ? 'Get notified even when the app is closed'
-          : `Allow them, or enable them in ${permissionSettingsLocation()}`;
+          ? 'Hear about messages while the app is closed'
+          : `Allow them here, or turn them on in ${permissionSettingsLocation()}`;
 
   async function handleAvatar(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -307,8 +307,8 @@ export function SettingsModal({ session, profile, onUpdated, onClose }: Settings
           maxLength={DISPLAY_NAME_MAX}
         />
         <span className="text-xs text-base-content/60 mt-1">
-          Shown to friends in chats. Spaces and capitals are fine, and names may repeat — a display
-          name is not an address. Nobody can find you by it.
+          Shown to friends in chats. Spaces and capitals are fine, and two people may pick the same
+          name. A display name is not an address, and nobody can find you by it.
         </span>
       </div>
 
@@ -320,7 +320,10 @@ export function SettingsModal({ session, profile, onUpdated, onClose }: Settings
             <Bell className="w-4 h-4 text-base-content/60 shrink-0" />
             <div className="min-w-0">
               <p className="text-sm font-medium">Message notifications</p>
-              <p className="text-xs text-base-content/60 truncate">{notifStatus}</p>
+              {/* Not truncated. This line is the only place the app says where
+                  to go when Android has blocked notifications, and clipping it
+                  at "enable them in Android's…" is how it read before. */}
+              <p className="text-xs text-base-content/60">{notifStatus}</p>
             </div>
           </div>
           {pushBusy ? (

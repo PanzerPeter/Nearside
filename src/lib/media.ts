@@ -2,7 +2,7 @@ import { AUDIO_KEEP_LIMIT, MEDIA_KEEP_LIMIT } from './conversation';
 import type { MediaType } from './types';
 
 /** How many over-limit rows one cleanup pass will trim. */
-export const MEDIA_TRIM_BATCH = 20;
+const MEDIA_TRIM_BATCH = 20;
 
 /**
  * Rows one cleanup pass fetches. Bounded on purpose: only rows past a keep

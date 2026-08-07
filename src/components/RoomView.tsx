@@ -8,6 +8,7 @@ import {
   ShieldAlert,
   ShieldQuestion,
   Trash2,
+  UserMinus,
   Users,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -17,6 +18,7 @@ import {
   openRoomRows,
   roomColour,
   roomKeyFor,
+  removeMember,
   roomMembers,
   roomSigningKeys,
   sendRoomMessage,
@@ -64,6 +66,8 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const [showMembers, setShowMembers] = useState(false);
+  /** Who is mid-removal, so their row can show it and not be tapped twice. */
+  const [removing, setRemoving] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const toast = useToast();
   const { generation, live } = useConnection();
@@ -195,6 +199,20 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
     }
   }
 
+  /** Owner-only. The panel below already tells the owner what removal does and
+   *  does not reach; this is the action that copy was written for. */
+  async function handleRemove(userId: string) {
+    setRemoving(userId);
+    try {
+      await removeMember(room.id, userId);
+      await loadMembers();
+    } catch {
+      toast.error('Could not remove them from the room.');
+    } finally {
+      setRemoving(null);
+    }
+  }
+
   async function handleLeave() {
     try {
       if (isOwner) await deleteRoom(room.id);
@@ -245,15 +263,34 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
         <div className="bg-base-100 border-b border-base-content/5 px-4 py-3 shrink-0">
           <ul className="flex flex-wrap gap-x-4 gap-y-1.5">
             {members.map((m) => (
-              <li key={m.user_id} className={`text-xs font-medium ${roomColour(m.colour_index)}`}>
+              <li
+                key={m.user_id}
+                className={`flex items-center gap-1 text-xs font-medium ${roomColour(m.colour_index)}`}
+              >
                 {nameFor(m.user_id)}
+                {isOwner && m.user_id !== me && (
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-xs btn-circle text-base-content/50 hover:text-error"
+                    onClick={() => void handleRemove(m.user_id)}
+                    disabled={removing !== null}
+                    title={`Remove ${nameFor(m.user_id)} from this room`}
+                    aria-label={`Remove ${nameFor(m.user_id)} from this room`}
+                  >
+                    {removing === m.user_id ? (
+                      <span className="loading loading-spinner loading-xs" />
+                    ) : (
+                      <UserMinus className="w-3 h-3" />
+                    )}
+                  </button>
+                )}
               </li>
             ))}
           </ul>
           {isOwner && (
             <p className="text-[11px] text-base-content/55 mt-2">
-              Removing someone stops them receiving new messages. They keep whatever they already
-              downloaded — nothing can take that back.
+              Removing someone stops them reading anything sent after that. They keep what they
+              already downloaded, and nothing can take that back.
             </p>
           )}
         </div>
@@ -328,7 +365,7 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
                   ) : m.text === null ? (
                     <p className="flex items-start gap-1.5 text-sm italic text-base-content/60">
                       <Lock className="w-4 h-4 shrink-0 mt-0.5" />
-                      <span>Sent before you joined — sealed with a key you do not have.</span>
+                      <span>Sent before you joined, sealed with a key you do not have.</span>
                     </p>
                   ) : (
                     <div className="text-sm whitespace-pre-wrap break-words">

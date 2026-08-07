@@ -20,8 +20,15 @@ import { IdentitySetup } from './components/IdentitySetup';
 import { useAppBadge } from './hooks/useAppBadge';
 import { PresenceProvider } from './hooks/usePresence';
 import { initSoundUnlock } from './lib/sound';
-import { initNotifications, onNotificationOpened } from './lib/notifications';
-import { initPurchases, applyTheme, packsFromEntitlements, storedTheme, themeForOwnership } from './lib/purchases';
+import { clearExternalUserId, initNotifications, onNotificationOpened } from './lib/notifications';
+import {
+  applyTheme,
+  initPurchases,
+  logOutPurchases,
+  packsFromEntitlements,
+  storedTheme,
+  themeForOwnership,
+} from './lib/purchases';
 import { useNicknameSync } from './lib/nicknames';
 import { clearAll } from './lib/outbox';
 import { clearLocalDb, openLocalDb } from './lib/localdb';
@@ -127,9 +134,16 @@ function App() {
   // session that wrote them on a shared device. The local mirror holds
   // decrypted text for the same reason and goes with it — the account's own
   // mirror, not the device's, so the other account keeps its history.
+  // Both third parties are told to forget the account too. A device left bound
+  // to the previous user keeps receiving their notifications and reports their
+  // purchases, which on a shared phone is the account leaking to whoever signs
+  // in next. Neither failing is a reason to leave someone signed in, so both
+  // run before the sign-out and neither can block it.
   const signOut = useCallback(async () => {
     await clearAll();
     await clearLocalDb();
+    await clearExternalUserId().catch(() => {});
+    await logOutPurchases().catch(() => {});
     await supabase.auth.signOut();
   }, []);
 

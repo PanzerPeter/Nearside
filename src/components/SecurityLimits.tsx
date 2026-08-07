@@ -60,7 +60,7 @@ export function SecurityLimits({ onClose }: SecurityLimitsProps) {
             No forward secrecy
           </h4>
           <p className="text-sm text-base-content/75 leading-relaxed mt-2">
-            If your key is ever stolen, messages an attacker also captured can be decrypted —
+            If your key is ever stolen, every message an attacker also captured can be decrypted,
             including old ones. Signal&rsquo;s ratchet prevents this by changing keys constantly.
             Nearside does not implement it.
           </p>
@@ -72,8 +72,8 @@ export function SecurityLimits({ onClose }: SecurityLimitsProps) {
             Unaudited
           </h4>
           <p className="text-sm text-base-content/75 leading-relaxed mt-2">
-            The cryptography is standard — libsodium, X25519, XSalsa20-Poly1305, Ed25519 — and used
-            in a standard way. No third party has reviewed this implementation.
+            The cryptography is standard (libsodium, X25519, XSalsa20-Poly1305, Ed25519) and used in
+            a standard way. No third party has reviewed this implementation.
           </p>
         </section>
 
@@ -85,8 +85,8 @@ export function SecurityLimits({ onClose }: SecurityLimitsProps) {
           <p className="text-sm text-base-content/75 leading-relaxed mt-2">
             If a state adversary or a well-resourced attacker may target you specifically, use
             Signal instead. It has forward secrecy, sealed sender, and years of audits. Nearside is
-            built for people who want ordinary conversations to stay ordinary — not for people
-            whose lives depend on the tool.
+            built for people who want ordinary conversations to stay ordinary. It is not built for
+            people whose lives depend on the tool.
           </p>
         </section>
       </div>

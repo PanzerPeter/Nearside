@@ -98,8 +98,8 @@ export function ThemeStore({ onClose }: ThemeStoreProps) {
       }
     >
       <p className="text-sm text-base-content/70 leading-relaxed">
-        Every feature in Nearside is free — the encryption, the vault, group rooms, and pinning
-        media to your phone. These are looks, and buying one is the only way to pay for any of it.
+        Every feature in Nearside is free: the encryption, the vault, group rooms, and pinning
+        media to your phone. These are looks. Buying one is the only way to pay for any of it.
       </p>
 
       <div className="space-y-3 mt-4">
@@ -215,7 +215,7 @@ function ThemeCard({
         ) : unavailable ? (
           <span className="text-base-content/60">Unavailable</span>
         ) : (
-          <span className="badge badge-primary badge-sm">{price ?? '—'}</span>
+          <span className="badge badge-primary badge-sm">{price ?? 'Loading'}</span>
         )}
       </span>
     </button>

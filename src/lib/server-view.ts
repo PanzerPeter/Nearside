@@ -96,7 +96,7 @@ export const TABLE_REPORTS: TableSpec[] = [
     label: 'Private nicknames',
     readable: ['owner_id', 'peer_id', 'nickname', 'updated_at'],
     opaque: [],
-    note: 'The names you gave your contacts. Private from them — they are never told — but not from the server, which stores them as text.',
+    note: 'The names you gave your contacts. Private from them, since they are never told, but not private from the server, which stores them as ordinary text.',
   },
   {
     table: 'chat_backgrounds',
@@ -145,7 +145,7 @@ export const TABLE_REPORTS: TableSpec[] = [
     label: 'Notification log',
     readable: ['message_id', 'sent_at'],
     opaque: [],
-    note: 'One row per notification sent, so a message is never notified twice. A notification says who a message is from and nothing about what it says — there is nothing for the server to say.',
+    note: 'One row per notification sent, so a message is never notified twice. A notification says who a message is from and nothing about what it says, because there is nothing here for the server to say.',
     infrastructure: true,
   },
   {
@@ -189,7 +189,7 @@ export interface StoredDataReport {
 
 /** The names of every table in the `public` schema, from the database itself.
  *  Backed by a SECURITY DEFINER RPC because `information_schema` is not
- *  reachable through PostgREST — see 0028_transparency.sql. */
+ *  reachable through PostgREST — see 0027_transparency.sql. */
 async function schemaTableNames(): Promise<string[]> {
   const { data, error } = await supabase.rpc('public_table_names');
   if (error) throw error;

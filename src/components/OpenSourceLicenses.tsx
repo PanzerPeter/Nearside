@@ -151,7 +151,7 @@ export function OpenSourceLicenses({ onClose }: OpenSourceLicensesProps) {
     >
       <p className="text-sm text-base-content/70 leading-relaxed">
         Nearside is built on other people&rsquo;s work. The cryptography in particular is standard
-        and borrowed on purpose — a messenger that rolled its own would be a worse one.
+        and borrowed on purpose. A messenger that rolled its own would be a worse one.
       </p>
 
       <ul className="space-y-2.5 mt-4">

@@ -345,11 +345,15 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
             <p className="text-xs font-medium truncate">
               {isAudio ? 'Voice message' : stagedFile.name}
             </p>
+            {/* The name above already says which kind this is for a voice note,
+                so repeating it here left the preview reading "Voice message /
+                Voice message · 0:03". */}
             <p className="text-xs text-base-content/60">
-              {stagedKind} ·{' '}
-              {isAudio && stagedDurationMs !== null
-                ? formatDuration(stagedDurationMs)
-                : `${(stagedFile.size / (1024 * 1024)).toFixed(1)} MB`}{' '}
+              {isAudio
+                ? stagedDurationMs !== null
+                  ? formatDuration(stagedDurationMs)
+                  : 'Recorded'
+                : `${stagedKind} · ${(stagedFile.size / (1024 * 1024)).toFixed(1)} MB`}{' '}
               · press Send
             </p>
             {silentTake && (

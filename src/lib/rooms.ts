@@ -179,7 +179,7 @@ export async function createRoom(
  *  and a box operation, and every message in a room needs it. */
 const keyCache = new Map<string, Uint8Array>();
 
-export function forgetRoomKey(roomId: string): void {
+function forgetRoomKey(roomId: string): void {
   keyCache.delete(roomId);
 }
 
@@ -322,11 +322,22 @@ export async function roomMembers(roomId: string): Promise<RoomParticipant[]> {
 /**
  * Removes a member and takes their key copy with them.
  *
- * What this does not do is claw back what they already have — nothing can, and
- * the UI says so at removal time. Messages sent from here on are still sealed
- * under the same key, which they no longer have a stored copy of but may have
- * cached in memory; rotating properly means resealing a fresh key to everyone
- * who remains, which `rotateRoomKey` does.
+ * Two things happen, and only one of them is reversible from the outside. The
+ * participant row is what row-level security checks, so they stop being able to
+ * read new messages at all. The key row is their stored copy of the key, so a
+ * fresh install cannot recover it.
+ *
+ * What this does not do is claw back what they already have, and nothing can.
+ * A session that already opened the key holds it in memory until it closes, and
+ * whatever they downloaded is on their phone. The members panel says exactly
+ * that before the removal happens.
+ *
+ * Nor does it reseal a fresh key to everyone who stays. That sounds stricter
+ * and is worse: every message in the room's history is sealed under the current
+ * key, the key lives only in memory, and replacing it would make the entire
+ * history unreadable to every remaining member the next time they open the app.
+ * Losing everyone's history to shorten one person's window is not a trade this
+ * makes quietly.
  */
 export async function removeMember(roomId: string, userId: string): Promise<void> {
   const { error: keyError } = await supabase
@@ -342,49 +353,6 @@ export async function removeMember(roomId: string, userId: string): Promise<void
     .eq('room_id', roomId)
     .eq('user_id', userId);
   if (error) throw error;
-}
-
-/**
- * A fresh key, sealed to everyone still in the room.
- *
- * Old messages stay readable only to devices that still hold the old key in
- * their local cache — which is the honest behaviour: history sealed under a
- * key a removed member had cannot be un-sealed from them, and pretending
- * otherwise by re-encrypting it would only hide that.
- */
-export async function rotateRoomKey(
-  roomId: string,
-  me: string,
-  identity: Identity
-): Promise<void> {
-  await sodium.ready;
-  const members = await roomMembers(roomId);
-  const keys = await publishedKeys(members.map((m) => m.user_id));
-  const roomKey = sodium.crypto_secretbox_keygen();
-
-  const rows = await Promise.all(
-    members
-      .filter((m) => keys.get(m.user_id)?.public_key)
-      .map(async (m) => {
-        const theirPublic = await fromBase64(keys.get(m.user_id)!.public_key!);
-        const sealed = await sealBytesFor(identity.boxPrivate, theirPublic, roomKey);
-        return {
-          room_id: roomId,
-          user_id: m.user_id,
-          key_ciphertext: sealed.ciphertext,
-          key_nonce: sealed.nonce,
-          sealed_by: me,
-        };
-      })
-  );
-
-  const { error: clearError } = await supabase.from('room_keys').delete().eq('room_id', roomId);
-  if (clearError) throw clearError;
-
-  const { error } = await supabase.from('room_keys').insert(rows);
-  if (error) throw error;
-
-  keyCache.set(roomId, roomKey);
 }
 
 export async function leaveRoom(roomId: string, me: string): Promise<void> {

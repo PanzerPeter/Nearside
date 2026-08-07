@@ -20,7 +20,7 @@ import { Media } from '@capacitor-community/media';
 import { Directory, Encoding, Filesystem } from '@capacitor/filesystem';
 
 /** The album saved attachments appear under in the gallery. */
-export const GALLERY_ALBUM = 'Nearside';
+const GALLERY_ALBUM = 'Nearside';
 
 /** The `data:` prefix a FileReader result carries, up to and including the comma. */
 const DATA_URL_PREFIX = /^data:[^;]*;base64,/;

@@ -71,8 +71,8 @@ export function ServerView({ onClose, onOpenLimits }: ServerViewProps) {
         what is in your vault. Your key is on this phone and nowhere else.
       </p>
       <p className="text-sm text-base-content/60 leading-relaxed mt-2">
-        Every number below comes from a query run as you, right now, against the live database —
-        not from a description of what we think it holds.
+        Every number below comes from a query run as you, right now, against the live database.
+        None of it is a description of what we think it holds.
       </p>
 
       <button className="btn btn-outline btn-sm w-full mt-4 gap-2" onClick={onOpenLimits}>

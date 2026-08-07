@@ -119,7 +119,7 @@ export function MediaLightbox({ messageId, url, path, type, onClose }: MediaLigh
             void togglePin();
           }}
           disabled={pinning}
-          title={pinned ? 'Pinned to this phone — tap to unpin' : 'Keep on this phone forever'}
+          title={pinned ? 'Pinned to this phone. Tap to unpin' : 'Keep on this phone forever'}
           aria-label={pinned ? 'Unpin from this phone' : 'Pin to this phone'}
           aria-pressed={pinned}
         >

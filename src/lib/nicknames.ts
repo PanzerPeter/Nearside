@@ -91,7 +91,7 @@ export function nicknameFor(peerId: string | null | undefined): string | null {
 }
 
 /** Current map. Exposed for the hook's initial snapshot and for tests. */
-export function getNicknames(): Map<string, string> {
+function getNicknames(): Map<string, string> {
   return nicknames;
 }
 
