@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { resolveOneSignal } from './notifications';
+import { pushBlockedByOs, resolveOneSignal, shouldOfferPush } from './notifications';
 
 /**
  * The shape of the OneSignal Cordova plugin as it actually arrives in the
@@ -61,5 +61,47 @@ describe('resolveOneSignal', () => {
     const cyclic: Record<string, unknown> = {};
     cyclic.default = cyclic;
     expect(resolveOneSignal(cyclic)).toBeNull();
+  });
+});
+
+describe('shouldOfferPush', () => {
+  const fresh = { native: true, granted: false, canRequest: true, alreadyAsked: false };
+
+  it('offers on a fresh install, which is the whole point of it', () => {
+    expect(shouldOfferPush(fresh)).toBe(true);
+  });
+
+  it('never offers twice', () => {
+    // "Not now" has to mean not now. A permission card that returns on the
+    // next launch is the pattern that teaches people to deny by reflex.
+    expect(shouldOfferPush({ ...fresh, alreadyAsked: true })).toBe(false);
+  });
+
+  it('stays quiet when notifications are already on', () => {
+    expect(shouldOfferPush({ ...fresh, granted: true })).toBe(false);
+  });
+
+  it('stays quiet when Android will no longer show a prompt', () => {
+    // Offering to ask when the OS has stopped listening produces a card whose
+    // button does nothing.
+    expect(shouldOfferPush({ ...fresh, canRequest: false })).toBe(false);
+  });
+
+  it('stays quiet off-device, where there is no OneSignal at all', () => {
+    expect(shouldOfferPush({ ...fresh, native: false })).toBe(false);
+  });
+});
+
+describe('pushBlockedByOs', () => {
+  it('is true only once Android has stopped offering the prompt', () => {
+    // This is what decides whether the app says "tap to turn on" or sends the
+    // user to system settings. Getting it backwards is what made the toggle
+    // read as broken: it pointed at Settings while a tap would have prompted.
+    expect(pushBlockedByOs({ granted: false, canRequest: false })).toBe(true);
+    expect(pushBlockedByOs({ granted: false, canRequest: true })).toBe(false);
+  });
+
+  it('is false when permission is already granted, whatever canRequest says', () => {
+    expect(pushBlockedByOs({ granted: true, canRequest: false })).toBe(false);
   });
 });

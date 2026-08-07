@@ -115,6 +115,81 @@ export async function requestPushPermission(): Promise<boolean> {
   }
 }
 
+/**
+ * Whether Android would still show the permission dialog if asked.
+ *
+ * Android 13 stops offering the dialog once it has been dismissed, and from
+ * then on `requestPermission` returns false without anything appearing on
+ * screen. That is the difference between "tap this and you will be asked" and
+ * "the only way back is system settings", and the app has to say which one it
+ * is or the toggle reads as broken.
+ */
+export async function canRequestPushPermission(): Promise<boolean> {
+  const os = await oneSignal();
+  if (!os) return false;
+  try {
+    return await os.Notifications.canRequestPermission();
+  } catch {
+    return false;
+  }
+}
+
+export interface PushState {
+  granted: boolean;
+  canRequest: boolean;
+}
+
+/** True when the only remaining route is the system settings app. */
+export function pushBlockedByOs({ granted, canRequest }: PushState): boolean {
+  return !granted && !canRequest;
+}
+
+export interface PushOfferState extends PushState {
+  native: boolean;
+  /** Whether this account has already been shown the one-time offer. */
+  alreadyAsked: boolean;
+}
+
+/**
+ * Whether to show the one-time offer that gets a new install asked at all.
+ *
+ * Nothing in the app used to ask. The permission was reachable only from a
+ * toggle buried in Settings, so an install that never opened that screen never
+ * saw the dialog and never received a notification, with nothing anywhere
+ * saying why.
+ *
+ * It is still not asked at launch. It waits until the account exists and the
+ * recovery phrase is dealt with, which is the first moment "we can tell you
+ * when a message arrives" means anything to the person reading it. And it is
+ * asked once: a card that comes back every launch is what teaches people to
+ * deny by reflex.
+ */
+export function shouldOfferPush(state: PushOfferState): boolean {
+  if (!state.native || state.alreadyAsked) return false;
+  return !state.granted && state.canRequest;
+}
+
+const OFFER_KEY = 'nearside.push.offered';
+
+/** Per account, because two people sharing a phone each get asked once. */
+export function pushOfferSeen(userId: string): boolean {
+  try {
+    return localStorage.getItem(`${OFFER_KEY}.${userId}`) === '1';
+  } catch {
+    // No storage means we cannot remember the answer, and asking on every
+    // launch is worse than never asking again.
+    return true;
+  }
+}
+
+export function markPushOfferSeen(userId: string): void {
+  try {
+    localStorage.setItem(`${OFFER_KEY}.${userId}`, '1');
+  } catch {
+    /* ignore storage failures */
+  }
+}
+
 export async function hasPushPermission(): Promise<boolean> {
   const os = await oneSignal();
   if (!os) return false;

@@ -3,7 +3,13 @@ import { Session } from '@supabase/supabase-js';
 import { Capacitor } from '@capacitor/core';
 import { supabase } from '../lib/supabase';
 import { Profile, initial } from '../lib/types';
-import { hasPushPermission, requestPushPermission, setPushEnabled } from '../lib/notifications';
+import {
+  canRequestPushPermission,
+  hasPushPermission,
+  pushBlockedByOs,
+  requestPushPermission,
+  setPushEnabled,
+} from '../lib/notifications';
 import { AVATAR_MAX_EDGE, compressImage } from '../lib/compress';
 import { isSoundMuted, setSoundMuted } from '../lib/sound';
 import { confirmsUsername } from '../lib/account';
@@ -66,6 +72,12 @@ export function SettingsModal({ session, profile, onUpdated, onClose }: Settings
   // "denied" on the one platform this app ships to and left the toggle
   // disabled under the words "Not supported on this device".
   const [granted, setGranted] = useState<boolean | null>(null);
+  // Whether Android would still show its dialog. Android 13 stops offering it
+  // after a dismissal, and from then on the toggle cannot do anything at all,
+  // so this is what decides between "tap to turn on" and "go to system
+  // settings". Saying the second while the first was true is what made the
+  // toggle read as broken.
+  const [canRequest, setCanRequest] = useState(true);
   const [pushOn, setPushOn] = useState(false);
   const [pushBusy, setPushBusy] = useState(false);
   const [muted, setMuted] = useState(isSoundMuted());
@@ -83,10 +95,11 @@ export function SettingsModal({ session, profile, onUpdated, onClose }: Settings
   // Reflect whether this device is currently opted in with OneSignal.
   useEffect(() => {
     let active = true;
-    void hasPushPermission().then((ok) => {
+    void Promise.all([hasPushPermission(), canRequestPushPermission()]).then(([ok, askable]) => {
       if (!active) return;
       setGranted(ok);
       setPushOn(ok);
+      setCanRequest(askable);
     });
     return () => {
       active = false;
@@ -107,9 +120,17 @@ export function SettingsModal({ session, profile, onUpdated, onClose }: Settings
       setPushOn(ok);
       if (ok) {
         await setPushEnabled(true);
-        toast.success('Notifications enabled. They never carry message content.');
+        toast.success('Notifications on. They never carry message content.');
       } else {
-        toast.error(`Notifications are blocked. Enable them in ${permissionSettingsLocation()}.`);
+        // A refusal and a dialog that never appeared need different advice, so
+        // re-read whether Android is still willing to ask.
+        const askable = await canRequestPushPermission();
+        setCanRequest(askable);
+        toast.error(
+          askable
+            ? 'Notifications stay off until you allow them.'
+            : `Android is no longer asking. Turn them on in ${permissionSettingsLocation()}.`
+        );
       }
     }
     setPushBusy(false);
@@ -129,7 +150,9 @@ export function SettingsModal({ session, profile, onUpdated, onClose }: Settings
         ? 'On. A notification names the sender and never what they said.'
         : granted
           ? 'Hear about messages while the app is closed'
-          : `Allow them here, or turn them on in ${permissionSettingsLocation()}`;
+          : pushBlockedByOs({ granted: false, canRequest })
+            ? `Blocked by Android. Turn them on in ${permissionSettingsLocation()}.`
+            : 'Tap to turn on. Android will ask you to allow it.';
 
   async function handleAvatar(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];

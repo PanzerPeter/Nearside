@@ -17,6 +17,7 @@ import { useIdentity } from './hooks/useIdentity';
 import { syncPublicKeys } from './lib/identity-sync';
 import { isSecureStorageAvailable } from './lib/keystore';
 import { IdentitySetup } from './components/IdentitySetup';
+import { NotificationsPrompt } from './components/NotificationsPrompt';
 import { useAppBadge } from './hooks/useAppBadge';
 import { PresenceProvider } from './hooks/usePresence';
 import { initSoundUnlock } from './lib/sound';
@@ -258,6 +259,10 @@ function App() {
 
   return (
     <PresenceProvider session={session} friendIds={friendIds}>
+    {/* Rendered only past the identity gate, so the first thing a new install
+        is asked is never "can we notify you" before it knows what the app is.
+        The component decides for itself whether there is anything to ask. */}
+    <NotificationsPrompt userId={session.user.id} />
     <div className="h-dvh flex flex-col bg-base-300 overflow-hidden">
       {/* Top Bar */}
       <header className="navbar bg-base-100 px-4 sm:px-6 shrink-0 border-b border-base-content/5 shadow-[0_1px_3px_rgba(0,0,0,0.25)] z-20 min-h-[3.5rem] pt-safe">
