@@ -1,15 +1,34 @@
 # Nearside
 
-A fast, real-time direct-messaging PWA. Add friends by username and chat one-to-one
-with text, images, and video — installable on mobile and desktop.
+A fast, real-time direct-messaging app for Android, built as a Capacitor shell
+around a React web app. Chat one-to-one with text, images, voice and video —
+end-to-end encrypted, with the keys held on the device.
 
 Built with React + TypeScript + Vite, TailwindCSS + daisyUI, and Supabase
-(Auth, Postgres, Realtime, Storage).
+(Auth, Postgres, Realtime, Storage). The browser build is a development
+convenience; there is no hosted web deploy.
+
+## Encryption
+
+- Every message body, caption and attachment is sealed on the device. The server
+  stores a ciphertext and a nonce and has no way to read either — `0023` dropped
+  the plaintext column and the server-side search that depended on it
+- Each account's key is derived from a 12-word recovery phrase, stored in
+  Android's Keystore and never sent anywhere. Losing the phrase means losing the
+  history: nobody can reset it
+- Keys are per account, not per device. Two accounts on one phone each hold their
+  own, and neither can read the other's messages
+- Attachments get a random per-file key, sealed to the recipient alongside the
+  message. Storage holds bytes it cannot interpret
+- Search and conversation previews run against a local SQLite mirror of what this
+  device has decrypted, one database file per account
 
 ## Features
 
-- Email/password auth with username, editable later, and email password reset
-- Friend requests by username (search, accept, decline)
+- Email/password auth with a display name, editable later, and email password
+  reset over an `app.nearside://` deep link
+- Friend requests by name search (accept, decline) — being replaced by QR and
+  short connect codes, after which the searchable directory goes away
 - Private friend nicknames: name someone whatever you like, visible only to you
   (they are never told), used in the sidebar, the chat header and notifications
 - A note-to-self chat, pinned to the top of the list for every account — the
@@ -26,7 +45,8 @@ Built with React + TypeScript + Vite, TailwindCSS + daisyUI, and Supabase
 - Per-conversation chat background image, set independently by each user
 - Avatar upload
 - Message pagination (load older on demand)
-- Installable PWA with offline app shell
+- Android app (Capacitor). The service worker still exists for the browser build
+  and is switched off in native builds — see the Android section
 - Survives sleep, network loss and blocked WebSockets: the app detects wake
   (including on desktop, where nothing fires an event), rebuilds its realtime
   subscriptions, backfills whatever it missed, and falls back to polling while
@@ -151,8 +171,14 @@ keyPassword=…
 
 Release builds are unsigned without it; debug builds do not need it.
 
-## Deploy (Netlify)
+## Deploy
 
-`netlify.toml` is included (build `npm run build`, publish `dist`, SPA redirect).
-Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` in
-**Site settings → Environment variables**, then deploy.
+There is no hosted web deploy. The shipped artifact is the Android build, and
+`npm run dev` covers local work — the browser build is a development
+convenience, not a target, which is also why `isSecureStorageAvailable()` warns
+that a browser cannot hold a key the way the app can.
+
+One consequence worth knowing: emailed auth links redirect to
+`app.nearside://auth/…` on the device (see `src/lib/authRedirect.ts`), so that
+scheme has to be allow-listed in Supabase rather than a web origin.
+`supabase/SETUP.md` covers it.

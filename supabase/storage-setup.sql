@@ -1,5 +1,5 @@
 /*
-  Chatly — Storage buckets & policies
+  Nearside — Storage buckets & policies
   Run once in the Supabase SQL editor AFTER 0001_init.sql.
 
   Buckets:
@@ -22,14 +22,17 @@ ON CONFLICT (id) DO UPDATE
       file_size_limit = EXCLUDED.file_size_limit,
       allowed_mime_types = EXCLUDED.allowed_mime_types;
 
--- The audio types are the containers MediaRecorder produces across browsers
--- (Opus in WebM/Ogg on Chrome and Firefox, AAC in MP4 on Safari) — see
--- `pickAudioMime` in src/lib/audio.ts, which negotiates against this list.
+-- Attachments are sealed on the device and uploaded as opaque bytes, so
+-- application/octet-stream is the only type they can be announced as — see
+-- 0025_sealed_media_mime.sql, which this must not contradict. The image types
+-- remain because chat backgrounds share this bucket and are not sealed.
+--
+-- The whitelist no longer says anything about what the sealed objects contain;
+-- file_size_limit is the control still doing work here.
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 VALUES ('chat-media', 'chat-media', false, 52428800,
-        ARRAY['image/png', 'image/jpeg', 'image/webp', 'image/gif',
-              'video/mp4', 'video/webm', 'video/quicktime',
-              'audio/webm', 'audio/ogg', 'audio/mp4', 'audio/aac', 'audio/mpeg'])
+        ARRAY['application/octet-stream',
+              'image/png', 'image/jpeg', 'image/webp', 'image/gif'])
 ON CONFLICT (id) DO UPDATE
   SET public = EXCLUDED.public,
       file_size_limit = EXCLUDED.file_size_limit,
