@@ -16,8 +16,10 @@ vi.mock('@revenuecat/purchases-capacitor', () => ({
   },
 }));
 
+import { readFileSync } from 'node:fs';
 import {
   DEFAULT_THEME,
+  FREE_THEMES,
   PACKS,
   packById,
   packsFromEntitlements,
@@ -64,6 +66,48 @@ describe('packs', () => {
   });
 });
 
+describe('free themes', () => {
+  it('never overlaps a pack', () => {
+    // A theme in both lists is either given away for free or charged for
+    // twice, depending on which list the screen reads first.
+    const sold = new Set(PACKS.map((p) => p.theme));
+    for (const free of FREE_THEMES) expect(sold.has(free.theme)).toBe(false);
+  });
+
+  it('includes the shipped default, and describes every entry like a pack', () => {
+    expect(FREE_THEMES.map((t) => t.theme)).toContain(DEFAULT_THEME);
+    for (const theme of FREE_THEMES) {
+      expect(theme.name).toBeTruthy();
+      expect(theme.description).toBeTruthy();
+      expect(theme.swatches).toHaveLength(3);
+      for (const swatch of theme.swatches) expect(swatch).toMatch(/^#[0-9a-f]{6}$/i);
+    }
+  });
+});
+
+describe('every listed theme exists', () => {
+  // A theme name with no daisyUI block behind it does not fall back to the
+  // default: `data-theme` resolves to no custom properties at all and the app
+  // renders as unstyled HTML. A typo here is a white screen, not a wrong colour.
+  const config = readFileSync('tailwind.config.js', 'utf8');
+
+  for (const { name, theme } of [...FREE_THEMES, ...PACKS]) {
+    it(`defines ${name} (${theme}) in tailwind.config.js`, () => {
+      expect(config).toMatch(new RegExp(`['"]?${theme}['"]?\\s*:\\s*\\{`));
+    });
+  }
+
+  it('gives every theme the status tokens the components read', () => {
+    // These are not inherited from the default theme — a block that omits one
+    // renders the literal string `var(--receipt-read)` as a colour, which
+    // computes to nothing and leaves the glyph invisible.
+    for (const token of ['--surface-ring', '--receipt-read', '--presence-offline']) {
+      const declared = config.match(new RegExp(`'${token}'`, 'g')) ?? [];
+      expect(declared.length).toBe(FREE_THEMES.length + PACKS.length);
+    }
+  });
+});
+
 describe('themeForOwnership', () => {
   it('keeps a theme the account owns', () => {
     const pack = PACKS[0];
@@ -78,5 +122,14 @@ describe('themeForOwnership', () => {
   it('leaves a non-pack theme as the default', () => {
     expect(themeForOwnership(DEFAULT_THEME, new Set())).toBe(DEFAULT_THEME);
     expect(themeForOwnership('something-else', new Set())).toBe(DEFAULT_THEME);
+  });
+
+  it('keeps a free theme with no entitlements at all', () => {
+    // Free themes were never entitlements, so an empty set says nothing about
+    // them. Reverting someone's light mode on every cold start because
+    // RevenueCat had nothing to report is the bug this guards.
+    for (const free of FREE_THEMES) {
+      expect(themeForOwnership(free.theme, new Set())).toBe(free.theme);
+    }
   });
 });

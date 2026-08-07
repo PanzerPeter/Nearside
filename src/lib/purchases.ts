@@ -11,17 +11,56 @@
 import { Capacitor } from '@capacitor/core';
 import { Purchases, type PurchasesPackage } from '@revenuecat/purchases-capacitor';
 
-export interface Pack {
-  /** The RevenueCat entitlement id, and the daisyUI theme name it unlocks. */
-  id: string;
+/** Anything the appearance screen can list, bought or not. */
+export interface ThemeOption {
   name: string;
   description: string;
-  /** daisyUI theme applied to `document.documentElement`. */
+  /** daisyUI theme applied to `document.documentElement`. Must exist in
+   *  `tailwind.config.js`, or the attribute resolves to no variables at all
+   *  and the app renders unstyled. */
   theme: string;
-  /** Three swatches for the store card, so a pack can be judged before it is
-   *  bought. */
+  /** Three swatches for the store card, so a theme can be judged from the
+   *  list without opening the preview. */
   swatches: [string, string, string];
 }
+
+export interface Pack extends ThemeOption {
+  /** The RevenueCat entitlement id. Also the product id we match offerings on. */
+  id: string;
+}
+
+/** The theme applied when no pack is active. Ships with the app and is never
+ *  for sale — the free experience is the whole app. */
+export const DEFAULT_THEME = 'nearside';
+
+/**
+ * Themes that cost nothing, ever.
+ *
+ * Light mode and an OLED black are accessibility and battery, not decoration:
+ * charging for a screen someone can read outdoors would be a functional
+ * paywall wearing a cosmetic label, which is the one thing this file promises
+ * not to do. `themeForOwnership` treats every entry here as always owned.
+ */
+export const FREE_THEMES: ThemeOption[] = [
+  {
+    name: 'Nearside',
+    description: 'The theme the app ships with.',
+    theme: DEFAULT_THEME,
+    swatches: ['#1a1b1e', '#2a2c31', '#3b82f6'],
+  },
+  {
+    name: 'Daylight',
+    description: 'A plain light theme, for a screen you are reading outdoors.',
+    theme: 'nearside-daylight',
+    swatches: ['#ffffff', '#e8ecf3', '#2563eb'],
+  },
+  {
+    name: 'Void',
+    description: 'True black. Unlit pixels on an OLED screen, and less battery.',
+    theme: 'nearside-void',
+    swatches: ['#000000', '#1c1d21', '#4c8dff'],
+  },
+];
 
 export const PACKS: Pack[] = [
   {
@@ -45,11 +84,28 @@ export const PACKS: Pack[] = [
     theme: 'nearside-terminal',
     swatches: ['#0a0f0a', '#123018', '#4ade80'],
   },
+  {
+    id: 'pack.sunset',
+    name: 'Sunset',
+    description: 'Dusk purple with a warm red accent, for the end of the day.',
+    theme: 'nearside-sunset',
+    swatches: ['#170d21', '#3a2450', '#e0563f'],
+  },
+  {
+    id: 'pack.sakura',
+    name: 'Sakura',
+    description: 'A soft light theme in rose and blossom pink, corners rounded.',
+    theme: 'nearside-sakura',
+    swatches: ['#fffafc', '#f7dde8', '#d6336c'],
+  },
+  {
+    id: 'pack.graphite',
+    name: 'Graphite',
+    description: 'No colour at all. Greys, square corners, nothing shouting.',
+    theme: 'nearside-graphite',
+    swatches: ['#0f1113', '#2b2f34', '#b3bac4'],
+  },
 ];
-
-/** The theme applied when no pack is active. Ships with the app and is never
- *  for sale — the free experience is the whole app. */
-export const DEFAULT_THEME = 'nearside';
 
 const THEME_KEY = 'nearside-theme';
 
@@ -159,10 +215,32 @@ export async function restorePurchases(): Promise<Set<string>> {
  */
 export function applyTheme(theme: string): void {
   document.documentElement.setAttribute('data-theme', theme);
+  syncBrowserChrome();
   try {
     localStorage.setItem(THEME_KEY, theme);
   } catch {
     // Private mode, or a storage quota. The theme still applies for this run.
+  }
+}
+
+/**
+ * Repoints `<meta name="theme-color">` at the theme that is now active.
+ *
+ * The tag is baked into `index.html` as the default theme's canvas, so before
+ * this existed a light theme kept a near-black address bar and PWA status bar
+ * above a white app. Read from the live `--b3` (daisyUI's base-300, the canvas
+ * tier) rather than a table, so a theme edit in `tailwind.config.js` cannot
+ * drift from it.
+ */
+function syncBrowserChrome(): void {
+  try {
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (!meta) return;
+    const canvas = getComputedStyle(document.documentElement).getPropertyValue('--b3').trim();
+    // daisyUI emits the bare HSL components ("222 14% 11%"), not a colour.
+    if (canvas) meta.setAttribute('content', `hsl(${canvas})`);
+  } catch {
+    // Chrome colour is decoration; never let it take the theme down with it.
   }
 }
 
@@ -178,10 +256,12 @@ export function storedTheme(): string {
  * The theme that should be showing, given what is owned.
  *
  * A stored theme belonging to a pack the account no longer owns falls back to
- * the default — a refund must not leave the paid-for look in place. A theme
- * that is not a pack at all is the default and is left alone.
+ * the default — a refund must not leave the paid-for look in place. A free
+ * theme is always kept: it was never an entitlement, so an empty entitlement
+ * set says nothing about it. Anything unrecognised is the default.
  */
 export function themeForOwnership(stored: string, owned: ReadonlySet<string>): string {
+  if (FREE_THEMES.some((t) => t.theme === stored)) return stored;
   const pack = PACKS.find((p) => p.theme === stored);
   if (!pack) return DEFAULT_THEME;
   return owned.has(pack.id) ? stored : DEFAULT_THEME;
