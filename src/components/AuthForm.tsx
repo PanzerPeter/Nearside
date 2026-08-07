@@ -140,18 +140,19 @@ export function AuthForm() {
                 <label className="label pb-1">
                   <span className={LABEL_CLASS}>Display name</span>
                 </label>
+                {/* No pattern and no minimum: a display name is not a handle.
+                    Spaces, capitals and accents are all fine, and two people
+                    may pick the same one — that is what stops it being an
+                    address. The only rule left is the length cap. */}
                 <input
                   type="text"
-                  placeholder="johndoe"
+                  placeholder="Jane Doe"
                   className={INPUT_CLASS}
                   value={display_name}
                   onChange={(e) => setUsername(e.target.value)}
                   required={isSignUp}
-                  minLength={3}
                   maxLength={DISPLAY_NAME_MAX}
-                  pattern="[a-zA-Z0-9_]+"
-                  title="Letters, numbers, and underscores only"
-                  autoComplete="username"
+                  autoComplete="name"
                 />
               </div>
             )}
