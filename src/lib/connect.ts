@@ -52,6 +52,24 @@ export async function redeemConnectCode(code: string): Promise<string> {
   return data as string;
 }
 
+const SAFETY_PREFIX = 'nearside-safety:v1:';
+
+/** The safety number as a QR, so two people can compare sixty digits by
+ *  holding up a phone instead of reading them out. Spaces are stripped: the
+ *  grouping is for the eye, and a scanner should not have to agree with it. */
+export function safetyPayload(number: string): string {
+  return `${SAFETY_PREFIX}${number.replace(/\s+/g, '')}`;
+}
+
+/** The digits from a scanned safety QR, or null if it was some other code.
+ *  Deliberately not a boolean "matches": the caller compares against its own
+ *  number, so this cannot be tricked into answering yes. */
+export function parseSafetyPayload(text: string): string | null {
+  if (!text.startsWith(SAFETY_PREFIX)) return null;
+  const digits = text.slice(SAFETY_PREFIX.length);
+  return /^\d+$/.test(digits) ? digits : null;
+}
+
 /** How long a minted code lives, mirroring the interval in
  *  `mint_connect_code`. Only the countdown reads it; expiry itself is decided
  *  server-side, so a device with a wrong clock cannot extend a token. */

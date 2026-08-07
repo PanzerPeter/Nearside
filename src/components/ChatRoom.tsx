@@ -15,6 +15,7 @@ import {
 import { openRows, sealBody, sealMediaKey } from '../lib/sealed-body';
 import { sealFile } from '../lib/media-crypto';
 import { peerPublicKey } from '../lib/peer-keys';
+import { verificationState, type VerificationState } from '../lib/verification';
 import type { Identity } from '../lib/crypto/keys';
 import { formatDisplayName, useNickname } from '../lib/nicknames';
 import { MEDIA_SCAN_LIMIT, selectStaleMedia, type MediaRow } from '../lib/media';
@@ -27,6 +28,7 @@ import { ConversationSearch } from './ConversationSearch';
 import { ChatBackgroundModal } from './ChatBackgroundModal';
 import { NicknameModal } from './NicknameModal';
 import { ForwardModal } from './ForwardModal';
+import { VerifyContact } from './VerifyContact';
 import { useReactions } from '../hooks/useReactions';
 import { useReplyTargets } from '../hooks/useReplyTargets';
 import { useChatBackground } from '../hooks/useChatBackground';
@@ -53,7 +55,16 @@ import { formatDate, formatLastSeen, formatTime } from '../lib/time';
 import { prefersReducedMotion } from '../lib/motion';
 import { useConnection, reportChannelStatus, forgetChannel } from '../lib/connection';
 import { closeNotificationsFor } from '../lib/push';
-import { ArrowLeft, ChevronDown, Image as ImageIcon, NotebookPen, Search } from 'lucide-react';
+import { toBase64 } from '../lib/crypto/keys';
+import {
+  ArrowLeft,
+  ChevronDown,
+  Image as ImageIcon,
+  NotebookPen,
+  Search,
+  ShieldAlert,
+  ShieldCheck,
+} from 'lucide-react';
 
 const PAGE_SIZE = 30;
 /** How long a jumped-to message's ring highlight stays visible. */
@@ -135,6 +146,14 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
   // The message whose "Forward" was chosen, and so the one the picker will
   // copy. Null when the picker is closed.
   const [forwarding, setForwarding] = useState<Message | null>(null);
+  // The peer's current key and what this device makes of it. `isSelf` skips
+  // the whole question: there is no second party to be impersonated.
+  const [peerKey, setPeerKey] = useState<Uint8Array | null>(null);
+  const [trust, setTrust] = useState<VerificationState>('unverified');
+  const [verifyOpen, setVerifyOpen] = useState(false);
+  // Bumped after a re-verification, to re-read a key `forgetPeerKey` just
+  // dropped from the session cache.
+  const [trustEpoch, setTrustEpoch] = useState(0);
   // The message a search jump just landed on — briefly ringed, then cleared.
   const [highlightId, setHighlightId] = useState<string | null>(null);
   // Render-facing mirror of `atBottomRef`, kept in sync by `handleListScroll`.
@@ -162,6 +181,37 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
   // Quoted messages, including the ones that are older than the loaded window
   // and so can't be found in `byId` at all.
   const replyTargets = useReplyTargets(me, friend.id, messages);
+
+  // What this device knows about the peer's key. `peerPublicKey` records it on
+  // first sight and caches in-module, so this costs one request per peer per
+  // session; `trustEpoch` is what forces a re-read after a re-verification has
+  // dropped that cache.
+  useEffect(() => {
+    if (isSelf) {
+      setPeerKey(null);
+      setTrust('verified');
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const key = await peerPublicKey(friend.id);
+      if (cancelled) return;
+      if (!key) {
+        // No published key at all. The send path already refuses to seal to
+        // nothing; it is not a key *change*, and must not be reported as one.
+        setPeerKey(null);
+        setTrust('unverified');
+        return;
+      }
+      const state = await verificationState(friend.id, await toBase64(key));
+      if (cancelled) return;
+      setPeerKey(key);
+      setTrust(state);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [friend.id, isSelf, trustEpoch]);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -1514,6 +1564,28 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
         >
           <Search className="w-5 h-5" />
         </button>
+        {!isSelf && (
+          <button
+            className={`btn btn-ghost btn-sm btn-square hover:bg-base-content/10 transition-colors ${
+              trust === 'changed' ? 'text-error' : trust === 'verified' ? 'text-success' : ''
+            }`}
+            onClick={() => setVerifyOpen(true)}
+            disabled={!peerKey}
+            title={
+              trust === 'changed'
+                ? 'Their key changed'
+                : trust === 'verified'
+                  ? 'Verified'
+                  : 'Verify safety number'
+            }
+          >
+            {trust === 'verified' ? (
+              <ShieldCheck className="w-5 h-5" />
+            ) : (
+              <ShieldAlert className="w-5 h-5" />
+            )}
+          </button>
+        )}
         <button
           className="btn btn-ghost btn-sm btn-square hover:bg-base-content/10 transition-colors"
           onClick={() => setBackgroundOpen(true)}
@@ -1522,6 +1594,17 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
           <ImageIcon className="w-5 h-5" />
         </button>
       </header>
+
+      {verifyOpen && peerKey && (
+        <VerifyContact
+          peerId={friend.id}
+          peerLabel={peerLabel}
+          myPublic={identity.boxPublic}
+          theirPublic={peerKey}
+          onVerified={() => setTrustEpoch((n) => n + 1)}
+          onClose={() => setVerifyOpen(false)}
+        />
+      )}
 
       {backgroundOpen && (
         <ChatBackgroundModal
@@ -1788,32 +1871,59 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
         )}
       </div>
 
-      {/* Input */}
-      <Composer
-        ref={composerRef}
-        value={newMessage}
-        onChange={(v) => {
-          setNewMessage(v);
-          notifyTyping();
-        }}
-        onSend={handleSend}
-        onStageFile={handleStageFile}
-        stagedFile={stagedFile}
-        stagedDurationMs={stagedDurationMs}
-        onClearStaged={handleClearStaged}
-        onError={toast.error}
-        sending={sending}
-        uploading={uploading}
-        replyingTo={
-          replyingTo
-            ? {
-                display_name: replyingTo.user_id === me ? 'yourself' : peerLabel,
-                snippet: messageSnippet(replyingTo),
-              }
-            : null
-        }
-        onCancelReply={() => setReplyingTo(null)}
-      />
+      {/* Input, unless the peer's key has changed under us. The composer is
+          replaced rather than disabled: a greyed-out box invites hunting for
+          the way around it, and there deliberately isn't one until somebody
+          has looked at a safety number. */}
+      {trust === 'changed' ? (
+        <div className="p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] border-t border-error/30 bg-error/10">
+          <div className="flex items-start gap-3">
+            <ShieldAlert className="w-5 h-5 text-error shrink-0 mt-0.5" />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-error">Their key changed.</p>
+              <p className="text-sm text-base-content/70 mt-1">
+                This happens when someone reinstalls the app or restores from a recovery phrase —
+                and it is also what an interception looks like. Compare safety numbers in person
+                before continuing.
+              </p>
+              <button
+                className="btn btn-error btn-sm mt-3 gap-1.5"
+                onClick={() => setVerifyOpen(true)}
+                disabled={!peerKey}
+              >
+                <ShieldCheck className="w-4 h-4" />
+                Compare safety numbers
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <Composer
+          ref={composerRef}
+          value={newMessage}
+          onChange={(v) => {
+            setNewMessage(v);
+            notifyTyping();
+          }}
+          onSend={handleSend}
+          onStageFile={handleStageFile}
+          stagedFile={stagedFile}
+          stagedDurationMs={stagedDurationMs}
+          onClearStaged={handleClearStaged}
+          onError={toast.error}
+          sending={sending}
+          uploading={uploading}
+          replyingTo={
+            replyingTo
+              ? {
+                  display_name: replyingTo.user_id === me ? 'yourself' : peerLabel,
+                  snippet: messageSnippet(replyingTo),
+                }
+              : null
+          }
+          onCancelReply={() => setReplyingTo(null)}
+        />
+      )}
     </div>
   );
 }
