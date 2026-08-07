@@ -19,6 +19,7 @@ import { verificationState, type VerificationState } from '../lib/verification';
 import type { Identity } from '../lib/crypto/keys';
 import { formatDisplayName, useNickname } from '../lib/nicknames';
 import { MEDIA_SCAN_LIMIT, selectStaleMedia, type MediaRow } from '../lib/media';
+import { pinnedIds } from '../lib/pins';
 import { CHAT_IMAGE_MAX_EDGE, compressImage } from '../lib/compress';
 import { Avatar } from './Avatar';
 import { StatusDot, presenceLabels } from './StatusDot';
@@ -53,8 +54,9 @@ import {
 } from '../lib/outbox';
 import { formatDate, formatLastSeen, formatTime } from '../lib/time';
 import { prefersReducedMotion } from '../lib/motion';
+import { tapSend, tapSuccess, tapWarning } from '../lib/haptics';
 import { useConnection, reportChannelStatus, forgetChannel } from '../lib/connection';
-import { closeNotificationsFor } from '../lib/push';
+import { closeNotificationsFor } from '../lib/notifications';
 import { toBase64 } from '../lib/crypto/keys';
 import {
   ArrowLeft,
@@ -207,6 +209,10 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
       if (cancelled) return;
       setPeerKey(key);
       setTrust(state);
+      // A key change blocks the composer, which is a jarring thing to walk
+      // into silently. The buzz is the same one Android uses for a warning,
+      // and it arrives with the banner rather than after it.
+      if (state === 'changed') void tapWarning();
     })();
     return () => {
       cancelled = true;
@@ -1019,6 +1025,11 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
   }
 
   async function handleSend() {
+    // Fired here rather than inside the two send paths, and before either
+    // runs: the confirmation the thumb wants is "I registered that", not "the
+    // server has it", and waiting for the round trip would land it after the
+    // bubble is already on screen.
+    void tapSend();
     if (stagedFile) {
       // Media stays synchronous: queueing a 50 MB video in IndexedDB is a
       // different problem than this task solves, and the staged-file preview
@@ -1401,7 +1412,10 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
 
     if (!data) return;
 
-    const stale = selectStaleMedia(data as MediaRow[]);
+    // Pins are read fresh on every pass rather than held in state: the set
+    // changes from the viewer, which is a different component, and a stale
+    // copy here would prune the very file someone just chose to keep.
+    const stale = selectStaleMedia(data as MediaRow[], await pinnedIds());
     if (!stale.length) return;
 
     const paths = stale.map((m) => m.media_path).filter((p): p is string => !!p);
@@ -1527,10 +1541,31 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
           onClick={() => setNicknameOpen(true)}
           title={isSelf ? 'Name this chat' : 'Set a nickname'}
         >
-          <p className="font-semibold text-sm truncate">
-            {peerLabel}
+          <p className="font-semibold text-sm truncate flex items-center gap-1.5">
+            <span className="truncate">{peerLabel}</span>
+            {/* Verification as visible state, not as a coloured icon in the
+                corner someone has to know to look at. A contact you took the
+                trouble to verify should look verified from across the room. */}
+            {trust === 'verified' && !isSelf && (
+              <span
+                className="shrink-0 inline-flex items-center gap-0.5 rounded-full bg-success/15 px-1.5 py-0.5 text-[0.65rem] font-medium text-success"
+                title="You compared safety numbers with this contact"
+              >
+                <ShieldCheck className="w-3 h-3" />
+                Verified
+              </span>
+            )}
+            {trust === 'changed' && !isSelf && (
+              <span
+                className="shrink-0 inline-flex items-center gap-0.5 rounded-full bg-error/15 px-1.5 py-0.5 text-[0.65rem] font-medium text-error"
+                title="Their key is not the one you verified"
+              >
+                <ShieldAlert className="w-3 h-3" />
+                Key changed
+              </span>
+            )}
             {nickname && !isSelf && (
-              <span className="ml-1.5 font-normal text-xs text-base-content/45">
+              <span className="shrink-0 font-normal text-xs text-base-content/60">
                 @{friend.display_name}
               </span>
             )}
@@ -1601,7 +1636,10 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
           peerLabel={peerLabel}
           myPublic={identity.boxPublic}
           theirPublic={peerKey}
-          onVerified={() => setTrustEpoch((n) => n + 1)}
+          onVerified={() => {
+            void tapSuccess();
+            setTrustEpoch((n) => n + 1);
+          }}
           onClose={() => setVerifyOpen(false)}
         />
       )}
@@ -1707,7 +1745,7 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
                         Storage that the server can read. Claiming otherwise
                         here would be the app's first lie about the one
                         property it is selling. */}
-                    <p className="text-base-content/50 text-xs mt-1">
+                    <p className="text-base-content/60 text-xs mt-1">
                       Notes, photos and voice memos. Your words are encrypted with a key only this
                       phone holds.
                     </p>

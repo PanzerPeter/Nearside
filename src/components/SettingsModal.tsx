@@ -1,14 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { Session } from '@supabase/supabase-js';
+import { Capacitor } from '@capacitor/core';
 import { supabase } from '../lib/supabase';
 import { Profile, initial } from '../lib/types';
-import {
-  enablePush,
-  disablePush,
-  notificationPermission,
-  notificationsSupported,
-  pushSupported,
-} from '../lib/push';
+import { hasPushPermission, requestPushPermission, setPushEnabled } from '../lib/notifications';
 import { AVATAR_MAX_EDGE, compressImage } from '../lib/compress';
 import { isSoundMuted, setSoundMuted } from '../lib/sound';
 import { confirmsUsername } from '../lib/account';
@@ -18,7 +13,20 @@ import { clearSeed } from '../lib/keystore';
 import { permissionSettingsLocation } from '../lib/device';
 import { useToast } from '../hooks/useToast';
 import { Modal } from './Modal';
-import { Camera, Bell, Volume2 } from 'lucide-react';
+import { ServerView } from './ServerView';
+import { ThemeStore } from './ThemeStore';
+import { OpenSourceLicenses } from './OpenSourceLicenses';
+import { SecurityLimits } from './SecurityLimits';
+import {
+  Camera,
+  Bell,
+  ChevronRight,
+  Database,
+  Palette,
+  Scale,
+  ShieldAlert,
+  Volume2,
+} from 'lucide-react';
 
 /** Display names collide freely and keep their spaces and capitals; the only
  *  rule left is that there is one and that it fits. See 0022_display_name. */
@@ -52,27 +60,34 @@ export function SettingsModal({ session, profile, onUpdated, onClose }: Settings
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const [perm, setPerm] = useState<NotificationPermission>(notificationPermission());
+  // Whether the OS has granted notifications, as OneSignal reports it.
+  // Deliberately NOT the WebView's `Notification.permission`: an Android
+  // WebView has no `window.Notification` at all, so that check answered
+  // "denied" on the one platform this app ships to and left the toggle
+  // disabled under the words "Not supported on this device".
+  const [granted, setGranted] = useState<boolean | null>(null);
   const [pushOn, setPushOn] = useState(false);
   const [pushBusy, setPushBusy] = useState(false);
   const [muted, setMuted] = useState(isSoundMuted());
+  const native = Capacitor.isNativePlatform();
+
+  const [showServerView, setShowServerView] = useState(false);
+  const [showLimits, setShowLimits] = useState(false);
+  const [showThemes, setShowThemes] = useState(false);
+  const [showLicenses, setShowLicenses] = useState(false);
 
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleteText, setDeleteText] = useState('');
   const [deleting, setDeleting] = useState(false);
 
-  // Reflect whether this device currently holds a push subscription.
+  // Reflect whether this device is currently opted in with OneSignal.
   useEffect(() => {
     let active = true;
-    if (pushSupported() && notificationPermission() === 'granted') {
-      navigator.serviceWorker
-        .getRegistration()
-        .then((reg) => reg?.pushManager.getSubscription())
-        .then((sub) => {
-          if (active) setPushOn(!!sub);
-        })
-        .catch(() => {});
-    }
+    void hasPushPermission().then((ok) => {
+      if (!active) return;
+      setGranted(ok);
+      setPushOn(ok);
+    });
     return () => {
       active = false;
     };
@@ -82,22 +97,19 @@ export function SettingsModal({ session, profile, onUpdated, onClose }: Settings
     if (pushBusy) return;
     setPushBusy(true);
     if (pushOn) {
-      await disablePush();
+      await setPushEnabled(false);
       setPushOn(false);
       toast.success('Notifications turned off on this device.');
     } else {
-      const { permission, subscribed } = await enablePush(session);
-      setPerm(permission);
-      setPushOn(subscribed);
-      if (subscribed) {
-        toast.success('Notifications enabled.');
-      } else if (permission === 'denied') {
-        toast.error(`Notifications are blocked. Enable them in ${permissionSettingsLocation()}.`);
+      // Asked here, at the moment the user turns them on, and never at launch.
+      const ok = await requestPushPermission();
+      setGranted(ok);
+      setPushOn(ok);
+      if (ok) {
+        await setPushEnabled(true);
+        toast.success('Notifications enabled. They never carry message content.');
       } else {
-        // Permission granted but no subscription — Push isn't available here.
-        toast.error(
-          'This browser can’t deliver background notifications. Add Nearside to your home screen, or keep the app open to be notified.'
-        );
+        toast.error(`Notifications are blocked. Enable them in ${permissionSettingsLocation()}.`);
       }
     }
     setPushBusy(false);
@@ -109,15 +121,15 @@ export function SettingsModal({ session, profile, onUpdated, onClose }: Settings
     setSoundMuted(next);
   }
 
-  const notifStatus = !notificationsSupported()
-    ? 'Not supported on this browser'
-    : !pushSupported()
-      ? 'Background push unavailable on this browser'
-      : perm === 'denied'
-        ? `Blocked in ${permissionSettingsLocation()}`
-        : pushOn
-          ? 'On for this device'
-          : 'Get notified even when the app is closed';
+  const notifStatus = !native
+    ? 'Background notifications need the Android app'
+    : granted === null
+      ? 'Checking…'
+      : pushOn
+        ? 'On for this device — never carries what was said'
+        : granted
+          ? 'Get notified even when the app is closed'
+          : `Allow them, or enable them in ${permissionSettingsLocation()}`;
 
   async function handleAvatar(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -292,12 +304,11 @@ export function SettingsModal({ session, profile, onUpdated, onClose }: Settings
           className="input w-full bg-base-200/50 border border-base-content/10 focus:border-primary"
           value={display_name}
           onChange={(e) => setUsername(e.target.value)}
-          minLength={3}
           maxLength={DISPLAY_NAME_MAX}
-          pattern="[a-zA-Z0-9_]+"
         />
         <span className="text-xs text-base-content/60 mt-1">
-          Shown to friends in chats. Letters, numbers, underscores.
+          Shown to friends in chats. Spaces and capitals are fine, and names may repeat — a display
+          name is not an address. Nobody can find you by it.
         </span>
       </div>
 
@@ -320,7 +331,7 @@ export function SettingsModal({ session, profile, onUpdated, onClose }: Settings
               className="toggle toggle-primary shrink-0"
               checked={pushOn}
               onChange={toggleNotifications}
-              disabled={!pushSupported() || perm === 'denied'}
+              disabled={!native}
             />
           )}
         </div>
@@ -342,6 +353,54 @@ export function SettingsModal({ session, profile, onUpdated, onClose }: Settings
             onChange={toggleSound}
           />
         </div>
+      </div>
+
+      <div className="divider my-4" />
+
+      <div className="space-y-2">
+        <p className="text-xs font-medium uppercase tracking-wider text-base-content/60">
+          Appearance
+        </p>
+        <button
+          className="btn btn-ghost btn-sm w-full justify-start gap-2.5 px-2"
+          onClick={() => setShowThemes(true)}
+        >
+          <Palette className="w-4 h-4 text-base-content/60 shrink-0" />
+          <span className="flex-1 text-left">Themes</span>
+          <ChevronRight className="w-4 h-4 text-base-content/40 shrink-0" />
+        </button>
+      </div>
+
+      <div className="divider my-4" />
+
+      <div className="space-y-2">
+        <p className="text-xs font-medium uppercase tracking-wider text-base-content/60">
+          Privacy
+        </p>
+        <button
+          className="btn btn-ghost btn-sm w-full justify-start gap-2.5 px-2"
+          onClick={() => setShowServerView(true)}
+        >
+          <Database className="w-4 h-4 text-base-content/60 shrink-0" />
+          <span className="flex-1 text-left">What the server knows</span>
+          <ChevronRight className="w-4 h-4 text-base-content/40 shrink-0" />
+        </button>
+        <button
+          className="btn btn-ghost btn-sm w-full justify-start gap-2.5 px-2"
+          onClick={() => setShowLimits(true)}
+        >
+          <ShieldAlert className="w-4 h-4 text-base-content/60 shrink-0" />
+          <span className="flex-1 text-left">Where this protection stops</span>
+          <ChevronRight className="w-4 h-4 text-base-content/40 shrink-0" />
+        </button>
+        <button
+          className="btn btn-ghost btn-sm w-full justify-start gap-2.5 px-2"
+          onClick={() => setShowLicenses(true)}
+        >
+          <Scale className="w-4 h-4 text-base-content/60 shrink-0" />
+          <span className="flex-1 text-left">Open source licenses</span>
+          <ChevronRight className="w-4 h-4 text-base-content/40 shrink-0" />
+        </button>
       </div>
 
       <div className="divider my-4" />
@@ -404,6 +463,19 @@ export function SettingsModal({ session, profile, onUpdated, onClose }: Settings
           </>
         )}
       </div>
+
+      {showServerView && (
+        <ServerView
+          onClose={() => setShowServerView(false)}
+          onOpenLimits={() => {
+            setShowServerView(false);
+            setShowLimits(true);
+          }}
+        />
+      )}
+      {showLimits && <SecurityLimits onClose={() => setShowLimits(false)} />}
+      {showThemes && <ThemeStore onClose={() => setShowThemes(false)} />}
+      {showLicenses && <OpenSourceLicenses onClose={() => setShowLicenses(false)} />}
     </Modal>
   );
 }

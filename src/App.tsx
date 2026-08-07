@@ -4,11 +4,13 @@ import { AuthForm } from './components/AuthForm';
 import { SetNewPassword } from './components/SetNewPassword';
 import { FriendsList } from './components/FriendsList';
 import { ChatRoom } from './components/ChatRoom';
+import { RoomView } from './components/RoomView';
 import { SettingsModal } from './components/SettingsModal';
 import { Avatar } from './components/Avatar';
 import { BrandMark } from './components/BrandMark';
 import { supabase } from './lib/supabase';
 import { Profile } from './lib/types';
+import type { RoomSummary } from './lib/rooms';
 import { useMessageNotifications } from './hooks/useMessageNotifications';
 import { useLastSeen } from './hooks/useLastSeen';
 import { useIdentity } from './hooks/useIdentity';
@@ -18,8 +20,8 @@ import { IdentitySetup } from './components/IdentitySetup';
 import { useAppBadge } from './hooks/useAppBadge';
 import { PresenceProvider } from './hooks/usePresence';
 import { initSoundUnlock } from './lib/sound';
-import { syncPushSubscription, storeSubscriptionJSON } from './lib/push';
-import { useConnection } from './lib/connection';
+import { initNotifications, onNotificationOpened } from './lib/notifications';
+import { initPurchases, applyTheme, packsFromEntitlements, storedTheme, themeForOwnership } from './lib/purchases';
 import { useNicknameSync } from './lib/nicknames';
 import { clearAll } from './lib/outbox';
 import { clearLocalDb, openLocalDb } from './lib/localdb';
@@ -28,6 +30,11 @@ import { LogOut, MessageSquare, Settings } from 'lucide-react';
 function App() {
   const { session, loading, recovering, endRecovery } = useAuth();
   const [selectedFriend, setSelectedFriend] = useState<Profile | null>(null);
+  // Rooms and one-to-one conversations share the chat pane, so opening one
+  // must close the other — two selections both set would render whichever the
+  // JSX below happened to check first, which is not a decision to leave to
+  // ordering.
+  const [selectedRoom, setSelectedRoom] = useState<RoomSummary | null>(null);
   const [myProfile, setMyProfile] = useState<Profile | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   // Owned here, reported up by FriendsList: presence needs the friend set to
@@ -37,7 +44,6 @@ function App() {
   // so the OS-level app badge can mirror it without duplicating the map.
   const [unreadTotal, setUnreadTotal] = useState(0);
   useAppBadge(unreadTotal);
-  const { generation } = useConnection();
 
   // Signing out unmounts FriendsList, so nothing would ever report the total
   // back down to zero — the badge would sit on the installed icon claiming
@@ -92,13 +98,16 @@ function App() {
   // Hardware/browser back closes the open chat instead of leaving the app.
   // Only on the single-pane layout — on desktop both panes are visible, so
   // "back" closing the chat would be surprising rather than expected.
-  const chatOpen = !!selectedFriend;
+  const chatOpen = !!selectedFriend || !!selectedRoom;
   useEffect(() => {
     if (!chatOpen) return;
     if (!window.matchMedia('(max-width: 1023px)').matches) return;
 
     window.history.pushState({ nearsideChat: true }, '');
-    const onPop = () => setSelectedFriend(null);
+    const onPop = () => {
+      setSelectedFriend(null);
+      setSelectedRoom(null);
+    };
     window.addEventListener('popstate', onPop);
 
     return () => {
@@ -124,13 +133,25 @@ function App() {
     await supabase.auth.signOut();
   }, []);
 
-  // Keep this device's push subscription registered for the logged-in user.
-  // Re-run on wake too: a subscription can be dropped or rotated while the
-  // device is asleep or off-network, and the endpoint stored server-side is
-  // then dead — silently, since nothing fails until someone sends a message.
+  // Bind this device to the account for notifications, and start the store.
+  // Both are best-effort by construction: neither one failing may stop the
+  // messenger from running.
   useEffect(() => {
-    if (session) syncPushSubscription(session);
-  }, [session, generation]);
+    if (!userId) return;
+    void initNotifications(userId);
+    void initPurchases(userId);
+  }, [userId]);
+
+  // The stored theme is applied before any entitlement check finishes, so a
+  // paying user does not get a frame of the default look — then reconciled,
+  // because a refund must not leave the paid-for theme in place.
+  useEffect(() => {
+    applyTheme(storedTheme());
+    if (!userId) return;
+    void packsFromEntitlements().then((owned) => {
+      applyTheme(themeForOwnership(storedTheme(), owned));
+    });
+  }, [userId]);
 
   /** Open a conversation given only a user id (from a notification click or a
    *  `?chat=` deep link). The friends list re-reports the full, live row for
@@ -142,26 +163,20 @@ function App() {
       .select('id, display_name, avatar_url, last_seen_at')
       .eq('id', friendId)
       .maybeSingle();
-    if (data) setSelectedFriend(data);
+    if (data) {
+      setSelectedRoom(null);
+      setSelectedFriend(data);
+    }
   }, []);
 
-  // Messages from the service worker: which chat a tapped notification meant,
-  // and rotated push subscriptions the worker cannot persist itself (it has
-  // no Supabase session).
+  // Which chat a tapped notification meant. Registered once per session: the
+  // OneSignal listener has no removal API, so re-registering on every render
+  // would stack handlers and open the same chat several times over.
   useEffect(() => {
-    if (!session || !('serviceWorker' in navigator)) return;
-    const onMessage = (event: MessageEvent) => {
-      const data = event.data;
-      if (data?.type === 'OPEN_CHAT' && typeof data.senderId === 'string') {
-        void openChatWith(data.senderId);
-      }
-      if (data?.type === 'PUSH_SUBSCRIPTION_CHANGED' && data.subscription) {
-        void storeSubscriptionJSON(session, data.subscription as PushSubscriptionJSON);
-      }
-    };
-    navigator.serviceWorker.addEventListener('message', onMessage);
-    return () => navigator.serviceWorker.removeEventListener('message', onMessage);
-  }, [session, openChatWith]);
+    if (!session) return;
+    void onNotificationOpened((senderId) => void openChatWith(senderId));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.user.id]);
 
   // Cold start from a notification: the worker opened `/?chat=<id>` because no
   // window was running to message. Consume the parameter and scrub it, so a
@@ -271,23 +286,31 @@ function App() {
         {/* Sidebar */}
         <aside
           className={`w-full lg:w-80 xl:w-96 lg:border-r lg:border-base-content/5 shrink-0 transition-all duration-200 ${
-            selectedFriend ? 'hidden lg:flex lg:flex-col' : 'flex flex-col'
+            chatOpen ? 'hidden lg:flex lg:flex-col' : 'flex flex-col'
           }`}
         >
           <FriendsList
             session={session}
             identity={identity}
             selectedFriendId={selectedFriend?.id || null}
-            onSelectFriend={(friend) => setSelectedFriend(friend)}
+            onSelectFriend={(friend) => {
+              setSelectedRoom(null);
+              setSelectedFriend(friend);
+            }}
             onFriendsChange={setFriendIds}
             onUnreadTotalChange={setUnreadTotal}
+            selectedRoomId={selectedRoom?.id ?? null}
+            onSelectRoom={(room) => {
+              setSelectedFriend(null);
+              setSelectedRoom(room);
+            }}
           />
         </aside>
 
         {/* Chat Area */}
         <main
           className={`flex-1 min-w-0 ${
-            selectedFriend ? 'flex flex-col' : 'hidden lg:flex lg:flex-col'
+            chatOpen ? 'flex flex-col' : 'hidden lg:flex lg:flex-col'
           }`}
         >
           {selectedFriend ? (
@@ -296,6 +319,14 @@ function App() {
               friend={selectedFriend}
               identity={identity}
               onBack={() => setSelectedFriend(null)}
+            />
+          ) : selectedRoom ? (
+            <RoomView
+              session={session}
+              room={selectedRoom}
+              identity={identity}
+              onBack={() => setSelectedRoom(null)}
+              onLeft={() => setSelectedRoom(null)}
             />
           ) : (
             <div className="flex-1 flex items-center justify-center bg-base-200/50">

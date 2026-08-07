@@ -3,6 +3,7 @@ import type { Session } from '@supabase/supabase-js';
 import { generateMnemonic, seedFromMnemonic } from '../lib/crypto/mnemonic';
 import { identityFromSeed, type Identity } from '../lib/crypto/keys';
 import { clearSeed, isSeedConfirmed, loadSeed, markSeedConfirmed, storeSeed } from '../lib/keystore';
+import { setRecoveryConfirmed } from '../lib/notifications';
 
 type Status = 'loading' | 'missing' | 'unconfirmed' | 'ready';
 
@@ -45,6 +46,11 @@ export function useIdentity(session: Session | null) {
       // A seed with no confirmation is a phrase the user was shown and never
       // copied. Reloading must put them back on that screen, not past it.
       setStatus(confirmed ? 'ready' : 'unconfirmed');
+      // Reported to OneSignal every load, not only at the moment of
+      // confirming: the In-App Message that chases an unconfirmed phrase
+      // targets the absence of this tag, and a device that confirmed while
+      // offline would otherwise be nagged forever.
+      void setRecoveryConfirmed(confirmed);
     })();
     return () => {
       cancelled = true;
@@ -63,6 +69,7 @@ export function useIdentity(session: Session | null) {
     const mnemonic = generateMnemonic();
     const seed = await seedFromMnemonic(mnemonic);
     await storeSeed(userId, seed);
+    void setRecoveryConfirmed(false);
     setIdentity(await identityFromSeed(seed));
     setStatus('unconfirmed');
     return mnemonic;
@@ -75,6 +82,7 @@ export function useIdentity(session: Session | null) {
   const confirmIdentity = useCallback(async (): Promise<void> => {
     if (!userId) return;
     await markSeedConfirmed(userId);
+    void setRecoveryConfirmed(true);
     setStatus('ready');
   }, [userId]);
 
@@ -86,6 +94,7 @@ export function useIdentity(session: Session | null) {
       // Restoring means the user is holding the phrase — there is nothing left
       // to prove, so this is confirmed on arrival.
       await markSeedConfirmed(userId);
+      void setRecoveryConfirmed(true);
       setIdentity(await identityFromSeed(seed));
       setStatus('ready');
     },

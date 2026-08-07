@@ -3,7 +3,7 @@ import { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { Message } from '../lib/types';
 import { playNotificationSound } from '../lib/sound';
-import { notificationPermission } from '../lib/push';
+import { notificationPermission } from '../lib/notifications';
 import { advanceDelivered } from '../lib/receipts';
 import { useConnection } from '../lib/connection';
 import { nicknameFor } from '../lib/nicknames';
