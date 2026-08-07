@@ -67,4 +67,15 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
+
+    <!-- Haptics on send. A normal permission: granted at install, no prompt. -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+
+    <!-- Notifications on Android 13+. Requested from the Settings toggle, at
+         the moment the user turns them on, and never at launch. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Play Billing, for the cosmetic packs. Nothing functional sits behind
+         a purchase; see ThemeStore.tsx. -->
+    <uses-permission android:name="com.android.vending.BILLING" />
 </manifest>

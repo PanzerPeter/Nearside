@@ -17,8 +17,8 @@ android {
         applicationId "app.nearside"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "0.1.0"
+        versionCode 2
+        versionName "0.2.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -41,12 +41,15 @@ android {
             if (keystorePropertiesFile.exists()) {
                 signingConfig signingConfigs.release
             }
-            // Deliberate for the closed-testing build: R8 on a Capacitor
-            // project needs plugin-specific keep rules, and a stripped class
-            // surfacing as a runtime crash is not what week 0 is for. Revisit
-            // before the production release.
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            // On, with the keep rules in proguard-rules.pro. Every Capacitor
+            // and Cordova plugin is reached reflectively from the WebView
+            // bridge, so R8 sees no caller for any of them and would strip the
+            // lot — a stripped class fails at runtime rather than at build
+            // time, which is why this waited for a rules file rather than a
+            // flag flip.
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
 }
