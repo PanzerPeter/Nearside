@@ -54,6 +54,34 @@ describe('selectStaleMedia', () => {
     expect(selectStaleMedia([...cleared, ...rows('image', MEDIA_KEEP_LIMIT)])).toEqual([]);
   });
 
+  it('never selects a pinned item for pruning', () => {
+    const all = rows('image', MEDIA_KEEP_LIMIT + 5);
+    const stale = selectStaleMedia(all, new Set(['image-0', 'image-1']));
+    expect(stale.map((r) => r.id)).not.toContain('image-0');
+    expect(stale.map((r) => r.id)).not.toContain('image-1');
+  });
+
+  it('prunes unpinned items past the limit as before', () => {
+    expect(selectStaleMedia(rows('image', MEDIA_KEEP_LIMIT + 5), new Set()).length).toBe(5);
+  });
+
+  it('does not let a pin count against the budget it protects', () => {
+    // Counting a pinned row would push an unpinned one off the end early —
+    // pinning your own photo would delete someone else's, which is exactly
+    // the trade "pinning is free" is supposed to rule out. Two pins here buy
+    // two more surviving rows, not two evictions.
+    const all = rows('image', MEDIA_KEEP_LIMIT + 2);
+    expect(selectStaleMedia(all, new Set(['image-0', 'image-1']))).toEqual([]);
+
+    const one = rows('image', MEDIA_KEEP_LIMIT + 3);
+    const stale = selectStaleMedia(one, new Set(['image-0', 'image-1']));
+    expect(stale.map((r) => r.id)).toEqual([`image-${MEDIA_KEEP_LIMIT + 2}`]);
+  });
+
+  it('treats an omitted pin set as nothing pinned', () => {
+    expect(selectStaleMedia(rows('image', MEDIA_KEEP_LIMIT + 1)).length).toBe(1);
+  });
+
   it('scans far enough that a full pair of budgets can still be trimmed', () => {
     expect(MEDIA_SCAN_LIMIT).toBeGreaterThan(MEDIA_KEEP_LIMIT + AUDIO_KEEP_LIMIT);
   });

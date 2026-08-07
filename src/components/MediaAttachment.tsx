@@ -5,6 +5,9 @@ import { MediaLightbox } from './MediaLightbox';
 import { ImageOff, Play } from 'lucide-react';
 
 interface MediaAttachmentProps {
+  /** The owning message, so the viewer can pin it and so a pruned object can
+   *  fall back to the pinned copy. */
+  messageId: string;
   path: string;
   /** The opened file key, from `openRows`. Without it the object is opaque. */
   mediaKey?: Uint8Array | null;
@@ -22,8 +25,8 @@ interface MediaAttachmentProps {
  * never reveals, the browser's own overflow menu, and the viewer. One way is
  * enough, and it is the one you reach by tapping the thing you want.
  */
-export function MediaAttachment({ path, type, mediaKey }: MediaAttachmentProps) {
-  const { url, failed, reload } = useSignedMediaUrl(path, mediaKey, type);
+export function MediaAttachment({ messageId, path, type, mediaKey }: MediaAttachmentProps) {
+  const { url, failed, reload } = useSignedMediaUrl(path, mediaKey, type, messageId);
   const [viewing, setViewing] = useState(false);
 
   if (failed) {
@@ -88,7 +91,13 @@ export function MediaAttachment({ path, type, mediaKey }: MediaAttachmentProps) 
       </button>
 
       {viewing && (
-        <MediaLightbox url={url} path={path} type={type} onClose={() => setViewing(false)} />
+        <MediaLightbox
+          messageId={messageId}
+          url={url}
+          path={path}
+          type={type}
+          onClose={() => setViewing(false)}
+        />
       )}
     </>
   );

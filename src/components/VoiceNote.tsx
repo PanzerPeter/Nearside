@@ -4,6 +4,9 @@ import { formatDuration } from '../lib/audio';
 import { useSignedMediaUrl } from '../hooks/useSignedMediaUrl';
 
 interface VoiceNoteProps {
+  /** The owning message, so a pruned recording can fall back to a pinned
+   *  copy on this device. */
+  messageId: string;
   path: string;
   /** The opened file key, from `openRows`. Without it the object is opaque. */
   mediaKey?: Uint8Array | null;
@@ -18,11 +21,11 @@ interface VoiceNoteProps {
  * both bubble palettes (primary for your own messages, neutral for the
  * friend's) without being told which one it is in.
  */
-export function VoiceNote({ path, durationMs, mediaKey }: VoiceNoteProps) {
+export function VoiceNote({ messageId, path, durationMs, mediaKey }: VoiceNoteProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
   // 'audio' is what tells `mimeForPath` that a .webm here is a recording and
   // not a video — the container is the same and the extension cannot say.
-  const { url, failed, reload } = useSignedMediaUrl(path, mediaKey, 'audio');
+  const { url, failed, reload } = useSignedMediaUrl(path, mediaKey, 'audio', messageId);
   const [playing, setPlaying] = useState(false);
   const [positionMs, setPositionMs] = useState(0);
   // Filled in from the element only when the row has no stored duration.

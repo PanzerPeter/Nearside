@@ -24,6 +24,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { openFile } from '../lib/media-crypto';
 import { keyToken, mimeForPath } from '../lib/media';
+import { pinnedObjectUrl } from '../lib/pins';
 import type { MediaType } from '../lib/types';
 
 /** Lifetime asked for on each signature. */
@@ -45,7 +46,11 @@ export interface SignedMedia {
 export function useSignedMediaUrl(
   path: string,
   mediaKey?: Uint8Array | null,
-  kind?: MediaType | null
+  kind?: MediaType | null,
+  /** The message this attachment belongs to. Supplied so a pruned object can
+   *  fall back to the pinned copy on this device — a pin is only worth making
+   *  if it survives the pruning it was made against. */
+  messageId?: string
 ): SignedMedia {
   const [url, setUrl] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
@@ -81,12 +86,28 @@ export function useSignedMediaUrl(
 
   const sign = useCallback(async () => {
     const ticket = ++requestRef.current;
+
+    /** The pinned plaintext, if this device kept one. Tried whenever the
+     *  server copy cannot be produced, which is the whole point of pinning. */
+    const fallBackToPin = async (): Promise<boolean> => {
+      if (!messageId) return false;
+      const pinned = await pinnedObjectUrl(messageId, kind);
+      if (!pinned || requestRef.current !== ticket) {
+        if (pinned) URL.revokeObjectURL(pinned);
+        return false;
+      }
+      releaseObjectUrl();
+      objectUrlRef.current = pinned;
+      setUrl(pinned);
+      return true;
+    };
+
     const { data, error } = await supabase.storage
       .from('chat-media')
       .createSignedUrl(path, SIGNED_URL_TTL_SECONDS);
     if (requestRef.current !== ticket) return;
     if (error || !data) {
-      setFailed(true);
+      if (!(await fallBackToPin())) setFailed(true);
       return;
     }
 
@@ -96,7 +117,7 @@ export function useSignedMediaUrl(
     // a lost file rather than as the encryption working.
     const key = keyRef.current;
     if (!key) {
-      setFailed(true);
+      if (!(await fallBackToPin())) setFailed(true);
       return;
     }
 
@@ -123,7 +144,7 @@ export function useSignedMediaUrl(
       setUrl(blobUrl);
     } catch {
       if (requestRef.current !== ticket) return;
-      setFailed(true);
+      if (!(await fallBackToPin())) setFailed(true);
     }
     // `token` is listed on purpose, and the rule is right that the body never
     // reads it: it stands in for `keyRef.current`, which the body does read
@@ -131,7 +152,7 @@ export function useSignedMediaUrl(
     // callback to the first key it ever saw. Reverting to a plain `mediaKey`
     // dependency is what caused the bug — see the ref's declaration.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [path, token, kind, releaseObjectUrl]);
+  }, [path, token, kind, messageId, releaseObjectUrl]);
 
   useEffect(() => {
     setUrl(null);

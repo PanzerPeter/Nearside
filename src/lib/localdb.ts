@@ -20,6 +20,15 @@ export interface CachedMessage {
   created_at: string;
 }
 
+/** A pinned attachment: the plaintext bytes are on this device, at
+ *  `file_path`, and the server copy may be pruned at any time. Local only —
+ *  a pin is a promise this phone makes, not one the server keeps. */
+export interface PinnedMedia {
+  message_id: string;
+  file_path: string;
+  pinned_at: string;
+}
+
 /** A peer's public key as this device first saw it, and whether a human ever
  *  confirmed it. Local only (spec §7): a server-held "verified" flag would be
  *  a claim from the party the verification exists to distrust. */
@@ -57,6 +66,12 @@ CREATE TABLE IF NOT EXISTS contacts (
   public_key   TEXT NOT NULL,
   verified_at  TEXT
 );
+
+CREATE TABLE IF NOT EXISTS pins (
+  message_id TEXT PRIMARY KEY,
+  file_path  TEXT NOT NULL,
+  pinned_at  TEXT NOT NULL
+);
 `;
 
 let db: SQLiteDBConnection | null = null;
@@ -67,6 +82,7 @@ let owner: string | null = null;
 /** Test and web-development drivers. Native builds never touch these. */
 const memory = new Map<string, Map<string, CachedMessage>>();
 const contactMemory = new Map<string, Map<string, CachedContact>>();
+const pinMemory = new Map<string, Map<string, PinnedMedia>>();
 
 function native(): boolean {
   return Capacitor.isNativePlatform();
@@ -88,6 +104,10 @@ function memoryStore(): Map<string, CachedMessage> | null {
 
 function contactStore(): Map<string, CachedContact> | null {
   return scoped(contactMemory);
+}
+
+function pinStore(): Map<string, PinnedMedia> | null {
+  return scoped(pinMemory);
 }
 
 /** Opens the store belonging to `userId`, closing whichever one was open. */
@@ -193,6 +213,44 @@ export async function putContact(row: CachedContact): Promise<void> {
   );
 }
 
+/** Records that `messageId`'s decrypted bytes now live at `filePath`. */
+export async function putPin(row: PinnedMedia): Promise<void> {
+  if (!native()) {
+    pinStore()?.set(row.message_id, row);
+    return;
+  }
+  await db?.run(
+    `INSERT INTO pins (message_id, file_path, pinned_at)
+     VALUES (?, ?, ?)
+     ON CONFLICT(message_id) DO UPDATE SET
+       file_path = excluded.file_path,
+       pinned_at = excluded.pinned_at`,
+    [row.message_id, row.file_path, row.pinned_at]
+  );
+}
+
+export async function cachedPin(messageId: string): Promise<PinnedMedia | null> {
+  if (!native()) return pinStore()?.get(messageId) ?? null;
+  const res = await db?.query('SELECT * FROM pins WHERE message_id = ?', [messageId]);
+  return (res?.values?.[0] as PinnedMedia) ?? null;
+}
+
+/** Every pinned message id. The prune pass needs the whole set, and there are
+ *  never enough pins for a per-row query to be worth the round trips. */
+export async function pinnedIds(): Promise<Set<string>> {
+  if (!native()) return new Set(pinStore()?.keys() ?? []);
+  const res = await db?.query('SELECT message_id FROM pins');
+  return new Set(((res?.values as { message_id: string }[]) ?? []).map((r) => r.message_id));
+}
+
+export async function removePin(messageId: string): Promise<void> {
+  if (!native()) {
+    pinStore()?.delete(messageId);
+    return;
+  }
+  await db?.run('DELETE FROM pins WHERE message_id = ?', [messageId]);
+}
+
 /** Empties the open account's stores. Signing out must not take the other
  *  account's messages with it — and must not leave this account's trusted
  *  contacts behind for whoever signs in next on a shared device. */
@@ -200,8 +258,10 @@ export async function clearLocalDb(): Promise<void> {
   if (!native()) {
     memoryStore()?.clear();
     contactStore()?.clear();
+    pinStore()?.clear();
     return;
   }
   await db?.execute('DELETE FROM messages_cache');
   await db?.execute('DELETE FROM contacts');
+  await db?.execute('DELETE FROM pins');
 }

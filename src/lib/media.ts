@@ -90,14 +90,26 @@ export interface MediaRow {
  * Photos/videos and voice notes are counted against separate limits rather
  * than one shared budget: a run of voice notes should not evict the photo
  * someone sent an hour earlier, and vice versa.
+ *
+ * A pinned item is skipped outright — not counted, not trimmed. Skipping it
+ * without counting matters: counting it would let a handful of pins push
+ * unpinned media off the end early, which would turn pinning into a way of
+ * losing other people's photos.
+ *
+ * Pruning exists because Supabase storage is finite, not because storage is a
+ * product. Pinning is free, and this parameter is what makes that true.
  */
-export function selectStaleMedia<T extends MediaRow>(rows: readonly T[]): T[] {
+export function selectStaleMedia<T extends MediaRow>(
+  rows: readonly T[],
+  pinned: ReadonlySet<string> = new Set()
+): T[] {
   let visual = 0;
   let audio = 0;
   const stale: T[] = [];
 
   for (const row of rows) {
     if (!row.media_path) continue;
+    if (pinned.has(row.id)) continue;
     const isAudio = row.media_type === 'audio';
     const seen = isAudio ? ++audio : ++visual;
     if (seen > (isAudio ? AUDIO_KEEP_LIMIT : MEDIA_KEEP_LIMIT)) stale.push(row);
