@@ -17,6 +17,7 @@ dist-ssr
 # Firebase service account keys and client config — never commit
 *-firebase-adminsdk-*.json
 google-services.json
+GoogleService-Info.plist
 
 # Android build output and local signing config. The keystore and its
 # passwords never enter version control — see Plan 1 Task 5.
@@ -27,4 +28,8 @@ android/local.properties
 android/keystore.properties
 *.jks
 *.keystore
+
+# iOS build output lives in ios/.gitignore, which `cap add ios` wrote and
+# which already covers Pods/, DerivedData and the copied web assets.
+
 CLAUDE.md

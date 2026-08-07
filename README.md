@@ -50,9 +50,10 @@ convenience; there is no hosted web deploy.
 - Free local pinning: a pinned attachment is decrypted and written to
   app-private storage, and survives the server-side pruning that keeps
   storage costs down
-- Cosmetic theme packs through RevenueCat. Nothing functional is behind a
-  purchase, and no advertising SDK is in the build — `no-ads.test.ts` fails
-  the suite if one appears
+- Nine themes, previewable before you commit to one. Light mode and the OLED
+  black are free; the six decorative packs are sold through RevenueCat.
+  Nothing functional is behind a purchase, and no advertising SDK is in the
+  build — `no-ads.test.ts` fails the suite if one appears
 - Message edit and delete (soft delete)
 - Image and video sharing (newest 20 media kept per conversation), with images
   re-encoded to WebP on the device before upload
@@ -98,6 +99,9 @@ CNAME.
 
 - Node.js 20.19+ (Vite 8 requirement)
 - A Supabase project
+- For the Android build: Android SDK 36 and JDK 21
+- For the iOS build: macOS with Xcode 15+ and CocoaPods. Not optional and not
+  substitutable — see the iOS section
 
 ## Setup
 
@@ -188,6 +192,8 @@ CNAME.
 | `npm run lint`      | ESLint                      |
 | `npm run android:sync` | Native build + copy into `android/` |
 | `npm run android:open` | Open `android/` in Android Studio |
+| `npm run ios:sync`  | Native build + copy into `ios/` (needs CocoaPods) |
+| `npm run ios:open`  | Open `ios/` in Xcode (macOS only) |
 
 ## Android
 
@@ -232,12 +238,114 @@ keyPassword=…
 
 Release builds are unsigned without it; debug builds do not need it.
 
+## iOS
+
+The `ios/` project is the same Capacitor shell around the same web app, bundle
+id `app.nearside`, deployment target 15.0, dependencies through CocoaPods.
+
+**Everything past `npm run ios:sync` needs a Mac.** Xcode, CocoaPods, the
+simulator, code signing and the upload to App Store Connect are all macOS-only,
+and there is no supported way around it — no CI runner, no cross-compiler, no
+container. A Linux checkout can edit the project and copy the web build into
+it; it cannot compile it. Options in order of cost: a Mac, a hosted Mac runner
+(GitHub Actions `macos-latest`, Codemagic, Bitrise), or a rented cloud Mac.
+
+```bash
+npm run ios:sync                     # works anywhere
+cd ios/App && pod install            # macOS
+open App.xcworkspace                 # macOS — the workspace, never the project
+```
+
+Then in Xcode, once, by hand:
+
+1. **Signing & Capabilities** → your team. Add **Push Notifications** and
+   **Background Modes → Remote notifications** (the `Info.plist` key is already
+   there; the entitlement is not, and only Xcode can add it).
+2. Drag `GoogleService-Info.plist` (Firebase project `nearside-9459c`, iOS app)
+   into the `App` target. It is gitignored for the same reason
+   `google-services.json` is. `AppDelegate` starts Firebase only when the file
+   is present, so the app still launches without it — with no crash reporting.
+3. Crashlytics needs the dSYM upload script: **Build Phases → + → New Run
+   Script Phase**, `"${PODS_ROOT}/FirebaseCrashlytics/run"`, with input files
+   `${DWARF_DSYM_FOLDER_PATH}/${DWARF_DSYM_FILE_NAME}/Contents/Resources/DWARF/${TARGET_NAME}`
+   and `$(SRCROOT)/$(BUILT_PRODUCTS_DIR)/$(INFOPLIST_PATH)`.
+4. APNs: upload an APNs auth key (.p8) to OneSignal, and add
+   `app.nearside://auth/confirm` and `…/recovery` to Supabase's redirect
+   allow-list if they are not already there — the scheme is claimed in
+   `Info.plist` and works identically to Android's intent filter.
+
+Two things that will fail review if left alone:
+
+- **Export compliance.** Nearside is end-to-end encrypted with libsodium, which
+  is not exempt. Do not set `ITSAppUsesNonExemptEncryption` to `false` — it is
+  deliberately absent from `Info.plist`. File the self-classification report
+  (Apple's CCATS/ERN flow) and answer the App Store Connect questions honestly.
+- **Account deletion.** Apple requires an in-app path for any app with
+  accounts. There is one — Settings → delete account, the `delete-account` edge
+  function — but be ready to point the reviewer at it.
+
+### macOS
+
+Two routes, neither of them a second codebase:
+
+- **Designed for iPad** — the iOS build runs unmodified on Apple Silicon Macs;
+  tick the Mac checkbox under the target's **Supported Destinations** and it
+  appears in the Mac App Store. Free, and the WebView-based UI takes it well.
+  Intel Macs are excluded.
+- **Mac Catalyst** — a real Mac binary, resizable windows, menu bar. Also a
+  separate build to test and sign, and some plugins have no Catalyst path
+  (ML Kit barcode scanning being the likely one, which would cost QR scanning
+  on that target).
+
+Start with Designed for iPad. Catalyst is worth it only if the Mac becomes a
+target in its own right rather than a place the phone app also runs.
+
+## Appearance and theme packs
+
+Nine themes ship. Three are free and need no store configuration at all —
+`nearside` (the default), Daylight and Void — because light mode and an OLED
+black are legibility, not decoration. The other six are non-consumable
+purchases through RevenueCat.
+
+Every theme lives in two places and must agree: a daisyUI block in
+`tailwind.config.js` and an entry in `PACKS` or `FREE_THEMES` in
+`src/lib/purchases.ts`. A pack's `id` is simultaneously its RevenueCat
+entitlement id, its store product id, and what `packOffers()` matches an
+offering on. `purchases.test.ts` fails if a listed theme has no block behind it,
+or if a block is missing one of the `--surface-ring` / `--receipt-read` /
+`--presence-offline` tokens the components read.
+
+To sell a pack, per store:
+
+1. Create a **non-consumable** product with the pack id verbatim —
+   `pack.midnight`, `pack.paper`, `pack.terminal`, `pack.sunset`,
+   `pack.sakura`, `pack.graphite` — in the Play Console and/or App Store
+   Connect.
+2. In RevenueCat: attach each product to an **entitlement of the same id**, and
+   put all six packages in the **current offering**. `packOffers()` reads only
+   the current offering, and a pack missing from it renders as "Unavailable"
+   rather than at a made-up price.
+3. Set `VITE_REVENUECAT_ANDROID_KEY` and `VITE_REVENUECAT_IOS_KEY` in `.env`.
+   They are different publishable keys for different store apps and are not
+   interchangeable; `initPurchases` picks by platform.
+
+Nothing here is load-bearing. With no keys, no offering, or no network, the
+store lists every pack as unavailable, the free themes still work, and the rest
+of the app is untouched — nothing functional sits behind a purchase.
+
+The **Preview** (eye) button beside each theme renders a sample conversation in
+that theme without applying it: `data-theme` on that element rather than on
+`<html>`, so nothing is stored and there is no state to walk back. It works in
+the browser build too, which is the only way to judge a pack on a machine that
+cannot buy one.
+
 ## Deploy
 
-There is no hosted web deploy. The shipped artifact is the Android build, and
-`npm run dev` covers local work — the browser build is a development
-convenience, not a target, which is also why `isSecureStorageAvailable()` warns
-that a browser cannot hold a key the way the app can.
+There is no hosted web deploy. The shipped artifacts are the Android and iOS
+builds, and `npm run dev` covers local work — the browser build is a
+development convenience, not a target, which is also why
+`isSecureStorageAvailable()` warns that a browser cannot hold a key the way the
+app can.
 
 One consequence worth knowing: emailed auth links redirect to
 `app.nearside://auth/…` on the device (see `src/lib/authRedirect.ts`), so that

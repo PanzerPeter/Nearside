@@ -10,7 +10,9 @@ export default tseslint.config(
   // with two errors on any machine that has run a Gradle build — the vendored
   // file carries `eslint-disable` comments for typescript-eslint rules that are
   // not loaded for plain .js.
-  { ignores: ['dist', 'android/**'] },
+  // `ios/` is the same story: Xcode/CocoaPods output plus the web bundle
+  // `cap sync` copies into App/App/public.
+  { ignores: ['dist', 'android/**', 'ios/**'] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ['**/*.{ts,tsx}'],

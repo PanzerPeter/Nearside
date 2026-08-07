@@ -48,6 +48,12 @@ const MODULE_INSTALL_TIMEOUT_MS = 60_000;
  * because a module already present emits nothing at all.
  */
 async function ensureScannerModule(): Promise<boolean> {
+  // Android only. The module is a Play Services download; on iOS the scanner
+  // is compiled into the app and these three calls are all unimplemented —
+  // the first one throws, the catch in `scanQr` swallows it, and scanning a
+  // code reports "Could not open the camera" on a device whose camera is fine.
+  if (Capacitor.getPlatform() !== 'android') return true;
+
   const { available } = await BarcodeScanner.isGoogleBarcodeScannerModuleAvailable();
   if (available) return true;
 

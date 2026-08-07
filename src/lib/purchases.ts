@@ -143,7 +143,13 @@ let configured = false;
  */
 export async function initPurchases(userId: string): Promise<void> {
   if (!Capacitor.isNativePlatform()) return;
-  const apiKey = import.meta.env.VITE_REVENUECAT_ANDROID_KEY;
+  // One key per store, and they are not interchangeable: RevenueCat rejects an
+  // App Store receipt presented under a Play key, and the failure surfaces as
+  // "owns nothing" — every pack a user paid for, gone, with no error to read.
+  const apiKey =
+    Capacitor.getPlatform() === 'ios'
+      ? import.meta.env.VITE_REVENUECAT_IOS_KEY
+      : import.meta.env.VITE_REVENUECAT_ANDROID_KEY;
   if (!apiKey) return;
 
   try {
