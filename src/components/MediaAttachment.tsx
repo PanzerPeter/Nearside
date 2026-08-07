@@ -50,7 +50,10 @@ export function MediaAttachment({ messageId, path, type, mediaKey }: MediaAttach
     <>
       <button
         type="button"
-        className="relative block rounded-lg overflow-hidden cursor-zoom-in"
+        // Square corners, and the caller rounds. The thumbnail sits flush
+        // against the bubble's edges now, so any radius of its own would cut
+        // four notches of bubble colour into the picture's corners.
+        className="relative block overflow-hidden cursor-zoom-in"
         onClick={(e) => {
           e.stopPropagation();
           setViewing(true);
@@ -62,7 +65,10 @@ export function MediaAttachment({ messageId, path, type, mediaKey }: MediaAttach
             src={url}
             alt="attachment"
             loading="lazy"
-            className="max-w-full max-h-72 object-cover"
+            // `block`: an inline image leaves a baseline gap under it, which
+            // used to hide inside the bubble's padding and now would show as a
+            // strip of bubble colour along the bottom edge.
+            className="block max-w-full max-h-72 object-cover"
             onError={reload}
           />
         ) : (
@@ -78,7 +84,7 @@ export function MediaAttachment({ messageId, path, type, mediaKey }: MediaAttach
               preload="metadata"
               muted
               playsInline
-              className="max-w-full max-h-72 pointer-events-none"
+              className="block max-w-full max-h-72 pointer-events-none"
               onError={reload}
             />
             <span className="absolute inset-0 flex items-center justify-center">

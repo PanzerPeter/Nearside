@@ -374,12 +374,30 @@ export function MessageBubble({
                       mediaKey={msg.media_key}
                     />
                   ) : (
-                    <MediaAttachment
-                      messageId={msg.id}
-                      path={msg.media_path}
-                      type={msg.media_type}
-                      mediaKey={msg.media_key}
-                    />
+                    // A photo runs to the bubble's edges. Left inside the
+                    // padding it sat in a 14px band of bubble colour on every
+                    // side, which reads as a coloured outline drawn around the
+                    // picture rather than as a bubble behind it. The negative
+                    // margins cancel the padding; `w-fit` on the bubble sizes
+                    // to the image minus those margins, so the media lands
+                    // exactly flush instead of overhanging.
+                    //
+                    // The top corners are only rounded away when the media is
+                    // the first thing in the bubble — under a forward notice
+                    // or a reply quote it is a straight edge, because there is
+                    // bubble above it to be flush with.
+                    <div
+                      className={`-mx-3.5 overflow-hidden ${
+                        msg.forwarded || msg.reply_to_id ? '' : '-mt-2 rounded-t-2xl'
+                      }`}
+                    >
+                      <MediaAttachment
+                        messageId={msg.id}
+                        path={msg.media_path}
+                        type={msg.media_type}
+                        mediaKey={msg.media_key}
+                      />
+                    </div>
                   ))}
                 {msg.text && <MessageText text={msg.text} />}
                 {/* Sealed, and this device could not open it — most likely a
