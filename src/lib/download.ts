@@ -17,7 +17,7 @@
 // is a bad trade, and this app does not make it.
 import { Capacitor } from '@capacitor/core';
 import { Media } from '@capacitor-community/media';
-import { Directory, Filesystem } from '@capacitor/filesystem';
+import { Directory, Encoding, Filesystem } from '@capacitor/filesystem';
 
 /** The album saved attachments appear under in the gallery. */
 export const GALLERY_ALBUM = 'Nearside';
@@ -70,6 +70,28 @@ function saveViaAnchor(blob: Blob, filename: string): void {
   // Not revoked synchronously: several browsers cancel an in-flight download
   // when its blob is released in the same tick as the click.
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
+/**
+ * Saves a text document — the data export — where the user can find it.
+ *
+ * Not `saveToGallery`: a JSON file is not a photo, and the gallery plugin
+ * would either refuse it or file it as a broken image. `Directory.Documents`
+ * is the Android equivalent of a downloads folder and needs no permission for
+ * a file the app itself wrote.
+ */
+export async function saveTextFile(text: string, filename: string): Promise<void> {
+  if (!Capacitor.isNativePlatform()) {
+    saveViaAnchor(new Blob([text], { type: 'application/json' }), filename);
+    return;
+  }
+  await Filesystem.writeFile({
+    path: filename,
+    data: text,
+    directory: Directory.Documents,
+    encoding: Encoding.UTF8,
+    recursive: true,
+  });
 }
 
 /**
