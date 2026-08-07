@@ -68,6 +68,31 @@ describe('sealing to yourself', () => {
     await expect(openForSelf(id.vaultKey, { ...sealed, ciphertext: btoa(bytes.join('')) }))
       .rejects.toThrow();
   });
+
+  it('seals a long body without truncating it', async () => {
+    // Every other fixture here is eight or nine characters, so a body silently
+    // capped at a fixed length would pass the whole suite. That is not
+    // hypothetical: it cost a live debugging session on Plan 2, where an
+    // eight-byte plaintext in the database was indistinguishable from a
+    // truncation bug until the caption turned out to be "Am Image".
+    const id = await identityFromSeed(await seedFromMnemonic(PHRASE));
+    const long = 'a caption clearly longer than any test fixture, '.repeat(8);
+    const sealed = await sealForSelf(id.vaultKey, long);
+    expect(await openForSelf(id.vaultKey, sealed)).toBe(long);
+    // secretbox adds a 16-byte tag and nothing else; a fixed-size ciphertext
+    // means something upstream capped the plaintext.
+    expect(atob(sealed.ciphertext).length).toBe(new TextEncoder().encode(long).length + 16);
+  });
+
+  it('round-trips a body that is not ASCII', async () => {
+    // Byte length, not character count: the two differ for every accented
+    // character the primary user types.
+    const id = await identityFromSeed(await seedFromMnemonic(PHRASE));
+    const text = 'árvíztűrő tükörfúrógép 🔐';
+    const sealed = await sealForSelf(id.vaultKey, text);
+    expect(await openForSelf(id.vaultKey, sealed)).toBe(text);
+    expect(atob(sealed.ciphertext).length).toBe(new TextEncoder().encode(text).length + 16);
+  });
 });
 
 describe('sealing to a peer', () => {
