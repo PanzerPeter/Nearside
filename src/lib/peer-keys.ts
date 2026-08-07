@@ -1,5 +1,6 @@
 import { fromBase64 } from './crypto/keys';
 import { supabase } from './supabase';
+import { recordPeerKey } from './verification';
 
 /** Keys change rarely and are read constantly, so they are cached for the
  *  session. Task 7's key-change detection is what invalidates an entry. */
@@ -16,6 +17,10 @@ export async function peerPublicKey(peerId: string): Promise<Uint8Array | null> 
     .maybeSingle();
 
   if (!data?.public_key) return null;
+  // Trust on first use, written down before the key is handed to any caller:
+  // the recorded key is the only thing a later change can be measured against,
+  // and an existing record is never overwritten here.
+  await recordPeerKey(peerId, data.public_key);
   const key = await fromBase64(data.public_key);
   cache.set(peerId, key);
   return key;

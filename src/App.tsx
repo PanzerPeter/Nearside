@@ -215,6 +215,18 @@ function App() {
     );
   }
 
+  // 'ready' is never set without a derived identity, but the status and the key
+  // are two pieces of state and only one of them is in the type system. Narrow
+  // on the key itself, so everything below can take it as non-null rather than
+  // each consumer inventing its own fallback.
+  if (!identity) {
+    return (
+      <div className="h-dvh flex items-center justify-center bg-base-300">
+        <span className="loading loading-spinner loading-lg text-primary" />
+      </div>
+    );
+  }
+
   return (
     <PresenceProvider session={session} friendIds={friendIds}>
     <div className="h-dvh flex flex-col bg-base-300 overflow-hidden">
@@ -264,6 +276,7 @@ function App() {
         >
           <FriendsList
             session={session}
+            identity={identity}
             selectedFriendId={selectedFriend?.id || null}
             onSelectFriend={(friend) => setSelectedFriend(friend)}
             onFriendsChange={setFriendIds}
@@ -277,7 +290,7 @@ function App() {
             selectedFriend ? 'flex flex-col' : 'hidden lg:flex lg:flex-col'
           }`}
         >
-          {selectedFriend && identity ? (
+          {selectedFriend ? (
             <ChatRoom
               session={session}
               friend={selectedFriend}

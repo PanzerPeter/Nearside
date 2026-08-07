@@ -6,11 +6,12 @@ import { isSelfChat, sortConversations } from '../lib/conversation';
 import { cachedPreview } from '../lib/localdb';
 import { Avatar } from './Avatar';
 import { ConversationRow } from './ConversationRow';
-import { AddFriendModal } from './AddFriendModal';
+import { ConnectModal } from './ConnectModal';
 import { LegalFooter } from './LegalFooter';
 import { advanceRead, fetchUnreadCounts } from '../lib/receipts';
 import { useConnection, reportChannelStatus, forgetChannel } from '../lib/connection';
 import { UserPlus, Check, X, Users } from 'lucide-react';
+import type { Identity } from '../lib/crypto/keys';
 
 /** Conversation-list refresh cadence while realtime is healthy — a cheap
  *  backstop, since the list is one RPC. */
@@ -21,6 +22,9 @@ const LIST_POLL_DEGRADED_MS = 12_000;
 
 interface FriendsListProps {
   session: Session;
+  /** Needed only by the connect dialog, which puts this device's public key
+   *  into the QR so scanning it verifies the contact on the spot. */
+  identity: Identity;
   selectedFriendId: string | null;
   onSelectFriend: (friend: Profile) => void;
   /** Reports the accepted-friend set upward, so presence can scope its
@@ -33,6 +37,7 @@ interface FriendsListProps {
 
 export function FriendsList({
   session,
+  identity,
   selectedFriendId,
   onSelectFriend,
   onFriendsChange,
@@ -407,7 +412,7 @@ export function FriendsList({
           <button
             className="btn btn-primary btn-sm btn-circle shadow-md shadow-primary/20 hover:shadow-primary/30 transition-shadow"
             onClick={() => setShowAddModal(true)}
-            title="Add Friend"
+            title="Connect"
           >
             <UserPlus className="w-4 h-4" />
           </button>
@@ -462,7 +467,9 @@ export function FriendsList({
               <Users className="w-8 h-8 text-base-content/55" />
             </div>
             <p className="text-sm text-base-content/55 font-medium">No conversations yet</p>
-            <p className="text-xs text-base-content/55 mt-1">Tap + to add a friend by display name</p>
+            <p className="text-xs text-base-content/55 mt-1">
+              Tap + to scan a friend&apos;s code, or show them yours
+            </p>
           </div>
         ) : (
           <ul className="p-2 sm:p-3 space-y-1">
@@ -493,7 +500,7 @@ export function FriendsList({
             Repeat it under the rows while yours is the only conversation. */}
         {conversations.length > 0 && !hasFriendRows && (
           <p className="px-4 pb-4 text-xs text-base-content/55 text-center">
-            Tap + to add a friend by display name
+            Tap + to scan a friend&apos;s code, or show them yours
           </p>
         )}
       </div>
@@ -501,8 +508,14 @@ export function FriendsList({
       {/* Footer */}
       <LegalFooter className="py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] border-t border-base-content/5 shrink-0" />
 
-      {/* Add Friend Modal */}
-      {showAddModal && <AddFriendModal me={me} onClose={() => setShowAddModal(false)} />}
+      {/* Connect Modal */}
+      {showAddModal && (
+        <ConnectModal
+          session={session}
+          identity={identity}
+          onClose={() => setShowAddModal(false)}
+        />
+      )}
     </div>
   );
 }

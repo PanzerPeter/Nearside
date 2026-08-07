@@ -20,6 +20,17 @@ export interface CachedMessage {
   created_at: string;
 }
 
+/** A peer's public key as this device first saw it, and whether a human ever
+ *  confirmed it. Local only (spec §7): a server-held "verified" flag would be
+ *  a claim from the party the verification exists to distrust. */
+export interface CachedContact {
+  peer_id: string;
+  /** Base64, exactly as `profiles.public_key` stores it — compared as a
+   *  string so a key change is a string inequality rather than a byte walk. */
+  public_key: string;
+  verified_at: string | null;
+}
+
 /** The database file is named for the account, so the isolation is the
  *  filesystem's rather than a WHERE clause somebody can forget to write. */
 const dbName = (userId: string) => `nearside-local-${userId}`;
@@ -40,6 +51,12 @@ CREATE TABLE IF NOT EXISTS messages_cache (
 );
 CREATE INDEX IF NOT EXISTS messages_cache_peer_time
   ON messages_cache (peer_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS contacts (
+  peer_id      TEXT PRIMARY KEY,
+  public_key   TEXT NOT NULL,
+  verified_at  TEXT
+);
 `;
 
 let db: SQLiteDBConnection | null = null;
@@ -47,21 +64,30 @@ let db: SQLiteDBConnection | null = null;
  *  writing to the last account's store because this one has not opened yet is
  *  the exact leak the scoping exists to prevent. */
 let owner: string | null = null;
-/** Test and web-development driver. Native builds never touch this. */
+/** Test and web-development drivers. Native builds never touch these. */
 const memory = new Map<string, Map<string, CachedMessage>>();
+const contactMemory = new Map<string, Map<string, CachedContact>>();
 
 function native(): boolean {
   return Capacitor.isNativePlatform();
 }
 
-function memoryStore(): Map<string, CachedMessage> | null {
+function scoped<T>(stores: Map<string, Map<string, T>>): Map<string, T> | null {
   if (!owner) return null;
-  let store = memory.get(owner);
+  let store = stores.get(owner);
   if (!store) {
     store = new Map();
-    memory.set(owner, store);
+    stores.set(owner, store);
   }
   return store;
+}
+
+function memoryStore(): Map<string, CachedMessage> | null {
+  return scoped(memory);
+}
+
+function contactStore(): Map<string, CachedContact> | null {
+  return scoped(contactMemory);
 }
 
 /** Opens the store belonging to `userId`, closing whichever one was open. */
@@ -78,6 +104,10 @@ export async function openLocalDb(userId: string): Promise<void> {
     owner = userId;
     db = await sqlite.createConnection(dbName(userId), false, 'no-encryption', 1, false);
     await db.open();
+    // The whole script, every open, not a versioned upgrade path. That is what
+    // gives a device already running an older build the `contacts` table: the
+    // connection version stays 1, so a bump would never fire, but every
+    // statement here is CREATE ... IF NOT EXISTS and re-running them is free.
     await db.execute(SCHEMA);
     return;
   }
@@ -137,12 +167,41 @@ export async function searchCached(peerId: string, query: string): Promise<Cache
   return (res?.values as CachedMessage[]) ?? [];
 }
 
-/** Empties the open account's store. Signing out must not take the other
- *  account's messages with it. */
+/** The contact as this device last recorded it, or null if never seen. */
+export async function cachedContact(peerId: string): Promise<CachedContact | null> {
+  if (!native()) return contactStore()?.get(peerId) ?? null;
+  const res = await db?.query('SELECT * FROM contacts WHERE peer_id = ?', [peerId]);
+  return (res?.values?.[0] as CachedContact) ?? null;
+}
+
+/** Writes the row outright, key and verification together. Deciding whether an
+ *  existing row may be overwritten is `lib/verification.ts`'s job — trust-on-
+ *  first-use must not silently adopt a *changed* key, and that rule belongs
+ *  next to the state machine that depends on it, not in the storage layer. */
+export async function putContact(row: CachedContact): Promise<void> {
+  if (!native()) {
+    contactStore()?.set(row.peer_id, row);
+    return;
+  }
+  await db?.run(
+    `INSERT INTO contacts (peer_id, public_key, verified_at)
+     VALUES (?, ?, ?)
+     ON CONFLICT(peer_id) DO UPDATE SET
+       public_key = excluded.public_key,
+       verified_at = excluded.verified_at`,
+    [row.peer_id, row.public_key, row.verified_at]
+  );
+}
+
+/** Empties the open account's stores. Signing out must not take the other
+ *  account's messages with it — and must not leave this account's trusted
+ *  contacts behind for whoever signs in next on a shared device. */
 export async function clearLocalDb(): Promise<void> {
   if (!native()) {
     memoryStore()?.clear();
+    contactStore()?.clear();
     return;
   }
   await db?.execute('DELETE FROM messages_cache');
+  await db?.execute('DELETE FROM contacts');
 }

@@ -51,4 +51,10 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Scanning a friend's connect QR. Requested at scan time, never at
+         launch: a messenger that asks for the camera on first run reads as a
+         red flag to exactly the people this app is for. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
 </manifest>
