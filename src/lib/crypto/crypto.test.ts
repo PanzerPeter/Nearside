@@ -1,7 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { generateMnemonic, isValidMnemonic, seedFromMnemonic } from './mnemonic';
 import { identityFromSeed } from './keys';
-import { openForSelf, openFrom, sealFor, sealForSelf } from './seal';
+import {
+  openBytesFrom,
+  openForSelf,
+  openFrom,
+  sealBytesFor,
+  sealFor,
+  sealForSelf,
+  signBytes,
+  signedPayload,
+  verifyBytes,
+} from './seal';
 import { safetyNumber } from './safety';
 
 const PHRASE = 'legal winner thank year wave sausage worth useful legal winner thank yellow';
@@ -134,5 +144,71 @@ describe('safety number', () => {
     const b = await identityFromSeed(await seedFromMnemonic(generateMnemonic()));
     const c = await identityFromSeed(await seedFromMnemonic(generateMnemonic()));
     expect(await safetyNumber(a.boxPublic, b.boxPublic)).not.toBe(await safetyNumber(a.boxPublic, c.boxPublic));
+  });
+});
+
+describe('sealed bytes', () => {
+  it('round-trips a raw key between two identities', async () => {
+    // A room key is 32 random bytes, and it must survive the trip unchanged —
+    // a text round-trip through base64 would be three chances to disagree.
+    const me = await identityFromSeed(await seedFromMnemonic(PHRASE));
+    const them = await identityFromSeed(await seedFromMnemonic(generateMnemonic()));
+    const key = new Uint8Array(32).map((_, i) => (i * 37) % 256);
+
+    const sealed = await sealBytesFor(me.boxPrivate, them.boxPublic, key);
+    const opened = await openBytesFrom(them.boxPrivate, me.boxPublic, sealed);
+    expect(Array.from(opened)).toEqual(Array.from(key));
+  });
+
+  it('refuses a third party holding the ciphertext', async () => {
+    const me = await identityFromSeed(await seedFromMnemonic(PHRASE));
+    const them = await identityFromSeed(await seedFromMnemonic(generateMnemonic()));
+    const other = await identityFromSeed(await seedFromMnemonic(generateMnemonic()));
+    const sealed = await sealBytesFor(me.boxPrivate, them.boxPublic, new Uint8Array([1, 2, 3]));
+    await expect(openBytesFrom(other.boxPrivate, me.boxPublic, sealed)).rejects.toThrow();
+  });
+});
+
+describe('room message signatures', () => {
+  it('verifies a signature from the right sender', async () => {
+    const id = await identityFromSeed(await seedFromMnemonic(generateMnemonic()));
+    const payload = new Uint8Array([1, 2, 3]);
+    const sig = await signBytes(id.signPrivate, payload);
+    expect(await verifyBytes(id.signPublic, sig, payload)).toBe(true);
+  });
+
+  it('rejects a signature from a different member', async () => {
+    // The attack this closes: every room member holds the room key, so any of
+    // them could write a message claiming to be someone else.
+    const alice = await identityFromSeed(await seedFromMnemonic(generateMnemonic()));
+    const mallory = await identityFromSeed(await seedFromMnemonic(generateMnemonic()));
+    const payload = new Uint8Array([1, 2, 3]);
+    const sig = await signBytes(mallory.signPrivate, payload);
+    expect(await verifyBytes(alice.signPublic, sig, payload)).toBe(false);
+  });
+
+  it('rejects a signature over different bytes', async () => {
+    const id = await identityFromSeed(await seedFromMnemonic(generateMnemonic()));
+    const sig = await signBytes(id.signPrivate, new Uint8Array([1, 2, 3]));
+    expect(await verifyBytes(id.signPublic, sig, new Uint8Array([1, 2, 4]))).toBe(false);
+  });
+
+  it('returns false rather than throwing on a malformed signature', async () => {
+    const id = await identityFromSeed(await seedFromMnemonic(generateMnemonic()));
+    expect(await verifyBytes(id.signPublic, 'not base64 at all !!', new Uint8Array([1]))).toBe(
+      false
+    );
+  });
+
+  it('covers the nonce as well as the ciphertext', async () => {
+    // Signing the ciphertext alone would leave the nonce swappable with the
+    // signature still valid, which is a decryptable-to-garbage attack.
+    const id = await identityFromSeed(await seedFromMnemonic(generateMnemonic()));
+    const sealed = { ciphertext: 'AAAA', nonce: 'BBBB' };
+    const sig = await signBytes(id.signPrivate, signedPayload(sealed));
+    expect(await verifyBytes(id.signPublic, sig, signedPayload(sealed))).toBe(true);
+    expect(
+      await verifyBytes(id.signPublic, sig, signedPayload({ ciphertext: 'AAAA', nonce: 'CCCC' }))
+    ).toBe(false);
   });
 });
