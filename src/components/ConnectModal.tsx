@@ -150,8 +150,10 @@ function ShowCode({ session, identity }: { session: Session; identity: Identity 
         Have them scan this, or read the code out to them.
       </p>
 
-      <div className={`rounded-2xl bg-white p-3 ${expired ? 'opacity-30' : ''}`}>
-        <QrCode text={payload} size={200} />
+      {/* The white here is cosmetic — the quiet zone a scanner needs lives
+          inside the SVG, where a container class cannot forget it. */}
+      <div className={`rounded-2xl bg-white p-2 ${expired ? 'opacity-30' : ''}`}>
+        <QrCode text={payload} size={224} />
       </div>
 
       <p

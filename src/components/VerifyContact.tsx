@@ -144,8 +144,8 @@ export function VerifyContact({
           </div>
 
           <div className="flex justify-center">
-            <div className="rounded-2xl bg-white p-3">
-              <QrCode text={safetyPayload(number)} size={160} />
+            <div className="rounded-2xl bg-white p-2">
+              <QrCode text={safetyPayload(number)} size={200} />
             </div>
           </div>
 
