@@ -51,7 +51,7 @@ export function ConversationRow({
       last_at
       ? 'Encrypted message'
       : isSelf
-        ? 'Notes, links, reminders — only you see this'
+        ? 'Notes, links, reminders. Only you see this'
         : 'No messages yet';
 
   return (

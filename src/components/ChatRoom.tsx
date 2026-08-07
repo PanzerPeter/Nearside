@@ -870,7 +870,7 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
           scrollToMessage(messageId);
         });
       } else {
-        toast.error("Couldn't find that message — it may be too far back in history.");
+        toast.error("Couldn't find that message. It may be too far back in the history.");
       }
     } finally {
       jumpInFlight.current = false;
@@ -1373,7 +1373,7 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
       await supabase.storage.from('chat-media').remove([path]);
       toast.error(
         /rate_limited_messages/.test(insertError.message)
-          ? "You're sending messages too quickly — give it a moment."
+          ? "You're sending messages too quickly. Give it a moment."
           : 'Could not send media.'
       );
       return;
@@ -1882,9 +1882,9 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
             <div className="min-w-0">
               <p className="text-sm font-semibold text-error">Their key changed.</p>
               <p className="text-sm text-base-content/70 mt-1">
-                This happens when someone reinstalls the app or restores from a recovery phrase —
-                and it is also what an interception looks like. Compare safety numbers in person
-                before continuing.
+                This happens when someone reinstalls the app or restores from a recovery phrase.
+                It is also what someone listening in would look like. Compare safety numbers in
+                person before you carry on.
               </p>
               <button
                 className="btn btn-error btn-sm mt-3 gap-1.5"

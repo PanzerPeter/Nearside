@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
-import { Capacitor } from '@capacitor/core';
-import { BarcodeFormat, BarcodeScanner } from '@capacitor-mlkit/barcode-scanning';
 import { Camera, QrCode as QrCodeIcon, RefreshCw } from 'lucide-react';
+import { SCAN_MESSAGES, scanQr } from '../lib/scan';
 import { supabase } from '../lib/supabase';
 import type { Identity } from '../lib/crypto/keys';
 import {
@@ -219,8 +218,8 @@ function AddSomeone({ me, onConnected, toastError }: AddSomeoneProps) {
             prior.status === 'accepted'
               ? 'You are already friends.'
               : prior.requester_id === me
-                ? 'You already sent them a request — waiting on their reply.'
-                : 'They already sent you a request — accept it from your pending list.'
+                ? 'You already sent them a request. Waiting on their reply.'
+                : 'They already sent you a request. Accept it from your pending list.'
           );
           return;
         }
@@ -250,45 +249,20 @@ function AddSomeone({ me, onConnected, toastError }: AddSomeoneProps) {
   );
 
   async function scan() {
-    if (!Capacitor.isNativePlatform()) {
-      toastError('Scanning needs the app. Type their code instead.');
-      return;
-    }
     setBusy(true);
     try {
-      const { supported } = await BarcodeScanner.isSupported();
-      if (!supported) {
-        toastError('This device has no camera to scan with.');
+      const result = await scanQr();
+      if ('failure' in result) {
+        if (result.failure !== 'cancelled') toastError(SCAN_MESSAGES[result.failure]);
         return;
       }
-      // Asked here, at the moment of scanning, and never at launch: a
-      // messenger that wants the camera on first run reads as a red flag to
-      // exactly the people this app is for.
-      const { camera } = await BarcodeScanner.requestPermissions();
-      if (camera !== 'granted' && camera !== 'limited') {
-        toastError('Camera access is needed to scan a code.');
-        return;
-      }
-      const { available } = await BarcodeScanner.isGoogleBarcodeScannerModuleAvailable();
-      if (!available) {
-        // Only starts the download; there is nothing to await meaningfully, so
-        // say so rather than hanging on a spinner.
-        await BarcodeScanner.installGoogleBarcodeScannerModule();
-        toastError('Setting up the scanner — try again in a moment.');
-        return;
-      }
-      const { barcodes } = await BarcodeScanner.scan({ formats: [BarcodeFormat.QrCode] });
-      const raw = barcodes[0]?.rawValue;
-      if (!raw) return;
 
-      const parsed = parseConnectPayload(raw);
+      const parsed = parseConnectPayload(result.value);
       if (!parsed) {
         toastError("That QR isn't a Nearside code.");
         return;
       }
       await connect(parsed.token, parsed.publicKey);
-    } catch {
-      toastError('Could not open the camera.');
     } finally {
       if (alive.current) setBusy(false);
     }

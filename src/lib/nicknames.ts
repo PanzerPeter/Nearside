@@ -200,7 +200,7 @@ function describeNicknameError(error: WriteError | null | undefined): string {
       return 'Nicknames are not set up on the server yet.';
     // A CHECK constraint rejected the value — length or a control character.
     case '23514':
-      return `A nickname must be 1–${MAX_NICKNAME_LENGTH} characters on one line.`;
+      return `A nickname has to be 1 to ${MAX_NICKNAME_LENGTH} characters on one line.`;
     // Postgres "permission denied": the role lacks table privileges. Distinct
     // from an RLS denial, which returns 0 rows.
     case '42501':

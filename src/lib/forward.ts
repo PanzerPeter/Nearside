@@ -139,7 +139,7 @@ export function describeForwardFailure(reason: ForwardFailure, label: string): s
     case 'not-set-up':
       return 'Forwarding is not set up on the server yet.';
     case 'rate-limited':
-      return "You're sending messages too quickly — give it a moment.";
+      return "You're sending messages too quickly. Give it a moment.";
     default:
       return `Could not forward to ${label}.`;
   }

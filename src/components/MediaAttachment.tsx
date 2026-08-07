@@ -1,10 +1,8 @@
 import { useState } from 'react';
 import { VisualMediaType } from '../lib/types';
 import { useSignedMediaUrl } from '../hooks/useSignedMediaUrl';
-import { downloadName, saveBlob } from '../lib/download';
-import { useToast } from '../hooks/useToast';
 import { MediaLightbox } from './MediaLightbox';
-import { ImageOff, Download } from 'lucide-react';
+import { ImageOff, Play } from 'lucide-react';
 
 interface MediaAttachmentProps {
   path: string;
@@ -15,33 +13,24 @@ interface MediaAttachmentProps {
 }
 
 /**
- * Renders a piece of chat media from the private `chat-media` bucket using a
- * short-lived signed URL. Falls back gracefully when the file has been removed
- * (e.g. trimmed by the per-conversation media cap).
+ * A thumbnail in the conversation. Tapping it opens the full-size viewer, which
+ * is where playing and saving happen.
+ *
+ * The thumbnail deliberately has no controls and no save button of its own.
+ * Both used to be here, and between them and the viewer a video offered three
+ * different ways to save the same file: a hover-only button that a touch screen
+ * never reveals, the browser's own overflow menu, and the viewer. One way is
+ * enough, and it is the one you reach by tapping the thing you want.
  */
 export function MediaAttachment({ path, type, mediaKey }: MediaAttachmentProps) {
   const { url, failed, reload } = useSignedMediaUrl(path, mediaKey, type);
   const [viewing, setViewing] = useState(false);
-  const toast = useToast();
-
-  async function handleDownload() {
-    if (!url) return;
-    try {
-      // The blob behind `url` is already the decrypted file, carrying the type
-      // `mimeForPath` gave it — refetching it costs nothing and keeps this
-      // function ignorant of how the hook stores its bytes.
-      const blob = await (await fetch(url)).blob();
-      await saveBlob(blob, downloadName(path, type === 'image' ? 'image' : 'video'));
-    } catch {
-      toast.error('Could not save that file.');
-    }
-  }
 
   if (failed) {
     return (
       <div className="flex items-center gap-2 text-xs text-base-content/60 py-2">
         <ImageOff className="w-4 h-4" />
-        Media no longer available
+        This file is no longer available
       </div>
     );
   }
@@ -54,53 +43,52 @@ export function MediaAttachment({ path, type, mediaKey }: MediaAttachmentProps) 
     );
   }
 
-  const downloadButton = (
-    <button
-      onClick={(e) => {
-        e.stopPropagation();
-        void handleDownload();
-      }}
-      className="absolute top-2 right-2 btn btn-xs btn-circle bg-base-100/70 hover:bg-base-100 border-none opacity-0 group-hover:opacity-100 transition-opacity"
-      title="Save"
-    >
-      <Download className="w-3.5 h-3.5" />
-    </button>
-  );
-
   return (
     <>
-      <div className="group relative inline-block">
+      <button
+        type="button"
+        className="relative block rounded-lg overflow-hidden cursor-zoom-in"
+        onClick={(e) => {
+          e.stopPropagation();
+          setViewing(true);
+        }}
+        aria-label={type === 'image' ? 'Open photo' : 'Play video'}
+      >
         {type === 'image' ? (
           <img
             src={url}
             alt="attachment"
             loading="lazy"
-            className="rounded-lg max-w-full max-h-72 object-cover cursor-zoom-in"
-            onClick={(e) => {
-              e.stopPropagation();
-              setViewing(true);
-            }}
+            className="max-w-full max-h-72 object-cover"
             onError={reload}
           />
         ) : (
-          <video
-            src={url}
-            controls
-            preload="metadata"
-            className="rounded-lg max-w-full max-h-72"
-            onError={reload}
-          />
+          <>
+            <video
+              // The fragment is the poster. A <video> with no `poster` paints
+              // nothing until it has decoded a frame, and "decode a frame" is
+              // not something metadata loading does on its own — which is why
+              // the thumbnail was a grey box with a play glyph until the video
+              // had been played once. Asking for a time offset makes the
+              // element seek there, and a seek decodes.
+              src={`${url}#t=0.001`}
+              preload="metadata"
+              muted
+              playsInline
+              className="max-w-full max-h-72 pointer-events-none"
+              onError={reload}
+            />
+            <span className="absolute inset-0 flex items-center justify-center">
+              <span className="flex h-12 w-12 items-center justify-center rounded-full bg-black/55">
+                <Play className="w-6 h-6 ml-0.5 text-white fill-current" />
+              </span>
+            </span>
+          </>
         )}
-        {downloadButton}
-      </div>
+      </button>
 
       {viewing && (
-        <MediaLightbox
-          url={url}
-          type={type}
-          onDownload={() => void handleDownload()}
-          onClose={() => setViewing(false)}
-        />
+        <MediaLightbox url={url} path={path} type={type} onClose={() => setViewing(false)} />
       )}
     </>
   );

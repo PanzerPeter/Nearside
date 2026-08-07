@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { identityFromSeed } from './crypto/keys';
 import { generateMnemonic, seedFromMnemonic } from './crypto/mnemonic';
-import { openBody, openMediaKey, sealBody, sealMediaKey } from './sealed-body';
+import { openBody, openMediaKey, openRows, sealBody, sealMediaKey } from './sealed-body';
 
 const ME = '11111111-1111-1111-1111-111111111111';
 const PEER = '22222222-2222-2222-2222-222222222222';
@@ -113,5 +113,61 @@ describe('media keys', () => {
       receiver_id: PEER,
     };
     expect(await openMediaKey(me, null, bare)).toBeNull();
+  });
+});
+
+describe('opened rows', () => {
+  const base = {
+    id: 'row-1',
+    created_at: '2026-08-07T10:00:00.000Z',
+    user_id: ME,
+    receiver_id: PEER,
+    media_key_ciphertext: null,
+    media_key_nonce: null,
+  };
+
+  it('does not call a captionless attachment a decryption failure', async () => {
+    // A voice note or an uncaptioned photo is inserted with null ciphertext
+    // because there is no body to seal. Nothing failed, and the bubble must
+    // not print "Can't decrypt this message" underneath a file that plays.
+    const me = await identity();
+    const them = await identity();
+    const [row] = await openRows(me, them.boxPublic, PEER, [
+      { ...base, ciphertext: null, nonce: null },
+    ]);
+    expect(row.text).toBeNull();
+    expect(row.decrypt_failed).toBe(false);
+  });
+
+  it('still reports a body that is present and unreadable', async () => {
+    const me = await identity();
+    const them = await identity();
+    const stranger = await identity();
+    const sealed = await sealBody(me, stranger.boxPublic, ME, PEER, 'hello');
+    const [row] = await openRows(them, me.boxPublic, PEER, [{ ...base, ...sealed }]);
+    expect(row.decrypt_failed).toBe(true);
+  });
+
+  it('opens a body it can read', async () => {
+    const me = await identity();
+    const them = await identity();
+    const sealed = await sealBody(me, them.boxPublic, ME, PEER, 'hello');
+    const [row] = await openRows(them, me.boxPublic, PEER, [{ ...base, ...sealed }]);
+    expect(row.text).toBe('hello');
+    expect(row.decrypt_failed).toBe(false);
+  });
+
+  it('reports every row as a failure when there is no identity to open with', async () => {
+    const me = await identity();
+    const sealed = await sealBody(me, me.boxPublic, ME, PEER, 'hello');
+    const [sealedRow, bareRow] = await openRows(null, null, PEER, [
+      { ...base, ...sealed },
+      { ...base, id: 'row-2', ciphertext: null, nonce: null },
+    ]);
+    expect(sealedRow.decrypt_failed).toBe(true);
+    // Even the captionless one: without an identity this device cannot open
+    // the file key either, so the attachment will not render and the row would
+    // otherwise be silently blank.
+    expect(bareRow.decrypt_failed).toBe(true);
   });
 });

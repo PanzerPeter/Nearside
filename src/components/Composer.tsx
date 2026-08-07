@@ -155,7 +155,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
       pendingReleaseRef.current = 'none';
       onError(
         failure === 'denied'
-          ? `Microphone access is blocked — enable it in ${permissionSettingsLocation()}.`
+          ? `Microphone access is off. Turn it on in ${permissionSettingsLocation()}.`
           : failure === 'unsupported'
             ? 'Voice messages are not supported on this device.'
             : 'Could not start recording.'

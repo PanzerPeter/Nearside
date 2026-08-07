@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Capacitor } from '@capacitor/core';
-import { BarcodeFormat, BarcodeScanner } from '@capacitor-mlkit/barcode-scanning';
 import { Camera, ShieldCheck } from 'lucide-react';
+import { SCAN_MESSAGES, scanQr } from '../lib/scan';
 import { safetyNumber } from '../lib/crypto/safety';
 import { toBase64 } from '../lib/crypto/keys';
 import { parseSafetyPayload, safetyPayload } from '../lib/connect';
@@ -57,28 +56,19 @@ export function VerifyContact({
 
   async function scanTheirs() {
     if (!number) return;
-    if (!Capacitor.isNativePlatform()) {
-      toast.error('Scanning needs the app. Compare the digits instead.');
-      return;
-    }
     setBusy(true);
     try {
-      const { camera } = await BarcodeScanner.requestPermissions();
-      if (camera !== 'granted' && camera !== 'limited') {
-        toast.error('Camera access is needed to scan a code.');
+      const result = await scanQr();
+      if ('failure' in result) {
+        if (result.failure === 'unsupported-platform') {
+          toast.error('Scanning needs the app. Compare the digits instead.');
+        } else if (result.failure !== 'cancelled') {
+          toast.error(SCAN_MESSAGES[result.failure]);
+        }
         return;
       }
-      const { available } = await BarcodeScanner.isGoogleBarcodeScannerModuleAvailable();
-      if (!available) {
-        await BarcodeScanner.installGoogleBarcodeScannerModule();
-        toast.error('Setting up the scanner — try again in a moment.');
-        return;
-      }
-      const { barcodes } = await BarcodeScanner.scan({ formats: [BarcodeFormat.QrCode] });
-      const raw = barcodes[0]?.rawValue;
-      if (!raw) return;
 
-      const scanned = parseSafetyPayload(raw);
+      const scanned = parseSafetyPayload(result.value);
       if (!scanned) {
         toast.error('That is not a safety-number code.');
         return;
@@ -87,13 +77,11 @@ export function VerifyContact({
         // Not a soft failure. Either one of you is looking at the wrong
         // contact, or someone is sitting between you.
         setScanMatched(false);
-        toast.error('These do not match. Do not continue until they do.');
+        toast.error('These do not match. Do not carry on until they do.');
         return;
       }
       setScanMatched(true);
       toast.success('The numbers match.');
-    } catch {
-      toast.error('Could not open the camera.');
     } finally {
       setBusy(false);
     }
@@ -143,7 +131,7 @@ export function VerifyContact({
       ) : (
         <div className="space-y-4">
           <p className="text-sm text-base-content/60">
-            These digits are the same on both phones — but only if nobody is in between. Compare
+            These digits are the same on both phones, but only if nobody is in between. Compare
             them in person, or over a call where you recognise the voice.
           </p>
 

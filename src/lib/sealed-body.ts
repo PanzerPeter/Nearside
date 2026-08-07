@@ -101,6 +101,14 @@ export async function openMediaKey(
   }
 }
 
+/** A row after `openRows` has been over it: the three client-only fields are
+ *  present, not merely allowed. */
+export type Opened<T> = T & {
+  text: string | null;
+  media_key: Uint8Array | null;
+  decrypt_failed: boolean;
+};
+
 /**
  * Fetched rows with their bodies opened into `text`, once, as they enter
  * state.
@@ -115,9 +123,12 @@ export async function openMediaKey(
  * is what makes it searchable later. A row the user has never loaded is not in
  * the mirror and is not searchable — correct, and explainable.
  *
- * `decrypt_failed` marks the rows that could not be opened, because a null
- * `text` alone is indistinguishable from a media message with no caption —
- * and the two must not render the same way.
+ * `decrypt_failed` marks the rows that could not be opened. A null `text` on
+ * its own does not mean that: an uncaptioned photo or a voice note is inserted
+ * with null ciphertext because there was no body to seal, and nothing failed.
+ * The row has to be carrying a sealed body for a null to count as a failure.
+ * Without an identity nothing can be opened, file keys included, so every row
+ * is a failure in that case whether it carries a body or not.
  */
 export async function openRows<
   T extends Readable & MediaKeyed & { id: string; created_at: string },
@@ -126,7 +137,7 @@ export async function openRows<
   peerPublic: Uint8Array | null,
   peerId: string,
   rows: T[]
-): Promise<T[]> {
+): Promise<Opened<T>[]> {
   return Promise.all(
     rows.map(async (row) => {
       // No identity yet: the row is sealed and unopenable, which is exactly
@@ -144,7 +155,8 @@ export async function openRows<
           created_at: row.created_at,
         });
       }
-      return { ...row, text, media_key, decrypt_failed: text === null };
+      const sealed = row.ciphertext !== null && row.nonce !== null;
+      return { ...row, text, media_key, decrypt_failed: text === null && (sealed || !identity) };
     })
   );
 }

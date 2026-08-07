@@ -1,17 +1,20 @@
-import { useEffect } from 'react';
-import { Download, X } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Check, Download, X } from 'lucide-react';
 import type { VisualMediaType } from '../lib/types';
+import { downloadName, saveToGallery } from '../lib/download';
+import { useToast } from '../hooks/useToast';
 
 interface MediaLightboxProps {
   /** An object URL for the already-decrypted bytes, owned by the caller. */
   url: string;
+  /** The storage object path, which is where the saved file gets its name. */
+  path: string;
   type: VisualMediaType;
-  onDownload: () => void;
   onClose: () => void;
 }
 
 /**
- * Full-size view, in the app.
+ * Full-size view, in the app, and the one place an attachment can be saved.
  *
  * The previous version was an `<a target="_blank">` around the thumbnail, which
  * cannot work here: Capacitor hands a new window to the system browser, and a
@@ -19,7 +22,11 @@ interface MediaLightboxProps {
  * user got was a black page of the decrypted bytes rendered as text, with no
  * way back and no way to save. Nothing leaves the WebView now.
  */
-export function MediaLightbox({ url, type, onDownload, onClose }: MediaLightboxProps) {
+export function MediaLightbox({ url, path, type, onClose }: MediaLightboxProps) {
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const toast = useToast();
+
   // Hardware and browser back close the viewer rather than the conversation
   // behind it — the same treatment ChatRoom gives an open chat.
   useEffect(() => {
@@ -43,6 +50,22 @@ export function MediaLightbox({ url, type, onDownload, onClose }: MediaLightboxP
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
+  async function save() {
+    setSaving(true);
+    try {
+      // Refetching the object URL costs nothing and gets the decrypted bytes
+      // with the content type `mimeForPath` gave them.
+      const blob = await (await fetch(url)).blob();
+      await saveToGallery(blob, downloadName(path, type), type);
+      setSaved(true);
+      toast.success(type === 'image' ? 'Photo saved to your gallery.' : 'Video saved to your gallery.');
+    } catch {
+      toast.error('Could not save that file.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <div
       className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center"
@@ -53,16 +76,25 @@ export function MediaLightbox({ url, type, onDownload, onClose }: MediaLightboxP
           className="btn btn-sm btn-circle bg-base-100/20 hover:bg-base-100/40 border-none text-white"
           onClick={(e) => {
             e.stopPropagation();
-            onDownload();
+            void save();
           }}
-          title="Save"
+          disabled={saving || saved}
+          title={saved ? 'Saved' : 'Save'}
+          aria-label={saved ? 'Saved to gallery' : 'Save to gallery'}
         >
-          <Download className="w-4 h-4" />
+          {saving ? (
+            <span className="loading loading-spinner loading-xs" />
+          ) : saved ? (
+            <Check className="w-4 h-4" />
+          ) : (
+            <Download className="w-4 h-4" />
+          )}
         </button>
         <button
           className="btn btn-sm btn-circle bg-base-100/20 hover:bg-base-100/40 border-none text-white"
           onClick={onClose}
           title="Close"
+          aria-label="Close"
         >
           <X className="w-4 h-4" />
         </button>
@@ -74,7 +106,18 @@ export function MediaLightbox({ url, type, onDownload, onClose }: MediaLightboxP
         {type === 'image' ? (
           <img src={url} alt="attachment" className="max-w-full max-h-[85dvh] object-contain" />
         ) : (
-          <video src={url} controls autoPlay className="max-w-full max-h-[85dvh]" />
+          <video
+            src={url}
+            controls
+            autoPlay
+            playsInline
+            // The browser's own overflow menu offers a download that writes
+            // nowhere useful from inside a WebView, and a second save button
+            // that behaves differently from the first is worse than none.
+            controlsList="nodownload noplaybackrate"
+            disablePictureInPicture
+            className="max-w-full max-h-[85dvh]"
+          />
         )}
       </div>
     </div>

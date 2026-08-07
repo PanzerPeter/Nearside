@@ -82,7 +82,7 @@ export function IdentitySetup({
               <h1 className="card-title">Your key</h1>
               <p className="text-sm text-base-content/70">
                 Nearside encrypts your vault and your messages on this device. The key never leaves
-                it, so we cannot reset it for you — your recovery phrase is the only way back in.
+                it, so we cannot reset it for you. Your recovery phrase is the only way back in.
               </p>
               <p className="text-sm text-base-content/70">
                 Each account has its own key. If you use more than one account on this phone, each
@@ -102,8 +102,8 @@ export function IdentitySetup({
             <>
               <h1 className="card-title">Write these 12 words down</h1>
               <p className="text-sm text-base-content/70">
-                On paper. Not in a screenshot, and not in another app on this phone — both are lost
-                with the phone itself.
+                On paper. Not in a screenshot, and not in another app on this phone, because both
+                go missing with the phone itself.
               </p>
               <ol className="grid grid-cols-2 gap-1 font-mono text-sm bg-base-200 rounded-box p-3">
                 {words.map((w, i) => (
