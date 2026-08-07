@@ -55,7 +55,7 @@ export function ChatBackgroundModal({
         {url ? (
           <img src={url} alt="Current chat background" className="w-full h-full object-cover" />
         ) : (
-          <span className="text-sm text-base-content/50">No background set</span>
+          <span className="text-sm text-base-content/60">No background set</span>
         )}
       </div>
 
@@ -94,7 +94,7 @@ export function ChatBackgroundModal({
         )}
       </div>
 
-      <p className="text-xs text-base-content/50 mt-3">
+      <p className="text-xs text-base-content/60 mt-3">
         PNG, JPEG, WebP or GIF, up to {maxMb} MB.
       </p>
     </Modal>

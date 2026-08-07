@@ -3,10 +3,10 @@
 @tailwind utilities;
 
 @layer base {
-  :root {
-    /* Dark-only app: render native controls, scrollbars, and browser UI dark. */
-    color-scheme: dark;
-  }
+  /* `color-scheme` is deliberately NOT set here. Every daisyUI theme in
+     tailwind.config.js declares its own, and a hard-coded `dark` on :root
+     survived the theme switch — which rendered the light "Paper" pack's native
+     controls, scrollbars and form widgets dark against a cream page. */
 
   html, body, #root {
     height: 100%;

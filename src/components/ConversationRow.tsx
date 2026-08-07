@@ -88,7 +88,7 @@ export function ConversationRow({
               {title}
             </span>
             {handle && (
-              <span className="min-w-0 truncate text-[0.7rem] text-base-content/45">{handle}</span>
+              <span className="min-w-0 truncate text-[0.7rem] text-base-content/60">{handle}</span>
             )}
           </span>
           {last_at && (

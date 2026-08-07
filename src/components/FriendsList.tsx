@@ -7,11 +7,13 @@ import { cachedPreview } from '../lib/localdb';
 import { Avatar } from './Avatar';
 import { ConversationRow } from './ConversationRow';
 import { ConnectModal } from './ConnectModal';
+import { RoomList } from './RoomList';
 import { LegalFooter } from './LegalFooter';
 import { advanceRead, fetchUnreadCounts } from '../lib/receipts';
 import { useConnection, reportChannelStatus, forgetChannel } from '../lib/connection';
 import { UserPlus, Check, X, Users } from 'lucide-react';
 import type { Identity } from '../lib/crypto/keys';
+import type { RoomSummary } from '../lib/rooms';
 
 /** Conversation-list refresh cadence while realtime is healthy — a cheap
  *  backstop, since the list is one RPC. */
@@ -33,6 +35,10 @@ interface FriendsListProps {
   /** Reports the summed unread count upward whenever the unread map changes,
    *  so the app-level badge can mirror it without owning the map itself. */
   onUnreadTotalChange?: (total: number) => void;
+  /** Rooms live beside conversations in this list but open a different pane,
+   *  so the selection is owned by App and reported back down. */
+  selectedRoomId: string | null;
+  onSelectRoom: (room: RoomSummary) => void;
 }
 
 export function FriendsList({
@@ -42,6 +48,8 @@ export function FriendsList({
   onSelectFriend,
   onFriendsChange,
   onUnreadTotalChange,
+  selectedRoomId,
+  onSelectRoom,
 }: FriendsListProps) {
   const me = session.user.id;
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
@@ -461,8 +469,21 @@ export function FriendsList({
 
       {/* Conversation List */}
       <div className="flex-1 overflow-y-auto">
+        <RoomList
+          me={me}
+          identity={identity}
+          selectedRoomId={selectedRoomId}
+          onSelectRoom={onSelectRoom}
+        />
+
+        <div className="px-3 sm:px-4 pt-2">
+          <p className="text-xs font-semibold uppercase tracking-wider text-base-content/55">
+            Direct
+          </p>
+        </div>
+
         {conversations.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full p-6 text-center">
+          <div className="flex flex-col items-center justify-center py-10 p-6 text-center">
             <div className="w-16 h-16 rounded-2xl bg-base-content/5 flex items-center justify-center mb-3">
               <Users className="w-8 h-8 text-base-content/55" />
             </div>

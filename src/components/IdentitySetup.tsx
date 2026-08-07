@@ -73,7 +73,7 @@ export function IdentitySetup({
             </div>
           )}
 
-          <p className="text-xs text-base-content/50">
+          <p className="text-xs text-base-content/60">
             Signed in as <span className="font-medium text-base-content/70">{account}</span>
           </p>
 
