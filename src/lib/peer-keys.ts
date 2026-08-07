@@ -29,3 +29,18 @@ export async function peerPublicKey(peerId: string): Promise<Uint8Array | null> 
 export function forgetPeerKey(peerId: string): void {
   cache.delete(peerId);
 }
+
+/**
+ * Empty the cache. Called when a session ends.
+ *
+ * Not about secrecy — these are public keys — but about trust-on-first-use. The
+ * record a key change is measured against is written by `recordPeerKey` on a
+ * cache *miss*, into the signed-in account's own store. A cache surviving the
+ * sign-out means the next account to open the same conversation gets a hit,
+ * never records the key, and so has nothing for `verificationState` to compare
+ * a later change against: 'changed' could not fire for that peer for the rest
+ * of the run.
+ */
+export function forgetAllPeerKeys(): void {
+  cache.clear();
+}

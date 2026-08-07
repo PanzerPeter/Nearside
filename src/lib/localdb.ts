@@ -147,6 +147,22 @@ export async function cacheMessage(row: CachedMessage): Promise<void> {
   );
 }
 
+/**
+ * Drop one message's decrypted copy.
+ *
+ * A deletion has to reach this store as well as the server's row. The mirror is
+ * what search and the sidebar preview read from, so a body left here after the
+ * message was deleted goes on being findable and goes on being previewed — the
+ * one place in the app where "delete" would visibly not have deleted anything.
+ */
+export async function forgetCachedMessage(id: string): Promise<void> {
+  if (!native()) {
+    memoryStore()?.delete(id);
+    return;
+  }
+  await db?.run('DELETE FROM messages_cache WHERE id = ?', [id]);
+}
+
 export async function cachedPreview(peerId: string): Promise<CachedMessage | null> {
   if (!native()) {
     const rows = [...(memoryStore()?.values() ?? [])]
@@ -241,6 +257,14 @@ export async function pinnedIds(): Promise<Set<string>> {
   if (!native()) return new Set(pinStore()?.keys() ?? []);
   const res = await db?.query('SELECT message_id FROM pins');
   return new Set(((res?.values as { message_id: string }[]) ?? []).map((r) => r.message_id));
+}
+
+/** Every pin, paths included. `pinnedIds` answers the prune pass; this answers
+ *  the teardown that has to delete the files those paths name. */
+export async function allPins(): Promise<PinnedMedia[]> {
+  if (!native()) return [...(pinStore()?.values() ?? [])];
+  const res = await db?.query('SELECT * FROM pins');
+  return (res?.values as PinnedMedia[]) ?? [];
 }
 
 export async function removePin(messageId: string): Promise<void> {

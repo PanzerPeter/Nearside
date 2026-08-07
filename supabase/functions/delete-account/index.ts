@@ -157,17 +157,17 @@ Deno.serve(async (req) => {
     await removeAll(admin.storage, AVATARS_BUCKET, await avatarPaths(admin.storage, uid));
     await removeAll(admin.storage, MEDIA_BUCKET, await mediaPaths(admin.storage, uid));
 
-    // invite_codes.used_by references auth.users(id) with no ON DELETE action
-    // (0008_invite_codes.sql), so the spent code would block the delete below
-    // outright. Dropping the row satisfies both invariants that migration
-    // states: the code does not return to the unused pool (`used_by is null`
-    // cannot match a row that no longer exists), and used_at is never left set
-    // beside a null used_by.
-    const { error: inviteError } = await admin.from("invite_codes").delete().eq("used_by", uid);
-    if (inviteError) return json({ error: `invite code cleanup: ${inviteError.message}` }, 500);
-
+    // There is no table to clear by hand before this. The invite_codes cleanup
+    // that used to sit here outlived its table — 0019 opened signup and dropped
+    // it — so PostgREST answered every deletion with "table not found" and this
+    // function returned 500 *after* the storage wipe above had already run:
+    // the account survived, its photos did not. Everything that remains hangs
+    // off auth.users with an ON DELETE action, so the one call below is the
+    // whole deletion. Anything added later with a bare reference (no ON DELETE)
+    // has to be cleared here, and this is the reminder to check.
+    //
     // Cascades from profiles.id take messages, friendships, reactions,
-    // receipts and push subscriptions with it.
+    // receipts, nicknames, rooms and connect tokens with it.
     const { error: deleteError } = await admin.auth.admin.deleteUser(uid);
     if (deleteError) return json({ error: `deleting user: ${deleteError.message}` }, 500);
 

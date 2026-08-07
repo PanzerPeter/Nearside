@@ -19,7 +19,7 @@ describe('enqueue', () => {
   // This suite runs in vitest's `node` environment, which has no
   // `indexedDB` global — the same condition a private-browsing tab with
   // storage denied produces in a real browser. `enqueue` resolving `false`
-  // here is exactly the signal `ChatRoom.sendText` needs to fall back to a
+  // here is exactly the signal `useOutbox.send` needs to fall back to a
   // direct send instead of leaving the message queued forever with nowhere
   // that will ever pick it up (see Finding 2 in the task-7 review).
   it('resolves false when IndexedDB is unavailable, so the caller can fall back to a direct send', async () => {

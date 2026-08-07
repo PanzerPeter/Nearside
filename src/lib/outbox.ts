@@ -1,6 +1,6 @@
 // The offline outbox: text messages the composer has accepted but the
 // server hasn't acknowledged yet. Persisted to IndexedDB so a reload — or the
-// app closing entirely while offline — doesn't silently drop them; ChatRoom's
+// app closing entirely while offline — doesn't silently drop them; `useOutbox`'s
 // flush loop resumes the queue on mount and on reconnect.
 //
 // Every export here degrades to a safe empty value instead of throwing or
@@ -113,7 +113,7 @@ async function withStore<T>(
  * storage denied) and a `put` that failed inside a live store. Callers need
  * this rather than a fire-and-forget `void`: a message the outbox couldn't
  * take custody of has to be sent some other way, or it never leaves the
- * screen at all (see `ChatRoom.flushOutbox`'s `unqueuedRef` path).
+ * screen at all (see `useOutbox.flush`'s `unqueuedRef` path).
  */
 export async function enqueue(msg: PendingMessage): Promise<boolean> {
   return withStore<boolean>('readwrite', false, (store, resolve) => {

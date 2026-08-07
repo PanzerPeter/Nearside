@@ -33,6 +33,9 @@ import {
 import { useNicknameSync } from './lib/nicknames';
 import { clearAll } from './lib/outbox';
 import { clearLocalDb, openLocalDb } from './lib/localdb';
+import { clearPinnedMedia } from './lib/pins';
+import { forgetAllPeerKeys } from './lib/peer-keys';
+import { forgetAllRoomKeys } from './lib/rooms';
 import { LogOut, MessageSquare, Settings } from 'lucide-react';
 
 function App() {
@@ -142,7 +145,17 @@ function App() {
   // run before the sign-out and neither can block it.
   const signOut = useCallback(async () => {
     await clearAll();
+    // Before `clearLocalDb`, which drops the rows naming these files: pinned
+    // attachments are decrypted bytes in the sandbox, and the store is the only
+    // thing that knows where they are.
+    await clearPinnedMedia().catch(() => {});
     await clearLocalDb();
+    // In-memory key caches, which no store clears: see `forgetAllPeerKeys` for
+    // why a surviving peer key breaks key-change detection for the next
+    // account, and `forgetAllRoomKeys` for why room keys must not outlive the
+    // session at all.
+    forgetAllPeerKeys();
+    forgetAllRoomKeys();
     await clearExternalUserId().catch(() => {});
     await logOutPurchases().catch(() => {});
     await supabase.auth.signOut();

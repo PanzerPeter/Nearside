@@ -8,7 +8,7 @@ import { classifyMedia, mediaPath } from './conversation';
  * participant-scoped storage policies already cover it and no new bucket is
  * involved. The `bg-` prefix is purely descriptive — nothing keys off it,
  * because the authoritative pointer is the `media_path` column on
- * `chat_backgrounds`. In particular, the media cap in ChatRoom trims by walking
+ * `chat_backgrounds`. In particular, the media cap in `useMediaSend` trims by walking
  * `messages` rows rather than by listing the folder, so a background is never
  * mistaken for an old attachment.
  *

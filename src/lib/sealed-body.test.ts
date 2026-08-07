@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { identityFromSeed } from './crypto/keys';
 import { generateMnemonic, seedFromMnemonic } from './crypto/mnemonic';
 import { openBody, openMediaKey, openRows, sealBody, sealMediaKey } from './sealed-body';
+import { cachedPreview, clearLocalDb, openLocalDb, searchCached } from './localdb';
 
 const ME = '11111111-1111-1111-1111-111111111111';
 const PEER = '22222222-2222-2222-2222-222222222222';
@@ -169,5 +170,41 @@ describe('opened rows', () => {
     // the file key either, so the attachment will not render and the row would
     // otherwise be silently blank.
     expect(bareRow.decrypt_failed).toBe(true);
+  });
+});
+
+describe('deleted rows and the local mirror', () => {
+  const PEER_B = '33333333-3333-3333-3333-333333333333';
+
+  beforeEach(async () => {
+    await openLocalDb(ME);
+    await clearLocalDb();
+  });
+
+  it('drops a deleted message from the mirror it was cached into', async () => {
+    const me = await identity();
+    const them = await identity();
+    const base = {
+      id: 'row-del',
+      created_at: '2026-08-07T10:00:00.000Z',
+      user_id: ME,
+      receiver_id: PEER_B,
+      media_key_ciphertext: null,
+      media_key_nonce: null,
+    };
+
+    const sealed = await sealBody(me, them.boxPublic, ME, PEER_B, 'delete me');
+    await openRows(them, me.boxPublic, PEER_B, [{ ...base, ...sealed }]);
+    expect(await searchCached(PEER_B, 'delete me')).toHaveLength(1);
+
+    // The tombstone as the server hands it back: body stripped, deleted_at set.
+    const [row] = await openRows(them, me.boxPublic, PEER_B, [
+      { ...base, ciphertext: null, nonce: null, deleted_at: '2026-08-07T11:00:00.000Z' },
+    ]);
+    expect(row.text).toBeNull();
+    // Not a decryption failure: there is nothing left to decrypt, by design.
+    expect(row.decrypt_failed).toBe(false);
+    expect(await searchCached(PEER_B, 'delete me')).toHaveLength(0);
+    expect(await cachedPreview(PEER_B)).toBeNull();
   });
 });

@@ -29,14 +29,29 @@ export interface ReplyTargets {
  *   scope: changing it drops everything resolved for the chat being left.
  * @param messages The loaded window, both the source of quotes to resolve and
  *   the first place each one is looked for.
+ * @param open The conversation's decrypt boundary (`ChatRoom.open`). Rows
+ *   fetched here are as sealed as any other, and this hook used to hand them
+ *   to the quote untouched — so a reply to anything older than the loaded
+ *   window rendered a quote with no text in it at all, because `text` is a
+ *   client-only field nothing had set. Taken as a callback rather than an
+ *   identity so the peer-key resolution stays in the one place that owns it.
  */
-export function useReplyTargets(me: string, peerId: string, messages: Message[]): ReplyTargets {
+export function useReplyTargets(
+  me: string,
+  peerId: string,
+  messages: Message[],
+  open: (rows: Message[]) => Promise<Message[]>
+): ReplyTargets {
   const [fetched, setFetched] = useState<Map<string, Message>>(() => new Map());
   // Ids the server did not return: the parent is unreadable (hard-deleted, or
   // hidden by RLS). Remembered so the same miss isn't re-requested on every
   // render for as long as the reply stays on screen.
   const [unresolvable, setUnresolvable] = useState<Set<string>>(() => new Set());
   const inFlight = useRef<Set<string>>(new Set());
+  // Through a ref: `open` is re-created on every render of the chat, and as an
+  // effect dependency it would restart the fetch below on each one.
+  const openRef = useRef(open);
+  openRef.current = open;
 
   const byId = useMemo(() => new Map(messages.map((m) => [m.id, m])), [messages]);
 
@@ -86,7 +101,10 @@ export function useReplyTargets(me: string, peerId: string, messages: Message[])
       // connection recovers on its own.
       if (error) return;
 
-      const rows = (data ?? []) as Message[];
+      // Opened before they are cached, exactly as the thread's own fetches
+      // are: a quote renders `text`, and these rows arrive holding ciphertext.
+      const rows = await openRef.current((data ?? []) as Message[]);
+      if (cancelled) return;
       if (rows.length > 0) {
         setFetched((prev) => {
           const next = new Map(prev);

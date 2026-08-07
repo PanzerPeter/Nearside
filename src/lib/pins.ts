@@ -12,7 +12,7 @@
 // keeping something in Nearside, not about publishing it to the phone.
 import { Capacitor } from '@capacitor/core';
 import { Directory, Filesystem } from '@capacitor/filesystem';
-import { cachedPin, pinnedIds, putPin, removePin } from './localdb';
+import { allPins, cachedPin, pinnedIds, putPin, removePin } from './localdb';
 import { mimeForPath } from './media';
 import type { MediaType } from './types';
 
@@ -99,6 +99,31 @@ export async function pinnedObjectUrl(
     // not have.
     await removePin(messageId);
     return null;
+  }
+}
+
+/**
+ * Delete every pinned file this account kept, and the rows naming them.
+ *
+ * Called before `clearLocalDb` on sign-out and on account deletion, and the
+ * order matters: the rows are the only record of where the files are, so
+ * clearing the store first would strand decrypted photos and voice notes in
+ * the sandbox with nothing left able to find them. That is what used to
+ * happen — `clearLocalDb` dropped the `pins` table's rows and the plaintext
+ * they pointed at outlived both the sign-out and the deleted account.
+ *
+ * Best effort per file: one that cannot be removed must not stop the rest, and
+ * neither may stop a sign-out.
+ */
+export async function clearPinnedMedia(): Promise<void> {
+  const pins = await allPins();
+  for (const pin of pins) {
+    if (Capacitor.isNativePlatform()) {
+      await Filesystem.deleteFile({ path: pin.file_path, directory: Directory.Data }).catch(
+        () => {}
+      );
+    }
+    await removePin(pin.message_id);
   }
 }
 

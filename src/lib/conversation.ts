@@ -128,8 +128,38 @@ export function fileExtension(file: File): string {
   return file.type.split('/')[1] ?? 'bin';
 }
 
-/** Max characters in a message body or media caption; matches the
- *  `content_length` CHECK constraint on public.messages. */
+/**
+ * The columns a soft delete writes.
+ *
+ * A tombstone has no body of any kind: no ciphertext, no attachment, and no
+ * key that would open one. `has_body` exempts a deleted row precisely so it can
+ * be stripped this far (see 0023).
+ *
+ * Named and exported so the payload can be *tested*, which is the whole reason
+ * it left `useMessageEditing.deleteMessage`. That version still wrote `content: ''` as
+ * the placeholder 0001's constraint used to demand — a column 0023 dropped, so
+ * PostgREST rejected the whole update (PGRST204) and nothing could be deleted
+ * at all. A patch built here cannot name a column that no longer exists without
+ * `noDroppedColumns` in conversation.test.ts saying so.
+ */
+export function tombstonePatch(now: string = new Date().toISOString()) {
+  return {
+    deleted_at: now,
+    ciphertext: null,
+    nonce: null,
+    media_path: null,
+    media_type: null,
+    media_key_ciphertext: null,
+    media_key_nonce: null,
+    // A length describing a file that is no longer named is a fact about
+    // something that is not there; the media trim nulls it for the same reason.
+    media_duration_ms: null,
+  };
+}
+
+/** Max characters in a message body or media caption. The server-side
+ *  `content_length` CHECK went with the `content` column in 0023, so this is
+ *  now the only limit — the sealed length is not something Postgres can judge. */
 export const MAX_MESSAGE_LENGTH = 2000;
 
 /** Newest N photos/videos kept per conversation. */

@@ -152,7 +152,7 @@ export function describeForwardFailure(reason: ForwardFailure, label: string): s
  * re-uploaded: the caller is a participant of both conversations, so the copy
  * passes the `chat-media` policies at both ends, and a 50 MB video never
  * touches the device. A copy that succeeds but whose row insert then fails is
- * cleaned up, mirroring `ChatRoom.sendMedia` — otherwise a rejected forward
+ * cleaned up, mirroring `useMediaSend.send` — otherwise a rejected forward
  * would leave an orphaned object against the destination's storage.
  */
 export async function forwardMessage(

@@ -9,6 +9,7 @@ import {
   mediaPath,
   messageSnippet,
   sortConversations,
+  tombstonePatch,
 } from './conversation';
 import type { Message } from './types';
 
@@ -223,5 +224,45 @@ describe('messageSnippet', () => {
     expect(messageSnippet(message({ text: 'oops', deleted_at: new Date().toISOString() }))).toBe(
       'Deleted message'
     );
+  });
+});
+
+describe('tombstonePatch', () => {
+  // Every column `messages` still has after 0023, so a patch naming anything
+  // else is naming a column PostgREST will reject the whole update over.
+  const LIVE_COLUMNS = new Set([
+    'id',
+    'user_id',
+    'receiver_id',
+    'ciphertext',
+    'nonce',
+    'media_path',
+    'media_type',
+    'media_key_ciphertext',
+    'media_key_nonce',
+    'media_duration_ms',
+    'reply_to_id',
+    'forwarded',
+    'edited_at',
+    'deleted_at',
+    'created_at',
+  ]);
+
+  it('names only columns the table still has', () => {
+    // The regression this exists for: the delete used to write `content: ''`,
+    // dropped in 0023, and PostgREST refused the update — so nothing could be
+    // deleted at all.
+    const named = Object.keys(tombstonePatch());
+    expect(named.filter((c) => !LIVE_COLUMNS.has(c))).toEqual([]);
+    expect(named).not.toContain('content');
+  });
+
+  it('leaves no body, attachment or key behind', () => {
+    const patch = tombstonePatch('2026-08-07T10:00:00.000Z');
+    expect(patch.deleted_at).toBe('2026-08-07T10:00:00.000Z');
+    for (const [column, value] of Object.entries(patch)) {
+      if (column === 'deleted_at') continue;
+      expect(value).toBeNull();
+    }
   });
 });

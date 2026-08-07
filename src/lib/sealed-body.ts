@@ -1,7 +1,7 @@
 import { fromBase64, toBase64, type Identity } from './crypto/keys';
 import { openForSelf, openFrom, sealFor, sealForSelf } from './crypto/seal';
 import { isSelfChat } from './conversation';
-import { cacheMessage } from './localdb';
+import { cacheMessage, forgetCachedMessage } from './localdb';
 
 export interface BodyColumns {
   ciphertext: string;
@@ -131,7 +131,8 @@ export type Opened<T> = T & {
  * is a failure in that case whether it carries a body or not.
  */
 export async function openRows<
-  T extends Readable & MediaKeyed & { id: string; created_at: string },
+  T extends Readable &
+    MediaKeyed & { id: string; created_at: string; deleted_at?: string | null },
 >(
   identity: Identity | null,
   peerPublic: Uint8Array | null,
@@ -140,6 +141,15 @@ export async function openRows<
 ): Promise<Opened<T>[]> {
   return Promise.all(
     rows.map(async (row) => {
+      // A tombstone arriving here — the peer deleted their message, or this is
+      // a refetch of one we deleted — has to take the mirrored plaintext with
+      // it. Done at the read boundary rather than at the delete, because only
+      // one side of a deletion runs `deleteMessage`; the other side only ever
+      // sees the stripped row come back.
+      if (row.deleted_at) {
+        await forgetCachedMessage(row.id);
+        return { ...row, text: null, media_key: null, decrypt_failed: false };
+      }
       // No identity yet: the row is sealed and unopenable, which is exactly
       // what decrypt_failed describes.
       const text = identity ? await openBody(identity, peerPublic, row) : null;

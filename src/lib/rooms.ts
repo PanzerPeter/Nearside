@@ -183,6 +183,14 @@ function forgetRoomKey(roomId: string): void {
   keyCache.delete(roomId);
 }
 
+/** Drop every opened room key. Called when a session ends: these are the
+ *  plaintext symmetric keys for whole conversations, and they have no business
+ *  outliving the account that was allowed to open them — least of all on a
+ *  phone somebody else is about to sign into. */
+export function forgetAllRoomKeys(): void {
+  keyCache.clear();
+}
+
 /**
  * This account's copy of the room key, or null if there is no row for them —
  * which means they are not a member, or were removed. Null is an error state

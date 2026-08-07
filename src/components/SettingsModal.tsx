@@ -15,6 +15,7 @@ import { isSoundMuted, setSoundMuted } from '../lib/sound';
 import { confirmsUsername } from '../lib/account';
 import { clearAll } from '../lib/outbox';
 import { clearLocalDb } from '../lib/localdb';
+import { clearPinnedMedia } from '../lib/pins';
 import { clearSeed } from '../lib/keystore';
 import { permissionSettingsLocation } from '../lib/device';
 import { useToast } from '../hooks/useToast';
@@ -257,6 +258,10 @@ export function SettingsModal({ session, profile, onUpdated, onClose }: Settings
       // a deleted account's plaintext and key material on a phone that may well
       // have another account signed into it.
       await clearAll();
+      // Before `clearLocalDb`: the pin rows are the only map to the decrypted
+      // files in the sandbox, and a deleted account must not leave its photos
+      // and voice notes behind on a phone somebody else uses.
+      await clearPinnedMedia().catch(() => {});
       await clearLocalDb();
       await clearSeed(session.user.id);
       await supabase.auth.signOut();

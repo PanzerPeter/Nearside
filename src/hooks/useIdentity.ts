@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { generateMnemonic, seedFromMnemonic } from '../lib/crypto/mnemonic';
 import { identityFromSeed, type Identity } from '../lib/crypto/keys';
-import { clearSeed, isSeedConfirmed, loadSeed, markSeedConfirmed, storeSeed } from '../lib/keystore';
+import { isSeedConfirmed, loadSeed, markSeedConfirmed, storeSeed } from '../lib/keystore';
 import { setRecoveryConfirmed } from '../lib/notifications';
 
 type Status = 'loading' | 'missing' | 'unconfirmed' | 'ready';
@@ -101,12 +101,5 @@ export function useIdentity(session: Session | null) {
     [userId]
   );
 
-  const forgetIdentity = useCallback(async (): Promise<void> => {
-    if (!userId) return;
-    await clearSeed(userId);
-    setIdentity(null);
-    setStatus('missing');
-  }, [userId]);
-
-  return { identity, status, createIdentity, confirmIdentity, restoreIdentity, forgetIdentity };
+  return { identity, status, createIdentity, confirmIdentity, restoreIdentity };
 }
