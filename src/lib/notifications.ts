@@ -27,11 +27,42 @@ export const RECOVERY_TAG = 'recovery_confirmed';
 type OneSignalModule = typeof import('onesignal-cordova-plugin').default;
 let plugin: OneSignalModule | null = null;
 
+/** How many `default` wrappers to unwrap before giving up. Two is the deepest
+ *  shape observed; the bound is here so a cyclic namespace cannot hang. */
+const MAX_DEFAULT_DEPTH = 4;
+
+/**
+ * The plugin instance inside whatever the dynamic import hands back.
+ *
+ * `onesignal-cordova-plugin` declares `"type": "module"` but ships a CommonJS
+ * `main`, so the bundler wraps it twice: the namespace's `default` is the CJS
+ * exports object, and the instance is one level below that at
+ * `.default.default`. Reading `.default` gave a bag of exported classes with no
+ * `initialize` on it, every call in this module threw into its own catch, and
+ * the whole notification stack failed without a word — the Settings toggle
+ * refused to turn on, and OneSignal's native side logged "no appId provided" at
+ * every launch because `initialize` had never reached it.
+ *
+ * Unwrapping by feature rather than by a fixed number of hops keeps this
+ * working whichever shape a future bundler or plugin release produces.
+ */
+export function resolveOneSignal(mod: unknown): OneSignalModule | null {
+  let candidate = mod;
+  for (let depth = 0; depth <= MAX_DEFAULT_DEPTH; depth++) {
+    if (typeof candidate !== 'object' || candidate === null) return null;
+    const record = candidate as Record<string, unknown>;
+    if (typeof record.initialize === 'function') return candidate as OneSignalModule;
+    if (record.default === candidate) return null;
+    candidate = record.default;
+  }
+  return null;
+}
+
 async function oneSignal(): Promise<OneSignalModule | null> {
   if (!Capacitor.isNativePlatform()) return null;
   if (plugin) return plugin;
   try {
-    plugin = (await import('onesignal-cordova-plugin')).default;
+    plugin = resolveOneSignal(await import('onesignal-cordova-plugin'));
     return plugin;
   } catch {
     return null;

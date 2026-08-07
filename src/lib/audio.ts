@@ -63,6 +63,51 @@ export function audioExtension(mime: string): string {
   }
 }
 
+/**
+ * The loudest sample in one analyser window, as an absolute amplitude.
+ *
+ * Peak rather than RMS: the question this answers is "did anything at all
+ * reach the microphone", and a single word in an otherwise quiet room barely
+ * moves an RMS average over a 20 ms window.
+ */
+export function peakAmplitude(samples: Float32Array): number {
+  let peak = 0;
+  for (let i = 0; i < samples.length; i++) {
+    const value = Math.abs(samples[i]);
+    if (Number.isFinite(value) && value > peak) peak = value;
+  }
+  return peak;
+}
+
+/**
+ * Below this peak, nothing was recorded.
+ *
+ * A microphone that is muted, missing, or (as on an emulator started with
+ * `-no-audio`) simply not wired to anything still produces a valid stream, a
+ * valid Opus file and a valid duration. The only thing that distinguishes it
+ * from a working recording is the amplitude, so that is what gets checked. A
+ * dead input measures around 1e-4; ordinary speech, even quiet and far from the
+ * phone, is two orders of magnitude above this.
+ */
+export const SILENT_PEAK = 0.005;
+
+/** Whether a recording's loudest moment never rose above the noise floor. */
+export function capturedSilence(peak: number): boolean {
+  return !(peak > SILENT_PEAK);
+}
+
+/**
+ * A 0..1 meter position for a peak amplitude.
+ *
+ * Cube root rather than linear, because loudness is not: a normal speaking
+ * voice peaks somewhere around 0.05 to 0.2, which a linear bar would paint as
+ * almost nothing and which would make a working microphone look broken.
+ */
+export function meterLevel(peak: number): number {
+  if (!Number.isFinite(peak) || peak <= 0) return 0;
+  return Math.min(1, Math.cbrt(Math.min(peak, 1)));
+}
+
 /** Whether this browser can record voice at all; gates the mic button. */
 export function voiceRecordingSupported(): boolean {
   if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) return false;

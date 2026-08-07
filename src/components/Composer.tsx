@@ -77,6 +77,8 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   const [attachOpen, setAttachOpen] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [hint, setHint] = useState<string | null>(null);
+  // Whether the staged recording is the one the meter heard nothing during.
+  const [silentTake, setSilentTake] = useState(false);
 
   // Probed once: neither answer changes without a reload in practice, and
   // re-running matchMedia on every render would be noise.
@@ -93,10 +95,14 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   // A local object URL to preview the staged image/video; revoked on change.
   // Voice notes get their duration rendered instead, so they need no URL.
   useEffect(() => {
+    // The warning belongs to one recording. Anything else taking the staged
+    // slot, including a photo, clears it.
+    if (!stagedFile) setSilentTake(false);
     if (!stagedFile || stagedFile.type.startsWith('audio/')) {
       setPreviewUrl(null);
       return;
     }
+    setSilentTake(false);
     const url = URL.createObjectURL(stagedFile);
     setPreviewUrl(url);
     return () => URL.revokeObjectURL(url);
@@ -115,6 +121,11 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
         setHint('Hold to record');
         return;
       }
+      // A microphone that is muted, or held by another app, still yields a
+      // perfectly valid file of nothing at all. Stage it anyway and say so on
+      // the preview: the meter can be wrong, and a recording someone means to
+      // send is not ours to throw away.
+      setSilentTake(recording.silent);
       onStageFile(recording.file, recording.durationMs);
     },
     [onStageFile]
@@ -341,6 +352,11 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
                 : `${(stagedFile.size / (1024 * 1024)).toFixed(1)} MB`}{' '}
               · press Send
             </p>
+            {silentTake && (
+              <p className="mt-0.5 text-xs text-warning">
+                No sound came through. Check the microphone before you send this.
+              </p>
+            )}
           </div>
           <button
             type="button"
@@ -415,6 +431,22 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
               <span className="w-2.5 h-2.5 rounded-full bg-error animate-pulse shrink-0" />
               <span className="font-mono text-sm tabular-nums">
                 {formatDuration(recorder.elapsedMs)}
+              </span>
+              {/* The one thing on screen that proves the microphone is picking
+                  anything up. Recording silence looks identical to recording a
+                  voice right up until the moment it is played back. */}
+              <span
+                className="h-4 flex-1 min-w-8 max-w-24 overflow-hidden rounded-full bg-base-content/10"
+                role="meter"
+                aria-label="Microphone level"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={Math.round(recorder.level * 100)}
+              >
+                <span
+                  className="block h-full rounded-full bg-error transition-[width] duration-100 ease-out"
+                  style={{ width: `${Math.max(2, recorder.level * 100)}%` }}
+                />
               </span>
               <span className="text-xs text-base-content/60 truncate">
                 {cancelArmed

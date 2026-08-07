@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { audioExtension, baseMime, formatDuration, pickAudioMime } from './audio';
+import {
+  audioExtension,
+  baseMime,
+  capturedSilence,
+  formatDuration,
+  meterLevel,
+  peakAmplitude,
+  pickAudioMime,
+  SILENT_PEAK,
+} from './audio';
 
 describe('pickAudioMime', () => {
   it('prefers Opus in WebM where it is available', () => {
@@ -44,6 +53,62 @@ describe('audioExtension', () => {
 
   it('defaults to webm for anything unrecognised, rather than an empty suffix', () => {
     expect(audioExtension('audio/exotic')).toBe('webm');
+  });
+});
+
+describe('peakAmplitude', () => {
+  it('reports the loudest sample in the window, regardless of sign', () => {
+    expect(peakAmplitude(Float32Array.from([0.1, -0.7, 0.3]))).toBeCloseTo(0.7);
+  });
+
+  it('reports zero for an empty window rather than -Infinity', () => {
+    expect(peakAmplitude(new Float32Array(0))).toBe(0);
+  });
+
+  it('ignores non-finite samples, which some engines emit on a dropped buffer', () => {
+    expect(peakAmplitude(Float32Array.from([Number.NaN, 0.2, Number.POSITIVE_INFINITY]))).toBeCloseTo(
+      0.2
+    );
+  });
+});
+
+describe('capturedSilence', () => {
+  // The emulator this app is developed against was running with -no-audio, so
+  // every voice note recorded on it was several seconds of digital silence that
+  // looked identical to a working one. The threshold sits above a real mic's
+  // noise floor (measured around 1e-4 on a dead input) and far below speech.
+  it('calls a dead input silent', () => {
+    expect(capturedSilence(0)).toBe(true);
+    expect(capturedSilence(0.0001)).toBe(true);
+  });
+
+  it('does not call quiet speech silent', () => {
+    expect(capturedSilence(0.05)).toBe(false);
+    expect(capturedSilence(0.6)).toBe(false);
+  });
+
+  it('puts the boundary where the constant says it is', () => {
+    expect(capturedSilence(SILENT_PEAK)).toBe(true);
+    expect(capturedSilence(SILENT_PEAK * 1.01)).toBe(false);
+  });
+});
+
+describe('meterLevel', () => {
+  it('maps silence to an empty meter and a loud peak to a full one', () => {
+    expect(meterLevel(0)).toBe(0);
+    expect(meterLevel(1)).toBe(1);
+  });
+
+  it('clamps rather than overflowing on a sample above full scale', () => {
+    expect(meterLevel(3)).toBe(1);
+    expect(meterLevel(-2)).toBe(0);
+  });
+
+  it('lifts quiet speech into a visible part of the bar', () => {
+    // Linear amplitude would paint an ordinary speaking voice as a sliver, so
+    // the meter has to be perceptual to be worth showing at all.
+    expect(meterLevel(0.05)).toBeGreaterThan(0.2);
+    expect(meterLevel(0.05)).toBeLessThan(meterLevel(0.5));
   });
 });
 
