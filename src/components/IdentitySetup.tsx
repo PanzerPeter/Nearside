@@ -6,12 +6,27 @@ interface Props {
    *  this is the human confirming they hold a copy. */
   onConfirm: () => Promise<void>;
   onRestore: (phrase: string) => Promise<void>;
+  /** Whose key this is. Keys are per account, so on a phone with more than one
+   *  the screen has to say which account it is about to mint or restore a key
+   *  for — restoring the wrong phrase into the wrong account is silent
+   *  otherwise, and only shows up later as messages that will not open. */
+  account: string;
+  /** The only way off this screen without finishing. Without it, signing in as
+   *  the wrong account strands the user on a phrase prompt with no exit. */
+  onSignOut: () => void;
   secureStorage: boolean;
 }
 
 type Stage = 'choose' | 'show' | 'confirm' | 'restore';
 
-export function IdentitySetup({ onCreate, onConfirm, onRestore, secureStorage }: Props) {
+export function IdentitySetup({
+  onCreate,
+  onConfirm,
+  onRestore,
+  account,
+  onSignOut,
+  secureStorage,
+}: Props) {
   const [stage, setStage] = useState<Stage>('choose');
   const [phrase, setPhrase] = useState('');
   const [typed, setTyped] = useState('');
@@ -58,6 +73,10 @@ export function IdentitySetup({ onCreate, onConfirm, onRestore, secureStorage }:
             </div>
           )}
 
+          <p className="text-xs text-base-content/50">
+            Signed in as <span className="font-medium text-base-content/70">{account}</span>
+          </p>
+
           {stage === 'choose' && (
             <>
               <h1 className="card-title">Your key</h1>
@@ -65,9 +84,16 @@ export function IdentitySetup({ onCreate, onConfirm, onRestore, secureStorage }:
                 Nearside encrypts your vault and your messages on this device. The key never leaves
                 it, so we cannot reset it for you — your recovery phrase is the only way back in.
               </p>
+              <p className="text-sm text-base-content/70">
+                Each account has its own key. If you use more than one account on this phone, each
+                one needs its own phrase.
+              </p>
               <button className="btn btn-primary" onClick={begin}>Create a new key</button>
               <button className="btn btn-ghost" onClick={() => setStage('restore')}>
                 I have a recovery phrase
+              </button>
+              <button className="btn btn-ghost btn-sm" onClick={onSignOut}>
+                Sign out
               </button>
             </>
           )}

@@ -2,6 +2,9 @@
 // conversation list read from once 0023 takes those capabilities away from
 // Postgres. It holds plaintext at rest in app-private storage, which spec §7
 // discloses rather than hides.
+//
+// One store per account, never one per device: two people sharing a phone must
+// not find each other's decrypted messages in their own search results.
 import { Capacitor } from '@capacitor/core';
 import {
   CapacitorSQLite,
@@ -17,7 +20,9 @@ export interface CachedMessage {
   created_at: string;
 }
 
-const DB_NAME = 'nearside-local';
+/** The database file is named for the account, so the isolation is the
+ *  filesystem's rather than a WHERE clause somebody can forget to write. */
+const dbName = (userId: string) => `nearside-local-${userId}`;
 
 /** Newest first, the order both drivers return rows in. */
 const NEWEST_FIRST = (a: CachedMessage, b: CachedMessage) =>
@@ -38,24 +43,50 @@ CREATE INDEX IF NOT EXISTS messages_cache_peer_time
 `;
 
 let db: SQLiteDBConnection | null = null;
+/** Whose store is currently open. Reads and writes with no owner are no-ops:
+ *  writing to the last account's store because this one has not opened yet is
+ *  the exact leak the scoping exists to prevent. */
+let owner: string | null = null;
 /** Test and web-development driver. Native builds never touch this. */
-const memory = new Map<string, CachedMessage>();
+const memory = new Map<string, Map<string, CachedMessage>>();
 
 function native(): boolean {
   return Capacitor.isNativePlatform();
 }
 
-export async function openLocalDb(): Promise<void> {
-  if (!native() || db) return;
-  const sqlite = new SQLiteConnection(CapacitorSQLite);
-  db = await sqlite.createConnection(DB_NAME, false, 'no-encryption', 1, false);
-  await db.open();
-  await db.execute(SCHEMA);
+function memoryStore(): Map<string, CachedMessage> | null {
+  if (!owner) return null;
+  let store = memory.get(owner);
+  if (!store) {
+    store = new Map();
+    memory.set(owner, store);
+  }
+  return store;
+}
+
+/** Opens the store belonging to `userId`, closing whichever one was open. */
+export async function openLocalDb(userId: string): Promise<void> {
+  if (owner === userId && (db || !native())) return;
+
+  if (native()) {
+    const sqlite = new SQLiteConnection(CapacitorSQLite);
+    if (db && owner) {
+      await db.close();
+      await sqlite.closeConnection(dbName(owner), false);
+      db = null;
+    }
+    owner = userId;
+    db = await sqlite.createConnection(dbName(userId), false, 'no-encryption', 1, false);
+    await db.open();
+    await db.execute(SCHEMA);
+    return;
+  }
+  owner = userId;
 }
 
 export async function cacheMessage(row: CachedMessage): Promise<void> {
   if (!native()) {
-    memory.set(row.id, row);
+    memoryStore()?.set(row.id, row);
     return;
   }
   await db?.run(
@@ -68,7 +99,9 @@ export async function cacheMessage(row: CachedMessage): Promise<void> {
 
 export async function cachedPreview(peerId: string): Promise<CachedMessage | null> {
   if (!native()) {
-    const rows = [...memory.values()].filter((r) => r.peer_id === peerId).sort(NEWEST_FIRST);
+    const rows = [...(memoryStore()?.values() ?? [])]
+      .filter((r) => r.peer_id === peerId)
+      .sort(NEWEST_FIRST);
     return rows[0] ?? null;
   }
   const res = await db?.query(
@@ -87,7 +120,7 @@ export async function searchCached(peerId: string, query: string): Promise<Cache
     // a difference here is a bug the test suite could never see, because the
     // suite only ever runs this branch.
     const lowered = needle.toLowerCase();
-    return [...memory.values()]
+    return [...(memoryStore()?.values() ?? [])]
       .filter((r) => r.peer_id === peerId && r.text.toLowerCase().includes(lowered))
       .sort(NEWEST_FIRST)
       .slice(0, SEARCH_LIMIT);
@@ -104,7 +137,12 @@ export async function searchCached(peerId: string, query: string): Promise<Cache
   return (res?.values as CachedMessage[]) ?? [];
 }
 
+/** Empties the open account's store. Signing out must not take the other
+ *  account's messages with it. */
 export async function clearLocalDb(): Promise<void> {
-  memory.clear();
-  if (native()) await db?.execute('DELETE FROM messages_cache');
+  if (!native()) {
+    memoryStore()?.clear();
+    return;
+  }
+  await db?.execute('DELETE FROM messages_cache');
 }

@@ -13,6 +13,8 @@ import { AVATAR_MAX_EDGE, compressImage } from '../lib/compress';
 import { isSoundMuted, setSoundMuted } from '../lib/sound';
 import { confirmsUsername } from '../lib/account';
 import { clearAll } from '../lib/outbox';
+import { clearLocalDb } from '../lib/localdb';
+import { clearSeed } from '../lib/keystore';
 import { useToast } from '../hooks/useToast';
 import { Modal } from './Modal';
 import { Camera, Bell, Volume2 } from 'lucide-react';
@@ -214,8 +216,13 @@ export function SettingsModal({ session, profile, onUpdated, onClose }: Settings
     try {
       // The server side of this account is gone; unsent drafts sitting in
       // IndexedDB are the last copy of the user's content on this device, and
-      // "delete my account" has to mean them too.
+      // "delete my account" has to mean them too. So are this account's
+      // decrypted mirror and its private key — leaving either behind would keep
+      // a deleted account's plaintext and key material on a phone that may well
+      // have another account signed into it.
       await clearAll();
+      await clearLocalDb();
+      await clearSeed(session.user.id);
       await supabase.auth.signOut();
     } finally {
       window.location.reload();

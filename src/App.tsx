@@ -46,12 +46,15 @@ function App() {
     if (!session) setUnreadTotal(0);
   }, [session]);
 
-  // Open the local mirror once, before anything tries to write to it. Every
+  // Open this account's mirror before anything tries to write to it. Every
   // cache call is a silent no-op until the connection exists, so a missed open
   // would not fail — it would just leave search and previews permanently empty.
+  // Keyed on the account: the store holds decrypted text, and the next person
+  // to sign in on this phone gets their own.
+  const userId = session?.user.id ?? null;
   useEffect(() => {
-    void openLocalDb();
-  }, []);
+    if (userId) void openLocalDb(userId);
+  }, [userId]);
 
   const fetchMyProfile = useCallback(async () => {
     if (!session) return;
@@ -109,6 +112,16 @@ function App() {
   // Unlock Web Audio on the first user gesture.
   useEffect(() => {
     initSoundUnlock();
+  }, []);
+
+  // Queued-but-unsent bodies are message content; they should not outlive the
+  // session that wrote them on a shared device. The local mirror holds
+  // decrypted text for the same reason and goes with it — the account's own
+  // mirror, not the device's, so the other account keeps its history.
+  const signOut = useCallback(async () => {
+    await clearAll();
+    await clearLocalDb();
+    await supabase.auth.signOut();
   }, []);
 
   // Keep this device's push subscription registered for the logged-in user.
@@ -195,6 +208,8 @@ function App() {
         onCreate={createIdentity}
         onConfirm={confirmIdentity}
         onRestore={restoreIdentity}
+        account={myProfile?.display_name ?? session.user.email ?? 'this account'}
+        onSignOut={() => void signOut()}
         secureStorage={isSecureStorageAvailable()}
       />
     );
@@ -230,15 +245,7 @@ function App() {
             <Settings className="w-4 h-4" />
           </button>
           <button
-            onClick={async () => {
-              // Queued-but-unsent bodies are message content; they should not
-              // outlive the session that wrote them on a shared device. The
-              // local mirror holds decrypted text for the same reason and goes
-              // with it.
-              await clearAll();
-              await clearLocalDb();
-              await supabase.auth.signOut();
-            }}
+            onClick={() => void signOut()}
             className="btn btn-ghost btn-sm btn-square hover:bg-base-content/10 transition-colors"
             title="Sign Out"
           >
