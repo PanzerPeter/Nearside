@@ -39,6 +39,10 @@ import { clearPinnedMedia } from './lib/pins';
 import { forgetAllPeerKeys } from './lib/peer-keys';
 import { forgetAllRoomKeys } from './lib/rooms';
 import { useMobileBackClose } from './hooks/useMobileBackClose';
+import { useAppLock } from './hooks/useAppLock';
+import { AppLockScreen } from './components/AppLockScreen';
+import { clearLock } from './lib/app-lock';
+import { setScreenGuard } from './lib/screen-guard';
 import { MessageSquare, Settings } from 'lucide-react';
 
 function App() {
@@ -79,9 +83,25 @@ function App() {
   // because the store holds decrypted text and the next person to sign in on
   // this phone gets their own.
   const userId = session?.user.id ?? null;
+
+  const appLock = useAppLock(userId);
+  const unlocked = appLock.state === 'off' || appLock.state === 'unlocked';
+
+  // Held closed while locked. The decrypted mirror is the one place on the
+  // device holding message plaintext; a lock that hides a screen while the
+  // mirror is open and queried is a screensaver.
   useEffect(() => {
-    if (userId) void openLocalDb(userId);
-  }, [userId]);
+    if (!userId || !unlocked) return;
+    void openLocalDb(userId);
+  }, [userId, unlocked]);
+
+  // Held whenever the feature is enabled, not only while the lock screen is up.
+  // The leak this closes is the recents-switcher thumbnail: a task-switcher
+  // preview of an open conversation is readable without unlocking anything.
+  useEffect(() => {
+    if (appLock.state === 'loading') return;
+    void setScreenGuard(appLock.state !== 'off', 'app-lock');
+  }, [appLock.state]);
 
   const fetchMyProfile = useCallback(async () => {
     if (!session) return;
@@ -147,6 +167,11 @@ function App() {
     // thing that knows where they are.
     await clearPinnedMedia().catch(() => {});
     await clearLocalDb();
+    // Per-account, like the seed and the peer-key cache. Left behind, the next
+    // account to sign in on this phone meets the previous owner's lock screen
+    // and cannot get past it.
+    if (userId) await clearLock(userId).catch(() => {});
+    await setScreenGuard(false, 'app-lock').catch(() => {});
     // In-memory key caches, which no store clears. See `forgetAllPeerKeys` for
     // why a surviving peer key breaks key-change detection for the next
     // account, and `forgetAllRoomKeys` for why room keys must not outlive the
@@ -156,7 +181,7 @@ function App() {
     await clearExternalUserId().catch(() => {});
     await logOutPurchases().catch(() => {});
     await supabase.auth.signOut();
-  }, []);
+  }, [userId]);
 
   // Bind this device to the account for notifications, and start the store.
   // Both are best effort: neither failing may stop the messenger running.
@@ -229,6 +254,26 @@ function App() {
 
   if (!session) {
     return <AuthForm />;
+  }
+
+  if (appLock.state === 'loading') {
+    return (
+      <div className="h-dvh flex items-center justify-center bg-base-300">
+        <span className="loading loading-spinner loading-lg text-primary" />
+      </div>
+    );
+  }
+
+  // Outside the identity gate, so a locked phone does not show a recovery-phrase
+  // prompt — or anything else — to whoever is holding it.
+  if (appLock.state === 'locked') {
+    return (
+      <AppLockScreen
+        onUnlock={appLock.unlock}
+        waitMs={appLock.waitMs}
+        onSignOut={() => void signOut()}
+      />
+    );
   }
 
   if (identityStatus === 'loading') {

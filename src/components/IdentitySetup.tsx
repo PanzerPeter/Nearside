@@ -40,9 +40,9 @@ export function IdentitySetup({
   // leaves a window where the recents thumbnail catches the words.
   const guarded = stage === 'show' || stage === 'confirm';
   useEffect(() => {
-    void setScreenGuard(guarded);
+    void setScreenGuard(guarded, 'recovery-phrase');
     return () => {
-      void setScreenGuard(false);
+      void setScreenGuard(false, 'recovery-phrase');
     };
   }, [guarded]);
 

@@ -13,11 +13,31 @@ interface ScreenGuardPlugin {
 
 const ScreenGuard = registerPlugin<ScreenGuardPlugin>('ScreenGuard');
 
-/** Block screenshots, screen recording and the recents thumbnail, or stop. */
-export async function setScreenGuard(on: boolean): Promise<void> {
-  if (!Capacitor.isNativePlatform()) return;
+/**
+ * Who currently wants the flag held.
+ *
+ * The flag is one global boolean and there is more than one reason to want it:
+ * the recovery-phrase screen holds it for two stages, and the app lock holds it
+ * for the whole session. Without this set, whichever of them released last won
+ * — unmounting the phrase screen cleared the lock's hold, and the recents
+ * thumbnail was exposed for the rest of the session with the lock still on.
+ */
+const holders = new Set<string>();
+
+/**
+ * Block screenshots, screen recording and the recents thumbnail, or stop.
+ *
+ * `reason` names the caller so two of them can hold it independently. Callers
+ * that release must pass the same reason they took it with.
+ */
+export async function setScreenGuard(on: boolean, reason = 'default'): Promise<void> {
+  const wanted = holders.size > 0;
+  if (on) holders.add(reason);
+  else holders.delete(reason);
+  const nowWanted = holders.size > 0;
+  if (!Capacitor.isNativePlatform() || nowWanted === wanted) return;
   try {
-    await (on ? ScreenGuard.enable() : ScreenGuard.disable());
+    await (nowWanted ? ScreenGuard.enable() : ScreenGuard.disable());
   } catch {
     // An older install without the plugin must not strand the caller. The
     // screen it protects is still worth showing; it is just not protected.
