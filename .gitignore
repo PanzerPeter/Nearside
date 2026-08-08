@@ -33,3 +33,4 @@ android/keystore.properties
 # which already covers Pods/, DerivedData and the copied web assets.
 
 CLAUDE.md
+docs/
