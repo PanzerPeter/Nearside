@@ -23,7 +23,12 @@ import { NotificationsPrompt } from './components/NotificationsPrompt';
 import { useAppBadge } from './hooks/useAppBadge';
 import { PresenceProvider } from './hooks/usePresence';
 import { initSoundUnlock } from './lib/sound';
-import { clearExternalUserId, initNotifications, onNotificationOpened } from './lib/notifications';
+import {
+  clearExternalUserId,
+  initNotifications,
+  onNotificationOpened,
+  setHasContacts,
+} from './lib/notifications';
 import {
   applyTheme,
   initPurchases,
@@ -190,6 +195,18 @@ function App() {
     void initNotifications(userId);
     void initPurchases(userId);
   }, [userId]);
+
+  // Reported whenever the friend list settles, not only on the first accepted
+  // request: `FriendsList` re-reports on every pass, so this converges even if
+  // the write that added the friendship happened on another device.
+  //
+  // Gated on a ready identity so an account still stuck on the phrase screen is
+  // not also told about connect codes — that account has one thing to do, and
+  // the recovery journey is the one addressing it.
+  useEffect(() => {
+    if (!userId || identityStatus !== 'ready') return;
+    void setHasContacts(friendIds.length > 0);
+  }, [userId, identityStatus, friendIds.length]);
 
   // The stored theme applies before any entitlement check finishes, so a
   // paying user never gets a frame of the default look, then reconciles,
