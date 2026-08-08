@@ -1,6 +1,8 @@
 # Supabase setup
 
-Project **`REDACTED-PROJECT-REF`**. Migrations `0001`–`0025` are live on it.
+Migrations `0001`–`0025` are live on the project named in `.env`. The project ref
+is deliberately not written down here: it is the API host, it is not rotatable,
+and a public repo is no place to hand out a target for free.
 
 `0001`–`0019a` were replayed onto this project during Plan 1; `0020` onward were
 applied individually and are the ones the migration history table records. The
@@ -92,7 +94,7 @@ Policies key `chat-media` off the conversation folder
   leaves the account intact and the call safe to retry.
 
   ```bash
-  supabase functions deploy delete-account --project-ref REDACTED-PROJECT-REF
+  supabase functions deploy delete-account --project-ref "$SUPABASE_PROJECT_REF"
   ```
 
   It runs with `verify_jwt` on and needs no secrets — `SUPABASE_URL`,
