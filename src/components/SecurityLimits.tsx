@@ -1,4 +1,4 @@
-import { AlertTriangle, Check, Clock, ShieldAlert, X } from 'lucide-react';
+import { AlertTriangle, Check, Clock, Lock, ShieldAlert, X } from 'lucide-react';
 import { Modal } from './Modal';
 
 interface SecurityLimitsProps {
@@ -63,6 +63,19 @@ export function SecurityLimits({ onClose }: SecurityLimitsProps) {
             If your key is ever stolen, every message an attacker also captured can be decrypted,
             including old ones. Signal&rsquo;s ratchet prevents this by changing keys constantly.
             Nearside does not implement it.
+          </p>
+        </section>
+
+        <section className="rounded-xl border border-base-content/10 bg-base-200/40 p-3.5">
+          <h4 className="flex items-center gap-2 font-medium text-sm">
+            <Lock className="w-4 h-4 text-base-content/60" />
+            The app lock is not encryption
+          </h4>
+          <p className="text-sm text-base-content/75 leading-relaxed mt-2">
+            It asks for a passphrase before Nearside opens, and it keeps the decrypted copy of your
+            messages on this phone closed until you answer. It does not add a layer of encryption on
+            top of what is already there, and it does not protect against someone who can read this
+            phone&rsquo;s storage directly.
           </p>
         </section>
 

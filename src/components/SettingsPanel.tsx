@@ -24,6 +24,8 @@ import { ThemeStore } from './ThemeStore';
 import { OpenSourceLicenses } from './OpenSourceLicenses';
 import { SecurityLimits } from './SecurityLimits';
 import { LegalDocModal, type LegalDoc } from './LegalFooter';
+import { MIN_PASSPHRASE_LENGTH, type RelockAfter } from '../lib/app-lock';
+import type { AppLock } from '../hooks/useAppLock';
 import {
   Camera,
   Bell,
@@ -61,6 +63,9 @@ interface SettingsPanelProps {
   onUpdated: (profile: Profile) => void;
   /** Runs App.signOut, which tears down far more than the session. */
   onSignOut: () => void;
+  /** The one instance owned by `App`. Calling `useAppLock` again here would
+   *  build a second state machine and the gate would stop matching the toggle. */
+  appLock: AppLock;
 }
 
 /**
@@ -72,13 +77,40 @@ interface SettingsPanelProps {
  * page there is no footer to put it in, and a button that sits beside the field
  * it commits reads better in the dialog too.
  */
-export function SettingsPanel({ session, profile, onUpdated, onSignOut }: SettingsPanelProps) {
+export function SettingsPanel({
+  session,
+  profile,
+  onUpdated,
+  onSignOut,
+  appLock,
+}: SettingsPanelProps) {
   const [display_name, setUsername] = useState(profile.display_name);
   const [avatarUrl, setAvatarUrl] = useState(profile.avatar_url ?? null);
   const toast = useToast();
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  const [lockSetup, setLockSetup] = useState(false);
+  const [lockPhrase, setLockPhrase] = useState('');
+  const [lockRepeat, setLockRepeat] = useState('');
+  const [lockError, setLockError] = useState('');
+
+  async function saveAppLock() {
+    if (lockPhrase !== lockRepeat) {
+      setLockError('Those do not match.');
+      return;
+    }
+    try {
+      await appLock.enable(lockPhrase, appLock.relock);
+      setLockPhrase('');
+      setLockRepeat('');
+      setLockError('');
+      setLockSetup(false);
+    } catch (e) {
+      setLockError(e instanceof Error ? e.message : 'Could not set the lock.');
+    }
+  }
 
   // Whether the OS has granted notifications, as OneSignal reports it.
   // Deliberately NOT the WebView's `Notification.permission`: an Android
@@ -385,6 +417,101 @@ export function SettingsPanel({ session, profile, onUpdated, onSignOut }: Settin
             onChange={toggleSound}
           />
         </div>
+
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <Lock className="w-4 h-4 text-base-content/60 shrink-0" />
+            <div className="min-w-0">
+              <p className="text-sm font-medium">App lock</p>
+              <p className="text-xs text-base-content/60">
+                Ask for a passphrase before opening Nearside
+              </p>
+            </div>
+          </div>
+          <input
+            type="checkbox"
+            className="toggle toggle-primary shrink-0"
+            checked={appLock.state !== 'off' && appLock.state !== 'loading'}
+            onChange={(e) => {
+              if (e.target.checked) setLockSetup(true);
+              else void appLock.disable();
+            }}
+          />
+        </div>
+
+        {lockSetup && appLock.state === 'off' && (
+          <div className="rounded-box bg-base-200/60 p-3 space-y-2.5">
+            <p className="text-xs text-base-content/70">
+              This locks the app. It is not extra encryption — your key already sits in Android's
+              Keystore and your messages are already encrypted on this phone. What it stops is
+              someone picking up an unlocked phone and reading your conversations.
+            </p>
+            <p className="text-xs text-base-content/70">
+              There is no way to reset it. Forgetting it means signing out, which keeps your account
+              and your recovery phrase but clears the messages stored on this phone.
+            </p>
+            <input
+              type="password"
+              className="input input-bordered input-sm w-full"
+              placeholder={`Passphrase, at least ${MIN_PASSPHRASE_LENGTH} characters`}
+              value={lockPhrase}
+              onChange={(e) => {
+                setLockPhrase(e.target.value);
+                setLockError('');
+              }}
+              autoCapitalize="none"
+              autoCorrect="off"
+            />
+            <input
+              type="password"
+              className="input input-bordered input-sm w-full"
+              placeholder="Again"
+              value={lockRepeat}
+              onChange={(e) => {
+                setLockRepeat(e.target.value);
+                setLockError('');
+              }}
+              autoCapitalize="none"
+              autoCorrect="off"
+            />
+            {lockError && <p className="text-xs text-error">{lockError}</p>}
+            <div className="flex gap-2">
+              <button
+                className="btn btn-primary btn-sm flex-1"
+                disabled={lockPhrase.length < MIN_PASSPHRASE_LENGTH}
+                onClick={() => void saveAppLock()}
+              >
+                Turn on
+              </button>
+              <button
+                className="btn btn-ghost btn-sm"
+                onClick={() => {
+                  setLockSetup(false);
+                  setLockPhrase('');
+                  setLockRepeat('');
+                  setLockError('');
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        {appLock.state !== 'off' && appLock.state !== 'loading' && (
+          <label className="flex items-center justify-between gap-3 pl-6.5">
+            <span className="text-xs text-base-content/60">Lock after</span>
+            <select
+              className="select select-bordered select-sm"
+              value={appLock.relock}
+              onChange={(e) => void appLock.setRelock(e.target.value as RelockAfter)}
+            >
+              <option value="immediate">Leaving the app</option>
+              <option value="1m">1 minute</option>
+              <option value="5m">5 minutes</option>
+            </select>
+          </label>
+        )}
       </div>
 
       <div className="divider my-4" />

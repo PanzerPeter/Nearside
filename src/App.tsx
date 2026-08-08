@@ -432,6 +432,7 @@ function App() {
                   profile={myProfile}
                   onUpdated={(p) => setMyProfile(p)}
                   onSignOut={() => void signOut()}
+                  appLock={appLock}
                 />
               ) : (
                 <div className="flex justify-center py-10">
@@ -454,6 +455,7 @@ function App() {
           onUpdated={(p) => setMyProfile(p)}
           onSignOut={() => void signOut()}
           onClose={() => setShowSettings(false)}
+          appLock={appLock}
         />
       )}
     </div>
