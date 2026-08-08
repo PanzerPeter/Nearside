@@ -9,10 +9,11 @@
 // transparency screen lists as something the server holds.
 import { Capacitor } from '@capacitor/core';
 
-/** Tag the In-App Message reads to chase an unconfirmed recovery phrase.
- *  Absent means twelve words were shown and never confirmed, after which a
- *  lost phone destroys the vault and no support process recovers it. */
+/** Tags the In-App Messages and journeys target. Both are booleans about the
+ *  state of the app on this account. Neither carries a message, a contact, or
+ *  anything the server does not already hold — see this file's header. */
 const RECOVERY_TAG = 'recovery_confirmed';
+const CONTACTS_TAG = 'has_contacts';
 
 /** Loaded lazily and only on a device. The Cordova plugin reaches for
  *  `window.cordova` at import time, which does not exist in the browser build
@@ -191,20 +192,39 @@ export async function setPushEnabled(enabled: boolean): Promise<void> {
   else os.User.pushSubscription.optOut();
 }
 
+/** Best effort by design: the gate in the app is the real protection, and a
+ *  campaign that cannot be targeted is not a reason to fail a user's session. */
+async function setTag(name: string, value: boolean): Promise<void> {
+  const os = await oneSignal();
+  try {
+    os?.User.addTag(name, value ? 'true' : 'false');
+  } catch {
+    // Tagging is best effort.
+  }
+}
+
 /**
  * Records whether this account has confirmed its recovery phrase.
  *
  * A tag rather than a server-side inference, because the server cannot know:
  * confirmation happens against a seed in Android's Keystore and nothing about
- * it is uploaded. The In-App Message targets the absence of `true`.
+ * it is uploaded. The journey targets the absence of `true`, and the
+ * population that has it is precisely the people who were shown twelve words
+ * and closed the app — `App.tsx` gates everything else on confirmation.
  */
 export async function setRecoveryConfirmed(confirmed: boolean): Promise<void> {
-  const os = await oneSignal();
-  try {
-    os?.User.addTag(RECOVERY_TAG, confirmed ? 'true' : 'false');
-  } catch {
-    // Tagging is best effort; the gate in the app is the real protection.
-  }
+  await setTag(RECOVERY_TAG, confirmed);
+}
+
+/**
+ * Whether this account has anyone to talk to yet.
+ *
+ * Not a failure state. The product's argument is that Nearside is useful alone
+ * before the network exists, so being alone is the expected first week — which
+ * makes the right response teaching the connect code once, rather than nagging.
+ */
+export async function setHasContacts(has: boolean): Promise<void> {
+  await setTag(CONTACTS_TAG, has);
 }
 
 /** Which conversation a tapped notification meant, if the payload named one. */

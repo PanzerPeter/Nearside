@@ -105,3 +105,11 @@ describe('pushBlockedByOs', () => {
     expect(pushBlockedByOs({ granted: true, canRequest: false })).toBe(false);
   });
 });
+
+describe('setHasContacts', () => {
+  it('resolves without throwing off a device', async () => {
+    const { setHasContacts } = await import('./notifications');
+    await expect(setHasContacts(true)).resolves.toBeUndefined();
+    await expect(setHasContacts(false)).resolves.toBeUndefined();
+  });
+});
