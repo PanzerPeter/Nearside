@@ -117,6 +117,44 @@
   .animate-message-in {
     animation: message-in 190ms cubic-bezier(0.22, 1, 0.36, 1);
   }
+
+  /* One diagonal sheen, marking the moment the body was actually sealed and
+     accepted. It is not decoration standing in for encryption — it fires on a
+     real state change (`pending` to `sent`) and on nothing else. */
+  @keyframes seal-sweep {
+    from {
+      transform: translateX(-120%) skewX(-18deg);
+      opacity: 0;
+    }
+    35% {
+      opacity: 0.55;
+    }
+    to {
+      transform: translateX(220%) skewX(-18deg);
+      opacity: 0;
+    }
+  }
+
+  .seal-sweep::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(
+      100deg,
+      transparent 30%,
+      rgba(255, 255, 255, 0.7) 50%,
+      transparent 70%
+    );
+    animation: seal-sweep var(--motion-seal-duration) var(--motion-seal-easing) 1;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .seal-sweep::after {
+      animation: none;
+      content: none;
+    }
+  }
 }
 
 /* emoji-mart lives in a shadow DOM, so only its exposed custom properties are

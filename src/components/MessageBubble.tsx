@@ -11,6 +11,7 @@ import { useToast } from '../hooks/useToast';
 import { MAX_MESSAGE_LENGTH, messageSnippet } from '../lib/conversation';
 import { isForwardable } from '../lib/forward';
 import { isCoarsePointer } from '../lib/device';
+import { motionDuration } from '../lib/motion';
 import type { MessageStatusKind } from '../lib/receipts';
 import { MessageStatus } from './MessageStatus';
 import { Copy, CornerUpRight, MoreVertical, Pencil, Trash2, Check, X, Reply } from 'lucide-react';
@@ -85,6 +86,22 @@ export function MessageBubble({
   const hasReactions = reactions.length > 0;
   // A queued message has no server row yet, so nothing can be done to it.
   const hasMenu = !isDeleted && status !== 'pending';
+  // The seal sweep, fired once when the server accepts an own message.
+  // Keyed on the transition rather than on the value: a message loaded from
+  // history mounts already `sent` and never passes through `pending`, so opening
+  // a conversation cannot cascade the sweep down the whole thread.
+  const [sealing, setSealing] = useState(false);
+  const previousStatus = useRef(status);
+  useEffect(() => {
+    const was = previousStatus.current;
+    previousStatus.current = status;
+    if (!(was === 'pending' && status === 'sent')) return;
+    const ms = motionDuration('seal');
+    if (ms === 0) return;
+    setSealing(true);
+    const timer = window.setTimeout(() => setSealing(false), ms);
+    return () => window.clearTimeout(timer);
+  }, [status]);
   // Reached directly rather than threaded through props, as everywhere else in
   // the app: a copy toast is a leaf concern with no bearing on thread state.
   const toast = useToast();
@@ -313,7 +330,7 @@ export function MessageBubble({
               // bubble; the ring is what keeps it visibly attached to the
               // message it acts on.
               menuOpen ? 'ring-2 ring-primary/60' : ''
-            }`}
+            } relative overflow-hidden ${sealing ? 'seal-sweep' : ''}`}
           >
             {isDeleted ? (
               'This message was deleted'
