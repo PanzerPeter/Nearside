@@ -8,6 +8,19 @@
      survived the theme switch — which rendered the light "Paper" pack's native
      controls, scrollbars and form widgets dark against a cream page. */
 
+  :root {
+    /* Mirrors MOTION in src/lib/motion.ts. Both exist because some consumers
+       animate from JavaScript and some from a stylesheet; they must not drift. */
+    --motion-enter-duration: 180ms;
+    --motion-enter-easing: cubic-bezier(0.16, 1, 0.3, 1);
+    --motion-exit-duration: 120ms;
+    --motion-exit-easing: cubic-bezier(0.4, 0, 1, 1);
+    --motion-emphasis-duration: 240ms;
+    --motion-emphasis-easing: cubic-bezier(0.34, 1.56, 0.64, 1);
+    --motion-seal-duration: 320ms;
+    --motion-seal-easing: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
   html, body, #root {
     height: 100%;
   }

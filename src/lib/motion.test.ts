@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { prefersReducedMotion } from './motion';
+import { MOTION, motionDuration, prefersReducedMotion } from './motion';
 
 // This suite runs under Vitest's `node` environment (see vitest.config.ts),
 // so `window` doesn't exist unless a test stubs it in — which doubles as
@@ -34,5 +34,20 @@ describe('prefersReducedMotion', () => {
     vi.stubGlobal('window', {});
     expect(() => prefersReducedMotion()).not.toThrow();
     expect(prefersReducedMotion()).toBe(false);
+  });
+});
+
+describe('motion tokens', () => {
+  it('defines a duration and an easing for every token', () => {
+    for (const token of ['enter', 'exit', 'emphasis', 'seal'] as const) {
+      expect(MOTION[token].duration).toBeGreaterThan(0);
+      expect(MOTION[token].easing).toMatch(/^cubic-bezier\(/);
+    }
+  });
+
+  it('reports a token duration when motion is allowed', () => {
+    // The vitest environment is node: no matchMedia, so prefersReducedMotion
+    // answers false and the full duration is returned.
+    expect(motionDuration('seal')).toBe(MOTION.seal.duration);
   });
 });
