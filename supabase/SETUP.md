@@ -21,6 +21,20 @@ The migrations that changed what the server can see, in order:
 | `0023_server_stops_reading_bodies.sql` | dropped `messages.content` and `search_messages()` |
 | `0024_encrypted_media.sql` | `media_key_ciphertext` / `media_key_nonce` |
 | `0025_sealed_media_mime.sql` | `chat-media` accepts `application/octet-stream` |
+| `0029_disappearing.sql` | `conversation_timers`, `rooms.ttl_seconds`, a trigger-stamped `expires_at`, and a `pg_cron` sweep that hard-deletes expired rows |
+
+`0029` needs two things the file itself cannot do:
+
+1. **The `pg_cron` extension**, enabled under Database → Extensions, before the
+   file is run.
+2. **A one-off `cron.schedule` call**, quoted in the comment block at the bottom
+   of the file and deliberately left out of the main body — it fails with a
+   duplicate-jobname error if run twice, which would make the rest of the file
+   unsafe to re-run. Without it the columns and triggers exist and stamp
+   correctly, and nothing is ever deleted.
+
+Confirm the job with
+`SELECT jobname, schedule, active FROM cron.job WHERE jobname = 'nearside-expire';`
 
 ## What the server holds
 
