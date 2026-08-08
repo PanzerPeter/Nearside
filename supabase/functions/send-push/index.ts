@@ -13,13 +13,12 @@
 // Delivery is de-duplicated by claiming a row in `message_pushes`, so both
 // callers racing produces exactly one notification, not two.
 //
-// **The notification never carries message content, and cannot.** After 0023
-// there is no body column on `messages` — the server holds a ciphertext and a
-// nonce and nothing else. Any code here reaching for the plaintext is a bug
-// that fails at runtime rather than a leak, and the copy below must not imply
-// otherwise. The most that can honestly be said is who it is from, and even
+// The notification never carries message content, and cannot: after 0023
+// `messages` holds a ciphertext and a nonce and no body column, so code here
+// reaching for plaintext fails at runtime rather than leaking. The copy below
+// must not imply otherwise. Who it is from is the most that can be said, and
 // that name comes from `profiles.display_name`, which the transparency screen
-// declares as readable.
+// already declares readable.
 //
 // Required Edge Function secrets (Dashboard → Edge Functions → Secrets):
 //   ONESIGNAL_APP_ID      — same id the client ships (VITE_ONESIGNAL_APP_ID)
@@ -52,18 +51,17 @@ const ONESIGNAL_REST_API_KEY = Deno.env.get("ONESIGNAL_REST_API_KEY")?.trim();
 const TRIGGER_SECRET = Deno.env.get("PUSH_TRIGGER_SECRET")?.trim();
 
 /**
- * The Android notification channel these pushes are posted on — "Messages",
- * group "Main", in Dashboard → Settings → Push & In-App → Android Notification
- * Channels, at importance Urgent with the default sound.
+ * The Android notification channel these pushes post on: "Messages", group
+ * "Main", importance Urgent with the default sound, under Dashboard →
+ * Settings → Push & In-App → Android Notification Channels.
  *
- * Not optional, and not a secret. On Android 8+ the sound and the heads-up
- * banner are properties of the channel, never of the payload, so a push that
- * names no channel gets whatever channel the device happens to have — which on
- * a test device was Android's invented `restored_OS_notifications` at
- * importance LOW, i.e. delivered silently. Android also refuses to raise the
- * importance of a channel it has already created, so **changing the importance
- * in the dashboard does nothing to devices that already received one push.
- * Fixing importance means creating a new channel and replacing this id.**
+ * Required, and not a secret. On Android 8+ the sound and the heads-up banner
+ * belong to the channel rather than the payload, so a push naming no channel
+ * gets whatever the device has: on one test device, Android's invented
+ * `restored_OS_notifications` at importance LOW, delivered silently. Android
+ * also refuses to raise the importance of a channel it has already created, so
+ * changing importance in the dashboard does nothing to devices that have
+ * received a push. Fixing it means a new channel and a new id here.
  */
 const ANDROID_CHANNEL_ID = "93c11c0a-4c75-4c56-9c38-dd235fbed183";
 
@@ -88,11 +86,9 @@ function json(body: unknown, status: number): Response {
 }
 
 /**
- * What the banner says.
- *
- * Deliberately content-free. `media_type` is a column the server does read, so
- * naming the kind of attachment is honest — but it stops there, and there is
- * no branch anywhere below that could widen it.
+ * What the banner says. Content-free by construction. `media_type` is a column
+ * the server does read, so naming the kind of attachment is honest, and no
+ * branch below widens it beyond that.
  */
 function bodyFor(name: string, mediaType: string | null): string {
   switch (mediaType) {
@@ -170,10 +166,10 @@ Deno.serve(async (req) => {
       .eq("id", msg.user_id)
       .maybeSingle();
 
-    // The private nickname the RECEIVER gave the sender, if any (0016). Without
-    // this the banner says "@bob" while every screen in the app says "Bobby" —
-    // the same person under two names, which is exactly what a nickname is for.
-    // Read with the service role because the row is readable only by its owner.
+    // The private nickname the receiver gave the sender, if any (0016).
+    // Without it the banner says "@bob" while every screen in the app says
+    // "Bobby". Read with the service role, since the row is readable only by
+    // its owner.
     const { data: nick } = await admin
       .from("friend_nicknames")
       .select("nickname")
@@ -184,9 +180,9 @@ Deno.serve(async (req) => {
     const name = nick?.nickname?.trim() ||
       (sender?.display_name ? `@${sender.display_name}` : "someone");
 
-    // Targeted by external id — the Supabase user id, set by the client's
-    // `initNotifications`. Targeting the account rather than a device is what
-    // makes this work across a reinstall and across two phones.
+    // Targeted by external id: the Supabase user id, set by the client's
+    // `initNotifications`. Addressing the account rather than a device is what
+    // survives a reinstall and reaches someone holding two phones.
     const response = await fetch("https://api.onesignal.com/notifications", {
       method: "POST",
       headers: {
@@ -200,17 +196,14 @@ Deno.serve(async (req) => {
         headings: { en: "Nearside" },
         contents: { en: bodyFor(name, msg.media_type) },
         android_channel_id: ANDROID_CHANNEL_ID,
-        // A message someone is waiting on is not background work. Left unset,
-        // FCM delivers at normal priority, which Doze may hold until the next
-        // maintenance window — the notification then appears late and quietly
-        // on a locked phone.
+        // A message someone is waiting on is not background work. Unset, FCM
+        // delivers at normal priority and Doze may hold it until the next
+        // maintenance window, so it arrives late and quietly on a locked phone.
         priority: 10,
         // Stacked per sender, so a conversation reads as one entry in the
-        // shade. Deliberately no `collapse_id`: that reuses one notification id
-        // per sender, and OneSignal posts these with ONLY_ALERT_ONCE, so every
-        // message after the first from that person updated the banner in
-        // silence. A messenger that goes quiet after the first message is worse
-        // than a stack of them.
+        // shade. No `collapse_id`: that reuses one notification id per sender,
+        // and OneSignal posts with ONLY_ALERT_ONCE, so every message after the
+        // first would update the banner in silence.
         android_group: `dm:${msg.user_id}`,
         data: { senderId: msg.user_id },
       }),
@@ -222,7 +215,7 @@ Deno.serve(async (req) => {
     };
 
     if (!response.ok || !result.id) {
-      // No device registered *yet* — the receiver may enable notifications a
+      // No device registered yet. The receiver may enable notifications a
       // moment from now, and a stuck claim would silence the retry forever.
       await releaseClaim();
       return json({ sent: 0, reason: result.errors ?? response.status }, 200);

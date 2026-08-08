@@ -17,20 +17,18 @@ const RELOAD_FALLBACK_MS = 4_000;
 /**
  * Bottom sheet prompting the user to reload when a new version is ready.
  *
- * Detection: with `registerType: 'prompt'` the browser only checks for a new
- * service worker on a hard navigation, so a long-lived PWA / tab would never
- * notice a deploy. We add active detection — poll periodically, and re-check
- * whenever the app regains focus or the network reconnects — so the prompt
- * actually appears "as needed".
+ * With `registerType: 'prompt'` the browser only checks for a new service
+ * worker on a hard navigation, so a long-lived tab never notices a deploy.
+ * Detection is therefore active: poll periodically, and re-check whenever the
+ * app regains focus or the network reconnects.
  *
- * Presentation: it is a wide card with full-height buttons, not a corner toast
- * with `btn-xs` controls. The old one put a ~20px tap target in the bottom
- * corner of a phone, which is both the hardest place on the screen to reach and
- * exactly where the composer's send button lives — misses landed in the chat
- * instead, and the prompt looked like it had ignored the tap.
+ * A wide card with full-height buttons rather than a corner toast. A ~20px tap
+ * target in the bottom corner of a phone is both the hardest place to reach
+ * and where the composer's send button lives, so misses land in the chat and
+ * the prompt reads as having ignored the tap.
  *
- * Reloading via `updateServiceWorker(true)` never clears localStorage, where the
- * Supabase session lives, so the user stays logged in across updates.
+ * `updateServiceWorker(true)` never clears localStorage, where the Supabase
+ * session lives, so the user stays signed in across updates.
  */
 export function UpdatePrompt() {
   const registrationRef = useRef<ServiceWorkerRegistration | null>(null);

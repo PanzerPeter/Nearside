@@ -6,10 +6,10 @@
 // writes the plaintext into app-private storage. The server copy then prunes on
 // the ordinary schedule and the pinned copy outlives it at no cost.
 //
-// App-private, not the gallery: `Directory.Data` is inside the app's sandbox,
-// which no other app and no media scanner can read. Saving to the gallery is a
-// separate, deliberate action the user takes in the viewer — a pin is about
-// keeping something in Nearside, not about publishing it to the phone.
+// App-private rather than the gallery. `Directory.Data` sits inside the app's
+// sandbox, which no other app and no media scanner can read. Saving to the
+// gallery is a separate action the user takes in the viewer: a pin keeps
+// something in Nearside without publishing it to the phone.
 import { Capacitor } from '@capacitor/core';
 import { Directory, Filesystem } from '@capacitor/filesystem';
 import { allPins, cachedPin, pinnedIds, putPin, removePin } from './localdb';
@@ -106,11 +106,9 @@ export async function pinnedObjectUrl(
  * Delete every pinned file this account kept, and the rows naming them.
  *
  * Called before `clearLocalDb` on sign-out and on account deletion, and the
- * order matters: the rows are the only record of where the files are, so
- * clearing the store first would strand decrypted photos and voice notes in
- * the sandbox with nothing left able to find them. That is what used to
- * happen — `clearLocalDb` dropped the `pins` table's rows and the plaintext
- * they pointed at outlived both the sign-out and the deleted account.
+ * order matters. The rows are the only record of where the files are, so
+ * dropping the `pins` table first strands decrypted photos and voice notes in
+ * the sandbox, outliving both the sign-out and the deleted account.
  *
  * Best effort per file: one that cannot be removed must not stop the rest, and
  * neither may stop a sign-out.

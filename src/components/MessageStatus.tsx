@@ -12,15 +12,14 @@ const LABELS: Record<MessageStatusKind, string> = {
  * Lifecycle glyph for one of your own messages, rendered in the bubble's
  * own footer.
  *
- * Three things separate the states, because on a desktop screen any one of them
- * alone was too subtle: shape (one tick vs two), weight (a heavier stroke once
- * read), and colour (the `--receipt-read` mint). Colour alone failed for
- * delivered → read, and shape alone failed for sent → delivered at the old
- * 12px hairline size — at arm's length from a monitor the second tick just
- * looked like anti-aliasing on the first.
+ * Three things separate the states, because on a desktop screen any one alone
+ * is too subtle: shape (one tick or two), weight (a heavier stroke once read),
+ * and colour (the `--receipt-read` mint). Colour alone fails for delivered
+ * against read, and shape alone fails for sent against delivered at a 12px
+ * hairline, where the second tick reads as anti-aliasing on the first.
  *
- * The glyph sits in a fixed-size box so none of those changes reflow the footer
- * row as a message walks through its lifecycle.
+ * The glyph sits in a fixed-size box, so none of those changes reflow the
+ * footer row as a message walks through its lifecycle.
  */
 export function MessageStatus({ status }: { status: MessageStatusKind }) {
   const label = LABELS[status];

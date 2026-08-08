@@ -21,20 +21,19 @@ interface NotificationsPromptProps {
 /**
  * The one-time offer that gets a new install asked for notifications.
  *
- * Before this, nothing in the app ever asked. The permission lived behind a
- * toggle in Settings, so an install that never opened that screen never saw
- * Android's dialog, never registered with OneSignal, and never received a
- * notification, with nothing anywhere explaining why.
+ * Without it the permission lives behind a toggle in Settings, so an install
+ * that never opens that screen never sees Android's dialog, never registers
+ * with OneSignal, and never receives a notification.
  *
- * It is deliberately not asked at launch. Android only offers its dialog once,
- * and a dialog that appears before the person has any idea what the app is gets
- * dismissed, which spends the single chance for nothing. This waits until the
- * account and the recovery phrase are done, which is the first moment "we can
- * tell you when a message arrives" is a sentence with meaning behind it.
+ * Not asked at launch. Android offers its dialog once, and a dialog appearing
+ * before the person knows what the app is gets dismissed, spending that single
+ * chance for nothing. This waits until the account and the recovery phrase are
+ * done, the first moment "we can tell you when a message arrives" means
+ * anything.
  *
- * The explainer in front of the system dialog is not decoration either. It is
- * where the app can say what a notification will and will not contain, and
- * Android's own dialog has no room for that.
+ * The explainer in front of the system dialog is where the app says what a
+ * notification will and will not contain. Android's own dialog has no room
+ * for that.
  */
 export function NotificationsPrompt({ userId }: NotificationsPromptProps) {
   const [open, setOpen] = useState(false);

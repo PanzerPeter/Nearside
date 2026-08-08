@@ -1,12 +1,12 @@
 // Whether the key you are talking to is the key you agreed to talk to.
 //
 // Three states, and the distinction between the last two is the entire point:
-//   'unverified' — no record, or a record matching the current key that no
-//                  human has ever confirmed. Routine; every new contact.
-//   'verified'   — a matching record someone confirmed in person.
-//   'changed'    — the recorded key is not the current one. A reinstall or a
-//                  restored recovery phrase looks like this, and so does an
-//                  interception. The UI must not guess which.
+//   'unverified' no record, or a record matching the current key that no human
+//                has confirmed. Routine, and true of every new contact.
+//   'verified'   a matching record someone confirmed in person.
+//   'changed'    the recorded key is not the current one. A reinstall or a
+//                restored recovery phrase looks like this, and so does an
+//                interception. The UI must not guess which.
 //
 // State lives in the local store only (spec §7). A server-held "verified" flag
 // would be a claim from exactly the party this check exists to distrust.

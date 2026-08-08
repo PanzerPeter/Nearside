@@ -45,18 +45,18 @@ type WebkitWindow = Window & { webkitAudioContext?: typeof AudioContext };
  * Microphone recording for voice messages.
  *
  * `onComplete` receives the finished recording, or null when it was too short
- * to be anything but a mis-tap. It is also what delivers the auto-stop at
- * MAX_VOICE_MS, so the caller does not have to watch the clock: every way a
- * recording can end well arrives through this one callback.
+ * to be anything but a mis-tap. It also delivers the auto-stop at
+ * MAX_VOICE_MS, so every way a recording can end well arrives through one
+ * callback and the caller never watches the clock.
  *
- * The mic track is stopped on every exit path — finish, cancel, error, and
- * unmount — because a live track leaves the browser's recording indicator on
- * and, on mobile, holds audio focus away from everything else.
+ * The mic track is stopped on every exit path, including unmount. A live track
+ * leaves the browser's recording indicator on and, on mobile, holds audio
+ * focus away from everything else.
  *
- * The input is metered while it records. That drives the live level bar, and it
- * is also the only way to tell a working microphone from one that is muted,
- * missing or unwired: all three produce a valid stream and a valid file, and
- * only the amplitude says which you got.
+ * The input is metered while recording. That drives the live level bar, and it
+ * is the only way to tell a working microphone from one that is muted, missing
+ * or unwired: all three produce a valid stream and a valid file, and only the
+ * amplitude says which you got.
  */
 export function useVoiceRecorder(
   onComplete: (recording: VoiceRecording | null) => void

@@ -37,17 +37,15 @@ interface Pos {
  * Everything you can do to one message, in a single floating card: quick
  * reactions on top, then reply/copy/edit/delete.
  *
- * It is one card on purpose. These used to be two independently positioned
- * layers — a reaction bar pinned above the bubble and a dropdown that unfolded
- * upward from a button on its side — both revealed by the same hover/tap, into
- * the same strip of space. They overlapped, and since the dropdown painted
- * underneath, its first items were covered and simply could not be clicked.
- * Merging them removes the collision by construction rather than by tuning
- * offsets until the two happen to miss each other.
+ * One card rather than two independently positioned layers. A reaction bar
+ * above the bubble and a dropdown unfolding from a button beside it are
+ * revealed by the same tap into the same strip of space, so they overlap and
+ * the dropdown's first items sit underneath, unclickable. Merging removes the
+ * collision by construction instead of by tuning offsets until they miss.
  *
- * Rendered in a body-level portal with viewport-aware placement: the message
- * list is a scroll container that clips both axes, so an in-flow card would be
- * cut off at the top of the thread and beside a wide bubble.
+ * Rendered in a body-level portal with viewport-aware placement, because the
+ * message list clips both axes and an in-flow card would be cut off at the top
+ * of the thread and beside a wide bubble.
  */
 export function MessageMenu({
   open,

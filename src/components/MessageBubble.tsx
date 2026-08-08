@@ -85,10 +85,8 @@ export function MessageBubble({
   const hasReactions = reactions.length > 0;
   // A queued message has no server row yet, so nothing can be done to it.
   const hasMenu = !isDeleted && status !== 'pending';
-  // Toasting a copy result is a leaf concern with nothing to do with this
-  // conversation's state — every other component in the app (ChatRoom
-  // included) reaches `useToast()` directly rather than threading it through
-  // props, so copy follows that precedent instead of widening the props list.
+  // Reached directly rather than threaded through props, as everywhere else in
+  // the app: a copy toast is a leaf concern with no bearing on thread state.
   const toast = useToast();
 
   async function copyContent() {
@@ -169,21 +167,18 @@ export function MessageBubble({
     if (!el) return;
     el.style.height = 'auto';
     el.style.height = `${Math.min(el.scrollHeight, MAX_TEXTAREA_PX)}px`;
-    // isEditing is a dep, not just editingText: cancelling leaves editingText
+    // isEditing is a dep as well as editingText: cancelling leaves editingText
     // untouched, so re-editing the same message sets an identical string,
-    // React bails on the update, and the remounted textarea would keep its
-    // one-row height with the content scrolling inside it.
+    // React bails on the update, and the remounted textarea keeps its one-row
+    // height with the content scrolling inside it.
   }, [editingText, isEditing]);
 
-  // Gesture reply: swipe (touch) or double-click (desktop). Own messages can
-  // be replied to too now — the menu already offered it, this just brings
-  // swipe/double-click into agreement. A pending message has no server row
-  // yet, so a reply built against its id would point `reply_to_id` at
-  // something the server has never seen; excluded the same way the toolbar
-  // and dropdown below already are.
+  // Gesture reply: swipe on touch, double-click on desktop, either side's
+  // messages. A pending message has no server row, so a reply built against
+  // its id would point `reply_to_id` at something the server has never seen.
   const canReply = !isDeleted && !isEditing && status !== 'pending';
-  // Friend's messages sit on the left and swipe right; own messages sit on
-  // the right and swipe left — both swipe away from their anchored edge.
+  // The friend's messages sit on the left and swipe right, own messages sit on
+  // the right and swipe left. Both swipe away from their anchored edge.
   const direction = isOwn ? -1 : 1;
   const { offset, armed, swiping, consumeSwipeClick, handlers } = useSwipeToReply({
     enabled: canReply,
@@ -274,14 +269,14 @@ export function MessageBubble({
               if (consumeSwipeClick()) return;
               // Don't steal a text-selection gesture (mostly desktop).
               if (window.getSelection()?.toString()) return;
-              // Controls inside the bubble — a voice note's play button, a
-              // link, an attachment — own their taps. Opening the menu on top
-              // of the thing you just pressed is not what you asked for.
+              // Controls inside the bubble (a play button, a link, an
+              // attachment) own their taps. The menu must not open on top of
+              // the thing that was just pressed.
               if ((e.target as HTMLElement).closest('button, a, audio, video')) return;
-              // Tapping the message *is* the gesture on touch, where there is
-              // no hover to reveal the handle beside it. On a pointer device
-              // a plain click stays inert — the handle and right-click are
-              // the ways in, so clicking a message never interrupts reading.
+              // On touch, tapping the message is the gesture: there is no hover
+              // to reveal the handle beside it. On a pointer device a plain
+              // click stays inert, so reading is never interrupted, and the
+              // handle and right-click are the ways in.
               if (!hasMenu || !isCoarsePointer()) return;
               setMenuOpen((open) => !open);
             }}
@@ -302,11 +297,10 @@ export function MessageBubble({
             className={`px-3.5 pt-2 rounded-2xl whitespace-pre-wrap break-words shadow-[0_1px_2px_rgba(0,0,0,0.28)] cursor-default ${
               isOwn ? 'rounded-br-md' : 'rounded-bl-md'
             } ${
-              // Reaction chips hang ~12px up into the bubble from -bottom-2.5.
-              // Without extra bottom padding they land on the footer, which is
-              // right-aligned like the friend's chips and like a short own
-              // bubble the footer itself sizes. The pad keeps them over dead
-              // space instead of over the timestamp.
+              // Reaction chips hang about 12px up into the bubble from
+              // -bottom-2.5. Without extra bottom padding they land on the
+              // right-aligned footer; the pad keeps them over dead space
+              // rather than over the timestamp.
               !isDeleted && hasReactions ? 'pb-5' : 'pb-2'
             } ${
               isDeleted
@@ -335,12 +329,11 @@ export function MessageBubble({
                   </p>
                 )}
                 {msg.reply_to_id && (
-                  // A button, not a div: following a quote back to what it
-                  // answers is the whole point of a quote, and it has to be
+                  // A button rather than a div, so following the quote back is
                   // reachable by keyboard as well as by tap. `stopPropagation`
-                  // keeps the tap from also toggling this bubble's own menu.
-                  // Disabled while the quoted message is still being fetched
-                  // and when it can't be read at all — there is nowhere to go.
+                  // keeps the tap from also toggling this bubble's menu.
+                  // Disabled while the quoted message is being fetched, and
+                  // when it cannot be read: there is nowhere to go.
                   <button
                     type="button"
                     disabled={!repliedTo}
@@ -374,18 +367,15 @@ export function MessageBubble({
                       mediaKey={msg.media_key}
                     />
                   ) : (
-                    // A photo runs to the bubble's edges. Left inside the
-                    // padding it sat in a 14px band of bubble colour on every
-                    // side, which reads as a coloured outline drawn around the
-                    // picture rather than as a bubble behind it. The negative
-                    // margins cancel the padding; `w-fit` on the bubble sizes
-                    // to the image minus those margins, so the media lands
-                    // exactly flush instead of overhanging.
+                    // A photo runs to the bubble's edges. Inside the padding it
+                    // sits in a 14px band of bubble colour, which reads as a
+                    // coloured outline drawn around the picture. The negative
+                    // margins cancel that padding, and `w-fit` sizes the bubble
+                    // to the image minus them so the media lands flush.
                     //
-                    // The top corners are only rounded away when the media is
-                    // the first thing in the bubble — under a forward notice
-                    // or a reply quote it is a straight edge, because there is
-                    // bubble above it to be flush with.
+                    // The top corners round away only when the media is first
+                    // in the bubble. Under a forward notice or a reply quote
+                    // there is bubble above it to be flush with.
                     <div
                       className={`-mx-3.5 overflow-hidden ${
                         msg.forwarded || msg.reply_to_id ? '' : '-mt-2 rounded-t-2xl'

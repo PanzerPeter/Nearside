@@ -1,15 +1,14 @@
 // Private friend nicknames: the name YOU gave someone, visible only to you.
 //
 // Backed by public.friend_nicknames (0016), one row per (owner, peer). The
-// display_name is still the identity — a nickname is a label painted over it in
-// this user's own client, so nothing here changes how anyone is looked up.
+// display_name remains the identity; a nickname is a label painted over it in
+// this user's own client, and nothing here changes how anyone is looked up.
 //
-// Why a module-level store rather than a context provider: the notification
-// hook that needs a nickname (`useMessageNotifications`) is called from App's
-// own body, so it cannot consume a provider App itself renders. Same shape as
-// lib/connection.ts — a value plus a listener set, read either through a hook
-// or as a plain function call. One fetch and one realtime channel serve every
-// consumer, instead of a query per rendered row.
+// A module-level store rather than a context provider, because
+// `useMessageNotifications` is called from App's own body and cannot consume a
+// provider App renders. Same shape as lib/connection.ts: a value plus a
+// listener set, read through a hook or as a plain call. One fetch and one
+// realtime channel serve every consumer instead of a query per rendered row.
 
 import { useEffect, useState } from 'react';
 import { Session } from '@supabase/supabase-js';
@@ -31,9 +30,9 @@ export interface NicknameRow {
 export function nicknameMapFrom(rows: NicknameRow[]): Map<string, string> {
   const map = new Map<string, string>();
   for (const row of rows) {
-    // A normalize pass on read as well as on write: a row predating a tightened
-    // constraint, or one written by another client, must not paint a broken
-    // line. An unusable value is dropped rather than shown as blank.
+    // Normalized on read as well as on write, so a row predating a tightened
+    // constraint cannot paint a broken line. Unusable values are dropped
+    // rather than shown blank.
     const nickname = normalizeNickname(row.nickname);
     if (nickname) map.set(row.peer_id, nickname);
   }
@@ -54,10 +53,10 @@ function publish(next: Map<string, string>): void {
  * A nickname as it may be stored, or null if `raw` holds no usable name.
  *
  * Mirrors both CHECK constraints in 0016 so the client rejects what the
- * database would: trimmed, 1–32 characters, no control characters (a newline
- * would break the single line the sidebar and chat header render it on).
- * Over-long input is truncated rather than refused — the input is capped at
- * the same length in the UI, so this only catches paste.
+ * database would: trimmed, 1 to 32 characters, no control characters, since a
+ * newline breaks the single line the sidebar and chat header render on.
+ * Over-long input is truncated rather than refused, and only ever arrives by
+ * paste: the field itself is capped at the same length.
  */
 export function normalizeNickname(raw: string): string | null {
   // eslint-disable-next-line no-control-regex
@@ -68,9 +67,9 @@ export function normalizeNickname(raw: string): string | null {
 
 /**
  * How to name a conversation in one line: the nickname if one was given, the
- * self-chat's default label for your own notes, `@display_name` otherwise. Pure, so
- * the whole fallback chain is testable without a store; `useNickname` supplies
- * the first argument.
+ * self-chat's default label for your own notes, `@display_name` otherwise.
+ * Pure, so the fallback chain is testable without a store. `useNickname`
+ * supplies the first argument.
  */
 export function formatDisplayName(
   nickname: string | null | undefined,
@@ -119,9 +118,9 @@ async function loadNicknames(me: string): Promise<void> {
     .eq('owner_id', me);
 
   if (error) {
-    // Not fatal: without nicknames every name falls back to @display_name, which
-    // is exactly the pre-feature behaviour. Logged because a missing migration
-    // (PGRST205) surfaces here first, before anyone tries to set one.
+    // Not fatal: without nicknames every name falls back to @display_name.
+    // Logged because a missing migration (PGRST205) surfaces here first,
+    // before anyone tries to set one.
     console.error('nickname load failed', error);
     return;
   }
@@ -151,9 +150,9 @@ export function useNicknameSync(session: Session | null): void {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'friend_nicknames' },
         () => {
-          // RLS scopes this stream to our own rows, so anything that arrives is
-          // ours and relevant. Refetching the whole set (a handful of rows) is
-          // simpler than patching the map per event kind, and it cannot drift.
+          // RLS scopes this stream to our own rows, so anything arriving is
+          // relevant. Refetching the handful of rows cannot drift the way
+          // patching the map per event kind can.
           void loadNicknames(me);
         }
       )
@@ -214,9 +213,9 @@ function describeNicknameError(error: WriteError | null | undefined): string {
  * Store a nickname for `peerId`. Resolves to an error message, or null on
  * success; the caller owns how that is surfaced.
  *
- * The store is updated optimistically so the header and sidebar rename on the
- * same frame as the click, then reverted if the write is refused — the realtime
- * echo would otherwise be the first thing to show it, a round trip later.
+ * The store updates optimistically so the header and sidebar rename on the
+ * same frame as the click, and reverts if the write is refused. Otherwise the
+ * realtime echo is the first thing to show it, a round trip later.
  */
 export async function saveNickname(
   me: string,

@@ -1,13 +1,12 @@
-// The offline outbox: text messages the composer has accepted but the
-// server hasn't acknowledged yet. Persisted to IndexedDB so a reload — or the
-// app closing entirely while offline — doesn't silently drop them; `useOutbox`'s
-// flush loop resumes the queue on mount and on reconnect.
+// The offline outbox: text messages the composer has accepted and the server
+// has not acknowledged. Persisted to IndexedDB so a reload, or the app closing
+// while offline, does not drop them silently. `useOutbox`'s flush loop resumes
+// the queue on mount and on reconnect.
 //
-// Every export here degrades to a safe empty value instead of throwing or
-// rejecting. IndexedDB can be missing outright (this module is also imported
-// by node-run unit tests) or throw when a private-browsing tab has denied
-// storage — either way the contract with the composer is "sending still
-// works, queueing just quietly doesn't," never a crash.
+// Every export degrades to a safe empty value rather than throwing. IndexedDB
+// can be missing outright, as it is under the node test runner, or throw when
+// a private-browsing tab denies storage. The contract with the composer is
+// that sending still works and queueing quietly does not, never a crash.
 
 import { PendingMessage } from './types';
 
@@ -35,12 +34,11 @@ const UNIQUE_VIOLATION = '23505';
 /**
  * Did this insert fail *because the row is already there*?
  *
- * A queued message carries its own uuid and sends it as the row's primary
- * key, which makes the insert idempotent: a retry of a send whose response
- * was lost (dropped socket, frozen tab, timeout) collides with the row it
- * already created instead of writing a second copy. Recognising that
- * collision is what lets the caller treat the retry as the success it
- * actually is, rather than as a failure to retry again.
+ * A queued message sends its own uuid as the row's primary key, which makes
+ * the insert idempotent: a retry of a send whose response was lost collides
+ * with the row it already created instead of writing a second copy.
+ * Recognising that collision is what lets the caller treat the retry as the
+ * success it is.
  */
 export function isDuplicateSend(error: { code?: string; message?: string } | null): boolean {
   if (!error) return false;
@@ -108,12 +106,11 @@ async function withStore<T>(
 }
 
 /**
- * Persist a message to the queue. Returns whether the write actually landed
- * in IndexedDB — `false` covers both "no store at all" (private browsing,
- * storage denied) and a `put` that failed inside a live store. Callers need
- * this rather than a fire-and-forget `void`: a message the outbox couldn't
- * take custody of has to be sent some other way, or it never leaves the
- * screen at all (see `useOutbox.flush`'s `unqueuedRef` path).
+ * Persist a message to the queue. Returns whether the write landed in
+ * IndexedDB: `false` covers both no store at all and a `put` that failed
+ * inside a live one. Callers need this rather than a fire-and-forget `void`,
+ * because a message the outbox could not take custody of has to be sent some
+ * other way or it never leaves the screen. See `useOutbox.flush`.
  */
 export async function enqueue(msg: PendingMessage): Promise<boolean> {
   return withStore<boolean>('readwrite', false, (store, resolve) => {
@@ -132,10 +129,9 @@ export async function dequeue(id: string): Promise<void> {
 }
 
 /**
- * Drop every queued message on this device. Called when a session ends: an
- * unsent body is message content, and leaving it in IndexedDB outlives both
- * sign-out and account deletion, which is the one case where the data is
- * supposed to be gone for good.
+ * Drop every queued message on this device, when a session ends. An unsent
+ * body is message content, and left in IndexedDB it outlives both sign-out and
+ * account deletion, the one case where the data is meant to be gone for good.
  */
 export async function clearAll(): Promise<void> {
   await withStore<void>('readwrite', undefined, (store, resolve) => {
@@ -146,11 +142,10 @@ export async function clearAll(): Promise<void> {
 }
 
 /**
- * Everything queued from `me` to `peerId`. The store only indexes
- * `receiver_id` — at personal scale (<50 accounts, one outbox per device) an
- * in-memory filter for `user_id` on top of that is cheaper than a compound
- * index would be worth. Sorted oldest-first so the flush loop retries in
- * send order.
+ * Everything queued from `me` to `peerId`. The store indexes `receiver_id`
+ * only; at one outbox per device an in-memory filter for `user_id` costs less
+ * than a compound index is worth. Sorted oldest first, so the flush loop
+ * retries in send order.
  */
 export async function listFor(me: string, peerId: string): Promise<PendingMessage[]> {
   const rows = await withStore<PendingMessage[]>('readonly', [], (store, resolve) => {

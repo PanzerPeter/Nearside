@@ -1,20 +1,17 @@
 // Passing a message you already have along to another conversation.
 //
-// A forward is an ordinary new message, not a reference to the old one: the
-// recipient must be able to read it without being able to read the thread it
-// came from, and `messages_select_participant` (0001) guarantees they cannot.
-// So the body is copied, media is duplicated into the destination's own storage
-// folder, and the only thing carried across from the original is the
-// `forwarded` flag that tells the bubble to say so.
+// A forward is an ordinary new message rather than a reference to the old one,
+// because `messages_select_participant` (0001) means the recipient cannot read
+// the thread it came from. The body is copied, media is duplicated into the
+// destination's storage folder, and only the `forwarded` flag travels with it.
 //
-// What is deliberately NOT carried across:
-//   - `reply_to_id`. It names a message in the source conversation, which
-//     `useReplyTargets` scopes its lookups to — quoted in the destination it
-//     would resolve to nothing and render "Message unavailable" forever.
+// Deliberately left behind:
+//   - `reply_to_id`, which names a message in the source conversation that
+//     `useReplyTargets` cannot resolve from the destination. It would render
+//     "Message unavailable" forever.
 //   - anything identifying the original sender. See 0018's header.
-//   - reactions. They belong to the message they were left on, and re-creating
-//     them here would attribute other people's reactions to a message they
-//     have never seen.
+//   - reactions, which would attribute other people's responses to a message
+//     they have never seen.
 
 import { supabase } from './supabase';
 import { mediaPath } from './conversation';
@@ -41,13 +38,12 @@ export function pathExtension(objectPath: string): string {
  * Where a forwarded attachment lands: a fresh name in the *destination*
  * conversation's folder.
  *
- * It has to be a real second object rather than a second row pointing at the
- * first. The `chat-media` policies key access off the folder name
- * (`{sortedA}_{sortedB}`), so the destination's participant could not read a
- * path in the source's folder — the attachment would arrive as "Media no longer
- * available". Reusing the source's *filename* is avoided for the same reason
- * `sendMedia` mints a uuid: two conversations trimming their media caps
- * independently must never be able to collide on one object.
+ * It has to be a real second object. The `chat-media` policies key access off
+ * the folder name (`{sortedA}_{sortedB}`), so the destination's participant
+ * cannot read a path in the source's folder and the attachment would arrive as
+ * "Media no longer available". The filename is a new uuid for the reason
+ * `sendMedia` mints one: two conversations trimming their media caps
+ * independently must never collide on a single object.
  *
  * `filename` is a parameter only so tests can pin it; callers pass nothing.
  */
@@ -62,13 +58,12 @@ export function forwardMediaPath(
 }
 
 /**
- * The row a forward inserts. Pure, so what does and does not travel with a
- * forwarded message is stated in one readable place (and tested) rather than
- * spread through the async function below.
+ * The row a forward inserts. Pure, so what travels with a forwarded message is
+ * stated (and tested) in one place rather than spread through the async
+ * function below.
  *
  * `mediaPath` is the *already copied* destination path, or null for a
- * text-only forward — including the case where the original's attachment has
- * since been trimmed away and only its placeholder text remains.
+ * text-only forward, including one whose attachment has been trimmed away.
  */
 export function forwardPayload(
   msg: Pick<Message, 'text' | 'media_type' | 'media_duration_ms'>,
@@ -90,20 +85,17 @@ export function forwardPayload(
   };
 }
 
-/** Is there anything in this message to forward at all? A deleted message has
- *  had its body and media stripped, and the UI never offers the action for
- *  one — this is the belt to that braces. */
+/** Is there anything left to forward? A deleted message has had its body and
+ *  media stripped. The UI never offers the action for one; this is the belt to
+ *  that braces. */
 export function isForwardable(msg: Pick<Message, 'text' | 'media_path' | 'deleted_at'>): boolean {
   return !msg.deleted_at && (!!msg.text?.trim() || !!msg.media_path);
 }
 
 /**
- * Does a conversation match what has been typed into the picker's filter?
- *
- * Both the displayed name and the raw handle are searched, because they can
- * differ: a friend you have renamed "Bobby" is still findable by typing "bob",
- * which is the name you would reach for if you had forgotten the nickname was
- * yours. Case- and whitespace-insensitive; an empty query matches everything.
+ * Does a conversation match the picker's filter? Both the displayed name and
+ * the raw handle are searched, so a friend renamed "Bobby" is still findable
+ * by typing "bob". Case- and whitespace-insensitive; empty matches everything.
  */
 export function matchesTarget(label: string, display_name: string, query: string): boolean {
   const needle = query.trim().toLowerCase();
@@ -118,8 +110,7 @@ interface WriteError {
 }
 
 /**
- * Why an insert was refused, in the same spirit as `describeNicknameError`: a
- * server that has not been migrated yet and a server that is throttling you are
+ * Why an insert was refused. An unmigrated server and a throttling server are
  * different problems and must not read identically.
  */
 export function classifyForwardError(error: WriteError | null | undefined): ForwardFailure {
@@ -148,12 +139,11 @@ export function describeForwardFailure(reason: ForwardFailure, label: string): s
 /**
  * Copy one message into another conversation.
  *
- * Media is duplicated server-side (`storage.copy`) rather than downloaded and
- * re-uploaded: the caller is a participant of both conversations, so the copy
- * passes the `chat-media` policies at both ends, and a 50 MB video never
- * touches the device. A copy that succeeds but whose row insert then fails is
- * cleaned up, mirroring `useMediaSend.send` — otherwise a rejected forward
- * would leave an orphaned object against the destination's storage.
+ * Media is duplicated server-side with `storage.copy` rather than downloaded
+ * and re-uploaded: the caller participates in both conversations, so the copy
+ * passes the `chat-media` policies at both ends and a 50 MB video never
+ * touches the device. A copy whose row insert then fails is cleaned up, as in
+ * `useMediaSend.send`, or a rejected forward orphans an object.
  */
 export async function forwardMessage(
   me: string,
@@ -163,9 +153,8 @@ export async function forwardMessage(
 ): Promise<ForwardResult> {
   if (!isForwardable(msg)) return { ok: false, reason: 'failed' };
 
-  // An attachment this device could not open cannot be forwarded: the bytes
-  // would copy fine and arrive unopenable. Reported as unavailable, which is
-  // what it is from the user's side.
+  // An attachment this device could not open would copy fine and arrive
+  // unopenable, so it reads as unavailable, which is what it is.
   if (msg.media_path && !msg.media_key) return { ok: false, reason: 'media-missing' };
 
   let copiedPath: string | null = null;
@@ -174,35 +163,29 @@ export async function forwardMessage(
     const { error: copyError } = await supabase.storage
       .from('chat-media')
       .copy(msg.media_path, destination);
-    // Overwhelmingly this means the object is gone — trimmed by the per-
-    // conversation retention cap, which removes the file while leaving the row
-    // that names it. Reported as such rather than as a generic failure, since
-    // "it is not there any more" is something the user can understand and the
-    // alternatives (a denied policy on a bucket they are demonstrably a
-    // participant of) are not things they can act on differently.
+    // Almost always the object is gone, trimmed by the per-conversation
+    // retention cap, which removes the file and leaves the row naming it. The
+    // user can act on "it is not there any more"; they cannot act on a denied
+    // policy for a bucket they demonstrably participate in.
     if (copyError) return { ok: false, reason: 'media-missing' };
     copiedPath = destination;
   }
 
-  // The payload stays pure and testable; sealing is layered over it, because
-  // a message forwarded INTO the vault must land sealed like anything else
-  // sent there — otherwise the one conversation that claims to be unreadable
-  // has a plaintext way in.
-  // `text` is destructured out rather than spread: it is the one field of the
-  // payload with no column behind it, and letting it reach `.insert()` would
-  // both fail and — worse, if it ever stopped failing — put a plaintext body
-  // back on the server.
+  // Sealing is layered over the pure payload, because a message forwarded into
+  // the vault must land sealed like anything else sent there. `text` is
+  // destructured out rather than spread: it is the one payload field with no
+  // column behind it, and reaching `.insert()` it would fail today and put a
+  // plaintext body back on the server if it ever stopped failing.
   const { text, ...columns } = forwardPayload(msg, me, targetId, copiedPath);
   const targetKey = await peerPublicKey(targetId);
   const body = text
     ? await sealBody(identity, targetKey, me, targetId, text)
     : { ciphertext: null, nonce: null };
 
-  // The copied object is the same sealed bytes under the same file key, so the
-  // key itself has to be re-sealed to whoever is receiving it now. Carrying the
-  // original message's media_key_ciphertext across instead would hand the
-  // target a key sealed to somebody else — the attachment would arrive, fail to
-  // open, and look like a corrupt file rather than a forwarding bug.
+  // The copy is the same sealed bytes under the same file key, so the key is
+  // re-sealed to whoever receives it now. Carrying the original
+  // `media_key_ciphertext` across would hand the target a key sealed to
+  // somebody else, and the attachment would arrive looking corrupt.
   const mediaKey =
     copiedPath && msg.media_key
       ? await sealMediaKey(identity, targetKey, me, targetId, msg.media_key)
@@ -219,8 +202,8 @@ export async function forwardMessage(
     return { ok: false, reason: classifyForwardError(error) };
   }
 
-  // Same fire-and-forget push as an ordinary send, and the same exemption: a
-  // message forwarded into your own notes has nobody to notify.
+  // Same fire-and-forget push as an ordinary send, and the same exemption:
+  // a message forwarded into your own notes has nobody to notify.
   if (targetId !== me) {
     supabase.functions.invoke('send-push', { body: { message_id: data.id } }).catch(() => {});
   }

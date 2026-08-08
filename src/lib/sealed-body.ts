@@ -23,9 +23,9 @@ interface MediaKeyed {
 }
 
 /**
- * Columns for a message insert. Every body is sealed — the self-chat under
- * the vault key, a conversation under crypto_box to the peer's published key.
- * There is no plaintext path; Plan 2's temporary one was deleted here.
+ * Columns for a message insert. Every body is sealed: the self-chat under the
+ * vault key, a conversation under crypto_box to the peer's published key.
+ * There is no plaintext path.
  */
 export async function sealBody(
   identity: Identity,
@@ -64,10 +64,10 @@ export async function openBody(
 /**
  * Columns carrying a file's key, sealed to whoever can read the message.
  *
- * The key is base64'd and put through the same `sealBody` as a body, rather
- * than growing a parallel byte-sealing path: it is 32 bytes of text as far as
- * the crypto is concerned, and one sealing routine means one place where the
- * self-chat/peer decision is made.
+ * The key is base64'd and put through the same `sealBody` as a body rather
+ * than a parallel byte-sealing path. It is 32 bytes of text as far as the
+ * crypto is concerned, and one routine means one place where the self-chat
+ * versus peer decision is made.
  */
 export async function sealMediaKey(
   identity: Identity,
@@ -110,25 +110,22 @@ export type Opened<T> = T & {
 };
 
 /**
- * Fetched rows with their bodies opened into `text`, once, as they enter
- * state.
+ * Fetched rows with their bodies opened into `text`, once, as they enter state.
  *
  * This is the seam that keeps the rest of the app unchanged: `MessageBubble`,
- * `messageSnippet`, the forward picker and the reply quote all read one field,
- * and they keep doing so. Decrypting here rather than at each of those sites
- * also means once per row instead of once per render, and rows re-render on
- * every presence tick.
+ * `messageSnippet`, the forward picker and the reply quote all read one field.
+ * Decrypting here rather than at each of those sites also means once per row
+ * instead of once per render, and rows re-render on every presence tick.
  *
- * Each row that opens is written to the local mirror on the way through, which
- * is what makes it searchable later. A row the user has never loaded is not in
- * the mirror and is not searchable — correct, and explainable.
+ * Rows that open are written to the local mirror on the way through, which is
+ * what makes them searchable later. A conversation this device never loaded is
+ * not in the mirror and is not searchable.
  *
- * `decrypt_failed` marks the rows that could not be opened. A null `text` on
- * its own does not mean that: an uncaptioned photo or a voice note is inserted
- * with null ciphertext because there was no body to seal, and nothing failed.
- * The row has to be carrying a sealed body for a null to count as a failure.
- * Without an identity nothing can be opened, file keys included, so every row
- * is a failure in that case whether it carries a body or not.
+ * `decrypt_failed` marks rows that could not be opened. A null `text` alone
+ * does not mean that: an uncaptioned photo or voice note is inserted with null
+ * ciphertext because there was no body to seal. The row has to be carrying a
+ * sealed body for a null to count as a failure. Without an identity nothing
+ * opens at all, file keys included, so every row fails in that case.
  */
 export async function openRows<
   T extends Readable &
@@ -141,11 +138,10 @@ export async function openRows<
 ): Promise<Opened<T>[]> {
   return Promise.all(
     rows.map(async (row) => {
-      // A tombstone arriving here — the peer deleted their message, or this is
-      // a refetch of one we deleted — has to take the mirrored plaintext with
-      // it. Done at the read boundary rather than at the delete, because only
-      // one side of a deletion runs `deleteMessage`; the other side only ever
-      // sees the stripped row come back.
+      // A tombstone arriving here has to take the mirrored plaintext with it.
+      // Done at the read boundary rather than at the delete, because only one
+      // side of a deletion runs `deleteMessage`; the other only ever sees the
+      // stripped row come back.
       if (row.deleted_at) {
         await forgetCachedMessage(row.id);
         return { ...row, text: null, media_key: null, decrypt_failed: false };

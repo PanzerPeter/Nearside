@@ -1,20 +1,19 @@
 // Getting a decrypted attachment out of the app and onto the device.
 //
-// An <a download> pointing at a blob: URL is the web answer and does nothing at
-// all inside an Android WebView: there is no DownloadListener registered, and
-// DownloadManager cannot resolve the blob: scheme even if there were. The save
-// button on every attachment was therefore inert on the only platform this app
-// ships to.
+// An <a download> pointing at a blob: URL is the web answer and does nothing
+// inside an Android WebView: no DownloadListener is registered, and
+// DownloadManager cannot resolve the blob: scheme even if one were. That makes
+// the save button inert on the only platform this app ships to.
 //
-// The first fix for that handed the file to the system share sheet, which put a
-// chooser between the user and the one thing they asked for. Saving a photo
-// should put it in the photo app, so it goes to the gallery directly now.
+// Handing the file to the share sheet instead puts a chooser between the user
+// and the one thing they asked for, so saving a photo writes to the gallery
+// directly.
 //
-// Where it lands is the app's own media directory (Android/media/app.nearside),
-// which the media scanner indexes and every gallery app lists as an album. That
-// directory needs no storage permission at any API level, which matters here:
-// asking a messenger for access to all your photos in order to save one of them
-// is a bad trade, and this app does not make it.
+// It lands in the app's own media directory (Android/media/app.nearside),
+// which the media scanner indexes and every gallery app lists as an album.
+// That directory needs no storage permission at any API level: asking a
+// messenger for access to all your photos in order to save one of them is a
+// trade this app does not make.
 import { Capacitor } from '@capacitor/core';
 import { Media } from '@capacitor-community/media';
 import { Directory, Encoding, Filesystem } from '@capacitor/filesystem';

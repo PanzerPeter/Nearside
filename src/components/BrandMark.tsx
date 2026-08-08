@@ -1,20 +1,15 @@
 import { useId } from 'react';
 
-// Inlined from public/logo-source.svg (not <img>) so the mark can be sized
-// and dropped anywhere without a network request. This is the one component
-// exempt from the "no hardcoded colour literals" rule: it's logo artwork,
-// which has to render identically everywhere it appears rather than adapt
-// to the surrounding theme like ordinary UI chrome does.
+// Inlined from public/logo-source.svg rather than loaded through <img>, so the
+// mark can be sized and dropped anywhere without a network request. This is
+// the one component exempt from the "no hardcoded colour literals" rule: logo
+// artwork renders identically everywhere instead of adapting to the theme.
 //
-// Gradient/filter ids are prefixed `nearside-` (not bare `bg`/`bubble`/`soft`,
-// the source file's ids) and suffixed with `useId()`. The prefix alone stops
-// collisions with unrelated SVGs elsewhere on the page; the per-instance
-// suffix is needed on top of it because the mark itself is rendered more
-// than once concurrently (header + auth screen aren't mutually exclusive in
-// every state — e.g. the header persists while a modal overlays it), and a
-// bare "nearside-bg" id repeated on two <linearGradient> elements is invalid
-// HTML and lets `url(#nearside-bg)` resolve to whichever one the browser
-// picked, not necessarily this instance's own.
+// Gradient and filter ids are prefixed `nearside-` and suffixed with
+// `useId()`. The prefix stops collisions with unrelated SVGs on the page; the
+// per-instance suffix is needed because the mark renders more than once at a
+// time, and a repeated id lets `url(#nearside-bg)` resolve to whichever
+// element the browser picked rather than this instance's own.
 export function BrandMark({ size = 24, className = '' }: { size?: number; className?: string }) {
   const uid = useId();
   const bgId = `nearside-bg-${uid}`;

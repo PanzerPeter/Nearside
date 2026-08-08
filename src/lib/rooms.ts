@@ -4,13 +4,11 @@
 // key. The server distributes a key it cannot open, and adding a member is one
 // row rather than a re-encryption of the history.
 //
-// Every message carries an Ed25519 signature over its sealed bytes, and the
-// signature is checked BEFORE the message is opened. `secretbox` gives
-// confidentiality, not authorship: every member holds the room key, so without
-// a signature any of them could compose a message and the `sender_id` column
-// would attest to whoever they claimed to be. Verifying after decryption would
-// mean rendering something whose author had not been established, which is the
-// bug this whole design exists to prevent.
+// Every message carries an Ed25519 signature over its sealed bytes, checked
+// BEFORE the message is opened. `secretbox` gives confidentiality, not
+// authorship: every member holds the room key, so without a signature any of
+// them could compose a message under any `sender_id` they liked. Verifying
+// after decryption would render something whose author was not established.
 import sodium from 'libsodium-wrappers';
 import { fromBase64, type Identity } from './crypto/keys';
 import {
@@ -49,22 +47,18 @@ export interface RoomMessage {
   nonce: string;
   signature: string;
   created_at: string;
-  /** Null when this device could not open the row — see `sender`, which says
-   *  why. */
+  /** Null when this device could not open the row. `sender` says why. */
   text?: string | null;
   /** How much this device can vouch for:
-   *    'verified'   — signature checks out against the sender's published key
-   *    'unverified' — signature does NOT check out. Rendered as a warning
-   *                   rather than hidden: hiding it would conceal an attack
-   *                   in progress.
-   *    'unknown'    — the sender has published no signing key, so there was
-   *                   nothing to check against. */
+   *    'verified'   signature checks out against the sender's published key
+   *    'unverified' signature does not check out. Rendered as a warning rather
+   *                 than hidden, since hiding it conceals an attack in progress
+   *    'unknown'    the sender has published no signing key to check against */
   sender?: 'verified' | 'unverified' | 'unknown';
 }
 
-/** Stable per-speaker colours. Index, not a hash of the user id: a hash
- *  collides silently and two members would share a colour with no way to tell
- *  them apart mid-conversation. */
+/** Stable per-speaker colours, by index rather than a hash of the user id. A
+ *  hash collides silently and two members share a colour mid-conversation. */
 export const ROOM_COLOURS = [
   'text-primary',
   'text-secondary',
@@ -96,9 +90,8 @@ async function publishedKeys(
   return map;
 }
 
-/** Members who cannot be sealed to, with the reason. Shown at create time
- *  rather than silently dropped: a room quietly missing someone is worse than
- *  a room that refuses to be created. */
+/** Members who cannot be sealed to. Surfaced at create time rather than
+ *  dropped, because a room quietly missing someone is the worse failure. */
 export async function unreachableMembers(userIds: string[]): Promise<string[]> {
   const keys = await publishedKeys(userIds);
   return userIds.filter((id) => !keys.get(id)?.public_key);
@@ -183,18 +176,17 @@ function forgetRoomKey(roomId: string): void {
   keyCache.delete(roomId);
 }
 
-/** Drop every opened room key. Called when a session ends: these are the
- *  plaintext symmetric keys for whole conversations, and they have no business
- *  outliving the account that was allowed to open them — least of all on a
- *  phone somebody else is about to sign into. */
+/** Drop every opened room key, on sign-out. These are plaintext symmetric keys
+ *  for whole conversations; they must not outlive the account allowed to open
+ *  them, least of all on a phone somebody else is about to sign into. */
 export function forgetAllRoomKeys(): void {
   keyCache.clear();
 }
 
 /**
- * This account's copy of the room key, or null if there is no row for them —
- * which means they are not a member, or were removed. Null is an error state
- * the UI must render as one; an empty room would be a lie.
+ * This account's copy of the room key, or null when no row exists: they are
+ * not a member, or were removed. The UI must render null as the error it is,
+ * because an empty room would be a lie.
  */
 export async function roomKeyFor(roomId: string, identity: Identity): Promise<Uint8Array | null> {
   const hit = keyCache.get(roomId);
@@ -219,7 +211,7 @@ export async function roomKeyFor(roomId: string, identity: Identity): Promise<Ui
     keyCache.set(roomId, key);
     return key;
   } catch {
-    // The sealer's key rotated after they sealed, or the row was tampered
+    // The sealer rotated their key after sealing, or the row was tampered
     // with. Either way this device cannot read the room, and saying so beats
     // rendering an empty one.
     return null;
@@ -269,9 +261,9 @@ export async function sendRoomMessage(
 /**
  * Verifies, then opens.
  *
- * A row whose signature does not check out is returned with
- * `sender: 'unverified'` and no text — never dropped. A dropped message is an
- * attack the user never learns about; a flagged one is an attack they can see.
+ * A row whose signature fails comes back as `sender: 'unverified'` with no
+ * text, never dropped. A dropped message is an attack the user never learns
+ * about; a flagged one is an attack they can see.
  */
 export async function openRoomRows(
   rows: RoomMessage[],
@@ -299,7 +291,7 @@ export async function openRoomRows(
         return { ...row, text, sender: 'verified' };
       } catch {
         // Signed by the right person but sealed under a key this device does
-        // not hold — what a member who joined after a rotation sees.
+        // not hold, which is what a member who joined after a rotation sees.
         return { ...row, text: null, sender: 'verified' };
       }
     })
@@ -328,24 +320,20 @@ export async function roomMembers(roomId: string): Promise<RoomParticipant[]> {
 }
 
 /**
- * Removes a member and takes their key copy with them.
+ * Removes a member and deletes their key copy.
  *
- * Two things happen, and only one of them is reversible from the outside. The
- * participant row is what row-level security checks, so they stop being able to
- * read new messages at all. The key row is their stored copy of the key, so a
- * fresh install cannot recover it.
+ * The participant row is what row-level security checks, so they stop reading
+ * new messages. The key row is their stored copy, so a fresh install cannot
+ * recover it.
  *
- * What this does not do is claw back what they already have, and nothing can.
- * A session that already opened the key holds it in memory until it closes, and
- * whatever they downloaded is on their phone. The members panel says exactly
- * that before the removal happens.
+ * It cannot claw back what they already hold, and nothing can: a session that
+ * opened the key keeps it in memory until it closes, and their downloads are
+ * on their phone. The members panel says so before the removal happens.
  *
- * Nor does it reseal a fresh key to everyone who stays. That sounds stricter
- * and is worse: every message in the room's history is sealed under the current
- * key, the key lives only in memory, and replacing it would make the entire
- * history unreadable to every remaining member the next time they open the app.
- * Losing everyone's history to shorten one person's window is not a trade this
- * makes quietly.
+ * It also does not reseal a fresh key to everyone who stays. That sounds
+ * stricter and is worse. The whole history is sealed under the current key,
+ * which lives only in memory, so replacing it would make every past message
+ * unreadable to every remaining member.
  */
 export async function removeMember(roomId: string, userId: string): Promise<void> {
   const { error: keyError } = await supabase

@@ -15,11 +15,11 @@ export const MEDIA_SCAN_LIMIT = MEDIA_KEEP_LIMIT + AUDIO_KEEP_LIMIT + MEDIA_TRIM
 /**
  * The content type of a sealed attachment, recovered from its object name.
  *
- * Every object in `chat-media` is uploaded as `application/octet-stream` —
- * that is the point of sealing it — so nothing downstream can ask Storage what
- * a file is. The extension `0024`'s upload path kept on the object name is the
- * only surviving answer, and a decrypted blob built without it is a `<video>`
- * with no first frame and an `<img>` that opens as a page of garbage text.
+ * Every object in `chat-media` uploads as `application/octet-stream`, which is
+ * the point of sealing it, so nothing downstream can ask Storage what a file
+ * is. The extension `0024`'s upload path kept on the object name is the only
+ * surviving answer, and a decrypted blob built without it is a `<video>` with
+ * no first frame and an `<img>` that opens as a page of garbage text.
  *
  * `kind` disambiguates WebM, which is a container both a voice note and a
  * video arrive in and which the extension alone cannot separate.
@@ -64,11 +64,10 @@ export function mimeForPath(path: string, kind?: MediaType | null): string {
 /**
  * A stable string standing in for a file key's *value*.
  *
- * `openRows` mints a fresh `Uint8Array` on every decrypt, and `mergeMessages`
- * replaces the newest row with a freshly-decrypted copy on every poll tick —
- * so anything keyed on the array's identity sees a new key every few seconds
- * for a key that never changed. That is what blanked a playing video and
- * re-downloaded its bytes on a loop.
+ * `openRows` mints a fresh `Uint8Array` on every decrypt and `mergeMessages`
+ * replaces the newest row on every poll tick, so anything keyed on the array's
+ * identity sees a new key every few seconds for a key that never changed. That
+ * blanks a playing video and re-downloads its bytes on a loop.
  *
  * Comma-delimited rather than concatenated: without a separator `[1, 23]` and
  * `[12, 3]` produce the same token.
@@ -87,14 +86,12 @@ export interface MediaRow {
 /**
  * Which of `rows` are past their keep limit, given newest-first input.
  *
- * Photos/videos and voice notes are counted against separate limits rather
- * than one shared budget: a run of voice notes should not evict the photo
- * someone sent an hour earlier, and vice versa.
+ * Photos and videos are counted against a separate limit from voice notes, so
+ * a run of voice notes cannot evict a photo sent an hour earlier.
  *
- * A pinned item is skipped outright — not counted, not trimmed. Skipping it
- * without counting matters: counting it would let a handful of pins push
- * unpinned media off the end early, which would turn pinning into a way of
- * losing other people's photos.
+ * A pinned item is skipped outright: not counted, not trimmed. Counting it
+ * would let a handful of pins push unpinned media off the end early, turning
+ * pinning into a way of losing other people's photos.
  *
  * Pruning exists because Supabase storage is finite, not because storage is a
  * product. Pinning is free, and this parameter is what makes that true.

@@ -1,27 +1,26 @@
 // Connection lifecycle: waking the app back up, and telling the UI when the
 // realtime stream is not actually carrying anything.
 //
-// The problem this exists to solve: after the machine sleeps (or a phone
-// freezes the tab, or a VPN drops), the Supabase WebSocket is dead but nothing
-// in the app notices. Channels never rejoin and no query is ever re-issued, so
-// the app sits there showing a conversation frozen at the moment of sleep until
-// the user reloads.
+// After the machine sleeps, a phone freezes the tab or a VPN drops, the
+// Supabase WebSocket is dead and nothing in the app notices. Channels never
+// rejoin and no query is re-issued, so the conversation stays frozen at the
+// moment of sleep until the user reloads.
 //
 // Three signals feed "we just woke up":
 //
-//   1. `visibilitychange` → visible, and `pageshow` — the mobile/backgrounded
-//      case, and bfcache restores.
-//   2. `online` — the network came back.
+//   1. `visibilitychange` to visible, and `pageshow`: backgrounded phones and
+//      bfcache restores.
+//   2. `online`: the network came back.
 //   3. A wall-clock jump between watchdog ticks. This is the one that matters
-//      on desktop: sleeping a laptop with Nearside in the foreground fires *no*
-//      visibility or focus event on wake, because as far as the page is
-//      concerned it was visible and focused the whole time. Only the clock
+//      on desktop, where sleeping a laptop with the app in the foreground
+//      fires no visibility or focus event at all. As far as the page is
+//      concerned it was visible and focused throughout, and only the clock
 //      gives it away.
 //
-// On any of them we refresh the auth token if it is close to expiry, kick the
-// socket, and bump `generation`. Every subscriber keys its channel effect on
-// that number, so a bump tears down and rebuilds every subscription and
-// re-runs the fetches beside it — one mechanism, no per-hook wake logic.
+// Any of them refreshes a near-expiry auth token, kicks the socket, and bumps
+// `generation`. Every subscriber keys its channel effect on that number, so
+// one bump rebuilds every subscription and re-runs the fetches beside it.
+// There is no per-hook wake logic anywhere else.
 
 import { useEffect, useState } from 'react';
 import { supabase } from './supabase';
@@ -46,8 +45,8 @@ export interface ConnectionState {
   /** Whether realtime is believed to be delivering. False ⇒ fall back to polling. */
   live: boolean;
   /** Whether the device has a network at all. A degraded `live` with `online`
-   *  still true is the socket being blocked, not the user being offline —
-   *  two different things to tell someone. */
+   *  still true means the socket is blocked rather than the user being
+   *  offline, which is a different thing to tell someone. */
   online: boolean;
 }
 
@@ -78,10 +77,10 @@ export function subscribeConnection(listener: (s: ConnectionState) => void): () 
 }
 
 /**
- * Whether the realtime socket reports itself connected. Feature-detected
- * rather than assumed: `isConnected` is realtime-js internals as far as the
- * public typings go, and an absent method must read as healthy rather than
- * permanently degrading every client.
+ * Whether the realtime socket reports itself connected. Feature-detected,
+ * because `isConnected` is realtime-js internals as far as the public typings
+ * go and an absent method must read as healthy rather than permanently
+ * degrading every client.
  */
 function socketConnected(): boolean {
   try {
@@ -94,10 +93,10 @@ function socketConnected(): boolean {
 
 // ---- Per-channel health ----------------------------------------------------
 //
-// The socket being up is necessary but not sufficient: a channel can be in
-// CHANNEL_ERROR (RLS hiccup, server-side drop) while the socket happily
-// heartbeats. Subscribers report their `subscribe()` status here so the UI can
-// tell "connected" from "actually receiving".
+// The socket being up is necessary but not sufficient: a channel can sit in
+// CHANNEL_ERROR after an RLS hiccup or a server-side drop while the socket
+// heartbeats happily. Subscribers report their `subscribe()` status here so
+// the UI can tell "connected" from "actually receiving".
 
 const channelStatus = new Map<string, string>();
 
@@ -112,10 +111,9 @@ export function forgetChannel(key: string): void {
 }
 
 function recomputeLive(): void {
-  // `!== false`, not a truthiness test: an environment that exposes
-  // `navigator` without implementing `onLine` yields undefined, and reading
-  // that as "offline" would pin the app to degraded forever. Only an explicit
-  // false counts as offline.
+  // `!== false` rather than a truthiness test. An environment exposing
+  // `navigator` without `onLine` yields undefined, and reading that as
+  // "offline" pins the app to degraded forever.
   const online = typeof navigator === 'undefined' || navigator.onLine !== false;
   const channelsOk = [...channelStatus.values()].every((s) => s === 'SUBSCRIBED');
   publish({ ...state, online, live: online && socketConnected() && channelsOk });
@@ -141,9 +139,9 @@ async function revive(): Promise<void> {
     /* offline, or no session — the channel rebuild below still runs */
   }
 
-  // 2. Kick the socket. A half-open socket (our side thinks it's connected,
-  //    the peer hung up during sleep) is the common post-wake state, so this
-  //    disconnects explicitly rather than trusting `isConnected`.
+  // 2. Kick the socket. A half-open socket, where our side believes it is
+  //    connected and the peer hung up during sleep, is the common post-wake
+  //    state, so disconnect explicitly rather than trusting `isConnected`.
   try {
     supabase.realtime.disconnect();
     supabase.realtime.connect();
@@ -151,9 +149,9 @@ async function revive(): Promise<void> {
     /* best effort */
   }
 
-  // 3. Tell every subscriber to rebuild and refetch. Channel health is
-  //    unknown until they re-report, so assume degraded until they do —
-  //    that is what turns the polling fallback on during the gap.
+  // 3. Tell every subscriber to rebuild and refetch. Channel health is unknown
+  //    until they re-report, so assume degraded meanwhile, which is what turns
+  //    the polling fallback on during the gap.
   channelStatus.clear();
   publish({ ...state, generation: state.generation + 1, live: false });
 }
@@ -185,10 +183,10 @@ export function startConnectionMonitor(): void {
     const now = Date.now();
     const gap = now - lastTick;
     lastTick = now;
-    // Only a *visible* page can distinguish sleep from ordinary background
-    // timer throttling — browsers clamp hidden-tab intervals to ~1/minute, so
-    // a hidden tab would report a "sleep" every single tick. Hidden tabs get
-    // their wake signal from `visibilitychange` instead, below.
+    // Only a visible page can tell sleep from ordinary timer throttling:
+    // browsers clamp hidden-tab intervals to about one a minute, so a hidden
+    // tab would report a sleep on every tick. Hidden tabs wake from
+    // `visibilitychange` below instead.
     if (gap > SLEEP_GAP_MS && document.visibilityState === 'visible') {
       triggerResume();
       return;

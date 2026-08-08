@@ -45,9 +45,8 @@ function App() {
   const { session, loading, recovering, endRecovery } = useAuth();
   const [selectedFriend, setSelectedFriend] = useState<Profile | null>(null);
   // Rooms and one-to-one conversations share the chat pane, so opening one
-  // must close the other — two selections both set would render whichever the
-  // JSX below happened to check first, which is not a decision to leave to
-  // ordering.
+  // closes the other. Two selections set at once would render whichever the
+  // JSX below checked first.
   const [selectedRoom, setSelectedRoom] = useState<RoomSummary | null>(null);
   const [myProfile, setMyProfile] = useState<Profile | null>(null);
   // The phone's tab bar selection. Desktop shows both panes at once and reaches
@@ -63,12 +62,10 @@ function App() {
   const [unreadTotal, setUnreadTotal] = useState(0);
   useAppBadge(unreadTotal);
 
-  // Signing out unmounts FriendsList, so nothing would ever report the total
-  // back down to zero — the badge would sit on the installed icon claiming
-  // unread messages for an account nobody is signed into.
-  // The tab goes back with it: signing out from the settings tab leaves this
-  // state behind, and the next person to sign in on the phone would land on
-  // settings rather than on their conversations.
+  // Signing out unmounts FriendsList, so nothing would report the total back
+  // down to zero and the installed icon would keep a badge for an account
+  // nobody is signed into. The tab resets with it, or the next person to sign
+  // in on the phone lands on settings rather than their conversations.
   useEffect(() => {
     if (!session) {
       setUnreadTotal(0);
@@ -76,11 +73,11 @@ function App() {
     }
   }, [session]);
 
-  // Open this account's mirror before anything tries to write to it. Every
-  // cache call is a silent no-op until the connection exists, so a missed open
-  // would not fail — it would just leave search and previews permanently empty.
-  // Keyed on the account: the store holds decrypted text, and the next person
-  // to sign in on this phone gets their own.
+  // Open this account's mirror before anything writes to it. Cache calls are
+  // silent no-ops until the connection exists, so a missed open leaves search
+  // and previews permanently empty rather than failing. Keyed on the account,
+  // because the store holds decrypted text and the next person to sign in on
+  // this phone gets their own.
   const userId = session?.user.id ?? null;
   useEffect(() => {
     if (userId) void openLocalDb(userId);
@@ -115,13 +112,13 @@ function App() {
     if (session && identity) void syncPublicKeys(session, identity);
   }, [session, identity]);
 
-  // Private friend nicknames, loaded once and kept live for the whole app —
-  // the sidebar, the chat header and the notification titles all read them.
+  // Private friend nicknames, loaded once and kept live for the whole app. The
+  // sidebar, the chat header and the notification titles all read them.
   useNicknameSync(session);
 
-  // Hardware/browser back closes the open chat, and returns the settings tab to
-  // the chat list, instead of leaving the app. Both are full-screen takeovers on
-  // a phone and neither exists as one on desktop — see the hook.
+  // Hardware and browser back close the open chat, and return the settings tab
+  // to the chat list, rather than leaving the app. Both are full-screen
+  // takeovers on a phone and neither is one on desktop; see the hook.
   const chatOpen = !!selectedFriend || !!selectedRoom;
   useMobileBackClose(chatOpen, () => {
     setSelectedFriend(null);
@@ -134,26 +131,26 @@ function App() {
     initSoundUnlock();
   }, []);
 
-  // Queued-but-unsent bodies are message content; they should not outlive the
+  // Queued-but-unsent bodies are message content and must not outlive the
   // session that wrote them on a shared device. The local mirror holds
-  // decrypted text for the same reason and goes with it — the account's own
-  // mirror, not the device's, so the other account keeps its history.
-  // Both third parties are told to forget the account too. A device left bound
-  // to the previous user keeps receiving their notifications and reports their
-  // purchases, which on a shared phone is the account leaking to whoever signs
-  // in next. Neither failing is a reason to leave someone signed in, so both
-  // run before the sign-out and neither can block it.
+  // decrypted text for the same reason and goes with it, the account's own
+  // mirror rather than the device's, so a second account keeps its history.
+  //
+  // OneSignal and RevenueCat are told to forget the account too. A device left
+  // bound to the previous user keeps receiving their notifications and reports
+  // their purchases. Neither failing is a reason to leave someone signed in,
+  // so both run first and neither can block the sign-out.
   const signOut = useCallback(async () => {
     await clearAll();
-    // Before `clearLocalDb`, which drops the rows naming these files: pinned
-    // attachments are decrypted bytes in the sandbox, and the store is the only
+    // Before `clearLocalDb`, which drops the rows naming these files. Pinned
+    // attachments are decrypted bytes in the sandbox and the store is the only
     // thing that knows where they are.
     await clearPinnedMedia().catch(() => {});
     await clearLocalDb();
-    // In-memory key caches, which no store clears: see `forgetAllPeerKeys` for
+    // In-memory key caches, which no store clears. See `forgetAllPeerKeys` for
     // why a surviving peer key breaks key-change detection for the next
     // account, and `forgetAllRoomKeys` for why room keys must not outlive the
-    // session at all.
+    // session.
     forgetAllPeerKeys();
     forgetAllRoomKeys();
     await clearExternalUserId().catch(() => {});
@@ -162,16 +159,15 @@ function App() {
   }, []);
 
   // Bind this device to the account for notifications, and start the store.
-  // Both are best-effort by construction: neither one failing may stop the
-  // messenger from running.
+  // Both are best effort: neither failing may stop the messenger running.
   useEffect(() => {
     if (!userId) return;
     void initNotifications(userId);
     void initPurchases(userId);
   }, [userId]);
 
-  // The stored theme is applied before any entitlement check finishes, so a
-  // paying user does not get a frame of the default look — then reconciled,
+  // The stored theme applies before any entitlement check finishes, so a
+  // paying user never gets a frame of the default look, then reconciles,
   // because a refund must not leave the paid-for theme in place.
   useEffect(() => {
     applyTheme(storedTheme());
@@ -181,10 +177,9 @@ function App() {
     });
   }, [userId]);
 
-  /** Open a conversation given only a user id (from a notification click or a
-   *  `?chat=` deep link). The friends list re-reports the full, live row for
-   *  the selected id on its next pass, so this only has to be right enough to
-   *  mount the chat. */
+  /** Open a conversation given only a user id, from a notification click or a
+   *  `?chat=` deep link. FriendsList re-reports the full live row on its next
+   *  pass, so this only has to be right enough to mount the chat. */
   const openChatWith = useCallback(async (friendId: string) => {
     const { data } = await supabase
       .from('profiles')
@@ -194,9 +189,8 @@ function App() {
     if (data) {
       setSelectedRoom(null);
       setSelectedFriend(data);
-      // A tapped notification while the settings tab is up would otherwise
-      // mount the conversation behind a hidden pane, and the tap would look
-      // like it did nothing.
+      // A notification tapped while the settings tab is up would otherwise
+      // mount the conversation behind a hidden pane, and read as doing nothing.
       setTab('chats');
     }
   }, []);
@@ -210,9 +204,9 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.user.id]);
 
-  // Cold start from a notification: the worker opened `/?chat=<id>` because no
-  // window was running to message. Consume the parameter and scrub it, so a
-  // later reload doesn't re-open a chat the user has since navigated away from.
+  // Cold start from a notification, where the worker opened `/?chat=<id>`
+  // because no window was running to message. The parameter is consumed and
+  // scrubbed, so a later reload does not re-open a chat already left.
   useEffect(() => {
     if (!session) return;
     const chatId = new URLSearchParams(window.location.search).get('chat');
@@ -245,10 +239,10 @@ function App() {
     );
   }
 
-  // 'unconfirmed' must be here too: createIdentity stores the seed and flips
+  // 'unconfirmed' belongs here too. `createIdentity` stores the seed and flips
   // status the moment the phrase is generated, so a gate matching only
-  // 'missing' would render the chat on that very render and the user would
-  // never see the twelve words they cannot recover the vault without.
+  // 'missing' renders the chat on that very render and the user never sees the
+  // twelve words the vault cannot be recovered without.
   if (identityStatus === 'missing' || identityStatus === 'unconfirmed') {
     return (
       <IdentitySetup
@@ -263,9 +257,9 @@ function App() {
   }
 
   // 'ready' is never set without a derived identity, but the status and the key
-  // are two pieces of state and only one of them is in the type system. Narrow
-  // on the key itself, so everything below can take it as non-null rather than
-  // each consumer inventing its own fallback.
+  // are two pieces of state and only one is in the type system. Narrowing on
+  // the key lets everything below take it as non-null instead of each consumer
+  // inventing a fallback.
   if (!identity) {
     return (
       <div className="h-dvh flex items-center justify-center bg-base-300">

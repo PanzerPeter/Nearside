@@ -68,19 +68,16 @@ type StorageClient = ReturnType<typeof createClient>["storage"];
 /**
  * Whether a `chat-media` top-level folder belongs to a conversation this user
  * is in. The key is `${sortedA}_${sortedB}` (see src/lib/conversation.ts), so
- * the test is *whole-segment equality* after splitting on `_` — never
- * `folder.includes(uid)`. A substring test would widen the match to anything
- * that merely embeds the id, and this deletes the other participant's media
- * too; there is no undo. The two-segment shape is required as well, so a
- * malformed or hand-made folder name can never be swept in by accident.
- * Mirrors the split_part() participant check in storage-setup.sql.
+ * the test is whole-segment equality after splitting on `_`, never
+ * `folder.includes(uid)`. A substring test widens the match to anything that
+ * merely embeds the id, and this deletes the other participant's media with no
+ * undo. The two-segment shape is required too, so a malformed folder name
+ * cannot be swept in. Mirrors the split_part() check in storage-setup.sql.
  *
- * This file is Deno and outside tsconfig/eslint/vitest, so nothing here is
- * type-checked, linted or tested by the gate. The logic is mirrored — and
- * actually tested — as `isConversationFolder` in src/lib/conversation.ts.
- * Keep this copy behaviourally identical to that one; they cannot import
- * from each other across the runtime boundary, so a change to either must be
- * applied to both by hand.
+ * This file is Deno and sits outside tsconfig, eslint and vitest, so nothing
+ * here is checked by the gate. `isConversationFolder` in
+ * src/lib/conversation.ts is the tested twin. The two cannot import across the
+ * runtime boundary, so a change to either must be applied to both by hand.
  */
 function isConversationFolder(folder: string, uid: string): boolean {
   const parts = folder.split("_");

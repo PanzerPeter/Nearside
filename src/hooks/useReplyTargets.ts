@@ -30,11 +30,10 @@ export interface ReplyTargets {
  * @param messages The loaded window, both the source of quotes to resolve and
  *   the first place each one is looked for.
  * @param open The conversation's decrypt boundary (`ChatRoom.open`). Rows
- *   fetched here are as sealed as any other, and this hook used to hand them
- *   to the quote untouched — so a reply to anything older than the loaded
- *   window rendered a quote with no text in it at all, because `text` is a
- *   client-only field nothing had set. Taken as a callback rather than an
- *   identity so the peer-key resolution stays in the one place that owns it.
+ *   fetched here are as sealed as any other, and `text` is a client-only
+ *   field, so handing them to the quote untouched renders an empty quote for
+ *   any reply older than the loaded window. Taken as a callback rather than an
+ *   identity, so peer-key resolution stays in the one place that owns it.
  */
 export function useReplyTargets(
   me: string,

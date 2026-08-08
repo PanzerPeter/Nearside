@@ -1,13 +1,14 @@
 // The only revenue line this product can honestly carry.
 //
-// Cosmetics, sold once, through RevenueCat. No advertising SDK enters the build
-// (spec §11, enforced by `no-ads.test.ts`), and nothing functional sits behind a
-// purchase: a privacy product that paywalls privacy has sold the thing it
-// claims to defend. What is for sale is a theme and a set of chat backgrounds.
+// Cosmetics, sold once, through RevenueCat. No advertising SDK enters the
+// build (spec §11, enforced by `no-ads.test.ts`), and nothing functional sits
+// behind a purchase: a privacy product that paywalls privacy has sold the
+// thing it claims to defend. What is for sale is a theme and a set of chat
+// backgrounds.
 //
-// Everything here degrades to "owns nothing" off-device. A user with no
-// purchases is the common case, not an error path — the store has to render for
-// them, and so does the rest of the app.
+// Everything here degrades to "owns nothing" off-device. Owning no packs is
+// the common case rather than an error path, and the store has to render for
+// it.
 import { Capacitor } from '@capacitor/core';
 import { Purchases, type PurchasesPackage } from '@revenuecat/purchases-capacitor';
 
@@ -115,9 +116,8 @@ export function packById(id: string): Pack | undefined {
 
 /**
  * The packs this account owns, read from RevenueCat's active entitlements.
- *
- * Off-device — the browser build — this is always empty, and that is correct
- * rather than a limitation: there is no Play billing to ask.
+ * Always empty in the browser build, correctly: there is no Play billing to
+ * ask.
  */
 export async function packsFromEntitlements(): Promise<Set<string>> {
   if (!Capacitor.isNativePlatform()) return new Set();
@@ -143,9 +143,9 @@ let configured = false;
  */
 export async function initPurchases(userId: string): Promise<void> {
   if (!Capacitor.isNativePlatform()) return;
-  // One key per store, and they are not interchangeable: RevenueCat rejects an
+  // One key per store, and they are not interchangeable. RevenueCat rejects an
   // App Store receipt presented under a Play key, and the failure surfaces as
-  // "owns nothing" — every pack a user paid for, gone, with no error to read.
+  // "owns nothing": every paid-for pack gone, with no error to read.
   const apiKey =
     Capacitor.getPlatform() === 'ios'
       ? import.meta.env.VITE_REVENUECAT_IOS_KEY
@@ -213,11 +213,10 @@ export async function restorePurchases(): Promise<Set<string>> {
 /**
  * Applies a theme to the document, the mechanism `index.html` already uses.
  *
- * Applying is separated from owning on purpose: `applyTheme` is called at boot
- * from a stored preference, before any entitlement check has finished, so the
- * app does not flash the default theme at someone who paid for another one.
- * `reconcileTheme` is what walks it back if the entitlement turns out to be
- * gone.
+ * Applying is separate from owning. This runs at boot from a stored preference
+ * before any entitlement check finishes, so the app does not flash the default
+ * theme at someone who paid for another one; `themeForOwnership` walks it back
+ * if the entitlement turns out to be gone.
  */
 export function applyTheme(theme: string): void {
   document.documentElement.setAttribute('data-theme', theme);
@@ -230,12 +229,10 @@ export function applyTheme(theme: string): void {
 }
 
 /**
- * Repoints `<meta name="theme-color">` at the theme that is now active.
- *
- * The tag is baked into `index.html` as the default theme's canvas, so before
- * this existed a light theme kept a near-black address bar and PWA status bar
- * above a white app. Read from the live `--b3` (daisyUI's base-300, the canvas
- * tier) rather than a table, so a theme edit in `tailwind.config.js` cannot
+ * Repoints `<meta name="theme-color">` at the active theme. The tag is baked
+ * into `index.html` as the default theme's canvas, so without this a light
+ * theme keeps a near-black address bar above a white app. Read from the live
+ * `--b3` rather than a table, so a theme edit in `tailwind.config.js` cannot
  * drift from it.
  */
 function syncBrowserChrome(): void {
@@ -261,10 +258,10 @@ export function storedTheme(): string {
 /**
  * The theme that should be showing, given what is owned.
  *
- * A stored theme belonging to a pack the account no longer owns falls back to
- * the default — a refund must not leave the paid-for look in place. A free
- * theme is always kept: it was never an entitlement, so an empty entitlement
- * set says nothing about it. Anything unrecognised is the default.
+ * A stored theme whose pack the account no longer owns falls back to the
+ * default, so a refund does not leave the paid-for look in place. Free themes
+ * are always kept: they were never entitlements, so an empty entitlement set
+ * says nothing about them. Anything unrecognised is the default.
  */
 export function themeForOwnership(stored: string, owned: ReadonlySet<string>): string {
   if (FREE_THEMES.some((t) => t.theme === stored)) return stored;

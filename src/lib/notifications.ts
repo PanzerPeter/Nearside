@@ -1,24 +1,17 @@
-// Notifications, through OneSignal on Android.
+// Notifications, through OneSignal on Android, plus the browser-side helpers
+// the foreground banner path still uses. OneSignal owns the tray entry alone;
+// the Web Push (VAPID) transport that competed for it is gone.
 //
-// Two transports was one too many. Web Push (VAPID) and OneSignal both wanted
-// to own the same tray entry, and the web one only ever worked in the browser
-// build — which is a development convenience, not a target. The VAPID path,
-// its service-worker handlers and the `push_subscriptions` writes are gone;
-// what survives here are the browser-side helpers the foreground path still
-// needs, plus the OneSignal wiring.
-//
-// **A notification never carries message content.** The server has none to
-// carry — after 0023 there is no body column to read — and the copy must not
-// imply otherwise. "New message from Alice" is the most that can honestly be
-// said, and even the name comes from `profiles.display_name`, which the server
-// does hold and which the transparency screen says so.
+// A notification never carries message content. After 0023 the server has no
+// body column to read, so it could not leak one if it tried, and the copy must
+// not imply otherwise. "New message from Alice" is the most that can honestly
+// be said, and even the name comes from `profiles.display_name`, which the
+// transparency screen lists as something the server holds.
 import { Capacitor } from '@capacitor/core';
 
-/** Tag consulted by the In-App Message that chases an unconfirmed recovery
- *  phrase. Absent means the user has been shown twelve words and never
- *  confirmed copying them — the highest-stakes unfinished action in the app,
- *  because a lost phone then destroys the vault and no support process
- *  recovers it. */
+/** Tag the In-App Message reads to chase an unconfirmed recovery phrase.
+ *  Absent means twelve words were shown and never confirmed, after which a
+ *  lost phone destroys the vault and no support process recovers it. */
 const RECOVERY_TAG = 'recovery_confirmed';
 
 /** Loaded lazily and only on a device. The Cordova plugin reaches for
@@ -35,16 +28,12 @@ const MAX_DEFAULT_DEPTH = 4;
  * The plugin instance inside whatever the dynamic import hands back.
  *
  * `onesignal-cordova-plugin` declares `"type": "module"` but ships a CommonJS
- * `main`, so the bundler wraps it twice: the namespace's `default` is the CJS
- * exports object, and the instance is one level below that at
- * `.default.default`. Reading `.default` gave a bag of exported classes with no
- * `initialize` on it, every call in this module threw into its own catch, and
- * the whole notification stack failed without a word — the Settings toggle
- * refused to turn on, and OneSignal's native side logged "no appId provided" at
- * every launch because `initialize` had never reached it.
- *
- * Unwrapping by feature rather than by a fixed number of hops keeps this
- * working whichever shape a future bundler or plugin release produces.
+ * `main`, so the bundler wraps it twice and the instance sits at
+ * `.default.default`. Reading `.default` yields a bag of exported classes with
+ * no `initialize`, which makes every call here fail silently into its own
+ * catch: the Settings toggle refuses to turn on and OneSignal logs "no appId
+ * provided" at launch. Unwrapping by feature rather than a fixed hop count
+ * survives whatever shape a future bundler or plugin release produces.
  */
 export function resolveOneSignal(mod: unknown): OneSignalModule | null {
   let candidate = mod;
@@ -75,9 +64,9 @@ let initialised = false;
  * Starts OneSignal and binds this device to the Supabase account.
  *
  * The external user id is the Supabase user id, so a campaign targets an
- * account rather than a device — which is what makes the recovery-phrase
- * message land on the right person when they have two phones, and what stops
- * it following the account off a phone that has been handed on.
+ * account rather than a device. That is what reaches someone holding two
+ * phones, and what stops notifications following an account onto a phone that
+ * has been handed on.
  */
 export async function initNotifications(userId: string): Promise<void> {
   const os = await oneSignal();
@@ -118,11 +107,10 @@ export async function requestPushPermission(): Promise<boolean> {
 /**
  * Whether Android would still show the permission dialog if asked.
  *
- * Android 13 stops offering the dialog once it has been dismissed, and from
- * then on `requestPermission` returns false without anything appearing on
- * screen. That is the difference between "tap this and you will be asked" and
- * "the only way back is system settings", and the app has to say which one it
- * is or the toggle reads as broken.
+ * Android 13 stops offering it once dismissed, after which `requestPermission`
+ * returns false with nothing appearing on screen. The app has to distinguish
+ * "tap this and you will be asked" from "the only route left is system
+ * settings", or the toggle reads as broken.
  */
 export async function canRequestPushPermission(): Promise<boolean> {
   const os = await oneSignal();
@@ -153,16 +141,12 @@ export interface PushOfferState extends PushState {
 /**
  * Whether to show the one-time offer that gets a new install asked at all.
  *
- * Nothing in the app used to ask. The permission was reachable only from a
- * toggle buried in Settings, so an install that never opened that screen never
- * saw the dialog and never received a notification, with nothing anywhere
- * saying why.
- *
- * It is still not asked at launch. It waits until the account exists and the
- * recovery phrase is dealt with, which is the first moment "we can tell you
- * when a message arrives" means anything to the person reading it. And it is
- * asked once: a card that comes back every launch is what teaches people to
- * deny by reflex.
+ * Not at launch: it waits until the account exists and the recovery phrase is
+ * dealt with, the first moment "we can tell you when a message arrives" means
+ * anything to the person reading it. And once only, because a card that
+ * returns every launch teaches people to deny by reflex. Without this offer
+ * the permission is reachable only from a toggle in Settings, so an install
+ * that never opens that screen never receives a notification.
  */
 export function shouldOfferPush(state: PushOfferState): boolean {
   if (!state.native || state.alreadyAsked) return false;
@@ -210,10 +194,9 @@ export async function setPushEnabled(enabled: boolean): Promise<void> {
 /**
  * Records whether this account has confirmed its recovery phrase.
  *
- * Written as a tag rather than inferred server-side because the server has no
- * way to know: confirmation happens against a seed held in Android's Keystore,
- * and nothing about it is ever uploaded. The In-App Message targets the
- * absence of `true`.
+ * A tag rather than a server-side inference, because the server cannot know:
+ * confirmation happens against a seed in Android's Keystore and nothing about
+ * it is uploaded. The In-App Message targets the absence of `true`.
  */
 export async function setRecoveryConfirmed(confirmed: boolean): Promise<void> {
   const os = await oneSignal();
@@ -240,37 +223,33 @@ export async function onNotificationOpened(
   }
 }
 
-// ---- Browser-side helpers, still used by the foreground path ----------------
+// ---- Browser-side helpers, for the foreground path --------------------------
 //
-// These are about the `Notification` API in the WebView, not about a transport.
-// `useMessageNotifications` raises a banner for a message that arrives while
-// the app is open and focused elsewhere, and that path is unchanged by the move
-// to OneSignal.
+// The `Notification` API in the WebView, not a transport.
+// `useMessageNotifications` raises a banner when a message arrives while the
+// app is open and focused elsewhere.
 
 function notificationsSupported(): boolean {
   return typeof window !== 'undefined' && 'Notification' in window;
 }
 
 /**
- * The browser's own notification permission.
+ * The browser's own notification permission, for the browser build.
  *
- * An Android WebView has no `window.Notification` at all, so this answers
- * "denied" on the platform the app actually ships to, and the foreground
- * banner path it gates never runs there. That is the right outcome rather than
- * a gap: on Android the tray entry comes from OneSignal, which shows it whether
- * the app is open or not. This is here for the browser build.
+ * An Android WebView has no `window.Notification`, so this answers "denied" on
+ * the shipping platform and the foreground banner never runs there. That is
+ * correct rather than a gap: on Android OneSignal owns the tray entry whether
+ * the app is open or not.
  */
 export function notificationPermission(): NotificationPermission {
   return notificationsSupported() ? Notification.permission : 'denied';
 }
 
 /**
- * Dismiss any notifications already shown for a conversation.
- *
- * Opening a chat is the user reading it, so leaving three stacked banners in
- * the tray afterwards is noise — and worse, it keeps the app icon lit for
- * messages that are visibly on screen. Matched by the same `dm:<senderId>` tag
- * the foreground path uses.
+ * Dismiss notifications already shown for a conversation, matched by the same
+ * `dm:<senderId>` tag the foreground path uses. Opening a chat is the user
+ * reading it, and three stacked banners left behind keep the app icon lit for
+ * messages visibly on screen.
  */
 export async function closeNotificationsFor(tag: string): Promise<void> {
   if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;

@@ -11,19 +11,17 @@ const WRITE_INTERVAL_MS = 60_000;
  * Persists this device's presence as a `last_seen_at` timestamp on the
  * signed-in user's profile row, throttled to once per 60s.
  *
- * The local device clock is acceptable here — unlike everywhere else in this
- * codebase (see `src/lib/receipts.ts`), `last_seen_at` is only ever formatted
- * for display ("Last seen 14:32") and never compared against a server-stamped
- * column, so a few seconds of client/server clock skew has no correctness
- * consequence. Receipts, by contrast, are watermarks compared against
- * `messages.created_at` and must use the server clock or comparisons break.
+ * The local device clock is acceptable here, unlike anywhere else in this
+ * codebase. `last_seen_at` is only ever formatted for display and never
+ * compared against a server-stamped column, so clock skew costs nothing.
+ * Receipts are watermarks compared against `messages.created_at` and must use
+ * the server clock; see `src/lib/receipts.ts`.
  *
- * Writes fire on mount, on `visibilitychange` (only when becoming visible),
- * on `focus`, and on a 60s interval — but the interval alone is not reliable:
- * browsers clamp `setInterval` in background tabs, so a tab that's been
- * hidden for a while won't tick on schedule. The visibility/focus listeners
- * cover the case that matters (the user comes back), and the interval only
- * covers the case where the tab stays open and visible the whole time.
+ * Writes fire on mount, on becoming visible, on `focus`, and on a 60s
+ * interval. The interval alone is not enough: browsers clamp `setInterval` in
+ * background tabs, so a tab hidden for a while does not tick on schedule. The
+ * visibility and focus listeners cover the case that matters, someone coming
+ * back to the app.
  */
 export function useLastSeen(session: Session | null): void {
   const lastWriteAt = useRef(0);

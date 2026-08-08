@@ -5,17 +5,16 @@ import { classifyMedia, mediaPath } from './conversation';
  * the two participants' choices are independent rows and independent objects.
  *
  * The image shares the conversation's `chat-media` folder, so the existing
- * participant-scoped storage policies already cover it and no new bucket is
- * involved. The `bg-` prefix is purely descriptive — nothing keys off it,
- * because the authoritative pointer is the `media_path` column on
- * `chat_backgrounds`. In particular, the media cap in `useMediaSend` trims by walking
- * `messages` rows rather than by listing the folder, so a background is never
- * mistaken for an old attachment.
+ * participant-scoped storage policies cover it and no new bucket is involved.
+ * The `bg-` prefix is descriptive only; the authoritative pointer is the
+ * `media_path` column on `chat_backgrounds`. The media cap in `useMediaSend`
+ * trims by walking `messages` rows rather than listing the folder, so a
+ * background is never mistaken for an old attachment.
  *
- * Note the storage folder is per-conversation, not per-user: the peer cannot
- * discover your background (the row naming it is unreadable to them), but the
- * bucket policy would let them read the object if they listed the folder. See
- * the README note — making that airtight needs new `chat-media` policies.
+ * The storage folder is per conversation rather than per user. The peer cannot
+ * discover your background, since the row naming it is unreadable to them, but
+ * the bucket policy would let them read the object if they listed the folder.
+ * Closing that needs new `chat-media` policies; see the README.
  */
 
 /** Max background upload size. Well under the bucket's 50 MB video ceiling: a
@@ -52,12 +51,10 @@ export interface WriteError {
 /**
  * A user-facing message for a failed background write.
  *
- * The generic "could not set the background" this used to return made the two
- * failures that actually happen indistinguishable from each other and from a
- * genuine RLS denial — a setup problem and a permission problem read the same,
- * so neither could be acted on. Codes with an unambiguous cause get a specific
- * message; everything else falls through to the server's own text rather than
- * being replaced by a guess.
+ * A generic "could not set the background" makes a setup problem and a
+ * permission problem read identically, so neither can be acted on. Codes with
+ * an unambiguous cause get a specific message; everything else falls through
+ * to the server's own text rather than a guess.
  */
 export function describeWriteError(error: WriteError | null | undefined): string {
   if (!error) return 'Could not save the background.';

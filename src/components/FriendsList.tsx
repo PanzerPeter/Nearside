@@ -59,36 +59,33 @@ export function FriendsList({
   const [showAddModal, setShowAddModal] = useState(false);
   const { generation, live } = useConnection();
 
-  // Live refs so the realtime handler always sees current friends/selection.
-  // Assigned directly during render (not inside an effect) so they're never
-  // one render stale, regardless of what any effect below is gated on.
+  // Live refs so the realtime handler always sees current friends and
+  // selection. Assigned during render rather than in an effect, so they are
+  // never one render stale whatever the effects below are gated on.
   const friendsRef = useRef<ConversationSummary[]>([]);
   friendsRef.current = conversations;
   const selectedRef = useRef<string | null>(selectedFriendId);
   selectedRef.current = selectedFriendId;
 
-  // Both fetchers are declared here, above every effect that lists them as a
-  // dependency: a dependency array is evaluated during render, so a `const`
-  // defined further down the component body would be read in its temporal dead
-  // zone. Each depends only on `me`, which cannot change for a mounted list, so
-  // the identities are stable and none of the effects below re-runs for them.
+  // Both fetchers are declared above every effect that depends on them: a
+  // dependency array is evaluated during render, so a `const` defined further
+  // down the body would be read in its temporal dead zone. Each depends only
+  // on `me`, which cannot change for a mounted list, so their identities are
+  // stable and no effect below re-runs for them.
   const fetchConversations = useCallback(async () => {
     const { data, error } = await supabase.rpc('conversation_list');
-    // A read that failed is not a list that is empty. Writing `data ?? []`
-    // here turned a single transient RPC error into a sidebar with nothing in
-    // it — not even the vault, which the RPC always returns — and nothing
-    // refetches on its own, so the only way back was restarting the app.
+    // A read that failed is not a list that is empty. `data ?? []` here turns
+    // one transient RPC error into an empty sidebar, missing even the vault
+    // the RPC always returns, with nothing to refetch it but an app restart.
     if (error) return;
-    // Ordering (self pinned first, then newest activity) lives in
-    // lib/conversation.ts so it can be tested without a component.
+    // Ordering lives in lib/conversation.ts so it can be tested without a
+    // component.
     const rows = sortConversations((data ?? []) as ConversationSummary[], me);
     setConversations(rows);
 
-    // Previews come from the local mirror, because 0023 took the body away
-    // from the server. Resolved after the rows are already on screen: the list
-    // must not wait on the local database to paint, and a row briefly showing
-    // "Encrypted message" before its preview lands is a better failure than a
-    // sidebar that appears a frame late.
+    // Previews come from the local mirror, since 0023 took the body away from
+    // the server. Resolved after the rows are on screen: a row briefly showing
+    // "Encrypted message" beats a sidebar that paints a frame late.
     const resolved = await Promise.all(
       rows.map(async (row) => [row.peer_id, (await cachedPreview(row.peer_id))?.text ?? null] as const)
     );
@@ -118,24 +115,20 @@ export function FriendsList({
     );
   }, [me]);
 
-  // `generation` for the same reason the channels below take it: after a wake
-  // — or the resume that follows a deep link back into the app — a fetch that
-  // was in flight over a dead socket never lands, and re-subscribing does not
-  // re-read anything. This is the retry that makes a failed first load
-  // temporary rather than permanent.
+  // `generation` for the same reason the channels below take it: after a wake,
+  // or the resume following a deep link, a fetch in flight over a dead socket
+  // never lands, and re-subscribing re-reads nothing. This is the retry that
+  // makes a failed first load temporary rather than permanent.
   useEffect(() => {
     void fetchConversations();
     void fetchPendingRequests();
   }, [generation, fetchConversations, fetchPendingRequests]);
 
-  // Live friendship updates: incoming requests, accepts, declines and removals
-  // all arrive here so the list stays current without a reload. RLS scopes the
-  // stream to rows where this user is the requester or addressee, so any event
-  // is relevant — just refetch both views.
-  // `generation` is a dep on this and the messages channel below: after a wake
-  // the old channels are joined to a socket that no longer exists, and nothing
-  // rejoins them on its own. Re-running the effect tears them down and builds
-  // fresh ones.
+  // Live friendship updates: requests, accepts, declines and removals. RLS
+  // scopes the stream to rows naming this user, so every event is relevant and
+  // both views refetch. `generation` is a dep here and on the messages channel
+  // below, because after a wake the old channels are joined to a socket that
+  // no longer exists and nothing rejoins them on its own.
   useEffect(() => {
     const channel = supabase
       .channel(`friendships:${me}`)
@@ -165,12 +158,11 @@ export function FriendsList({
   }, [unread, onUnreadTotalChange]);
 
   // The Profile handed upward on click is a snapshot of that render's row, and
-  // nothing re-syncs it while the chat stays open. That was harmless until
-  // last_seen_at joined Profile: it changes continuously, so the chat header
-  // would report the friend's last-seen time as of when you opened the chat,
-  // not as of now. This refetches nothing — it just re-reports the row this
-  // list is already keeping current. Keyed on the values rather than the row
-  // object, which is new on every refetch.
+  // nothing re-syncs it while the chat stays open. `last_seen_at` changes
+  // continuously, so without this the chat header reports the friend's
+  // last-seen time as of when the chat was opened. Nothing is refetched; the
+  // row this list already keeps current is re-reported. Keyed on the values
+  // rather than the row object, which is new on every refetch.
   const selectedRow = conversations.find((c) => c.peer_id === selectedFriendId);
   const selectedUsername = selectedRow?.display_name;
   const selectedAvatar = selectedRow?.avatar_url;
@@ -187,13 +179,11 @@ export function FriendsList({
     });
   }, [selectedFriendId, selectedUsername, selectedAvatar, selectedLastSeen]);
 
-  // Stable primitive dep: `conversations` gets a new array identity on every
-  // refetch (recency reshuffles, preview text edits, ...), but a full unread
-  // recount is only meaningful when the *set of peers* actually changes.
-  // Keying on the array itself meant every inbound message paid for two
-  // round trips — the optimistic increment in the realtime handler below,
-  // immediately clobbered by this effect re-running off the fetchConversations
-  // it triggered. Same pattern as usePresence's peerKey.
+  // Stable primitive dep. `conversations` gets a new array identity on every
+  // refetch, but a full unread recount only means anything when the *set of
+  // peers* changes. Keying on the array made every inbound message cost two
+  // round trips: the optimistic increment below, clobbered by this effect
+  // re-running off the refetch it triggered. Same pattern as usePresence.
   const peerKey = useMemo(
     () => conversations.map((c) => c.peer_id).sort().join(','),
     [conversations]
@@ -207,12 +197,11 @@ export function FriendsList({
     }
     let cancelled = false;
     fetchUnreadCounts().then((counts) => {
-      // A refetch triggered while this one was in flight has already published
-      // fresher counts; don't overwrite it with our stale snapshot.
+      // A refetch that started while this one was in flight has published
+      // fresher counts already; this snapshot must not overwrite them.
       if (cancelled) return;
-      // The open conversation is read by definition. Its watermark may still
-      // be mid-write (advanceRead is a round trip), which would otherwise
-      // resurrect the badge we just cleared.
+      // The open conversation is read by definition, and its watermark may
+      // still be mid-write, which would resurrect the badge just cleared.
       const open = selectedRef.current;
       if (open) counts.delete(open);
       setUnread(counts);
@@ -226,8 +215,8 @@ export function FriendsList({
   /** Drop a conversation's badge and persist the marker behind it. */
   const clearUnreadFor = useCallback(
     (friendId: string) => {
-      // Your own notes are read by definition — `unread_counts()` excludes
-      // them, and `no_self_receipt` forbids the watermark row this would write.
+      // Your own notes are read by definition: `unread_counts()` excludes them
+      // and `no_self_receipt` forbids the watermark row this would write.
       if (isSelfChat(me, friendId)) return;
       setUnread((prev) => {
         if (!prev.has(friendId)) return prev;
@@ -236,10 +225,9 @@ export function FriendsList({
         return next;
       });
       // Fire-and-forget: the badge is already gone locally, and a failed write
-      // only means the count is recomputed on the next load.
-      // Anchor to the newest message they actually sent us: the watermark is
-      // compared against `created_at`, so a local clock would be wrong by the
-      // device's skew in whichever direction it happens to drift.
+      // only means the count is recomputed on the next load. Anchored to the
+      // newest message they actually sent, because the watermark is compared
+      // against `created_at` and a local clock is wrong by the device's skew.
       void supabase
         .from('messages')
         .select('created_at')
@@ -254,10 +242,9 @@ export function FriendsList({
             if (data?.created_at) void advanceRead(friendId, data.created_at);
           },
           // supabase-js resolves with { error } rather than rejecting, but a
-          // transport-level failure could still reject; swallow it the same
-          // way as the error path above — the badge recomputes on next load.
-          // (The builder is only a thenable, not a full Promise, so the
-          // rejection handler goes here rather than in a chained `.catch`.)
+          // transport-level failure can still reject. The builder is a thenable
+          // rather than a full Promise, so the handler goes here instead of in
+          // a chained `.catch`.
           () => {}
         );
     },
@@ -271,16 +258,15 @@ export function FriendsList({
   }, [selectedFriendId, clearUnreadFor]);
 
   // Live unread updates: increment on inbound messages unless that chat is
-  // open and focused; either way refetch so the row moves and its preview updates.
+  // open and focused, and refetch either way so the row moves and its preview
+  // updates.
   //
-  // Four bindings on one channel, not one: `receiver_id=eq.${me}` only ever
-  // matches messages sent TO us, so it never fires for our own sends — a
-  // conversation you just messaged would otherwise sit frozen with the
-  // peer's older preview and stale ordering until they reply. UPDATE is
-  // covered on both directions too, so an edit or soft-delete of the last
-  // message (ours or theirs) refreshes the preview instead of showing stale
-  // text. fetchConversations() only reads via RPC, so none of these refetches
-  // writes to `messages` and none can re-trigger this subscription itself.
+  // Four bindings rather than one. `receiver_id=eq.${me}` never fires for our
+  // own sends, so a conversation you just messaged would sit frozen on the
+  // peer's older preview until they replied. UPDATE is bound in both
+  // directions so an edit or soft-delete of the last message refreshes the
+  // preview. `fetchConversations` only reads, so none of these refetches can
+  // re-trigger the subscription.
   const unreadChannelKey = `friends-unread:${me}`;
   useEffect(() => {
     const channel = supabase
@@ -310,8 +296,8 @@ export function FriendsList({
           void fetchConversations();
         }
       )
-      // Our own sends: never touch unread state, but the row's preview and
-      // recency ordering still need to move.
+      // Our own sends never touch unread state, but the row's preview and
+      // recency ordering still have to move.
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'messages', filter: `user_id=eq.${me}` },

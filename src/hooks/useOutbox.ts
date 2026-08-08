@@ -1,9 +1,9 @@
 // Optimistic text sends and the queue that makes them durable.
 //
-// A text send never touches the network on the path the user can feel: the
-// bubble appears and the composer clears before any round trip, and the
-// message is in IndexedDB before `send` returns. Everything after that —
-// insert, retry, back-off, giving up — happens in `flush`.
+// Nothing the user can feel touches the network: the bubble appears and the
+// composer clears before any round trip, and the message is in IndexedDB
+// before `send` returns. Insert, retry, back-off and giving up all happen in
+// `flush`.
 
 import { useEffect, useRef, useState, type MutableRefObject } from 'react';
 import { supabase } from '../lib/supabase';
@@ -28,9 +28,8 @@ export interface Outbox {
   /** Sends not yet acknowledged by the server. Rendered after `messages`
    *  rather than merged into it — see `ChatRoom`. */
   pending: PendingMessage[];
-  /** `pending`, readable from the realtime callbacks — those close over the
-   *  state as it was when `subscribe` ran, which for a long-lived channel is
-   *  almost never the current one. */
+  /** `pending`, readable from the realtime callbacks, which close over the
+   *  state as it was when `subscribe` ran. */
   pendingRef: MutableRefObject<PendingMessage[]>;
   /** True for the moment `send` spends handing the message to IndexedDB. */
   sending: boolean;
@@ -50,17 +49,16 @@ interface OutboxOptions {
   isSelf: boolean;
   /** The conversation the component currently has open. */
   loadedFor: MutableRefObject<string>;
-  /** Bumped when the app wakes: a queue left behind by a dropped connection
-   *  gets another go. */
+  /** Bumped when the app wakes, giving a queue left behind by a dropped
+   *  connection another go. */
   generation: number;
-  /** The conversation's decrypt boundary, for reading back a row this client
-   *  wrote. */
+  /** The decrypt boundary, for reading back a row this client wrote. */
   open: (rows: Message[]) => Promise<Message[]>;
   /** Hand the authoritative row to the thread. Called immediately before
-   *  `pending` is trimmed, and with no `await` in between — see `flush`. */
+   *  `pending` is trimmed, with no `await` in between. See `flush`. */
   onAdopt: (row: Message) => void;
-  /** Run the moment the optimistic bubble exists: clear the composer, drop the
-   *  reply target, take focus back. */
+  /** Run once the optimistic bubble exists: clear the composer, drop the reply
+   *  target, take focus back. */
   onQueued: () => void;
   onError: (message: string) => void;
 }
@@ -81,26 +79,22 @@ export function useOutbox({
   const [sending, setSending] = useState(false);
 
   const pendingRef = useRef<PendingMessage[]>(pending);
-  // Messages `enqueue` could not persist (IndexedDB unavailable or denied),
-  // keyed by id. These never appear in `listFor`'s results, so without this
-  // `flush` would never attempt them at all — the composer would show a
-  // "pending" bubble that is never sent, retried, or failed. Reset alongside
-  // `pending` on every conversation switch, since nothing in here is durable
-  // across one anyway.
+  // Messages `enqueue` could not persist (IndexedDB unavailable or denied).
+  // They never appear in `listFor`, so without this the composer would show a
+  // "pending" bubble that is never sent, retried or failed. Reset with
+  // `pending` on a conversation switch; nothing here is durable across one.
   const unqueuedRef = useRef<Map<string, PendingMessage>>(new Map());
-  // The pending timer, and which conversation's queue it will flush. Keyed
-  // rather than a bare boolean so a switch mid-flush doesn't make the new
-  // conversation's own mount-flush a no-op — see `flush`.
+  // Which conversation's queue the pending timer will flush. Keyed rather than
+  // a bare boolean so a switch mid-flush doesn't make the new conversation's
+  // mount-flush a no-op.
   const flushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const flushInFlightFor = useRef<string | null>(null);
-  // Set when a flush is asked for while one is already running for the same
-  // conversation, so the running pass re-runs once instead of the request
-  // being lost — see `flush`.
+  // Set when a flush is asked for while one is already running, so the running
+  // pass re-runs once instead of the request being lost.
   const flushAgainFor = useRef<string | null>(null);
 
-  // Written from an effect, not inline during render: a ref write belongs in
-  // the commit phase, which runs once per commit rather than once per
-  // render-body invocation.
+  // In an effect rather than inline during render: a ref write belongs in the
+  // commit phase, which runs once per commit rather than once per render body.
   useEffect(() => {
     pendingRef.current = pending;
   }, [pending]);
@@ -136,9 +130,8 @@ export function useOutbox({
 
     setSending(true);
     // The local clock only orders this bubble among this session's own
-    // optimistic sends — it never reaches a receipt comparison, because the
-    // row is discarded the moment the server's `messages` insert (with its
-    // own, authoritative `created_at`) arrives over realtime and replaces it.
+    // optimistic sends. It never reaches a receipt comparison: the row is
+    // discarded once the server's insert arrives with its own `created_at`.
     const msg: PendingMessage = {
       id: crypto.randomUUID(),
       user_id: me,
@@ -151,27 +144,23 @@ export function useOutbox({
     setPending((p) => [...p, msg]);
     onQueued();
     const persisted = await enqueue(msg);
-    // IndexedDB unavailable or denied: the outbox can't take custody of this
-    // message, so `flush` would never see it via `listFor` and it would sit on
-    // screen as "pending" forever. Track it here instead so `flush` still
-    // attempts (and retries, and can fail) it directly.
+    // IndexedDB unavailable or denied. `flush` reads `listFor`, so an
+    // uncaptured message would sit on screen as "pending" forever. Tracked
+    // here so it is still attempted, retried and failed like any other.
     if (!persisted) unqueuedRef.current.set(msg.id, msg);
     setSending(false);
     void flush();
   }
 
   /**
-   * The insert the composer used to make directly, now made only from the
-   * queue. Returns the authoritative row (not just `true`) so the caller can
-   * swap it in for the optimistic bubble itself.
+   * The only place a message is inserted. Returns the authoritative row rather
+   * than a boolean, so the caller can swap it in for the optimistic bubble.
    *
-   * The insert carries the queued message's own uuid as the row's primary
-   * key, which is what makes sending idempotent. Without it, a send whose
-   * *response* was lost — a dropped connection, a frozen tab, a timeout —
-   * looked identical to one that never reached the server at all, and the
-   * retry wrote a second copy: the "message sent twice" everyone sees on a
-   * flaky link. With it, the retry collides with the row it already created,
-   * and that collision is read here as the delivery it actually was.
+   * The insert carries the queued message's uuid as the row's primary key,
+   * which is what makes sending idempotent. Without it a send whose *response*
+   * was lost looks identical to one that never arrived, and the retry writes a
+   * second copy: the duplicate message everyone sees on a flaky link. With it
+   * the retry collides, and the collision is read here as the delivery it was.
    */
   async function attemptSend(msg: PendingMessage): Promise<Message | null> {
     try {
@@ -195,20 +184,18 @@ export function useOutbox({
 
       if (isDuplicateSend(insertError)) {
         const row = await fetchOwnMessageRow(me, msg.id);
-        // A null here is treated as an ordinary failed attempt — the send is
-        // retried, hits the same collision, and tries again, which is
-        // harmless.
+        // Null is an ordinary failed attempt: the send retries, hits the same
+        // collision and tries again, which is harmless.
         if (!row) return null;
-        // The row landed but its response never did, so the push for it was
-        // never asked for either — this retry is the first chance to send it.
+        // The row landed but its response never did, so nobody asked for the
+        // push either. This retry is the first chance to send it.
         notifyReceiver(row.id, isSelf);
         const [opened] = await open([row]);
         return opened;
       }
-      // Genuinely offline fetches reject rather than resolving with an
-      // `error` field on some stacks — the outbox exists specifically for
-      // this case, so treat a thrown network error as an ordinary failure
-      // rather than letting it escape as an unhandled rejection.
+      // Some stacks reject an offline fetch rather than resolving with an
+      // `error` field. The outbox exists for exactly this case, so a thrown
+      // network error is an ordinary failure, not an unhandled rejection.
       if (insertError || !inserted) return null;
       notifyReceiver(inserted.id, isSelf);
       const [opened] = await open([inserted as Message]);
@@ -226,11 +213,9 @@ export function useOutbox({
     }, delayMs);
   }
 
-  /** In-memory equivalent of `bumpAttempts`, for a message the outbox never
-   *  captured (see `unqueuedRef`) — same shape, so `flush` can treat a durable
-   *  and a non-durable entry identically apart from where the new attempt
-   *  count is written. Null when the entry has left the queue meanwhile,
-   *  matching what `bumpAttempts` reports for the same case. */
+  /** In-memory `bumpAttempts` for a message the outbox never captured (see
+   *  `unqueuedRef`). Same shape and same null-when-gone contract, so `flush`
+   *  treats durable and non-durable entries identically. */
   function bumpUnqueued(msg: PendingMessage): PendingMessage | null {
     const current = unqueuedRef.current.get(msg.id);
     if (!current) return null;
@@ -245,47 +230,36 @@ export function useOutbox({
     setPending((prev) => prev.filter((m) => !drop.has(m.id)));
   }
 
-  /** Both halves are no-ops when the entry isn't there, so callers that don't
-   *  know which queue captured it (the realtime adoption paths) can just call
-   *  this. */
+  /** Both halves are no-ops when the entry isn't there, so the realtime
+   *  adoption paths can call this without knowing which queue captured it. */
   async function retire(id: string): Promise<void> {
     unqueuedRef.current.delete(id);
     await dequeue(id);
   }
 
   /**
-   * Drain this conversation's queue: attempt every entry, dequeue and drop
-   * from `pending` on success, or bump its attempt count on failure — giving
-   * up (and toasting) once `MAX_ATTEMPTS` is reached. A message that reaches
-   * the server is *not* pushed into `messages` here; the realtime INSERT
-   * delivers the authoritative row and `mergeMessages` de-dupes it.
+   * Drain this conversation's queue: attempt every entry, dequeue and drop it
+   * from `pending` on success, bump its attempt count on failure, give up and
+   * toast at `MAX_ATTEMPTS`. A delivered message is not pushed into `messages`
+   * here; the realtime INSERT carries the authoritative row.
    *
-   * Two sources feed the attempt list: the entries read from IndexedDB via
-   * `listFor`, and `unqueuedRef`, messages `send` couldn't persist there at
-   * all (storage denied, private browsing). They're disjoint by construction —
-   * `send` puts a given message's id in exactly one of them — so attempting
-   * both here can't double-send; it's what keeps a message going out even when
-   * the outbox itself is unavailable.
+   * Two disjoint sources feed the attempt list: IndexedDB via `listFor`, and
+   * `unqueuedRef` for what `send` could not persist there. `send` files a
+   * given id in exactly one of them, so attempting both cannot double-send.
    *
-   * Guarded per-conversation (not with a single flag) so a slow flush for a
-   * conversation you've since left doesn't block the new one's mount-flush.
-   * Durable writes (`dequeue`, `bumpAttempts`, and the `unqueuedRef`
-   * mutations that stand in for them) run unconditionally — they only touch
-   * storage local to this function, not the screen, so they're correct
-   * regardless of which conversation is open. Only the React state updates
-   * (`setPending`, the error toast) are gated behind `loadedFor`, since those
-   * alone paint *this* screen. Do not "simplify" this back to one shared gate:
-   * it used to gate the durable write too, so a success landing exactly as the
-   * user switched conversations away never got dequeued — the next flush
-   * re-sent it and produced a duplicate row on the server.
+   * The guard is per conversation rather than a single flag, so a slow flush
+   * for a chat you have left doesn't block the new one's mount-flush. Durable
+   * writes run unconditionally, since they touch storage rather than the
+   * screen; only `setPending` and the error toast are gated behind
+   * `loadedFor`. Do not collapse these into one gate: gating the durable write
+   * too meant a success landing as the user switched away was never dequeued,
+   * and the next flush re-sent it as a duplicate row.
    */
   async function flush(): Promise<void> {
     const forFriend = peerId;
-    // A flush already reading this conversation's queue snapshotted it before
-    // whatever prompted this call — a fresh `send`, a reconnect — so the new
-    // work is invisible to it. Ask for one more pass instead of dropping the
-    // request on the floor, which used to leave a message queued behind a
-    // concurrent flush with nothing left to retry it.
+    // A flush already running snapshotted the queue before whatever prompted
+    // this call, so the new work is invisible to it. Ask for one more pass
+    // rather than dropping the request and stranding a queued message.
     if (flushInFlightFor.current === forFriend) {
       flushAgainFor.current = forFriend;
       return;
@@ -295,9 +269,8 @@ export function useOutbox({
     try {
       const queued = await listFor(me, forFriend);
       if (loadedFor.current !== forFriend) return;
-      // Seeds `pending` with anything that survived a reload — the mount
-      // flush is the only trigger with no prior `send` call to have added
-      // these already.
+      // Seeds `pending` with anything that survived a reload. The mount flush
+      // is the only trigger with no prior `send` call to have added these.
       setPending((prev) => {
         const known = new Set(prev.map((m) => m.id));
         const additions = queued.filter((m) => !known.has(m.id));
@@ -315,12 +288,11 @@ export function useOutbox({
         const onScreen = loadedFor.current === forFriend;
 
         if (row) {
-          // Both updates in one commit, with no `await` between them: either
-          // ordering split across two commits is visible at 60fps. Dropping
-          // `pending` first blinks the bubble out and back; adding the row
-          // first paints the same message twice. The durable write comes
-          // after for the same reason — `dequeue` is an await, and dequeuing
-          // a moment later is invisible either way.
+          // Both updates in one commit, no `await` between: split across two
+          // commits, either ordering is visible at 60fps. Dropping `pending`
+          // first blinks the bubble out and back, adding the row first paints
+          // the message twice. `dequeue` waits for the same reason, and a
+          // moment's delay there is invisible.
           if (onScreen) {
             onAdopt(row);
             dropPending(msg.id);
@@ -330,17 +302,16 @@ export function useOutbox({
           continue;
         }
 
-        // A rate-limit rejection lands here too: it consumes an attempt like
-        // any other failure rather than being retried immediately, so a
-        // flush against that limit backs off instead of spinning on it.
+        // A rate-limit rejection lands here too and consumes an attempt like
+        // any other failure, so a flush against that limit backs off rather
+        // than spinning on it.
         const updated: PendingMessage | null = durable
           ? await bumpAttempts(msg.id)
           : bumpUnqueued(msg);
 
-        // Gone from the queue while this attempt was in flight: its server
-        // row arrived over realtime and the adoption path retired it. The
-        // message is delivered — not failed — so there is nothing to retry
-        // and nothing to tell the user about.
+        // Gone from the queue mid-attempt: the server row arrived over
+        // realtime and the adoption path retired it. Delivered, not failed, so
+        // there is nothing to retry and nothing to report.
         if (!updated) continue;
 
         if (updated.attempts >= MAX_ATTEMPTS) {
@@ -365,10 +336,9 @@ export function useOutbox({
       }
     } finally {
       if (flushInFlightFor.current === forFriend) flushInFlightFor.current = null;
-      // Serve whatever asked for a flush while this one held the lock. Only
-      // for the conversation still on screen, and only once per coalesced
-      // burst — the flag is cleared before the recursive call, so a pass that
-      // finds nothing to do ends the chain rather than looping.
+      // Serve whatever asked for a flush while this one held the lock, once
+      // per coalesced burst. The flag is cleared before the recursive call, so
+      // a pass with nothing to do ends the chain rather than looping.
       if (flushAgainFor.current === forFriend) {
         flushAgainFor.current = null;
         if (loadedFor.current === forFriend) void flush();
