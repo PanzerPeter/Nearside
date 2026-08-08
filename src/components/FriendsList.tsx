@@ -8,7 +8,6 @@ import { Avatar } from './Avatar';
 import { ConversationRow } from './ConversationRow';
 import { ConnectModal } from './ConnectModal';
 import { RoomList } from './RoomList';
-import { LegalFooter } from './LegalFooter';
 import { advanceRead, fetchUnreadCounts } from '../lib/receipts';
 import { useConnection, reportChannelStatus, forgetChannel } from '../lib/connection';
 import { UserPlus, Check, X, Users } from 'lucide-react';
@@ -410,12 +409,14 @@ export function FriendsList({
 
   return (
     <div className="flex flex-col h-full bg-base-100">
-      {/* Header */}
-      <div className="p-4 sm:p-5 border-b border-base-content/5">
+      {/* Header. It carries the notch inset itself: on a phone this list is the
+          top of the screen — the shared top bar is desktop-only — while on
+          desktop that bar is above it and already paid for the inset. */}
+      <div className="p-4 pt-[calc(1rem+env(safe-area-inset-top))] sm:p-5 sm:pt-[calc(1.25rem+env(safe-area-inset-top))] lg:pt-5 border-b border-base-content/5">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <Users className="w-5 h-5 text-primary" />
-            <h2 className="font-semibold text-base-content">Friends</h2>
+            <Users className="w-5 h-5 text-primary hidden lg:block" />
+            <h2 className="font-semibold text-base-content">Chats</h2>
           </div>
           <button
             className="btn btn-primary btn-sm btn-circle shadow-md shadow-primary/20 hover:shadow-primary/30 transition-shadow"
@@ -525,9 +526,6 @@ export function FriendsList({
           </p>
         )}
       </div>
-
-      {/* Footer */}
-      <LegalFooter className="py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] border-t border-base-content/5 shrink-0" />
 
       {/* Connect Modal */}
       {showAddModal && (

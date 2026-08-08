@@ -6,6 +6,8 @@ import { FriendsList } from './components/FriendsList';
 import { ChatRoom } from './components/ChatRoom';
 import { RoomView } from './components/RoomView';
 import { SettingsModal } from './components/SettingsModal';
+import { SettingsPanel } from './components/SettingsPanel';
+import { TabBar, type Tab } from './components/TabBar';
 import { Avatar } from './components/Avatar';
 import { BrandMark } from './components/BrandMark';
 import { supabase } from './lib/supabase';
@@ -36,7 +38,8 @@ import { clearLocalDb, openLocalDb } from './lib/localdb';
 import { clearPinnedMedia } from './lib/pins';
 import { forgetAllPeerKeys } from './lib/peer-keys';
 import { forgetAllRoomKeys } from './lib/rooms';
-import { LogOut, MessageSquare, Settings } from 'lucide-react';
+import { useMobileBackClose } from './hooks/useMobileBackClose';
+import { MessageSquare, Settings } from 'lucide-react';
 
 function App() {
   const { session, loading, recovering, endRecovery } = useAuth();
@@ -47,6 +50,10 @@ function App() {
   // ordering.
   const [selectedRoom, setSelectedRoom] = useState<RoomSummary | null>(null);
   const [myProfile, setMyProfile] = useState<Profile | null>(null);
+  // The phone's tab bar selection. Desktop shows both panes at once and reaches
+  // settings through the top bar's dialog, so this only decides what the
+  // single-pane layout is showing.
+  const [tab, setTab] = useState<Tab>('chats');
   const [showSettings, setShowSettings] = useState(false);
   // Owned here, reported up by FriendsList: presence needs the friend set to
   // scope its channels, and the chat pane needs it below the provider.
@@ -59,8 +66,14 @@ function App() {
   // Signing out unmounts FriendsList, so nothing would ever report the total
   // back down to zero — the badge would sit on the installed icon claiming
   // unread messages for an account nobody is signed into.
+  // The tab goes back with it: signing out from the settings tab leaves this
+  // state behind, and the next person to sign in on the phone would land on
+  // settings rather than on their conversations.
   useEffect(() => {
-    if (!session) setUnreadTotal(0);
+    if (!session) {
+      setUnreadTotal(0);
+      setTab('chats');
+    }
   }, [session]);
 
   // Open this account's mirror before anything tries to write to it. Every
@@ -106,28 +119,15 @@ function App() {
   // the sidebar, the chat header and the notification titles all read them.
   useNicknameSync(session);
 
-  // Hardware/browser back closes the open chat instead of leaving the app.
-  // Only on the single-pane layout — on desktop both panes are visible, so
-  // "back" closing the chat would be surprising rather than expected.
+  // Hardware/browser back closes the open chat, and returns the settings tab to
+  // the chat list, instead of leaving the app. Both are full-screen takeovers on
+  // a phone and neither exists as one on desktop — see the hook.
   const chatOpen = !!selectedFriend || !!selectedRoom;
-  useEffect(() => {
-    if (!chatOpen) return;
-    if (!window.matchMedia('(max-width: 1023px)').matches) return;
-
-    window.history.pushState({ nearsideChat: true }, '');
-    const onPop = () => {
-      setSelectedFriend(null);
-      setSelectedRoom(null);
-    };
-    window.addEventListener('popstate', onPop);
-
-    return () => {
-      window.removeEventListener('popstate', onPop);
-      // Closed from the UI rather than by a back navigation: our entry is still
-      // on the stack, so consume it or the next back press would be a no-op.
-      if (window.history.state?.nearsideChat) window.history.back();
-    };
-  }, [chatOpen]);
+  useMobileBackClose(chatOpen, () => {
+    setSelectedFriend(null);
+    setSelectedRoom(null);
+  });
+  useMobileBackClose(!chatOpen && tab === 'settings', () => setTab('chats'));
 
   // Unlock Web Audio on the first user gesture.
   useEffect(() => {
@@ -194,6 +194,10 @@ function App() {
     if (data) {
       setSelectedRoom(null);
       setSelectedFriend(data);
+      // A tapped notification while the settings tab is up would otherwise
+      // mount the conversation behind a hidden pane, and the tap would look
+      // like it did nothing.
+      setTab('chats');
     }
   }, []);
 
@@ -277,48 +281,43 @@ function App() {
         The component decides for itself whether there is anything to ask. */}
     <NotificationsPrompt userId={session.user.id} />
     <div className="h-dvh flex flex-col bg-base-300 overflow-hidden">
-      {/* Top Bar */}
-      <header className="navbar bg-base-100 px-4 sm:px-6 shrink-0 border-b border-base-content/5 shadow-[0_1px_3px_rgba(0,0,0,0.25)] z-20 min-h-[3.5rem] pt-safe">
+      {/* Top Bar. Desktop only: on a phone the tab bar carries settings and the
+          list's own header carries the brand, so this row would be a second
+          header stacked on the screen with the least room for one. */}
+      <header className="hidden lg:flex navbar bg-base-100 px-4 sm:px-6 shrink-0 border-b border-base-content/5 shadow-[0_1px_3px_rgba(0,0,0,0.25)] z-20 min-h-[3.5rem] pt-safe">
         <div className="flex-1 gap-2">
           <BrandMark size={22} />
           <span className="font-bold text-base sm:text-lg tracking-tight">Nearside</span>
         </div>
-        <div className="flex-none flex items-center gap-1 sm:gap-2">
+        {/* Sign-out is no longer a bare icon up here: it lives in settings
+            beside what it clears, next to the account it belongs to. */}
+        <div className="flex-none flex items-center gap-2">
           {myProfile && (
             <button
               onClick={() => setShowSettings(true)}
-              className="hidden sm:flex items-center gap-2 btn btn-ghost btn-sm normal-case"
+              className="flex items-center gap-2 btn btn-ghost btn-sm normal-case"
               title="Profile settings"
             >
               <Avatar display_name={myProfile.display_name} url={myProfile.avatar_url} size={24} />
-              <span className="text-xs text-base-content/60 hidden sm:inline truncate max-w-[120px]">
+              <span className="text-xs text-base-content/60 truncate max-w-[120px]">
                 @{myProfile.display_name}
               </span>
+              <Settings className="w-4 h-4 text-base-content/60" />
             </button>
           )}
-          <button
-            onClick={() => setShowSettings(true)}
-            className="btn btn-ghost btn-sm btn-square sm:hidden"
-            title="Settings"
-          >
-            <Settings className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => void signOut()}
-            className="btn btn-ghost btn-sm btn-square hover:bg-base-content/10 transition-colors"
-            title="Sign Out"
-          >
-            <LogOut className="w-4 h-4" />
-          </button>
         </div>
       </header>
 
       {/* Main Content */}
       <div className="flex flex-1 min-h-0 overflow-hidden">
         {/* Sidebar */}
+        {/* Hidden, never unmounted, when the settings tab is up: this list owns
+            the app-wide unread channel, the presence scope and the badge the tab
+            bar is showing, so tearing it down on a tab switch would drop all
+            three and pay for a full refetch on the way back. */}
         <aside
           className={`w-full lg:w-80 xl:w-96 lg:border-r lg:border-base-content/5 shrink-0 transition-all duration-200 ${
-            chatOpen ? 'hidden lg:flex lg:flex-col' : 'flex flex-col'
+            chatOpen || tab === 'settings' ? 'hidden lg:flex lg:flex-col' : 'flex flex-col'
           }`}
         >
           <FriendsList
@@ -376,13 +375,45 @@ function App() {
             </div>
           )}
         </main>
+
+        {/* Settings, as the phone's second tab. The same panel the desktop
+            dialog renders — mounted only while the tab is up, so its push and
+            entitlement checks don't run on every launch. */}
+        {tab === 'settings' && !chatOpen && (
+          <section className="w-full lg:hidden flex flex-col min-w-0 bg-base-100">
+            <div className="px-4 pt-[calc(1rem+env(safe-area-inset-top))] pb-4 border-b border-base-content/5 shrink-0">
+              <h2 className="font-semibold text-base-content">Settings</h2>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              {/* The profile row is what every field here edits, so the tab
+                  waits for it rather than rendering an empty form. */}
+              {myProfile ? (
+                <SettingsPanel
+                  session={session}
+                  profile={myProfile}
+                  onUpdated={(p) => setMyProfile(p)}
+                  onSignOut={() => void signOut()}
+                />
+              ) : (
+                <div className="flex justify-center py-10">
+                  <span className="loading loading-spinner text-primary" />
+                </div>
+              )}
+            </div>
+          </section>
+        )}
       </div>
+
+      {/* Hidden while a conversation is open: the composer owns the bottom edge
+          there, and "chats" would be a button leading to where you already are. */}
+      {!chatOpen && <TabBar tab={tab} onSelect={setTab} unread={unreadTotal} />}
 
       {showSettings && myProfile && (
         <SettingsModal
           session={session}
           profile={myProfile}
           onUpdated={(p) => setMyProfile(p)}
+          onSignOut={() => void signOut()}
           onClose={() => setShowSettings(false)}
         />
       )}

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { authRedirectTo } from '../lib/authRedirect';
 import { subscribeToAuthLinkError } from '../lib/nativeAuthLinks';
-import { LegalFooter } from './LegalFooter';
+import { LegalDocModal, LegalFooter, type LegalDoc } from './LegalFooter';
 import { BrandMark } from './BrandMark';
 import { LogIn, UserPlus } from 'lucide-react';
 
@@ -29,6 +29,13 @@ export function AuthForm() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [loading, setLoading] = useState(false);
+  /** Sign-up only, and reset whenever the form flips: consent belongs to the
+   *  account being created, so coming back to sign up asks again rather than
+   *  inheriting a tick from a form the user abandoned. */
+  const [agreedToLegal, setAgreedToLegal] = useState(false);
+  /** Terms or Privacy opened from the consent line — the documents have to be
+   *  readable before agreeing to them, not only after. */
+  const [legalDoc, setLegalDoc] = useState<LegalDoc | null>(null);
 
   // An emailed link that failed fails while the user is in their mail client,
   // so the sign-in screen is where they land and the only place the reason can
@@ -41,6 +48,12 @@ export function AuthForm() {
     setNotice('');
 
     if (isSignUp) {
+      // Re-checked here and not only on the button's `disabled`: an account may
+      // not be created without this, and a disabled attribute is a hint.
+      if (!agreedToLegal) {
+        setError('Please agree to the Terms of Service and Privacy Policy first.');
+        return;
+      }
       // Trimmed but not lowercased: the name is shown as the person wrote it.
       const normalized = display_name.trim();
       if (!normalized || normalized.length > DISPLAY_NAME_MAX) {
@@ -198,6 +211,38 @@ export function AuthForm() {
               </button>
             )}
 
+            {isSignUp && (
+              <label className="flex items-start gap-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="checkbox checkbox-sm checkbox-primary mt-0.5 shrink-0"
+                  checked={agreedToLegal}
+                  onChange={(e) => setAgreedToLegal(e.target.checked)}
+                />
+                <span className="text-xs leading-relaxed text-base-content/70">
+                  I agree to the{' '}
+                  {/* type="button": a bare button inside a form submits it, so
+                      reading the terms would have attempted the sign-up. */}
+                  <button
+                    type="button"
+                    className="link link-hover text-primary"
+                    onClick={() => setLegalDoc('terms')}
+                  >
+                    Terms of Service
+                  </button>{' '}
+                  and the{' '}
+                  <button
+                    type="button"
+                    className="link link-hover text-primary"
+                    onClick={() => setLegalDoc('privacy')}
+                  >
+                    Privacy Policy
+                  </button>
+                  .
+                </span>
+              </label>
+            )}
+
             {error && (
               <div className="rounded-lg bg-error/10 border border-error/20 px-3 py-2.5">
                 <p className="text-error text-sm">{error}</p>
@@ -212,7 +257,7 @@ export function AuthForm() {
             <button
               type="submit"
               className="btn btn-primary w-full mt-2 shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-shadow"
-              disabled={loading}
+              disabled={loading || (isSignUp && !agreedToLegal)}
             >
               {loading ? (
                 <span className="loading loading-spinner loading-sm" />
@@ -239,6 +284,7 @@ export function AuthForm() {
                 setIsSignUp(!isSignUp);
                 setError('');
                 setNotice('');
+                setAgreedToLegal(false);
               }}
             >
               {isSignUp ? 'Sign in' : 'Sign up'}
@@ -247,6 +293,8 @@ export function AuthForm() {
         </div>
       </div>
       <LegalFooter />
+
+      {legalDoc && <LegalDocModal doc={legalDoc} onClose={() => setLegalDoc(null)} />}
     </div>
   );
 }

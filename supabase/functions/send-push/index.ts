@@ -51,6 +51,22 @@ const ONESIGNAL_REST_API_KEY = Deno.env.get("ONESIGNAL_REST_API_KEY")?.trim();
 // Unset ⇒ the database-trigger path is disabled entirely.
 const TRIGGER_SECRET = Deno.env.get("PUSH_TRIGGER_SECRET")?.trim();
 
+/**
+ * The Android notification channel these pushes are posted on — "Messages",
+ * group "Main", in Dashboard → Settings → Push & In-App → Android Notification
+ * Channels, at importance Urgent with the default sound.
+ *
+ * Not optional, and not a secret. On Android 8+ the sound and the heads-up
+ * banner are properties of the channel, never of the payload, so a push that
+ * names no channel gets whatever channel the device happens to have — which on
+ * a test device was Android's invented `restored_OS_notifications` at
+ * importance LOW, i.e. delivered silently. Android also refuses to raise the
+ * importance of a channel it has already created, so **changing the importance
+ * in the dashboard does nothing to devices that already received one push.
+ * Fixing importance means creating a new channel and replacing this id.**
+ */
+const ANDROID_CHANNEL_ID = "93c11c0a-4c75-4c56-9c38-dd235fbed183";
+
 /** Length-independent comparison, so a wrong secret can't be narrowed down by
  *  timing the reply. */
 function secretMatches(provided: string | null): boolean {
@@ -183,10 +199,19 @@ Deno.serve(async (req) => {
         include_aliases: { external_id: [msg.receiver_id] },
         headings: { en: "Nearside" },
         contents: { en: bodyFor(name, msg.media_type) },
-        // One entry per sender, so a conversation collapses into a single
-        // banner instead of a column of them.
+        android_channel_id: ANDROID_CHANNEL_ID,
+        // A message someone is waiting on is not background work. Left unset,
+        // FCM delivers at normal priority, which Doze may hold until the next
+        // maintenance window — the notification then appears late and quietly
+        // on a locked phone.
+        priority: 10,
+        // Stacked per sender, so a conversation reads as one entry in the
+        // shade. Deliberately no `collapse_id`: that reuses one notification id
+        // per sender, and OneSignal posts these with ONLY_ALERT_ONCE, so every
+        // message after the first from that person updated the banner in
+        // silence. A messenger that goes quiet after the first message is worse
+        // than a stack of them.
         android_group: `dm:${msg.user_id}`,
-        collapse_id: `dm:${msg.user_id}`,
         data: { senderId: msg.user_id },
       }),
     });

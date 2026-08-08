@@ -1,7 +1,12 @@
 import { useState } from 'react';
 import { Modal } from './Modal';
 
-type Doc = 'terms' | 'privacy' | null;
+/** Which document to show. Exported because the two documents are reached from
+ *  three places now — this footer, the settings page and the sign-up consent
+ *  line — and all of them open the same modal below. */
+export type LegalDoc = 'terms' | 'privacy';
+
+type Doc = LegalDoc | null;
 
 const LAST_UPDATED = 'August 7, 2026';
 
@@ -48,12 +53,12 @@ export function LegalFooter({ className = '' }: { className?: string }) {
         </button>
       </footer>
 
-      {open && <LegalModal doc={open} onClose={() => setOpen(null)} />}
+      {open && <LegalDocModal doc={open} onClose={() => setOpen(null)} />}
     </>
   );
 }
 
-function LegalModal({ doc, onClose }: { doc: Exclude<Doc, null>; onClose: () => void }) {
+export function LegalDocModal({ doc, onClose }: { doc: LegalDoc; onClose: () => void }) {
   return (
     <Modal
       title={doc === 'terms' ? 'Terms of Service' : 'Privacy Policy'}
