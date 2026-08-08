@@ -129,7 +129,12 @@ export type Opened<T> = T & {
  */
 export async function openRows<
   T extends Readable &
-    MediaKeyed & { id: string; created_at: string; deleted_at?: string | null },
+    MediaKeyed & {
+      id: string;
+      created_at: string;
+      deleted_at?: string | null;
+      expires_at?: string | null;
+    },
 >(
   identity: Identity | null,
   peerPublic: Uint8Array | null,
@@ -159,6 +164,10 @@ export async function openRows<
           user_id: row.user_id,
           text,
           created_at: row.created_at,
+          // The row's own stamp, not null. Mirroring a timed message as
+          // permanent would put it beyond the local sweep for good, and the
+          // server deleting its copy does nothing about this one.
+          expires_at: row.expires_at ?? null,
         });
       }
       const sealed = row.ciphertext !== null && row.nonce !== null;

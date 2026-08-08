@@ -6,6 +6,7 @@
 // One store per account, never one per device: two people sharing a phone must
 // not find each other's decrypted messages in their own search results.
 import { Capacitor } from '@capacitor/core';
+import { hasExpired } from './disappearing';
 import {
   CapacitorSQLite,
   SQLiteConnection,
@@ -18,6 +19,10 @@ export interface CachedMessage {
   user_id: string;
   text: string;
   created_at: string;
+  /** The server's stamp, mirrored so this device can drop the row on the same
+   *  schedule. The server deleting its copy does nothing about the decrypted
+   *  one here, which is the copy search reads from. */
+  expires_at: string | null;
 }
 
 /** A pinned attachment: the plaintext bytes are on this device, at
@@ -56,7 +61,8 @@ CREATE TABLE IF NOT EXISTS messages_cache (
   peer_id    TEXT NOT NULL,
   user_id    TEXT NOT NULL,
   text       TEXT NOT NULL,
-  created_at TEXT NOT NULL
+  created_at TEXT NOT NULL,
+  expires_at TEXT
 );
 CREATE INDEX IF NOT EXISTS messages_cache_peer_time
   ON messages_cache (peer_id, created_at DESC);
@@ -129,6 +135,14 @@ export async function openLocalDb(userId: string): Promise<void> {
     // connection version stays 1, so a bump would never fire, but every
     // statement here is CREATE ... IF NOT EXISTS and re-running them is free.
     await db.execute(SCHEMA);
+    // SQLite has no ADD COLUMN IF NOT EXISTS. A store created by an earlier
+    // build already has the table, so CREATE TABLE IF NOT EXISTS skips the new
+    // column and every write below fails on an unknown column instead.
+    try {
+      await db.execute('ALTER TABLE messages_cache ADD COLUMN expires_at TEXT');
+    } catch {
+      // Already there.
+    }
     return;
   }
   owner = userId;
@@ -140,10 +154,10 @@ export async function cacheMessage(row: CachedMessage): Promise<void> {
     return;
   }
   await db?.run(
-    `INSERT INTO messages_cache (id, peer_id, user_id, text, created_at)
-     VALUES (?, ?, ?, ?, ?)
-     ON CONFLICT(id) DO UPDATE SET text = excluded.text`,
-    [row.id, row.peer_id, row.user_id, row.text, row.created_at]
+    `INSERT INTO messages_cache (id, peer_id, user_id, text, created_at, expires_at)
+     VALUES (?, ?, ?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET text = excluded.text, expires_at = excluded.expires_at`,
+    [row.id, row.peer_id, row.user_id, row.text, row.created_at, row.expires_at]
   );
 }
 
@@ -288,4 +302,38 @@ export async function clearLocalDb(): Promise<void> {
   await db?.execute('DELETE FROM messages_cache');
   await db?.execute('DELETE FROM contacts');
   await db?.execute('DELETE FROM pins');
+}
+
+/**
+ * Drop every mirrored row whose server-stamped expiry has passed.
+ *
+ * Returns the ids removed so a caller can drop the same messages from whatever
+ * it is currently rendering — a row deleted from the mirror but left on screen
+ * is a message the user watches not disappear.
+ */
+export async function purgeExpired(nowMs: number): Promise<string[]> {
+  if (!native()) {
+    const store = memoryStore();
+    if (!store) return [];
+    const removed: string[] = [];
+    for (const [id, row] of store) {
+      if (hasExpired(row.expires_at, nowMs)) {
+        store.delete(id);
+        removed.push(id);
+      }
+    }
+    return removed;
+  }
+
+  const at = new Date(nowMs).toISOString();
+  const found = await db?.query(
+    'SELECT id FROM messages_cache WHERE expires_at IS NOT NULL AND expires_at <= ?',
+    [at]
+  );
+  const ids = (found?.values ?? []).map((row) => (row as { id: string }).id);
+  if (ids.length === 0) return [];
+  await db?.run('DELETE FROM messages_cache WHERE expires_at IS NOT NULL AND expires_at <= ?', [
+    at,
+  ]);
+  return ids;
 }
