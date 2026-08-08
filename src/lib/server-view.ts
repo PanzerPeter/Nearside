@@ -73,6 +73,7 @@ export const TABLE_REPORTS: TableSpec[] = [
       'media_path',
       'media_type',
       'media_duration_ms',
+      'expires_at',
     ],
     opaque: ['ciphertext', 'nonce', 'media_key_ciphertext', 'media_key_nonce'],
     note: 'The server stores who sent what to whom and when, the size of each attachment, and how long each voice note runs. It cannot read a single word of any message, and it cannot open a single attachment.',
@@ -108,9 +109,9 @@ export const TABLE_REPORTS: TableSpec[] = [
   {
     table: 'rooms',
     label: 'Group rooms',
-    readable: ['id', 'title', 'created_by', 'created_at'],
+    readable: ['id', 'title', 'created_by', 'created_at', 'ttl_seconds', 'ttl_set_by'],
     opaque: [],
-    note: 'A room title is stored as text so the server can list your rooms. Do not put anything in a title you would not put on an envelope.',
+    note: 'A room title is stored as text so the server can list your rooms. Do not put anything in a title you would not put on an envelope. The last two columns are the room\u2019s disappearing-message timer and who set it.',
   },
   {
     table: 'room_participants',
@@ -129,9 +130,16 @@ export const TABLE_REPORTS: TableSpec[] = [
   {
     table: 'room_messages',
     label: 'Room messages',
-    readable: ['id', 'room_id', 'sender_id', 'created_at'],
+    readable: ['id', 'room_id', 'sender_id', 'created_at', 'expires_at'],
     opaque: ['ciphertext', 'nonce', 'signature'],
     note: 'Same as your one-to-one conversations: timing and authorship, never content. The signature proves who wrote it without revealing what.',
+  },
+  {
+    table: 'conversation_timers',
+    label: 'Disappearing-message timers',
+    readable: ['user_a', 'user_b', 'ttl_seconds', 'set_by', 'updated_at'],
+    opaque: [],
+    note: 'How long messages in a conversation last before the server deletes them. Two user ids, a number of seconds, and who set it last. No message content \u2014 the server has none to hold.',
   },
   {
     table: 'connect_tokens',

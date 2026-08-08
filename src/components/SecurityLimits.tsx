@@ -1,4 +1,4 @@
-import { AlertTriangle, Check, Clock, Lock, ShieldAlert, X } from 'lucide-react';
+import { AlertTriangle, Check, Clock, Lock, ShieldAlert, Timer, X } from 'lucide-react';
 import { Modal } from './Modal';
 
 interface SecurityLimitsProps {
@@ -63,6 +63,19 @@ export function SecurityLimits({ onClose }: SecurityLimitsProps) {
             If your key is ever stolen, every message an attacker also captured can be decrypted,
             including old ones. Signal&rsquo;s ratchet prevents this by changing keys constantly.
             Nearside does not implement it.
+          </p>
+        </section>
+
+        <section className="rounded-xl border border-base-content/10 bg-base-200/40 p-3.5">
+          <h4 className="flex items-center gap-2 font-medium text-sm">
+            <Timer className="w-4 h-4 text-base-content/60" />
+            Disappearing messages are deleted, not unsendable
+          </h4>
+          <p className="text-sm text-base-content/75 leading-relaxed mt-2">
+            When the timer runs out the row is deleted from the server and from the copy on your
+            phone. It does not reach a screenshot, a photograph of the screen, or text somebody
+            copied out before it went. If you would not say it to someone holding a camera, a timer
+            does not change that.
           </p>
         </section>
 
