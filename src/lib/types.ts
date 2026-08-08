@@ -56,6 +56,10 @@ export interface Message {
   forwarded: boolean;
   edited_at: string | null;
   deleted_at: string | null;
+  /** Server-stamped, never client-supplied — see the BEFORE INSERT trigger in
+   *  0029. Null means this conversation had no timer when the message was
+   *  sent; changing the timer later does not restamp existing rows. */
+  expires_at: string | null;
   created_at: string;
 }
 

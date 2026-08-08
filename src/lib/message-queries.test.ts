@@ -22,6 +22,7 @@ function msg(id: string, created_at: string): Message {
     forwarded: false,
     edited_at: null,
     deleted_at: null,
+    expires_at: null,
     created_at,
   };
 }

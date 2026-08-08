@@ -143,6 +143,9 @@ export function pendingAsMessage(msg: PendingMessage): Message {
     forwarded: false,
     edited_at: null,
     deleted_at: null,
+    // Not stamped yet: the trigger runs on insert, and this row has not reached
+    // the server. The real value arrives with the row the send returns.
+    expires_at: null,
     created_at: msg.created_at,
   };
 }

@@ -32,6 +32,7 @@ function message(overrides: Partial<Message> = {}): Message {
     forwarded: false,
     edited_at: null,
     deleted_at: null,
+    expires_at: null,
     created_at: new Date().toISOString(),
     ...overrides,
   };
