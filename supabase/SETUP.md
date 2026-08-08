@@ -1,6 +1,6 @@
 # Supabase setup
 
-Migrations `0001`–`0025` are live on the project named in `.env`. The project ref
+Migrations `0001`–`0025` and `0029` are live on the project named in `.env`. The project ref
 is deliberately not written down here: it is the API host, it is not rotatable,
 and a public repo is no place to hand out a target for free.
 
@@ -23,18 +23,32 @@ The migrations that changed what the server can see, in order:
 | `0025_sealed_media_mime.sql` | `chat-media` accepts `application/octet-stream` |
 | `0029_disappearing.sql` | `conversation_timers`, `rooms.ttl_seconds`, a trigger-stamped `expires_at`, and a `pg_cron` sweep that hard-deletes expired rows |
 
-`0029` needs two things the file itself cannot do:
+**`0029` is applied**, along with the two things the file itself cannot do:
 
-1. **The `pg_cron` extension**, enabled under Database → Extensions, before the
-   file is run.
+1. **The `pg_cron` extension** (1.6.4, in `pg_catalog`). Enabled first; the
+   file's functions do not depend on it, but the sweep never runs without it.
 2. **A one-off `cron.schedule` call**, quoted in the comment block at the bottom
    of the file and deliberately left out of the main body — it fails with a
-   duplicate-jobname error if run twice, which would make the rest of the file
+   duplicate-jobname error if re-run, which would make the rest of the file
    unsafe to re-run. Without it the columns and triggers exist and stamp
    correctly, and nothing is ever deleted.
 
-Confirm the job with
-`SELECT jobname, schedule, active FROM cron.job WHERE jobname = 'nearside-expire';`
+Job `nearside-expire`, `* * * * *`, active. Confirm with:
+
+```sql
+SELECT jobname, schedule, active FROM cron.job WHERE jobname = 'nearside-expire';
+SELECT status, return_message, start_time FROM cron.job_run_details
+ WHERE jobid = (SELECT jobid FROM cron.job WHERE jobname = 'nearside-expire')
+ ORDER BY start_time DESC LIMIT 5;
+```
+
+The two new RPCs show up in the security advisor as `SECURITY DEFINER`
+functions callable by `authenticated`. That is intentional and is the same
+notice `redeem_connect_code` and `rooms_for_me` already carry: going through a
+definer function is what lets the pair be normalized and `set_by` recorded as
+the caller rather than trusted from the client. `expire_messages` and the two
+stamping triggers are revoked from `anon` and `authenticated` and raise no
+notice.
 
 ## What the server holds
 
