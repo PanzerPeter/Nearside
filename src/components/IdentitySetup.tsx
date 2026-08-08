@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { Eye, ShieldAlert } from 'lucide-react';
+import { setScreenGuard } from '../lib/screen-guard';
 
 interface Props {
   onCreate: () => Promise<string>;
@@ -31,6 +33,24 @@ export function IdentitySetup({
   const [phrase, setPhrase] = useState('');
   const [typed, setTyped] = useState('');
   const [error, setError] = useState('');
+  const [revealed, setRevealed] = useState(false);
+
+  // Held for the 'show' and 'confirm' stages, not just 'show': the confirm stage
+  // can send the user back for another look, and a flag toggled off in between
+  // leaves a window where the recents thumbnail catches the words.
+  const guarded = stage === 'show' || stage === 'confirm';
+  useEffect(() => {
+    void setScreenGuard(guarded);
+    return () => {
+      void setScreenGuard(false);
+    };
+  }, [guarded]);
+
+  // Re-hide whenever the stage changes, so returning to the words from the
+  // confirm step does not put them straight back on screen.
+  useEffect(() => {
+    setRevealed(false);
+  }, [stage]);
 
   const words = phrase ? phrase.split(' ') : [];
   // Three words, chosen up front so the indices do not shuffle as the user types.
@@ -105,14 +125,47 @@ export function IdentitySetup({
                 On paper. Not in a screenshot, and not in another app on this phone, because both
                 go missing with the phone itself.
               </p>
-              <ol className="grid grid-cols-2 gap-1 font-mono text-sm bg-base-200 rounded-box p-3">
-                {words.map((w, i) => (
-                  <li key={i} className="tabular-nums">
-                    <span className="text-base-content/40">{i + 1}.</span> {w}
-                  </li>
-                ))}
-              </ol>
-              <button className="btn btn-primary" onClick={() => { setTyped(''); setStage('confirm'); }}>
+
+              <div className="relative">
+                <ol
+                  className={`grid grid-cols-2 gap-1.5 font-mono text-sm bg-base-200 rounded-box p-3 transition-[filter] ${
+                    revealed ? '' : 'blur-sm select-none'
+                  }`}
+                  style={{ transitionDuration: 'var(--motion-enter-duration)' }}
+                  aria-hidden={!revealed}
+                >
+                  {words.map((w, i) => (
+                    <li key={i} className="tabular-nums flex gap-1.5">
+                      <span className="text-base-content/40 w-5 text-right">{i + 1}.</span>
+                      <span>{w}</span>
+                    </li>
+                  ))}
+                </ol>
+
+                {!revealed && (
+                  <button
+                    className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 rounded-box bg-base-100/40 text-sm font-medium"
+                    onClick={() => setRevealed(true)}
+                  >
+                    <Eye className="w-5 h-5" />
+                    Tap to show your phrase
+                  </button>
+                )}
+              </div>
+
+              <p className="flex items-start gap-2 text-xs text-base-content/60">
+                <ShieldAlert className="w-4 h-4 shrink-0 mt-px" />
+                <span>
+                  This is the only copy. Nobody at Nearside has it, and there is no reset. Lose it
+                  with the phone and the vault is gone.
+                </span>
+              </p>
+
+              <button
+                className="btn btn-primary"
+                disabled={!revealed}
+                onClick={() => { setTyped(''); setStage('confirm'); }}
+              >
                 I have written them down
               </button>
             </>
@@ -121,6 +174,11 @@ export function IdentitySetup({
           {stage === 'confirm' && (
             <>
               <h1 className="card-title">Check your copy</h1>
+              {secureStorage && (
+                <p className="text-xs text-base-content/50">
+                  Screenshots are blocked on this screen.
+                </p>
+              )}
               <p className="text-sm text-base-content/70">
                 Type words {checkIndexes.map((i) => i + 1).join(', ')}, separated by spaces.
               </p>
