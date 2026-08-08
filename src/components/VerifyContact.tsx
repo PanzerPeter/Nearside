@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Camera, ShieldCheck } from 'lucide-react';
 import { SCAN_MESSAGES, scanQr } from '../lib/scan';
 import { safetyNumber } from '../lib/crypto/safety';
+import { safetyArt, type SafetyArt } from '../lib/crypto/safety-art';
 import { toBase64 } from '../lib/crypto/keys';
 import { parseSafetyPayload, safetyPayload } from '../lib/connect';
 import { forgetPeerKey } from '../lib/peer-keys';
@@ -9,6 +10,7 @@ import { markVerified } from '../lib/verification';
 import { useToast } from '../hooks/useToast';
 import { Modal } from './Modal';
 import { QrCode } from './QrCode';
+import { SafetySigil } from './SafetySigil';
 
 interface VerifyContactProps {
   peerId: string;
@@ -38,6 +40,7 @@ export function VerifyContact({
   onClose,
 }: VerifyContactProps) {
   const [number, setNumber] = useState<string | null>(null);
+  const [art, setArt] = useState<SafetyArt | null>(null);
   const [compared, setCompared] = useState(false);
   const [scanMatched, setScanMatched] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -47,7 +50,9 @@ export function VerifyContact({
     let cancelled = false;
     void (async () => {
       const n = await safetyNumber(myPublic, theirPublic);
-      if (!cancelled) setNumber(n);
+      if (cancelled) return;
+      setNumber(n);
+      setArt(await safetyArt(n));
     })();
     return () => {
       cancelled = true;
@@ -130,6 +135,18 @@ export function VerifyContact({
         </div>
       ) : (
         <div className="space-y-4">
+          {art && (
+            <div className="flex flex-col items-center gap-2">
+              <SafetySigil art={art} size={132} />
+              <p className="font-mono text-sm tracking-wide">{art.words.join(' · ')}</p>
+              <p className="text-xs text-base-content/50 text-center max-w-xs">
+                The same picture and the same four words on both phones. Read the words aloud if
+                you are on a call. They come from the digits below, so they are the same check in a
+                form you can actually compare.
+              </p>
+            </div>
+          )}
+
           <p className="text-sm text-base-content/60">
             These digits are the same on both phones, but only if nobody is in between. Compare
             them in person, or over a call where you recognise the voice.
