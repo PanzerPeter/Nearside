@@ -159,6 +159,8 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
         onToggleSearch={() => setSearchOpen((open) => !open)}
         onOpenVerify={() => setVerifyOpen(true)}
         onOpenBackground={() => setBackgroundOpen(true)}
+        timer={thread.timer}
+        onSetTimer={(seconds) => void thread.changeTimer(seconds)}
       />
 
       {verifyOpen && peerKey && (

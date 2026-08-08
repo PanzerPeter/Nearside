@@ -5,7 +5,7 @@
 // they are composed here rather than side by side in the component. `ChatRoom`
 // sees one object.
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { Message } from '../lib/types';
@@ -24,6 +24,13 @@ import type { Identity } from '../lib/crypto/keys';
 import { useThreadScroll, type ThreadScroll } from './useThreadScroll';
 import { useReadReceipts } from './useReadReceipts';
 import { useOutbox, type Outbox } from './useOutbox';
+import {
+  hasExpired,
+  loadConversationTimer,
+  saveConversationTimer,
+  type ConversationTimer,
+} from '../lib/disappearing';
+import { purgeExpired } from '../lib/localdb';
 
 /** Bounds how many pages a search jump will fetch looking for an old message,
  *  so a hit deep in history can't page indefinitely. */
@@ -61,6 +68,9 @@ export interface ChatThread {
   /** Follow a reply's quote back to the message it answers. */
   jumpToRepliedMessage: (target: Message) => void;
   notifyTyping: () => void;
+  /** The conversation's timer, or null when there has never been one. */
+  timer: ConversationTimer | null;
+  changeTimer: (seconds: number | null) => Promise<void>;
 }
 
 interface ChatThreadOptions {
@@ -95,6 +105,7 @@ export function useChatThread({
   const [hasMore, setHasMore] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [friendTyping, setFriendTyping] = useState(false);
+  const [timer, setTimer] = useState<ConversationTimer | null>(null);
 
   // The conversation a fetch was issued for. Loads merge rather than replace,
   // so a reply from the previous chat landing after a switch would otherwise
@@ -192,6 +203,46 @@ export function useChatThread({
     void pullNew();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [generation]);
+
+  // Load the timer, and sweep whatever has expired since we last looked.
+  // Keyed on the generation so a phone that was asleep for a day sweeps on wake
+  // rather than showing a day of messages the server has already deleted.
+  useEffect(() => {
+    if (!me || !peerId) return;
+    let cancelled = false;
+
+    async function refresh() {
+      const loaded = await loadConversationTimer(me, peerId);
+      if (cancelled) return;
+      setTimer(loaded);
+
+      const removed = await purgeExpired(Date.now());
+      if (cancelled) return;
+      const gone = new Set(removed);
+      const now = Date.now();
+      setMessages((current) =>
+        current.filter((m) => !gone.has(m.id) && !hasExpired(m.expires_at, now))
+      );
+    }
+
+    void refresh();
+    // A minute, matching the server's cron cadence. There is no point sweeping
+    // faster than the rows are actually being deleted.
+    const tick = window.setInterval(() => void refresh(), 60_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(tick);
+    };
+  }, [me, peerId, generation]);
+
+  const changeTimer = useCallback(
+    async (seconds: number | null) => {
+      if (!peerId) return;
+      await saveConversationTimer(peerId, seconds);
+      setTimer(await loadConversationTimer(me, peerId));
+    },
+    [me, peerId]
+  );
 
   // Fast while realtime is down, which some networks and VPN routes cause by
   // stalling wss:// while plain HTTPS keeps working. Slow while it is up, as a
@@ -532,6 +583,8 @@ export function useChatThread({
 
   return {
     messages,
+    timer,
+    changeTimer,
     hasMore,
     loadingOlder,
     friendTyping,

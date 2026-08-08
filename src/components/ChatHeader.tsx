@@ -4,7 +4,16 @@ import type { PresenceStatus } from '../hooks/usePresence';
 import { Avatar } from './Avatar';
 import { StatusDot, presenceLabels } from './StatusDot';
 import { formatLastSeen } from '../lib/time';
-import { ArrowLeft, Image as ImageIcon, NotebookPen, Search, ShieldAlert, ShieldCheck } from 'lucide-react';
+import {
+  ArrowLeft,
+  Image as ImageIcon,
+  NotebookPen,
+  Search,
+  ShieldAlert,
+  ShieldCheck,
+  Timer,
+} from 'lucide-react';
+import { formatTtl, TTL_OPTIONS, type ConversationTimer } from '../lib/disappearing';
 
 interface ChatHeaderProps {
   friend: Profile;
@@ -26,6 +35,10 @@ interface ChatHeaderProps {
   onToggleSearch: () => void;
   onOpenVerify: () => void;
   onOpenBackground: () => void;
+  /** The conversation's timer, or null when there has never been one. Either
+   *  participant may change it; `setBy` is who did last. */
+  timer: ConversationTimer | null;
+  onSetTimer: (seconds: number | null) => void;
 }
 
 export function ChatHeader({
@@ -43,6 +56,8 @@ export function ChatHeader({
   onToggleSearch,
   onOpenVerify,
   onOpenBackground,
+  timer,
+  onSetTimer,
 }: ChatHeaderProps) {
   return (
     <header className="flex items-center gap-3 px-4 sm:px-5 py-3 bg-base-100 border-b border-base-content/5 shadow-[0_1px_3px_rgba(0,0,0,0.25)] z-10 shrink-0">
@@ -148,6 +163,44 @@ export function ChatHeader({
           )}
         </button>
       )}
+      <div className="dropdown dropdown-end">
+        <button
+          tabIndex={0}
+          className={`btn btn-ghost btn-sm btn-square hover:bg-base-content/10 transition-colors ${
+            timer?.ttlSeconds ? 'text-primary' : ''
+          }`}
+          title={
+            timer?.ttlSeconds
+              ? `Messages disappear after ${formatTtl(timer.ttlSeconds)}`
+              : 'Disappearing messages are off'
+          }
+          aria-label="Disappearing messages"
+        >
+          <Timer className="w-5 h-5" />
+        </button>
+        <ul
+          tabIndex={0}
+          className="dropdown-content menu bg-base-100 rounded-box z-30 w-56 p-2 shadow"
+        >
+          <li className="menu-title text-xs">Disappear after</li>
+          {TTL_OPTIONS.map((option) => (
+            <li key={String(option.seconds)}>
+              <button
+                className={timer?.ttlSeconds === option.seconds ? 'active' : ''}
+                onClick={() => onSetTimer(option.seconds)}
+              >
+                {option.label}
+              </button>
+            </li>
+          ))}
+          <li className="px-3 pt-2">
+            <span className="text-xs text-base-content/50 leading-snug">
+              Either of you can change this, and you both see the change. It does not stop a
+              screenshot.
+            </span>
+          </li>
+        </ul>
+      </div>
       <button
         className="btn btn-ghost btn-sm btn-square hover:bg-base-content/10 transition-colors"
         onClick={onOpenBackground}
