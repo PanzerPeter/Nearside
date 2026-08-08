@@ -6,6 +6,7 @@
 // storage. This stops someone who picks up an unlocked phone. It does not stop
 // anyone who has already defeated those, and the UI must not suggest it does.
 import sodium from 'libsodium-wrappers';
+import { SecureStoragePlugin } from 'capacitor-secure-storage-plugin';
 import { fromBase64, toBase64 } from './crypto/keys';
 
 /** Short enough to type one-handed, long enough that the stretching below makes
@@ -109,4 +110,67 @@ export async function verifyPassphrase(
 export function backoffMs(failures: number): number {
   if (failures < FREE_ATTEMPTS) return 0;
   return Math.min(FIRST_DELAY_MS * 2 ** (failures - FREE_ATTEMPTS), MAX_DELAY_MS);
+}
+
+/** Per account, for the same reason the seed is (see `keystore.ts`): two people
+ *  share a phone, and the second must not meet the first one's lock screen. */
+const LOCK_KEY = 'nearside.lock';
+const lockKey = (userId: string) => `${LOCK_KEY}.${userId}`;
+
+export type RelockAfter = 'immediate' | '1m' | '5m';
+
+export const RELOCK_MS: Record<RelockAfter, number> = {
+  immediate: 0,
+  '1m': 60_000,
+  '5m': 300_000,
+};
+
+interface StoredLock {
+  verifier: LockVerifier;
+  relock: RelockAfter;
+}
+
+function isRelockAfter(value: unknown): value is RelockAfter {
+  return value === 'immediate' || value === '1m' || value === '5m';
+}
+
+export async function loadLock(userId: string): Promise<StoredLock | null> {
+  let raw: string;
+  try {
+    const { value } = await SecureStoragePlugin.get({ key: lockKey(userId) });
+    if (!value) return null;
+    raw = value;
+  } catch {
+    // No lock set. The plugin throws for an absent key.
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(raw) as Partial<StoredLock>;
+    const { verifier, relock } = parsed;
+    if (!verifier?.salt || !verifier?.hash || !isRelockAfter(relock)) return null;
+    return { verifier: { salt: verifier.salt, hash: verifier.hash }, relock };
+  } catch {
+    // A corrupt entry is treated as no lock rather than as a locked-out
+    // account: there is no reset path, and a parse failure must not be one.
+    return null;
+  }
+}
+
+export async function saveLock(
+  userId: string,
+  verifier: LockVerifier,
+  relock: RelockAfter
+): Promise<void> {
+  await SecureStoragePlugin.set({
+    key: lockKey(userId),
+    value: JSON.stringify({ verifier, relock } satisfies StoredLock),
+  });
+}
+
+export async function clearLock(userId: string): Promise<void> {
+  try {
+    await SecureStoragePlugin.remove({ key: lockKey(userId) });
+  } catch {
+    // Already absent.
+  }
 }
