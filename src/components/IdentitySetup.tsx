@@ -83,7 +83,7 @@ export function IdentitySetup({
   }
 
   return (
-    <div className="h-dvh flex items-center justify-center bg-base-300 p-4">
+    <div className="h-dvh flex items-center justify-center bg-base-300 p-4 pt-[calc(1rem+var(--safe-top))] pb-[calc(1rem+var(--safe-bottom))]">
       <div className="card bg-base-100 w-full max-w-md shadow-xl">
         <div className="card-body gap-4">
           {!secureStorage && (

@@ -120,7 +120,7 @@ export function AuthForm() {
   }
 
   return (
-    <div className="relative min-h-dvh flex flex-col items-center justify-center gap-4 bg-base-300 px-4 py-6 overflow-hidden">
+    <div className="relative min-h-dvh flex flex-col items-center justify-center gap-4 bg-base-300 px-4 py-6 pt-[calc(1.5rem+var(--safe-top))] pb-[calc(1.5rem+var(--safe-bottom))] overflow-hidden">
       {/* Ambient brand glow — adds depth behind the card without competing with it. */}
       <div
         aria-hidden

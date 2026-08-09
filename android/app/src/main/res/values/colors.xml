@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- The app's canvas, `base-300` of the default theme in
+         tailwind.config.js. It is the window background, which is what shows
+         in the strips the WebView does not cover: behind the status bar and
+         gesture bar on a WebView older than 140 (Capacitor pads the WebView
+         there instead of passing the insets through to CSS), on every device
+         below API 35, and for the frame between the splash screen going and
+         the first paint arriving. Left at the AppCompat DayNight default,
+         those strips are white around a dark app. -->
+    <color name="appCanvas">#1a1b1e</color>
+</resources>

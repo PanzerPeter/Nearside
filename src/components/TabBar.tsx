@@ -19,7 +19,7 @@ interface TabBarProps {
  */
 export function TabBar({ tab, onSelect, unread }: TabBarProps) {
   return (
-    <nav className="lg:hidden shrink-0 bg-base-100 border-t border-base-content/5 pb-[env(safe-area-inset-bottom)] z-20">
+    <nav className="lg:hidden shrink-0 bg-base-100 border-t border-base-content/5 pb-[var(--safe-bottom)] z-20">
       <div className="flex">
         <TabButton
           label="Chats"

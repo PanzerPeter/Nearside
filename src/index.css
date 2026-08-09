@@ -9,6 +9,21 @@
      controls, scrollbars and form widgets dark against a cream page. */
 
   :root {
+    /* The one place system-bar insets are named. Two mechanisms have to agree:
+       iOS and the browser answer `env(safe-area-inset-*)`, while on Android
+       only a WebView 140+ does — below that Capacitor's SystemBars plugin pads
+       the WebView's parent instead and injects `--safe-area-inset-*` holding
+       what is left (zero). Taking the larger is correct under both, and adds
+       nothing twice: whichever mechanism is not in play reports 0.
+
+       Android is why this matters at all — targetSdk 36 makes edge-to-edge
+       mandatory, so anything drawing the top or bottom edge without these
+       lands underneath the status bar or the gesture pill. */
+    --safe-top: max(env(safe-area-inset-top), var(--safe-area-inset-top, 0px));
+    --safe-bottom: max(env(safe-area-inset-bottom), var(--safe-area-inset-bottom, 0px));
+    --safe-left: max(env(safe-area-inset-left), var(--safe-area-inset-left, 0px));
+    --safe-right: max(env(safe-area-inset-right), var(--safe-area-inset-right, 0px));
+
     /* Mirrors MOTION in src/lib/motion.ts. Both exist because some consumers
        animate from JavaScript and some from a stylesheet; they must not drift. */
     --motion-enter-duration: 180ms;
@@ -94,7 +109,20 @@
 @layer utilities {
   /* Notch inset added on top of the shared top bar's own height. */
   .pt-safe {
-    padding-top: env(safe-area-inset-top);
+    padding-top: var(--safe-top);
+  }
+
+  /* Gesture pill inset, for a surface that owns the bottom edge. */
+  .pb-safe {
+    padding-bottom: var(--safe-bottom);
+  }
+
+  /* A full-screen card view — sign-in, lock, recovery phrase. The card is
+     centred, so it only meets the system bars once it grows taller than the
+     screen; without this its top and bottom then sit under them. */
+  .py-safe {
+    padding-top: var(--safe-top);
+    padding-bottom: var(--safe-bottom);
   }
 
   @keyframes message-in {

@@ -16,7 +16,7 @@ interface KeyChangedNoticeProps {
  */
 export function KeyChangedNotice({ peerKey, onVerify }: KeyChangedNoticeProps) {
   return (
-    <div className="p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] border-t border-error/30 bg-error/10">
+    <div className="p-4 pb-[calc(1rem+var(--safe-bottom))] border-t border-error/30 bg-error/10">
       <div className="flex items-start gap-3">
         <ShieldAlert className="w-5 h-5 text-error shrink-0 mt-0.5" />
         <div className="min-w-0">

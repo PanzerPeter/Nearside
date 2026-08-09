@@ -438,7 +438,7 @@ function App() {
             entitlement checks don't run on every launch. */}
         {tab === 'settings' && !chatOpen && (
           <section className="w-full lg:hidden flex flex-col min-w-0 bg-base-100">
-            <div className="px-4 pt-[calc(1rem+env(safe-area-inset-top))] pb-4 border-b border-base-content/5 shrink-0">
+            <div className="px-4 pt-[calc(1rem+var(--safe-top))] pb-4 border-b border-base-content/5 shrink-0">
               <h2 className="font-semibold text-base-content">Settings</h2>
             </div>
             <div className="flex-1 overflow-y-auto p-4">

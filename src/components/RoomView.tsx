@@ -225,7 +225,9 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
 
   return (
     <div className="flex flex-col h-full bg-base-200/50 min-h-0">
-      <header className="navbar bg-base-100 px-2 sm:px-4 shrink-0 border-b border-base-content/5 min-h-[3.5rem] gap-1">
+      {/* Same top edge as ChatHeader, and inset the same way — see the comment
+          there for why `lg:` puts it back. */}
+      <header className="navbar bg-base-100 px-2 sm:px-4 pt-[calc(0.5rem+var(--safe-top))] lg:pt-2 shrink-0 border-b border-base-content/5 min-h-[3.5rem] gap-1">
         <button className="btn btn-ghost btn-sm btn-square lg:hidden" onClick={onBack} title="Back">
           <ArrowLeft className="w-4 h-4" />
         </button>
@@ -390,7 +392,7 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
         <div ref={bottomRef} />
       </div>
 
-      <div className="bg-base-100 border-t border-base-content/5 p-2.5 pb-[calc(0.625rem+env(safe-area-inset-bottom))] shrink-0">
+      <div className="bg-base-100 border-t border-base-content/5 p-2.5 pb-[calc(0.625rem+var(--safe-bottom))] shrink-0">
         <div className="flex items-end gap-2">
           <textarea
             className="textarea flex-1 bg-base-200/50 border border-base-content/10 focus:border-primary resize-none min-h-[2.75rem] max-h-40"

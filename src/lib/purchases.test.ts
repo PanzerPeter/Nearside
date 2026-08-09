@@ -4,6 +4,8 @@ import { describe, expect, it, vi } from 'vitest';
 // circuits to "owns nothing", which would make every assertion below vacuous.
 vi.mock('@capacitor/core', () => ({
   Capacitor: { isNativePlatform: () => true },
+  SystemBars: { setStyle: async () => undefined },
+  SystemBarsStyle: { Light: 'LIGHT', Dark: 'DARK' },
 }));
 
 const customerInfo: { entitlements: { active: Record<string, object> } } = {

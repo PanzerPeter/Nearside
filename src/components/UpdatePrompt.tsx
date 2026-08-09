@@ -90,7 +90,7 @@ export function UpdatePrompt() {
     <div
       // Above the toast layer (z-100): this is the one thing on screen the user
       // is being asked to act on, so nothing transient may sit over its buttons.
-      className="fixed inset-x-0 bottom-0 z-[110] flex justify-center px-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pointer-events-none"
+      className="fixed inset-x-0 bottom-0 z-[110] flex justify-center px-3 pb-[calc(0.75rem+var(--safe-bottom))] pointer-events-none"
       role="status"
       aria-live="polite"
     >

@@ -302,7 +302,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
         e.preventDefault();
         submit();
       }}
-      className="p-3 sm:p-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:pb-[calc(1rem+env(safe-area-inset-bottom))] bg-base-100 border-t border-base-content/5 shrink-0"
+      className="p-3 sm:p-4 pb-[calc(0.75rem+var(--safe-bottom))] sm:pb-[calc(1rem+var(--safe-bottom))] bg-base-100 border-t border-base-content/5 shrink-0"
     >
       {replyingTo && (
         <div className="flex items-center gap-2 mb-2 px-3 py-2 rounded-lg bg-base-200/70 border-l-2 border-primary">

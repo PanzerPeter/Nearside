@@ -13,6 +13,17 @@
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
         <item name="android:background">@null</item>
+        <!-- Capacitor's SystemBars plugin paints the decor with this attribute,
+             so it is the colour of the strips behind the system bars. See
+             colors.xml for when those strips are visible at all. -->
+        <item name="android:windowBackground">@color/appCanvas</item>
+        <!-- Below API 35 the window is not edge-to-edge and the bars are
+             opaque; without these they take colorPrimaryDark and the platform
+             default, neither of which is this app's canvas. API 35+ ignores
+             all three and draws the bars transparent. -->
+        <item name="android:statusBarColor">@color/appCanvas</item>
+        <item name="android:navigationBarColor">@color/appCanvas</item>
+        <item name="android:windowLightStatusBar">false</item>
     </style>
 
 

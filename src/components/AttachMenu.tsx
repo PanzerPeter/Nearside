@@ -56,7 +56,7 @@ export function AttachMenu({
       onClick={onClose}
     >
       <div
-        className="w-full rounded-t-2xl bg-base-100 p-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] shadow-2xl"
+        className="w-full rounded-t-2xl bg-base-100 p-2 pb-[calc(0.5rem+var(--safe-bottom))] shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mx-auto mb-2 mt-1 h-1 w-10 rounded-full bg-base-content/20" />

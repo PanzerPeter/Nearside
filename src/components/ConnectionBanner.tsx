@@ -62,7 +62,7 @@ export function ConnectionBanner() {
 
   return (
     <div
-      className="fixed inset-x-0 top-0 z-50 flex justify-center px-3 pt-[calc(0.5rem+env(safe-area-inset-top))] pointer-events-none"
+      className="fixed inset-x-0 top-0 z-50 flex justify-center px-3 pt-[calc(0.5rem+var(--safe-top))] pointer-events-none"
       // polite, and on the wrapper rather than the pill: the collapse is a
       // visual change, not new information, and should not be re-announced.
       role="status"

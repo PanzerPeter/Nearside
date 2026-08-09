@@ -9,7 +9,7 @@
 // Everything here degrades to "owns nothing" off-device. Owning no packs is
 // the common case rather than an error path, and the store has to render for
 // it.
-import { Capacitor } from '@capacitor/core';
+import { Capacitor, SystemBars, SystemBarsStyle } from '@capacitor/core';
 import { Purchases, type PurchasesPackage } from '@revenuecat/purchases-capacitor';
 
 /** Anything the appearance screen can list, bought or not. */
@@ -229,22 +229,54 @@ export function applyTheme(theme: string): void {
 }
 
 /**
- * Repoints `<meta name="theme-color">` at the active theme. The tag is baked
- * into `index.html` as the default theme's canvas, so without this a light
- * theme keeps a near-black address bar above a white app. Read from the live
- * `--b3` rather than a table, so a theme edit in `tailwind.config.js` cannot
- * drift from it.
+ * Points the browser's address bar and the phone's system bars at the active
+ * theme. Both are baked into `index.html` as the default theme's colours, so
+ * without this a light pack keeps a near-black address bar above a white app,
+ * and — since targetSdk 36 draws the app edge-to-edge under the status bar —
+ * white clock and battery icons on top of a cream header.
+ *
+ * Read from the live daisyUI variables rather than a table, so a theme edit in
+ * `tailwind.config.js` cannot drift from it.
  */
 function syncBrowserChrome(): void {
   try {
+    const root = getComputedStyle(document.documentElement);
     const meta = document.querySelector('meta[name="theme-color"]');
-    if (!meta) return;
-    const canvas = getComputedStyle(document.documentElement).getPropertyValue('--b3').trim();
-    // daisyUI emits the bare HSL components ("222 14% 11%"), not a colour.
-    if (canvas) meta.setAttribute('content', `hsl(${canvas})`);
+    const canvas = root.getPropertyValue('--b3').trim();
+    // daisyUI v4 emits the bare oklch components ("22.23% .006 271"), not a
+    // colour — and not HSL, which is what this used to wrap them in. A
+    // malformed value is dropped silently, so the tag simply never moved.
+    if (meta && canvas) meta.setAttribute('content', `oklch(${canvas})`);
+
+    // The status bar sits over the top bar, which is base-100 — that surface,
+    // not the canvas, is what the clock has to stay legible against.
+    const surface = root.getPropertyValue('--b1').trim();
+    syncSystemBars(surface);
   } catch {
     // Chrome colour is decoration; never let it take the theme down with it.
   }
+}
+
+/**
+ * Status-bar and gesture-bar icon contrast, from the surface behind them.
+ *
+ * Capacitor's own default picks a style from the *phone's* dark-mode setting,
+ * which is the wrong input: the packs are chosen in-app, so a light pack on a
+ * phone in dark mode gets white-on-cream icons. The first oklch component is
+ * a lightness percentage, which is all this needs.
+ */
+function syncSystemBars(surface: string): void {
+  if (!Capacitor.isNativePlatform() || !surface) return;
+  const lightness = Number.parseFloat(surface);
+  if (Number.isNaN(lightness)) return;
+  void SystemBars.setStyle({
+    // Capacitor's naming is by content, not by background: Dark means light
+    // icons. A light surface therefore takes Light — dark icons.
+    style: lightness >= 60 ? SystemBarsStyle.Light : SystemBarsStyle.Dark,
+  }).catch(() => {
+    // Bar styling is cosmetic, and this runs on every theme change; a rejected
+    // call must not take the theme with it.
+  });
 }
 
 export function storedTheme(): string {

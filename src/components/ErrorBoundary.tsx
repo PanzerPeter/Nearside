@@ -31,7 +31,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   render() {
     if (this.state.hasError) {
       return (
-        <div className="h-dvh flex flex-col items-center justify-center gap-4 bg-base-300 px-6 text-center">
+        <div className="h-dvh flex flex-col items-center justify-center gap-4 bg-base-300 px-6 text-center py-safe">
           <p className="text-base-content font-semibold">Something went wrong.</p>
           <p className="text-base-content/55 text-sm max-w-xs">
             Nearside hit an unexpected error. Reloading usually fixes it.

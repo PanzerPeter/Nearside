@@ -398,7 +398,7 @@ export function FriendsList({
       {/* Header. It carries the notch inset itself: on a phone this list is the
           top of the screen — the shared top bar is desktop-only — while on
           desktop that bar is above it and already paid for the inset. */}
-      <div className="p-4 pt-[calc(1rem+env(safe-area-inset-top))] sm:p-5 sm:pt-[calc(1.25rem+env(safe-area-inset-top))] lg:pt-5 border-b border-base-content/5">
+      <div className="p-4 pt-[calc(1rem+var(--safe-top))] sm:p-5 sm:pt-[calc(1.25rem+var(--safe-top))] lg:pt-5 border-b border-base-content/5">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <Users className="w-5 h-5 text-primary hidden lg:block" />

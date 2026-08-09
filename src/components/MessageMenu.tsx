@@ -1,5 +1,6 @@
 import { ReactNode, RefObject, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { safeAreaInsets } from '../lib/safe-area';
 import { ReactionBar } from './ReactionBar';
 
 export interface MessageMenuAction {
@@ -87,13 +88,20 @@ export function MessageMenu({
       const height = panel.offsetHeight;
       const vw = window.innerWidth;
       const vh = window.innerHeight;
+      // The viewport runs under the status bar and the gesture pill, so the
+      // margin that keeps this card on screen has to keep it out from under
+      // them too — otherwise a tall menu clamps to a top edge occupied by the
+      // clock, or a bottom edge occupied by the pill.
+      const safe = safeAreaInsets();
+      const topLimit = MARGIN + safe.top;
+      const bottomLimit = vh - MARGIN - safe.bottom;
 
       // Above the bubble by preference — that is where the thumb isn't, and
       // it leaves the message itself visible. Below when there isn't room,
       // clamped into the viewport when there is room for neither.
       let top = a.top - height - GAP;
-      if (top < MARGIN) top = a.bottom + GAP;
-      if (top + height > vh - MARGIN) top = Math.max(MARGIN, vh - height - MARGIN);
+      if (top < topLimit) top = a.bottom + GAP;
+      if (top + height > bottomLimit) top = Math.max(topLimit, bottomLimit - height);
 
       const left = align === 'end' ? a.right - width : a.left;
       setPos({ top, left: Math.min(Math.max(MARGIN, left), Math.max(MARGIN, vw - width - MARGIN)) });

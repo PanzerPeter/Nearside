@@ -25,7 +25,7 @@ export function Toast() {
     <div
       role="status"
       aria-live="polite"
-      className="fixed inset-x-0 bottom-[calc(5rem+env(safe-area-inset-bottom))] z-[100] flex flex-col items-center gap-2 px-4 pointer-events-none"
+      className="fixed inset-x-0 bottom-[calc(5rem+var(--safe-bottom))] z-[100] flex flex-col items-center gap-2 px-4 pointer-events-none"
     >
       {toasts.map((toast) => (
         <div
