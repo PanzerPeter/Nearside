@@ -142,6 +142,13 @@ export const TABLE_REPORTS: TableSpec[] = [
     note: 'How long messages in a conversation last before the server deletes them. Two user ids, a number of seconds, and who set it last. No message content \u2014 the server has none to hold.',
   },
   {
+    table: 'theme_grants',
+    label: 'Theme packs given to you',
+    readable: ['user_id', 'pack_id', 'note', 'granted_at'],
+    opaque: [],
+    note: 'Cosmetic packs handed to an account without a purchase — demo phones, review builds, the occasional apology. Almost certainly empty for you. Nothing here is written by the app; only the database owner can add a row.',
+  },
+  {
     table: 'connect_tokens',
     label: 'Connect codes',
     readable: ['code', 'user_id', 'expires_at', 'used_at', 'used_by'],

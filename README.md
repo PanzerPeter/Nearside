@@ -6,7 +6,7 @@ device and nothing readable on the server.
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 ![Platform](https://img.shields.io/badge/platform-Android%20%7C%20iOS-lightgrey)
-![Tests](https://img.shields.io/badge/tests-390%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-460%20passing-brightgreen)
 
 Built with React, TypeScript and Vite, wrapped in Capacitor, backed by Supabase
 for auth, Postgres, realtime and storage. The browser build is a development
@@ -181,6 +181,12 @@ so. In short:
      compares itself against the real schema
    - `0028_drop_web_push.sql`: drops `push_subscriptions` and the VAPID
      transport
+   - `0029_disappearing.sql`: conversation timers, `expires_at` stamped by
+     trigger, and the `pg_cron` sweep that deletes expired rows. The extension
+     and the `cron.schedule` call are separate steps; see `supabase/SETUP.md`
+   - `0030_theme_grants.sql`: `theme_grants`, so an account can be given theme
+     packs it did not buy. Optional — without it every account owns exactly
+     what RevenueCat says it owns
    - `supabase/storage-setup.sql`: the `avatars` and `chat-media` buckets and
      their policies
 
@@ -363,9 +369,11 @@ or if a block is missing one of the `--surface-ring`, `--receipt-read` or
 
 To sell a pack, per store:
 
-1. Create a **non-consumable** product with the pack id verbatim
-   (`pack.midnight`, `pack.paper`, `pack.terminal`, `pack.sunset`,
-   `pack.sakura`, `pack.graphite`) in the Play Console or App Store Connect.
+1. Create a **non-consumable** product (Play calls it a one-time in-app
+   product) with the pack id verbatim (`pack.midnight`, `pack.paper`,
+   `pack.terminal`, `pack.sunset`, `pack.sakura`, `pack.graphite`) in the Play
+   Console or App Store Connect, priced and **activated**. A product left as a
+   draft does not appear in an offering.
 2. In RevenueCat, attach each product to an **entitlement of the same id** and
    put all six packages in the **current offering**. `packOffers()` reads only
    the current offering, and a pack missing from it renders as "Unavailable"
@@ -374,9 +382,62 @@ To sell a pack, per store:
    They are different publishable keys for different store apps and are not
    interchangeable. `initPurchases` picks by platform.
 
-None of this is load-bearing. With no keys, no offering, or no network, the
-store lists every pack as unavailable, the free themes still work, and the rest
-of the app is untouched.
+On Play, two things outside this repository gate the whole flow, and both fail
+as "Unavailable" rather than as an error:
+
+- **The app must exist on a track.** Play only serves in-app products to a build
+  whose package name, version code and signing certificate match something it has
+  processed — internal testing is enough. A locally signed APK sideloaded onto a
+  phone gets no offering, no matter how correct the RevenueCat dashboard is.
+- **RevenueCat needs the Play service-account credentials** to validate a
+  purchase server-side. Without them the purchase completes in Play and the
+  entitlement never arrives, which reads in-app as paying and getting nothing.
+
+### What a purchase actually does
+
+`purchasePack()` hands the RevenueCat package to Play's billing sheet. On
+success the entitlement id — which is the pack id — appears in
+`customerInfo.entitlements.active`, `ThemeStore` adds it to the owned set and
+applies the theme immediately. Nothing is written to Supabase: ownership is
+RevenueCat's record, and it is keyed to the Supabase user id through
+`Purchases.logIn()`, so the pack follows the account rather than the phone.
+Reinstalling, or signing in on a second device, needs **Restore purchases**;
+Play requires that button to exist and a user on a new phone genuinely needs it.
+
+At boot `ownedPacks()` reconciles: a stored theme whose pack is no longer owned
+falls back to the default, so a refund does not leave the paid-for look in
+place. Free themes are never entitlements and are never walked back.
+
+To test a purchase without paying, add the account as a **license tester** in
+the Play Console (Setup → License testing) and install from an internal testing
+link. The billing sheet then shows a test card and the purchase runs the whole
+real path, entitlement included.
+
+### Unlocking packs without a purchase
+
+Migration `0030_theme_grants.sql` adds `theme_grants`: one row per pack an
+account owns without having bought it, for demo phones, store screenshots and
+review builds. In the SQL editor, as `postgres`:
+
+```sql
+SELECT public.grant_theme_packs('tester@example.com');                    -- all six
+SELECT public.grant_theme_packs('tester@example.com', ARRAY['pack.paper']);
+SELECT public.revoke_theme_grants('tester@example.com');
+```
+
+`src/lib/theme-grants.ts` reads those rows back and merges them with the
+entitlements, so a granted pack behaves exactly like a bought one — it applies,
+it survives a restore, and it shows on the transparency screen as a table with
+rows in it.
+
+The client can only read. `theme_grants` has no INSERT policy and the two
+functions are revoked from `authenticated`, because a pack the app can award
+itself is a pack nobody needs to buy. Grants also work in the browser build,
+which is the only place a showcase account can be driven without a phone.
+
+None of this is load-bearing. With no keys, no offering, no network, or without
+`0030` applied, the store lists every pack as unavailable, the free themes still
+work, and the rest of the app is untouched.
 
 The preview button beside each theme renders a sample conversation in that theme
 without applying it, by setting `data-theme` on that element rather than on

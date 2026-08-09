@@ -33,10 +33,10 @@ import {
   applyTheme,
   initPurchases,
   logOutPurchases,
-  packsFromEntitlements,
   storedTheme,
   themeForOwnership,
 } from './lib/purchases';
+import { ownedPacks } from './lib/theme-grants';
 import { useNicknameSync } from './lib/nicknames';
 import { clearAll } from './lib/outbox';
 import { clearLocalDb, openLocalDb } from './lib/localdb';
@@ -208,13 +208,14 @@ function App() {
     void setHasContacts(friendIds.length > 0);
   }, [userId, identityStatus, friendIds.length]);
 
-  // The stored theme applies before any entitlement check finishes, so a
-  // paying user never gets a frame of the default look, then reconciles,
-  // because a refund must not leave the paid-for theme in place.
+  // The stored theme applies before any ownership check finishes, so a paying
+  // user never gets a frame of the default look, then reconciles, because a
+  // refund must not leave the paid-for theme in place. `ownedPacks` counts a
+  // server-side grant as owned, so a showcase account keeps its theme too.
   useEffect(() => {
     applyTheme(storedTheme());
     if (!userId) return;
-    void packsFromEntitlements().then((owned) => {
+    void ownedPacks().then((owned) => {
       applyTheme(themeForOwnership(storedTheme(), owned));
     });
   }, [userId]);
@@ -397,6 +398,11 @@ function App() {
 
         {/* Chat Area */}
         <main
+          // Opening a conversation is a navigation on a phone, so the pane
+          // travels in from the edge it will leave by. The attribute, rather
+          // than a class, is what lets the expressive set restart the
+          // animation each time it flips — see index.css.
+          data-chat-open={chatOpen}
           className={`flex-1 min-w-0 ${
             chatOpen ? 'flex flex-col' : 'hidden lg:flex lg:flex-col'
           }`}
@@ -419,7 +425,7 @@ function App() {
           ) : (
             <div className="flex-1 flex items-center justify-center bg-base-200/50">
               <div className="text-center px-4">
-                <div className="w-20 h-20 rounded-2xl bg-base-content/5 flex items-center justify-center mx-auto mb-4">
+                <div className="motion-float w-20 h-20 rounded-2xl bg-base-content/5 flex items-center justify-center mx-auto mb-4">
                   <MessageSquare className="w-10 h-10 text-base-content/55" />
                 </div>
                 <p className="text-base-content/60 text-base sm:text-lg font-medium">

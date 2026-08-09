@@ -50,6 +50,28 @@ the caller rather than trusted from the client. `expire_messages` and the two
 stamping triggers are revoked from `anon` and `authenticated` and raise no
 notice.
 
+## `0030_theme_grants.sql` — **not applied yet**
+
+Adds `theme_grants` plus `grant_theme_packs()` / `revoke_theme_grants()`, so a
+demo or review account can own theme packs nobody paid for. Nothing else depends
+on it: without the table the client's grant read fails and every account falls
+back to whatever RevenueCat says it owns, which is the behaviour that shipped.
+
+Paste the file into the SQL editor as `postgres`. It is idempotent and safe to
+re-run. Then, per account:
+
+```sql
+SELECT public.grant_theme_packs('tester@example.com');   -- all six packs
+SELECT public.revoke_theme_grants('tester@example.com'); -- take them back
+```
+
+Both functions are `SECURITY DEFINER` and **revoked from `authenticated` and
+`anon`** — they read `auth.users` by email, and a client that could call them
+would be able to award itself the entire catalogue. Expect the advisor to flag
+them as definer functions; unlike the `0029` pair, these have no EXECUTE grant
+behind them. The table itself grants `SELECT` only, so the app can see what it
+owns and has no write path at all.
+
 ## What the server holds
 
 After `0023` there is no message body in Postgres. `messages` carries a

@@ -6,12 +6,12 @@ import {
   PACKS,
   applyTheme,
   packOffers,
-  packsFromEntitlements,
   purchasePack,
   restorePurchases,
   storedTheme,
   type PackOffer,
 } from '../lib/purchases';
+import { grantedPacks, ownedPacks } from '../lib/theme-grants';
 import { useToast } from '../hooks/useToast';
 import { Modal } from './Modal';
 
@@ -42,8 +42,8 @@ export function ThemeStore({ onClose }: ThemeStoreProps) {
   const native = Capacitor.isNativePlatform();
 
   const load = useCallback(async () => {
-    const [entitlements, live] = await Promise.all([packsFromEntitlements(), packOffers()]);
-    setOwned(entitlements);
+    const [mine, live] = await Promise.all([ownedPacks(), packOffers()]);
+    setOwned(mine);
     setOffers(live);
     setLoading(false);
   }, []);
@@ -84,8 +84,12 @@ export function ThemeStore({ onClose }: ThemeStoreProps) {
   async function restore() {
     setBusy('restore');
     try {
-      const restored = await restorePurchases();
-      setOwned(restored);
+      // Restoring replaces the entitlement set rather than adding to it, so a
+      // refunded pack disappears here as it should. Granted packs are re-read
+      // beside it: they were never purchases, and dropping them would take the
+      // showcase account's themes away the first time someone tapped this.
+      const [restored, granted] = await Promise.all([restorePurchases(), grantedPacks()]);
+      setOwned(new Set([...restored, ...granted]));
       toast.success(
         restored.size > 0 ? 'Purchases restored.' : 'Nothing to restore on this account.'
       );
