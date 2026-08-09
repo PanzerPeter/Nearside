@@ -2,10 +2,11 @@ import { Message, PendingMessage, Reaction } from '../lib/types';
 import { pendingAsMessage } from '../lib/message-queries';
 import { formatUnread, statusFor, type Receipt } from '../lib/receipts';
 import { formatDate, formatTime } from '../lib/time';
+import { timerChangeIndex, type TimerChange } from '../lib/disappearing';
 import type { ReplyTargets } from '../hooks/useReplyTargets';
 import type { ThreadScroll } from '../hooks/useThreadScroll';
 import { MessageBubble } from './MessageBubble';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, Timer } from 'lucide-react';
 
 /** Group consecutive messages from the same sender within this window. */
 const GROUP_WINDOW_MS = 5 * 60 * 1000;
@@ -29,6 +30,9 @@ interface MessageThreadProps {
   /** The chat background, if the pair chose one — a decorative layer behind
    *  the thread. */
   backgroundUrl: string | null;
+  /** The conversation's timer as a line in the thread, or null when the pair
+   *  has never set one. */
+  timerChange: TimerChange | null;
   editingId: string | null;
   editingText: string;
   /** False for a message that was on screen before this conversation's first
@@ -57,6 +61,21 @@ function isGrouped(msg: Message | PendingMessage, prev: Message | PendingMessage
   );
 }
 
+/** The timer change, in the middle of the thread where it happened — the same
+ *  pill the date divider uses, because it is the same kind of thing: not
+ *  something either of you said, but something that happened to the
+ *  conversation. */
+function TimerNotice({ label }: { label: string }) {
+  return (
+    <div className="flex justify-center my-4">
+      <span className="inline-flex items-center gap-1.5 text-[0.7rem] font-medium text-base-content/60 bg-base-300/80 px-3 py-1 rounded-full ring-1 ring-base-content/5 backdrop-blur-sm">
+        <Timer className="w-3 h-3 shrink-0" />
+        {label}
+      </span>
+    </div>
+  );
+}
+
 export function MessageThread({
   me,
   peerLabel,
@@ -70,6 +89,7 @@ export function MessageThread({
   replyTargets,
   scroll,
   backgroundUrl,
+  timerChange,
   editingId,
   editingText,
   isAlreadySeen,
@@ -84,6 +104,13 @@ export function MessageThread({
   onStartEdit,
   onDelete,
 }: MessageThreadProps) {
+  const noticeIndex = timerChange
+    ? timerChangeIndex(
+        messages.map((m) => m.created_at),
+        timerChange.at
+      )
+    : -1;
+
   return (
     <div className="relative flex-1 min-h-0">
       {backgroundUrl && (
@@ -131,12 +158,16 @@ export function MessageThread({
         )}
 
         {messages.length === 0 && queued.length === 0 && (
-          <div className="flex items-center justify-center h-full">
+          <div className="flex flex-col items-center justify-center h-full">
+            {/* Inside the empty state rather than after it: the block below is
+                a full-height centred box, so a sibling pill would sit under
+                the fold of a thread with nothing in it to scroll. */}
+            {timerChange && <TimerNotice label={timerChange.label} />}
             <div className="text-center px-6">
               {isSelf ? (
                 <>
                   <p className="text-base-content/60 text-sm">
-                    Send yourself notes, links and reminders
+                    Send yourself notes, photos and voice memos
                   </p>
                   {/* "Your words", not "everything": the text is sealed with
                       the vault key, but an attachment is still an object in
@@ -144,8 +175,7 @@ export function MessageThread({
                       here would be the app's first lie about the one
                       property it is selling. */}
                   <p className="text-base-content/60 text-xs mt-1">
-                    Notes, photos and voice memos. Your words are encrypted with a key only this
-                    phone holds.
+                    Your words are encrypted with a key only this phone holds.
                   </p>
                 </>
               ) : (
@@ -184,6 +214,7 @@ export function MessageThread({
                     </span>
                   </div>
                 )}
+                {timerChange && noticeIndex === i && <TimerNotice label={timerChange.label} />}
                 <MessageBubble
                   msg={msg}
                   isOwn={isOwn}
@@ -216,6 +247,16 @@ export function MessageThread({
               </div>
             );
           })}
+
+          {/* The change is newer than everything loaded. Guarded on there being
+              something to sit under: with the thread empty the pill is drawn
+              inside the empty state above instead, and drawing it twice is the
+              bug this excludes. */}
+          {timerChange &&
+            noticeIndex === messages.length &&
+            (messages.length > 0 || queued.length > 0) && (
+              <TimerNotice label={timerChange.label} />
+            )}
 
           {/* Every action on a queued send is a no-op: a message that doesn't
               exist server-side can't be edited, deleted, replied to, or

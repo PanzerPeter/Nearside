@@ -287,6 +287,7 @@ function App() {
     return (
       <AppLockScreen
         onUnlock={appLock.unlock}
+        onUnlockWithRecoveryPhrase={appLock.unlockWithRecoveryPhrase}
         waitMs={appLock.waitMs}
         onSignOut={() => void signOut()}
       />

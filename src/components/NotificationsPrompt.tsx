@@ -105,9 +105,8 @@ export function NotificationsPrompt({ userId }: NotificationsPromptProps) {
           Without this, Nearside can only reach you while it is open on screen.
         </p>
         <p className="text-sm text-base-content/75 leading-relaxed">
-          A notification says who wrote to you and nothing else. It cannot quote a message, because
-          the server has no readable copy of one to quote. You can turn this off again in Settings
-          whenever you like.
+          A notification says who wrote to you and nothing else &mdash; the server has no readable
+          copy of a message to quote. You can turn it off again in Settings.
         </p>
       </div>
     </Modal>

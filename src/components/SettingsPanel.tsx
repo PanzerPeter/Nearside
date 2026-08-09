@@ -442,13 +442,8 @@ export function SettingsPanel({
         {lockSetup && appLock.state === 'off' && (
           <div className="rounded-box bg-base-200/60 p-3 space-y-2.5">
             <p className="text-xs text-base-content/70">
-              This locks the app. It is not extra encryption — your key already sits in Android's
-              Keystore and your messages are already encrypted on this phone. What it stops is
-              someone picking up an unlocked phone and reading your conversations.
-            </p>
-            <p className="text-xs text-base-content/70">
-              There is no way to reset it. Forgetting it means signing out, which keeps your account
-              and your recovery phrase but clears the messages stored on this phone.
+              Stops someone picking up an unlocked phone and reading your conversations. Forget it
+              and your recovery phrase opens the app instead.
             </p>
             <input
               type="password"

@@ -5,11 +5,13 @@ import {
   clearLock,
   deriveVerifier,
   loadLock,
+  matchesRecoveryPhrase,
   RELOCK_MS,
   saveLock,
   verifyPassphrase,
   type RelockAfter,
 } from '../lib/app-lock';
+import { loadSeed } from '../lib/keystore';
 
 export type LockState = 'loading' | 'off' | 'locked' | 'unlocked';
 
@@ -18,6 +20,9 @@ export interface AppLock {
   relock: RelockAfter;
   waitMs: number;
   unlock(passphrase: string): Promise<boolean>;
+  /** The forgotten-passphrase route: the twelve words open the app and take
+   *  the lock off with them. */
+  unlockWithRecoveryPhrase(phrase: string): Promise<boolean>;
   enable(passphrase: string, relock: RelockAfter): Promise<void>;
   disable(): Promise<void>;
   setRelock(relock: RelockAfter): Promise<void>;
@@ -33,8 +38,9 @@ export interface AppLock {
  * thing the lock exists to prevent.
  *
  * Failure counts live in memory only. Persisting them would let a locked-out
- * owner stay locked out across a restart with no way back, and there is no
- * reset path in this app.
+ * owner sit out a five-minute backoff they cannot escape, and the way past a
+ * forgotten passphrase — the recovery phrase — is throttled by the same
+ * counter.
  */
 export function useAppLock(userId: string | null): AppLock {
   const [state, setState] = useState<LockState>('loading');
@@ -88,6 +94,15 @@ export function useAppLock(userId: string | null): AppLock {
     };
   }, [relock]);
 
+  /** One counter for both routes in, so the phrase field is not a way around
+   *  the throttle on the passphrase field. */
+  const registerFailure = useCallback(() => {
+    failures.current += 1;
+    const wait = backoffMs(failures.current);
+    setWaitMs(wait);
+    if (wait > 0) window.setTimeout(() => setWaitMs(0), wait);
+  }, []);
+
   const unlock = useCallback(
     async (passphrase: string) => {
       if (!userId) return false;
@@ -99,10 +114,7 @@ export function useAppLock(userId: string | null): AppLock {
       }
       const ok = await verifyPassphrase(passphrase, stored.verifier);
       if (!ok) {
-        failures.current += 1;
-        const wait = backoffMs(failures.current);
-        setWaitMs(wait);
-        if (wait > 0) window.setTimeout(() => setWaitMs(0), wait);
+        registerFailure();
         return false;
       }
       failures.current = 0;
@@ -110,7 +122,28 @@ export function useAppLock(userId: string | null): AppLock {
       setState('unlocked');
       return true;
     },
-    [userId]
+    [userId, registerFailure]
+  );
+
+  const unlockWithRecoveryPhrase = useCallback(
+    async (phrase: string) => {
+      if (!userId) return false;
+      if (backoffMs(failures.current) > 0) return false;
+      const ok = await matchesRecoveryPhrase(phrase, await loadSeed(userId));
+      if (!ok) {
+        registerFailure();
+        return false;
+      }
+      failures.current = 0;
+      setWaitMs(0);
+      // The lock comes off rather than merely opening: the passphrase behind it
+      // is the one the user has just told us they no longer have, and leaving
+      // it in place would lock them out again at the next cold start.
+      await clearLock(userId);
+      setState('off');
+      return true;
+    },
+    [userId, registerFailure]
   );
 
   const enable = useCallback(
@@ -147,5 +180,15 @@ export function useAppLock(userId: string | null): AppLock {
     setState((current) => (current === 'unlocked' ? 'locked' : current));
   }, []);
 
-  return { state, relock, waitMs, unlock, enable, disable, setRelock, lockNow };
+  return {
+    state,
+    relock,
+    waitMs,
+    unlock,
+    unlockWithRecoveryPhrase,
+    enable,
+    disable,
+    setRelock,
+    lockNow,
+  };
 }

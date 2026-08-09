@@ -7,7 +7,9 @@ import { formatLastSeen } from '../lib/time';
 import {
   ArrowLeft,
   Image as ImageIcon,
+  MoreVertical,
   NotebookPen,
+  Pencil,
   Search,
   ShieldAlert,
   ShieldCheck,
@@ -39,6 +41,12 @@ interface ChatHeaderProps {
    *  participant may change it; `setBy` is who did last. */
   timer: ConversationTimer | null;
   onSetTimer: (seconds: number | null) => void;
+}
+
+/** A daisyUI dropdown is held open by focus, so a menu item that only runs its
+ *  handler leaves the menu standing over the answer. */
+function closeMenu() {
+  (document.activeElement as HTMLElement | null)?.blur();
 }
 
 export function ChatHeader({
@@ -79,7 +87,7 @@ export function ChatHeader({
           thing being renamed, so it needs no icon of its own to explain it. */}
       <button
         type="button"
-        className="min-w-0 text-left rounded-lg px-1 -mx-1 hover:bg-base-content/5 transition-colors"
+        className="min-w-0 flex-1 text-left rounded-lg px-1 -mx-1 hover:bg-base-content/5 transition-colors"
         onClick={onOpenNickname}
         title={isSelf ? 'Name this chat' : 'Set a nickname'}
       >
@@ -112,7 +120,7 @@ export function ChatHeader({
             </span>
           )}
         </p>
-        <p className="text-xs text-base-content/60">
+        <p className="text-xs text-base-content/60 flex items-center gap-2 truncate">
           {isSelf ? (
             // Presence and last-seen would be this device reporting on
             // itself; what is worth saying here is that nobody else can read
@@ -131,83 +139,115 @@ export function ChatHeader({
                 : presenceLabels[friendStatus]}
             </span>
           )}
+          {/* A running timer belongs on the line that already says what state
+              this conversation is in, not behind a menu nobody opens. */}
+          {timer?.ttlSeconds != null && (
+            <span className="inline-flex items-center gap-1 text-primary shrink-0">
+              <Timer className="w-3 h-3" />
+              {formatTtl(timer.ttlSeconds)}
+            </span>
+          )}
         </p>
       </button>
       <button
-        className="btn btn-ghost btn-sm btn-square ml-auto hover:bg-base-content/10 transition-colors"
+        className="btn btn-ghost btn-sm btn-square hover:bg-base-content/10 transition-colors"
         onClick={onToggleSearch}
         title="Search messages"
         aria-pressed={searchOpen}
       >
         <Search className="w-5 h-5" />
       </button>
-      {!isSelf && (
-        <button
-          className={`btn btn-ghost btn-sm btn-square hover:bg-base-content/10 transition-colors ${
-            trust === 'changed' ? 'text-error' : trust === 'verified' ? 'text-success' : ''
-          }`}
-          onClick={onOpenVerify}
-          disabled={!peerKey}
-          title={
-            trust === 'changed'
-              ? 'Their key changed'
-              : trust === 'verified'
-                ? 'Verified'
-                : 'Verify safety number'
-          }
-        >
-          {trust === 'verified' ? (
-            <ShieldCheck className="w-5 h-5" />
-          ) : (
-            <ShieldAlert className="w-5 h-5" />
-          )}
-        </button>
-      )}
       <div className="dropdown dropdown-end">
         <button
           tabIndex={0}
-          className={`btn btn-ghost btn-sm btn-square hover:bg-base-content/10 transition-colors ${
-            timer?.ttlSeconds ? 'text-primary' : ''
-          }`}
-          title={
-            timer?.ttlSeconds
-              ? `Messages disappear after ${formatTtl(timer.ttlSeconds)}`
-              : 'Disappearing messages are off'
-          }
-          aria-label="Disappearing messages"
+          className="btn btn-ghost btn-sm btn-square relative hover:bg-base-content/10 transition-colors"
+          aria-label="Conversation options"
         >
-          <Timer className="w-5 h-5" />
+          <MoreVertical className="w-5 h-5" />
+          {/* The one thing in this menu that cannot wait to be found. */}
+          {trust === 'changed' && !isSelf && (
+            <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-error" />
+          )}
         </button>
         <ul
           tabIndex={0}
-          className="dropdown-content menu bg-base-100 rounded-box z-30 w-56 p-2 shadow"
+          className="dropdown-content menu bg-base-100 rounded-box z-30 w-72 p-2 shadow"
         >
-          <li className="menu-title text-xs">Disappear after</li>
-          {TTL_OPTIONS.map((option) => (
-            <li key={String(option.seconds)}>
+          {!isSelf && (
+            <li>
               <button
-                className={timer?.ttlSeconds === option.seconds ? 'active' : ''}
-                onClick={() => onSetTimer(option.seconds)}
+                onClick={() => {
+                  closeMenu();
+                  onOpenVerify();
+                }}
+                disabled={!peerKey}
+                className={
+                  trust === 'changed' ? 'text-error' : trust === 'verified' ? 'text-success' : ''
+                }
               >
-                {option.label}
+                {trust === 'verified' ? (
+                  <ShieldCheck className="w-4 h-4" />
+                ) : (
+                  <ShieldAlert className="w-4 h-4" />
+                )}
+                {trust === 'changed'
+                  ? 'Their key changed'
+                  : trust === 'verified'
+                    ? 'Verified — check again'
+                    : 'Verify safety number'}
               </button>
             </li>
-          ))}
-          <li className="px-3 pt-2">
-            <span className="text-xs text-base-content/50 leading-snug">
-              Either of you can change this, and you both see the change. It does not stop a
-              screenshot.
-            </span>
+          )}
+          <li>
+            <details>
+              <summary className="whitespace-nowrap">
+                <Timer className={`w-4 h-4 ${timer?.ttlSeconds != null ? 'text-primary' : ''}`} />
+                Disappearing messages
+                <span className="ml-auto text-xs text-base-content/50">
+                  {formatTtl(timer?.ttlSeconds ?? null)}
+                </span>
+              </summary>
+              <ul>
+                {TTL_OPTIONS.map((option) => (
+                  <li key={String(option.seconds)}>
+                    <button
+                      className={(timer?.ttlSeconds ?? null) === option.seconds ? 'active' : ''}
+                      onClick={() => {
+                        closeMenu();
+                        onSetTimer(option.seconds);
+                      }}
+                    >
+                      {option.label}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          </li>
+          <li>
+            <button
+              onClick={() => {
+                closeMenu();
+                onOpenBackground();
+              }}
+            >
+              <ImageIcon className="w-4 h-4" />
+              Chat background
+            </button>
+          </li>
+          <li>
+            <button
+              onClick={() => {
+                closeMenu();
+                onOpenNickname();
+              }}
+            >
+              <Pencil className="w-4 h-4" />
+              {isSelf ? 'Name this chat' : 'Set a nickname'}
+            </button>
           </li>
         </ul>
       </div>
-      <button
-        className="btn btn-ghost btn-sm btn-square hover:bg-base-content/10 transition-colors"
-        onClick={onOpenBackground}
-        title="Chat background"
-      >
-        <ImageIcon className="w-5 h-5" />
-      </button>
     </header>
   );
 }

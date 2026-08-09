@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Camera, ShieldCheck } from 'lucide-react';
 import { SCAN_MESSAGES, scanQr } from '../lib/scan';
 import { safetyNumber } from '../lib/crypto/safety';
@@ -23,13 +23,18 @@ interface VerifyContactProps {
   onClose: () => void;
 }
 
+const PAGES = ['Picture and words', 'Digits', 'QR code'];
+
 /**
- * The same sixty digits on both phones, or they are not talking to each other.
+ * The same check in three forms, one screen each: a picture and four words, the
+ * sixty digits they come from, and a code to scan. They are the same comparison
+ * — which one is usable depends on whether you are in the room, on a call, or
+ * holding both phones — and stacking all three down one modal made the shortest
+ * of them look like a preamble to the longest.
  *
- * "Mark verified" stays disabled until either a scan matched or the user
- * ticked the box saying they compared the digits themselves. A verify button
- * anyone can press without looking at anything is a button that records a
- * claim nobody made.
+ * "Mark verified" stays disabled until either a scan matched or the user ticked
+ * the box saying they compared. A verify button anyone can press without
+ * looking at anything is a button that records a claim nobody made.
  */
 export function VerifyContact({
   peerId,
@@ -44,6 +49,8 @@ export function VerifyContact({
   const [compared, setCompared] = useState(false);
   const [scanMatched, setScanMatched] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [page, setPage] = useState(0);
+  const track = useRef<HTMLDivElement>(null);
   const toast = useToast();
 
   useEffect(() => {
@@ -58,6 +65,12 @@ export function VerifyContact({
       cancelled = true;
     };
   }, [myPublic, theirPublic]);
+
+  function goTo(index: number) {
+    const el = track.current;
+    if (!el) return;
+    el.scrollTo({ left: index * el.clientWidth, behavior: 'smooth' });
+  }
 
   async function scanTheirs() {
     if (!number) return;
@@ -134,47 +147,74 @@ export function VerifyContact({
           <span className="loading loading-spinner" />
         </div>
       ) : (
-        <div className="space-y-4">
-          {art && (
-            <div className="flex flex-col items-center gap-2">
-              <SafetySigil art={art} size={132} />
-              <p className="font-mono text-sm tracking-wide">{art.words.join(' · ')}</p>
-              <p className="text-xs text-base-content/50 text-center max-w-xs">
-                The same picture and the same four words on both phones. Read the words aloud if
-                you are on a call. They come from the digits below, so they are the same check in a
-                form you can actually compare.
+        <div className="space-y-3">
+          {/* One scroll container, three snap points. No carousel library: the
+              platform already does this, and does it with the right inertia. */}
+          <div
+            ref={track}
+            onScroll={(e) => {
+              const el = e.currentTarget;
+              setPage(Math.round(el.scrollLeft / el.clientWidth));
+            }}
+            className="flex overflow-x-auto snap-x snap-mandatory min-h-[18rem] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          >
+            <section className="w-full shrink-0 snap-center flex flex-col items-center justify-center gap-3 px-1">
+              {art && <SafetySigil art={art} size={132} />}
+              <p className="font-mono text-sm tracking-wide">{art?.words.join(' · ')}</p>
+              <p className="text-xs text-base-content/60 text-center max-w-xs">
+                The same picture and words on both phones. Read them aloud on a call where you
+                recognise the voice.
               </p>
-            </div>
-          )}
+            </section>
 
-          <p className="text-sm text-base-content/60">
-            These digits are the same on both phones, but only if nobody is in between. Compare
-            them in person, or over a call where you recognise the voice.
-          </p>
+            <section className="w-full shrink-0 snap-center flex flex-col justify-center gap-3 px-1">
+              <div className="grid grid-cols-3 gap-1.5 font-mono text-center">
+                {groups.map((group, i) => (
+                  <span key={i} className="rounded-lg bg-base-200/60 py-1.5 text-sm tracking-wider">
+                    {group}
+                  </span>
+                ))}
+              </div>
+              <p className="text-xs text-base-content/60 text-center">
+                Where the picture and the words come from. Sixty digits, identical on both phones.
+              </p>
+            </section>
 
-          <div className="grid grid-cols-3 gap-1.5 font-mono text-center">
-            {groups.map((group, i) => (
-              <span key={i} className="rounded-lg bg-base-200/60 py-1.5 text-sm tracking-wider">
-                {group}
-              </span>
+            <section className="w-full shrink-0 snap-center flex flex-col items-center justify-center gap-3 px-1">
+              <div className="rounded-2xl bg-white p-2">
+                <QrCode text={safetyPayload(number)} size={168} />
+              </div>
+              <button
+                className="btn btn-outline btn-sm gap-2"
+                onClick={() => void scanTheirs()}
+                disabled={busy}
+              >
+                <Camera className="w-4 h-4" />
+                Scan theirs
+              </button>
+              <p className="text-xs text-base-content/60 text-center max-w-xs">
+                Point this phone at the code on theirs. The app compares for you.
+              </p>
+            </section>
+          </div>
+
+          <div className="flex justify-center gap-2">
+            {PAGES.map((label, i) => (
+              <button
+                key={label}
+                type="button"
+                aria-label={label}
+                aria-current={page === i}
+                onClick={() => goTo(i)}
+                className={`h-2 rounded-full transition-all ${
+                  page === i ? 'w-5 bg-primary' : 'w-2 bg-base-content/25'
+                }`}
+              />
             ))}
           </div>
 
-          <div className="flex justify-center">
-            <div className="rounded-2xl bg-white p-2">
-              <QrCode text={safetyPayload(number)} size={200} />
-            </div>
-          </div>
-
-          <button
-            className="btn btn-outline w-full gap-2"
-            onClick={() => void scanTheirs()}
-            disabled={busy}
-          >
-            <Camera className="w-4 h-4" />
-            Scan theirs
-          </button>
-
+          {/* Below the pager, so the thing that records the claim never scrolls
+              out from under the thing being claimed. */}
           {scanMatched ? (
             <p className="text-sm text-success flex items-center gap-1.5">
               <ShieldCheck className="w-4 h-4" />
@@ -189,7 +229,7 @@ export function VerifyContact({
                 onChange={(e) => setCompared(e.target.checked)}
               />
               <span className="text-sm text-base-content/70">
-                I compared these digits with {peerLabel} and they are identical.
+                I compared these with {peerLabel} and they are identical.
               </span>
             </label>
           )}

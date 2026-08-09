@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from 'react';
 import { Session } from '@supabase/supabase-js';
 import { Message, Profile } from '../lib/types';
 import { isSelfChat, messageSnippet } from '../lib/conversation';
+import { describeTimerChange } from '../lib/disappearing';
 import { openRows } from '../lib/sealed-body';
 import { peerPublicKey } from '../lib/peer-keys';
 import type { Identity } from '../lib/crypto/keys';
@@ -235,6 +236,7 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
         replyTargets={replyTargets}
         scroll={thread.scroll}
         backgroundUrl={background.url}
+        timerChange={describeTimerChange(thread.timer, me, peerLabel)}
         editingId={editing.editingId}
         editingText={editing.editingText}
         isAlreadySeen={thread.isAlreadySeen}

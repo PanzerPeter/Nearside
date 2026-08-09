@@ -21,7 +21,14 @@ vi.mock('capacitor-secure-storage-plugin', () => ({
   },
 }));
 
-import { backoffMs, deriveVerifier, MIN_PASSPHRASE_LENGTH, verifyPassphrase } from './app-lock';
+import {
+  backoffMs,
+  deriveVerifier,
+  matchesRecoveryPhrase,
+  MIN_PASSPHRASE_LENGTH,
+  verifyPassphrase,
+} from './app-lock';
+import { generateMnemonic, seedFromMnemonic } from './crypto/mnemonic';
 
 describe('deriveVerifier', () => {
   it('produces a different salt every time', async () => {
@@ -53,6 +60,37 @@ describe('verifyPassphrase', () => {
     const verifier = await deriveVerifier('correct horse');
     expect(await verifyPassphrase('correct horsé', verifier)).toBe(false);
     expect(await verifyPassphrase('', verifier)).toBe(false);
+  });
+});
+
+describe('matchesRecoveryPhrase', () => {
+  it('accepts the phrase the stored seed came from', async () => {
+    const phrase = generateMnemonic();
+    expect(await matchesRecoveryPhrase(phrase, await seedFromMnemonic(phrase))).toBe(true);
+  });
+
+  it('ignores case and stray whitespace, which is how people type twelve words', async () => {
+    const phrase = generateMnemonic();
+    const seed = await seedFromMnemonic(phrase);
+    expect(await matchesRecoveryPhrase(`  ${phrase.toUpperCase()}  `, seed)).toBe(true);
+    expect(await matchesRecoveryPhrase(phrase.replace(/ /g, '   '), seed)).toBe(true);
+  });
+
+  it('rejects a different account phrase', async () => {
+    const seed = await seedFromMnemonic(generateMnemonic());
+    expect(await matchesRecoveryPhrase(generateMnemonic(), seed)).toBe(false);
+  });
+
+  it('rejects nonsense without throwing', async () => {
+    const seed = await seedFromMnemonic(generateMnemonic());
+    expect(await matchesRecoveryPhrase('', seed)).toBe(false);
+    expect(await matchesRecoveryPhrase('not a recovery phrase at all', seed)).toBe(false);
+    // Twelve real words that fail the checksum.
+    expect(await matchesRecoveryPhrase('abandon '.repeat(12).trim(), seed)).toBe(false);
+  });
+
+  it('rejects everything when this device holds no seed', async () => {
+    expect(await matchesRecoveryPhrase(generateMnemonic(), null)).toBe(false);
   });
 });
 

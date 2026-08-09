@@ -101,12 +101,8 @@ export function IdentitySetup({
             <>
               <h1 className="card-title">Your key</h1>
               <p className="text-sm text-base-content/70">
-                Nearside encrypts your vault and your messages on this device. The key never leaves
-                it, so we cannot reset it for you. Your recovery phrase is the only way back in.
-              </p>
-              <p className="text-sm text-base-content/70">
-                Each account has its own key. If you use more than one account on this phone, each
-                one needs its own phrase.
+                Your key never leaves this device, so we cannot reset it for you. Your recovery
+                phrase is the only way back in, and every account on this phone needs its own.
               </p>
               <button className="btn btn-primary" onClick={begin}>Create a new key</button>
               <button className="btn btn-ghost" onClick={() => setStage('restore')}>
@@ -156,8 +152,8 @@ export function IdentitySetup({
               <p className="flex items-start gap-2 text-xs text-base-content/60">
                 <ShieldAlert className="w-4 h-4 shrink-0 mt-px" />
                 <span>
-                  This is the only copy. Nobody at Nearside has it, and there is no reset. Lose it
-                  with the phone and the vault is gone.
+                  The only copy. Nobody at Nearside has it, and lose it with the phone and the
+                  vault is gone.
                 </span>
               </p>
 

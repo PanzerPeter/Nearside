@@ -8,6 +8,7 @@
 import sodium from 'libsodium-wrappers';
 import { SecureStoragePlugin } from 'capacitor-secure-storage-plugin';
 import { fromBase64, toBase64 } from './crypto/keys';
+import { isValidMnemonic, seedFromMnemonic } from './crypto/mnemonic';
 
 /** Short enough to type one-handed, long enough that the stretching below makes
  *  offline guessing pointless for the threat this actually addresses. */
@@ -100,12 +101,40 @@ export async function verifyPassphrase(
 }
 
 /**
+ * The way back in for someone who has forgotten the passphrase.
+ *
+ * The twelve words derive the seed; if it is the seed this account's Keystore
+ * slot already holds, the person holding the phone is the owner. That is not a
+ * weakening of the lock: whoever has the phrase can restore the account onto a
+ * phone of their own and read everything from there, so refusing them here
+ * would only cost the owner their local messages while stopping nobody.
+ *
+ * `seed` is passed in rather than read here so this stays testable without the
+ * Keystore, and so the caller keeps the seed's lifetime as short as it can.
+ */
+export async function matchesRecoveryPhrase(
+  phrase: string,
+  seed: Uint8Array | null
+): Promise<boolean> {
+  if (!seed) return false;
+  const normalized = phrase.trim().toLowerCase().replace(/\s+/g, ' ');
+  // Checked before deriving: `seedFromMnemonic` throws on a bad phrase, and a
+  // throw on the lock screen is a user with no way back into their account.
+  if (!isValidMnemonic(normalized)) return false;
+  await sodium.ready;
+  const candidate = await seedFromMnemonic(normalized);
+  if (candidate.length !== seed.length) return false;
+  return sodium.memcmp(candidate, seed);
+}
+
+/**
  * How long to refuse the next attempt, given how many have already failed.
  *
  * Four free tries, because a mistyped passphrase is the common case and
  * punishing it teaches people to disable the lock. Then doubling, capped — the
  * cap exists because an uncapped backoff is a denial of service the owner
- * inflicts on themselves, and there is no reset path to escape it.
+ * inflicts on themselves, and `matchesRecoveryPhrase` is throttled by this same
+ * counter, so there is nothing to wait it out with.
  */
 export function backoffMs(failures: number): number {
   if (failures < FREE_ATTEMPTS) return 0;
@@ -151,7 +180,9 @@ export async function loadLock(userId: string): Promise<StoredLock | null> {
     return { verifier: { salt: verifier.salt, hash: verifier.hash }, relock };
   } catch {
     // A corrupt entry is treated as no lock rather than as a locked-out
-    // account: there is no reset path, and a parse failure must not be one.
+    // account. The recovery phrase would open it, but making someone fetch
+    // twelve words off paper because a JSON blob got truncated is not a
+    // trade this lock is worth.
     return null;
   }
 }

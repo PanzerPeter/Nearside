@@ -88,7 +88,8 @@ export function SecurityLimits({ onClose }: SecurityLimitsProps) {
             It asks for a passphrase before Nearside opens, and it keeps the decrypted copy of your
             messages on this phone closed until you answer. It does not add a layer of encryption on
             top of what is already there, and it does not protect against someone who can read this
-            phone&rsquo;s storage directly.
+            phone&rsquo;s storage directly. Your recovery phrase also opens it, so it stops nobody
+            who has that &mdash; they could read everything from a phone of their own anyway.
           </p>
         </section>
 

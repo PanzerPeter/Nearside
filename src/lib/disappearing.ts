@@ -46,6 +46,51 @@ export interface ConversationTimer {
   updatedAt: string;
 }
 
+export interface TimerChange {
+  label: string;
+  /** When the change was made, so the thread can put it where it happened. */
+  at: string;
+}
+
+/**
+ * The one line the thread shows about the timer.
+ *
+ * There is exactly one, because `conversation_timers` keeps one row per pair:
+ * the current setting and who set it last. Earlier changes were overwritten and
+ * are not recoverable, so this is the whole history the app can honestly draw.
+ * Both phones read that row, so both show the same line in the same place.
+ */
+export function describeTimerChange(
+  timer: ConversationTimer | null,
+  me: string,
+  peerLabel: string
+): TimerChange | null {
+  if (!timer) return null;
+  const who = timer.setBy === me ? 'You' : peerLabel;
+  const label =
+    timer.ttlSeconds === null
+      ? `${who} turned off disappearing messages`
+      : `${who} set messages to disappear after ${formatTtl(timer.ttlSeconds).toLowerCase()}`;
+  return { label, at: timer.updatedAt };
+}
+
+/**
+ * Where the change belongs in a thread ordered oldest first: before the first
+ * message sent after it, or at the end when it is newer than all of them.
+ *
+ * A timestamp that will not parse is sorted to the end rather than dropped —
+ * the line is worth showing in the wrong place, and not worth hiding over.
+ */
+export function timerChangeIndex(createdAts: readonly string[], at: string): number {
+  const changedAt = Date.parse(at);
+  if (!Number.isFinite(changedAt)) return createdAts.length;
+  const i = createdAts.findIndex((iso) => {
+    const sentAt = Date.parse(iso);
+    return Number.isFinite(sentAt) && sentAt > changedAt;
+  });
+  return i === -1 ? createdAts.length : i;
+}
+
 export async function loadConversationTimer(
   me: string,
   peerId: string
