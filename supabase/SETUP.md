@@ -1,6 +1,6 @@
 # Supabase setup
 
-Migrations `0001`–`0025` and `0029` are live on the project named in `.env`. The project ref
+Migrations `0001`–`0025`, `0029` and `0030` are live on the project named in `.env`. The project ref
 is deliberately not written down here: it is the API host, it is not rotatable,
 and a public repo is no place to hand out a target for free.
 
@@ -22,6 +22,7 @@ The migrations that changed what the server can see, in order:
 | `0024_encrypted_media.sql` | `media_key_ciphertext` / `media_key_nonce` |
 | `0025_sealed_media_mime.sql` | `chat-media` accepts `application/octet-stream` |
 | `0029_disappearing.sql` | `conversation_timers`, `rooms.ttl_seconds`, a trigger-stamped `expires_at`, and a `pg_cron` sweep that hard-deletes expired rows |
+| `0030_theme_grants.sql` | `theme_grants`, readable by its owner and writable by nobody through the API |
 
 **`0029` is applied**, along with the two things the file itself cannot do:
 
@@ -50,15 +51,15 @@ the caller rather than trusted from the client. `expire_messages` and the two
 stamping triggers are revoked from `anon` and `authenticated` and raise no
 notice.
 
-## `0030_theme_grants.sql` — **not applied yet**
+## `0030_theme_grants.sql` — applied
 
 Adds `theme_grants` plus `grant_theme_packs()` / `revoke_theme_grants()`, so a
 demo or review account can own theme packs nobody paid for. Nothing else depends
 on it: without the table the client's grant read fails and every account falls
 back to whatever RevenueCat says it owns, which is the behaviour that shipped.
 
-Paste the file into the SQL editor as `postgres`. It is idempotent and safe to
-re-run. Then, per account:
+Live, with no rows. The file is idempotent and safe to re-run in the SQL editor
+as `postgres`. Per account:
 
 ```sql
 SELECT public.grant_theme_packs('tester@example.com');   -- all six packs
@@ -67,10 +68,17 @@ SELECT public.revoke_theme_grants('tester@example.com'); -- take them back
 
 Both functions are `SECURITY DEFINER` and **revoked from `authenticated` and
 `anon`** — they read `auth.users` by email, and a client that could call them
-would be able to award itself the entire catalogue. Expect the advisor to flag
-them as definer functions; unlike the `0029` pair, these have no EXECUTE grant
-behind them. The table itself grants `SELECT` only, so the app can see what it
-owns and has no write path at all.
+would be able to award itself the entire catalogue. Unlike the `0029` pair they
+raise no advisor notice at all, because a definer function nobody can execute is
+not reachable through the API. The table grants `SELECT` only, so the app can
+see what it owns and has no write path.
+
+Confirm the lockdown survived a later migration with:
+
+```sql
+SELECT has_function_privilege('authenticated',
+         'public.grant_theme_packs(text, text[], text)', 'EXECUTE') AS should_be_false;
+```
 
 ## What the server holds
 
