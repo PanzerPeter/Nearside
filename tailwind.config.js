@@ -3,6 +3,17 @@ export default {
   content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
   theme: {
     extend: {
+      // Overlay elevation. Tailwind's own scale bands badly on a dark surface;
+      // see the long note beside `--elev-*` in src/index.css for why, and why
+      // these are variables rather than literals.
+      boxShadow: {
+        overlay: 'var(--elev-overlay)',
+        modal: 'var(--elev-modal)',
+        sheet: 'var(--elev-sheet)',
+      },
+      colors: {
+        scrim: 'var(--scrim)',
+      },
       fontFamily: {
         sans: [
           'Inter',

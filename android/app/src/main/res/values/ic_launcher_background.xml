@@ -1,4 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="ic_launcher_background">#FFFFFF</color>
+    <!-- The tile's own canvas, so an adaptive icon masked to any shape still
+         sits on the surface the mark was drawn against. Was #FFFFFF: the
+         Android Studio placeholder, which put the blue mark on white on every
+         launcher while the rest of the app shipped dark. -->
+    <color name="ic_launcher_background">#1A1B1E</color>
 </resources>

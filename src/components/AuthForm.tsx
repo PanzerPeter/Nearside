@@ -130,7 +130,7 @@ export function AuthForm() {
             'radial-gradient(60rem 40rem at 50% -10%, rgba(59,130,246,0.10), transparent 70%)',
         }}
       />
-      <div className="relative card w-full max-w-sm bg-base-100 shadow-2xl border border-base-content/5">
+      <div className="relative card w-full max-w-sm bg-base-100 shadow-modal border border-base-content/5">
         <div className="card-body p-6 sm:p-8">
           <div className="flex flex-col items-center gap-2.5 mb-1">
             <div className="relative">

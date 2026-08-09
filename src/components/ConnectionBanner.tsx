@@ -75,7 +75,7 @@ export function ConnectionBanner() {
         // amber bar across the top of the app reads as "something is wrong
         // with your account", which is a much bigger claim than "the socket
         // is down and we are polling instead".
-        className="pointer-events-auto flex items-center gap-2 rounded-full bg-base-100/95 text-base-content border border-base-content/10 shadow-lg backdrop-blur px-3 py-1.5 text-xs font-medium hover:bg-base-100 transition-colors"
+        className="pointer-events-auto flex items-center gap-2 rounded-full bg-base-100/95 text-base-content border border-base-content/10 shadow-overlay backdrop-blur px-3 py-1.5 text-xs font-medium hover:bg-base-100 transition-colors"
         title={`${label}. Tap to retry.`}
         aria-label={`${label}. Tap to retry now.`}
       >

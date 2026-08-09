@@ -35,7 +35,83 @@ export const MOTION = {
 export type MotionToken = keyof typeof MOTION;
 
 /** A token's duration in milliseconds, or zero when the OS asked for reduced
- *  motion — so a caller can schedule cleanup with one number either way. */
+ *  motion — so a caller can schedule cleanup with one number either way.
+ *
+ *  Deliberately not affected by the in-app "Reduce motion" switch: that switch
+ *  chooses between two sets of animations, and the restrained set still runs
+ *  the seal sweep. Only the OS setting means "no animation at all". */
 export function motionDuration(token: MotionToken): number {
   return prefersReducedMotion() ? 0 : MOTION[token].duration;
+}
+
+// ---------------------------------------------------------------------------
+// The in-app preference
+//
+// Two tiers of animation ship, not an on/off switch. Off (the default) is the
+// expressive set — bubbles that spring in from their own corner, a seal that
+// glows, sheets that rise. On is the restrained set the app had before it:
+// short fades and slides, nothing that overshoots or loops.
+//
+// The OS accessibility setting is a third, stricter state and always wins: it
+// means "no animation", which neither tier is, so it collapses to `reduced`
+// here *and* is caught again by the `prefers-reduced-motion` block in
+// index.css. Belt and braces, because the expressive set contains a few
+// looping decorations that a duration override alone would leave frozen
+// mid-cycle rather than removed.
+
+const REDUCED_KEY = 'nearside.motion.reduced';
+
+/** Whether the user asked, in settings, for the restrained animation set.
+ *  Off by default — a fresh install gets the expressive one. */
+export function isMotionReduced(): boolean {
+  try {
+    return localStorage.getItem(REDUCED_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+/** Persist the choice and repaint against it. Takes effect immediately: every
+ *  expressive rule hangs off one attribute, so nothing needs remounting. */
+export function setMotionReduced(reduced: boolean): void {
+  try {
+    localStorage.setItem(REDUCED_KEY, reduced ? '1' : '0');
+  } catch {
+    /* ignore storage failures — the attribute below still applies for now */
+  }
+  applyMotionPreference();
+}
+
+/** Whether the expressive set should be running: neither tier of "calm down"
+ *  is in force. */
+export function expressiveMotion(): boolean {
+  return !isMotionReduced() && !prefersReducedMotion();
+}
+
+/**
+ * Stamp `data-motion` on `<html>`. Every expressive rule in `index.css` is
+ * scoped to `:root[data-motion='expressive']`, so the attribute being absent —
+ * before this runs, or if it never does — yields the restrained set rather
+ * than a half-applied expressive one.
+ */
+export function applyMotionPreference(): void {
+  if (typeof document === 'undefined') return;
+  document.documentElement.setAttribute(
+    'data-motion',
+    expressiveMotion() ? 'expressive' : 'reduced'
+  );
+}
+
+/**
+ * Call once, before the first render, so the opening frame is already in the
+ * right tier. Also follows the OS setting for the rest of the session: Android
+ * exposes "remove animations" as a quick toggle, and a user who reaches for it
+ * mid-conversation means now, not next launch.
+ */
+export function initMotionPreference(): void {
+  applyMotionPreference();
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+  window
+    .matchMedia('(prefers-reduced-motion: reduce)')
+    .addEventListener('change', applyMotionPreference);
 }

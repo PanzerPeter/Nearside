@@ -138,7 +138,7 @@ export function ChatHeader({
             </span>
           ) : (
             <span className="inline-flex items-center gap-1.5">
-              <StatusDot status={friendStatus} size={8} />
+              <StatusDot status={friendStatus} size={8} pulse />
               {friendStatus === 'offline' && friend.last_seen_at
                 ? formatLastSeen(friend.last_seen_at)
                 : presenceLabels[friendStatus]}

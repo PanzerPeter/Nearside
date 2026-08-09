@@ -64,7 +64,7 @@ export function AppLockScreen({ onUnlock, onUnlockWithRecoveryPhrase, waitMs, on
 
   return (
     <div className="h-dvh flex items-center justify-center bg-base-300 p-4 pt-[calc(1rem+var(--safe-top))] pb-[calc(1rem+var(--safe-bottom))]">
-      <form onSubmit={submit} className="card bg-base-100 w-full max-w-sm shadow-xl">
+      <form onSubmit={submit} className="card bg-base-100 w-full max-w-sm shadow-modal">
         <div className="card-body gap-4 items-center text-center">
           <BrandMark size={32} />
           <Lock className="w-6 h-6 text-base-content/50" />

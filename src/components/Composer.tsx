@@ -432,7 +432,9 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
             </button>
 
             <div className="flex-1 flex items-center gap-2 min-w-0 h-12" aria-live="polite">
-              <span className="w-2.5 h-2.5 rounded-full bg-error animate-pulse shrink-0" />
+              {/* motion-recording swaps the flat opacity pulse for emitted
+                  rings under the expressive set — see index.css. */}
+              <span className="motion-recording w-2.5 h-2.5 rounded-full bg-error animate-pulse shrink-0" />
               <span className="font-mono text-sm tabular-nums">
                 {formatDuration(recorder.elapsedMs)}
               </span>

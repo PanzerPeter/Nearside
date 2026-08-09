@@ -251,10 +251,31 @@ function syncBrowserChrome(): void {
     // The status bar sits over the top bar, which is base-100 — that surface,
     // not the canvas, is what the clock has to stay legible against.
     const surface = root.getPropertyValue('--b1').trim();
-    syncSystemBars(surface);
+    const light = surfaceIsLight(surface);
+    syncSystemBars(light);
+
+    // Shadows and the modal scrim are tuned per surface, not per pack: the
+    // steep, high-alpha shadow that keeps a dark theme's overlays from banding
+    // into coloured contour rings reads as a bruise under a cream card, and
+    // the soft wide one is the thing that bands. Same lightness reading as the
+    // bars above rather than a list of theme names, so a pack added later
+    // cannot be left out of it. See `--elev-*` in src/index.css.
+    if (light === null) document.documentElement.removeAttribute('data-surface');
+    else document.documentElement.setAttribute('data-surface', light ? 'light' : 'dark');
   } catch {
     // Chrome colour is decoration; never let it take the theme down with it.
   }
+}
+
+/**
+ * Whether the active surface reads as light, or null when the theme has not
+ * resolved yet. The first oklch component is a lightness percentage, which is
+ * all either caller needs.
+ */
+function surfaceIsLight(surface: string): boolean | null {
+  if (!surface) return null;
+  const lightness = Number.parseFloat(surface);
+  return Number.isNaN(lightness) ? null : lightness >= 60;
 }
 
 /**
@@ -262,17 +283,14 @@ function syncBrowserChrome(): void {
  *
  * Capacitor's own default picks a style from the *phone's* dark-mode setting,
  * which is the wrong input: the packs are chosen in-app, so a light pack on a
- * phone in dark mode gets white-on-cream icons. The first oklch component is
- * a lightness percentage, which is all this needs.
+ * phone in dark mode gets white-on-cream icons.
  */
-function syncSystemBars(surface: string): void {
-  if (!Capacitor.isNativePlatform() || !surface) return;
-  const lightness = Number.parseFloat(surface);
-  if (Number.isNaN(lightness)) return;
+function syncSystemBars(light: boolean | null): void {
+  if (!Capacitor.isNativePlatform() || light === null) return;
   void SystemBars.setStyle({
     // Capacitor's naming is by content, not by background: Dark means light
     // icons. A light surface therefore takes Light — dark icons.
-    style: lightness >= 60 ? SystemBarsStyle.Light : SystemBarsStyle.Dark,
+    style: light ? SystemBarsStyle.Light : SystemBarsStyle.Dark,
   }).catch(() => {
     // Bar styling is cosmetic, and this runs on every theme change; a rejected
     // call must not take the theme with it.

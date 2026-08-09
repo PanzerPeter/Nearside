@@ -328,6 +328,8 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
             return (
               <li
                 key={m.id}
+                // Same side marker as MessageBubble — see index.css.
+                data-own={mine}
                 className={`flex ${mine ? 'justify-end' : 'justify-start'} animate-message-in`}
               >
                 <div

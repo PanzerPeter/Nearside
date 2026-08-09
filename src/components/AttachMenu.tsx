@@ -49,14 +49,14 @@ export function AttachMenu({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-end bg-black/40"
+      className="motion-scrim fixed inset-0 z-50 flex items-end bg-scrim"
       role="dialog"
       aria-modal="true"
       aria-label="Choose attachment source"
       onClick={onClose}
     >
       <div
-        className="w-full rounded-t-2xl bg-base-100 p-2 pb-[calc(0.5rem+var(--safe-bottom))] shadow-2xl"
+        className="motion-sheet w-full rounded-t-2xl bg-base-100 p-2 pb-[calc(0.5rem+var(--safe-bottom))] shadow-sheet"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mx-auto mb-2 mt-1 h-1 w-10 rounded-full bg-base-content/20" />

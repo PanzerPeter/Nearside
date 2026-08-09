@@ -205,6 +205,10 @@ export function MessageBubble({
 
   return (
     <div
+      // Which side the entrance comes from, for the expressive animation set
+      // in index.css. Set unconditionally rather than only while animating:
+      // the attribute is inert without `.animate-message-in` beside it.
+      data-own={isOwn}
       className={`group flex flex-col ${isOwn ? 'items-end' : 'items-start'} ${
         isNew ? 'animate-message-in' : ''
       }`}

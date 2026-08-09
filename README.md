@@ -110,6 +110,11 @@ fetches beside them. When the WebSocket is blocked, which some corporate proxies
 and VPN routes do while ordinary HTTPS keeps working, the app polls and a banner
 says so rather than showing a frozen conversation.
 
+**Two animation sets, not an on/off switch.** Messages spring in from their own
+corner, a sealed message glows as it lands, sheets rise, the scrim fades.
+Settings → Appearance → **Reduce motion** swaps the lot for short fades and
+slides. The OS accessibility setting is stricter than either and always wins.
+
 **Unsent messages are durable.** The outbox persists to IndexedDB with
 client-generated uuids, so a retry after a lost response collides on the primary
 key instead of writing a second copy.
@@ -445,6 +450,49 @@ without applying it, by setting `data-theme` on that element rather than on
 browser build too, which is the only way to judge a pack on a machine that
 cannot buy one.
 
+### Motion
+
+Two tiers, chosen by `data-motion` on `<html>` and nothing else. Expressive is
+the default; **Reduce motion** in Settings → Appearance stores the choice and
+repaints on the spot, because every expressive rule in `src/index.css` is scoped
+to `:root[data-motion='expressive']` and the attribute simply being absent
+yields the restrained set rather than a half-applied one.
+
+`prefers-reduced-motion` is a third and stricter state: it collapses the
+attribute to `reduced`, disables the switch, and is caught again by a media
+block in the stylesheet, because a few expressive decorations loop and a
+duration override alone would freeze them mid-cycle instead of removing them.
+`initMotionPreference()` runs in `main.tsx` before the first render — a frame
+painted before the attribute lands would open in the wrong tier and visibly
+switch — and listens for the OS setting changing mid-session, which on Android
+is a quick-settings tile.
+
+### Elevation, and why the Tailwind shadows are banned
+
+`shadow-xl` and `shadow-2xl` do not work on this app's surfaces. `shadow-2xl` is
+`0 25px 50px -12px rgb(0 0 0 / 0.25)`; over a near-black scrim that alpha spans
+about four of the 256 levels per channel, so each 8-bit step lands as a flat
+~25px band with a hard edge, and the three channels cross their thresholds at
+different radii, fringing every edge green. The result is a stack of coloured
+contour rings around the dialog, not a shadow.
+
+So overlays use `shadow-overlay` / `shadow-modal` / `shadow-sheet`, which resolve
+to `--elev-*` variables that change with the surface: a hairline ring and a deep
+scrim on dark, the ordinary soft blur on light, where the same alpha has the
+levels to spend. `data-surface` on `<html>` is set from the live daisyUI
+lightness in `purchases.ts` — the same reading that picks the system-bar icon
+contrast — so a pack added later cannot be left out of it.
+`lib/elevation.test.ts` fails if a banned shadow class reappears.
+
+### The mark
+
+`BrandMark.tsx` and `public/logo-source.svg` are the same drawing: one disc cut
+on the diagonal and slid apart, so the logo is really the gap between the two
+halves. Every icon in the repo — Android mipmaps, the adaptive foreground in
+`public/logo-foreground.svg`, the iOS asset catalogue, the splash screens, the
+PWA icons and the favicon — is rendered from those files, so a change to the
+mark means re-rendering them rather than editing a PNG.
+
 ## Testing
 
 ```bash
@@ -458,10 +506,13 @@ or component test setup, which is deliberate: logic that needs testing gets
 pushed out of components and into `src/lib/`, where it can be tested without a
 renderer.
 
-Two of them are load-bearing rather than incidental. `lib/no-plaintext.test.ts`
-fails if a message body ever reaches an insert payload. `lib/no-ads.test.ts`
-fails if an advertising SDK appears in `package.json` or the Gradle build. Both
-exist so the claims on the store listing stay true by construction.
+Three of them guard a decision rather than a function.
+`lib/no-plaintext.test.ts` fails if a message body ever reaches an insert
+payload and `lib/no-ads.test.ts` fails if an advertising SDK appears in
+`package.json` or the Gradle build — both so the claims on the store listing
+stay true by construction. `lib/elevation.test.ts` fails if a banned Tailwind
+shadow class comes back, because the banding it causes is invisible on the
+machine most of this is written on and obvious on a phone.
 
 ## Project layout
 

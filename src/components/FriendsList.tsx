@@ -480,7 +480,7 @@ export function FriendsList({
             </p>
           </div>
         ) : (
-          <ul className="p-2 sm:p-3 space-y-1">
+          <ul className="motion-stagger p-2 sm:p-3 space-y-1">
             {conversations.map((conversation) => (
               <li key={conversation.peer_id}>
                 <ConversationRow

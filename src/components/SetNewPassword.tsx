@@ -32,7 +32,7 @@ export function SetNewPassword({ onDone }: SetNewPasswordProps) {
 
   return (
     <div className="min-h-dvh flex items-center justify-center bg-base-300 px-4 py-safe">
-      <div className="card w-full max-w-sm bg-base-100 shadow-2xl border border-base-content/5">
+      <div className="card w-full max-w-sm bg-base-100 shadow-modal border border-base-content/5">
         <div className="card-body p-6 sm:p-8">
           <div className="flex items-center justify-center gap-2.5 mb-1">
             <KeyRound className="w-6 h-6 text-primary" />

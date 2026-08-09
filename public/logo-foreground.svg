@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!--
+    The Android adaptive-icon foreground: the same mark as logo-source.svg with
+    the tile taken off, because the launcher supplies its own background layer
+    and masks the pair to whatever shape the phone's theme uses.
+
+    Outer radius 133 in a 512 box, so the disc is about 52% of the foreground's
+    width. The safe zone — the inner 72dp of a 108dp foreground — allows up to
+    170, but filling it leaves the mark touching the edge of every round mask
+    with no ground showing around it, which is what makes an icon look like it
+    was pasted in rather than drawn to fit.
+
+    No drop shadow: the launcher elevates the icon itself, and a baked-in one
+    reads as dirt under the mask on the phones that do.
+
+    Geometry is logo-source's scaled by 133/136, gap included, so the two files
+    are the same drawing at two sizes rather than two drawings.
+  -->
+  <defs>
+    <linearGradient id="near" x1="0.15" y1="0" x2="0.85" y2="1">
+      <stop offset="0" stop-color="#93c5ff"/>
+      <stop offset="1" stop-color="#4a8ff7"/>
+    </linearGradient>
+    <linearGradient id="far" x1="0.15" y1="0" x2="0.85" y2="1">
+      <stop offset="0" stop-color="#2f66c4"/>
+      <stop offset="1" stop-color="#1d4187"/>
+    </linearGradient>
+  </defs>
+
+  <path
+    fill="url(#far)" stroke="url(#far)" stroke-width="20" stroke-linejoin="round"
+    transform="translate(-9.26 13.22)"
+    d="M 348.56 320.81 A 113 113 0 0 1 163.44 191.19 Z"/>
+  <path
+    fill="url(#near)" stroke="url(#near)" stroke-width="20" stroke-linejoin="round"
+    transform="translate(9.26 -13.22)"
+    d="M 163.44 191.19 A 113 113 0 0 1 348.56 320.81 Z"/>
+</svg>

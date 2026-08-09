@@ -9,6 +9,7 @@ import { ToastProvider } from './hooks/useToast';
 import { Toast } from './components/Toast';
 import { ConnectionBanner } from './components/ConnectionBanner';
 import { startConnectionMonitor } from './lib/connection';
+import { initMotionPreference } from './lib/motion';
 import { registerAuthLinkHandler } from './lib/nativeAuthLinks';
 import '@fontsource/inter/400.css';
 import '@fontsource/inter/500.css';
@@ -20,6 +21,12 @@ import './index.css';
 // per-document concern, not per-mount, and they have to survive StrictMode's
 // double-mount without doubling their timers.
 startConnectionMonitor();
+
+// Before the first render, not inside a component: `data-motion` decides which
+// of the two animation sets every stylesheet rule resolves to, and a frame
+// painted before it lands would open the app in the restrained one and then
+// visibly switch.
+initMotionPreference();
 
 // Native crashes are captured by the SDK itself. Unhandled JS rejections are
 // not, and the crypto layer added in Plan 2 is exactly the kind of code that

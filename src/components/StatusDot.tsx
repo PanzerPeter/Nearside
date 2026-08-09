@@ -16,13 +16,20 @@ interface StatusDotProps {
   status: PresenceStatus;
   size?: number;
   className?: string;
+  /** Emit a slow halo while the peer is active, under the expressive motion
+   *  set. Opt-in, and only one caller takes it: the same halo repeated down a
+   *  list of conversations is noise behind the text you are trying to read. */
+  pulse?: boolean;
 }
 
 /** Small presence indicator: green / amber / grey with a surface-coloured ring. */
-export function StatusDot({ status, size = 12, className = '' }: StatusDotProps) {
+export function StatusDot({ status, size = 12, className = '', pulse = false }: StatusDotProps) {
   return (
     <span
-      className={`inline-block rounded-full ${className}`}
+      // `relative` only when pulsing: the halo is an absolutely positioned
+      // ::after and needs this dot as its containing block.
+      className={`inline-block rounded-full ${pulse ? 'motion-presence relative ' : ''}${className}`}
+      data-presence={pulse ? status : undefined}
       style={{
         width: size,
         height: size,

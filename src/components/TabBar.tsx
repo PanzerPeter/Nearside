@@ -62,7 +62,9 @@ function TabButton({
         active ? 'text-primary' : 'text-base-content/55 hover:text-base-content/80'
       }`}
     >
-      <span className="relative">
+      {/* motion-tab-icon is the hook the expressive set animates when
+          aria-current above flips to this button — see index.css. */}
+      <span className="motion-tab-icon relative">
         {children}
         {badge > 0 && (
           <span className="absolute -top-1.5 -right-2.5 badge badge-xs badge-primary px-1 font-semibold">

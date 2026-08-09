@@ -12,6 +12,7 @@ import {
 } from '../lib/notifications';
 import { AVATAR_MAX_EDGE, compressImage } from '../lib/compress';
 import { isSoundMuted, setSoundMuted } from '../lib/sound';
+import { isMotionReduced, prefersReducedMotion, setMotionReduced } from '../lib/motion';
 import { confirmsUsername } from '../lib/account';
 import { clearAll } from '../lib/outbox';
 import { clearLocalDb } from '../lib/localdb';
@@ -37,6 +38,7 @@ import {
   Palette,
   Scale,
   ShieldAlert,
+  Sparkles,
   Volume2,
 } from 'lucide-react';
 
@@ -127,6 +129,13 @@ export function SettingsPanel({
   const [pushOn, setPushOn] = useState(false);
   const [pushBusy, setPushBusy] = useState(false);
   const [muted, setMuted] = useState(isSoundMuted());
+  const [reducedMotion, setReducedMotion] = useState(isMotionReduced());
+  // Read once per mount, not per render: the OS setting decides whether the
+  // switch below can do anything at all, and a value that changed between two
+  // renders would flip the control's disabled state under the user's finger.
+  // A change to it is picked up on the next mount, and by the listener
+  // `initMotionPreference` installed, which repaints the app either way.
+  const [osReducedMotion] = useState(prefersReducedMotion);
   const native = Capacitor.isNativePlatform();
 
   const [showServerView, setShowServerView] = useState(false);
@@ -188,6 +197,14 @@ export function SettingsPanel({
     const next = !muted;
     setMuted(next);
     setSoundMuted(next);
+  }
+
+  function toggleReducedMotion() {
+    const next = !reducedMotion;
+    setReducedMotion(next);
+    // Repaints the whole app on the spot — every rule hangs off one attribute
+    // on <html>, so the switch demonstrates itself.
+    setMotionReduced(next);
   }
 
   const notifStatus = !native
@@ -515,6 +532,34 @@ export function SettingsPanel({
         <p className="text-xs font-medium uppercase tracking-wider text-base-content/60">
           Appearance
         </p>
+
+        {/* Not an on/off switch for animation — off is the fuller set, on is
+            the plain one. Framed as "reduce" rather than "fancy animations"
+            because that is the word people look for when they want a calmer
+            app, and it matches the OS setting it defers to. */}
+        <div className="flex items-center justify-between gap-3 px-2 py-1">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <Sparkles className="w-4 h-4 text-base-content/60 shrink-0" />
+            <div className="min-w-0">
+              <p className="text-sm font-medium">Reduce motion</p>
+              <p className="text-xs text-base-content/60">
+                {osReducedMotion
+                  ? 'Your device already asks for reduced motion, so this stays on.'
+                  : reducedMotion
+                    ? 'Plain fades and slides.'
+                    : 'Messages spring in, sheets rise, a sealed message glows.'}
+              </p>
+            </div>
+          </div>
+          <input
+            type="checkbox"
+            className="toggle toggle-primary shrink-0"
+            checked={reducedMotion || osReducedMotion}
+            onChange={toggleReducedMotion}
+            disabled={osReducedMotion}
+          />
+        </div>
+
         <button
           className="btn btn-ghost btn-sm w-full justify-start gap-2.5 px-2"
           onClick={() => setShowThemes(true)}

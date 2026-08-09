@@ -24,6 +24,42 @@
     --safe-left: max(env(safe-area-inset-left), var(--safe-area-inset-left, 0px));
     --safe-right: max(env(safe-area-inset-right), var(--safe-area-inset-right, 0px));
 
+    /* Elevation, and why a dark surface gets no blur at all.
+       -----------------------------------------------------------------------
+       A shadow is a gradient, and a gradient banded onto 8 bits shows contours
+       wherever it crosses fewer levels than it covers pixels. `shadow-2xl` —
+       50px of blur at 0.25 alpha — spans about 64 levels over white and reads
+       as a soft blur; over this app's scrim it spans four, so each level
+       landed as a ~25px flat band with a hard edge. Worse, the scrim is not
+       neutral (a black scrim over the cool-grey canvas leaves 16,17,19), so
+       red, green and blue cross their thresholds at different radii and every
+       band edge came out fringed teal. What you saw around a dialog was not a
+       shadow, it was a stack of coloured contour rings.
+
+       Shortening the blur only shrinks the rings — it cannot remove them,
+       because the channels still cross at different radii, and a measured
+       probe on the device confirmed a residual fringe at every blur radius
+       tested. The only value with no artifact is no gradient. So a dark
+       surface lifts with hard edges instead: a 1px ring, the hairline border
+       the components already carry, and a scrim deep enough to do the
+       separating. Light surfaces keep the soft blur, where the same alpha has
+       all those levels to spend and nothing bands. `purchases.ts` stamps
+       `data-surface` from the live theme's own lightness, so a pack added
+       later cannot miss it.
+
+       Never `none` in these: Tailwind composes the utility as a comma list
+       (`var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--elev-*)`),
+       and `none` inside a list is invalid — the whole declaration is dropped
+       and daisyUI's own `.modal-box` shadow comes back. `0 0 #0000` is the
+       no-op that survives. */
+    --elev-overlay: 0 0 0 1px rgb(0 0 0 / 0.5);
+    --elev-modal: 0 0 0 1px rgb(0 0 0 / 0.4);
+    /* A bottom sheet's only free edge is its top one. */
+    --elev-sheet: 0 -1px 0 rgb(0 0 0 / 0.45);
+    /* Deeper than daisyUI's `#0006`. With no halo announcing the dialog, the
+       scrim and the hairline border are the whole of the separation. */
+    --scrim: rgb(0 0 0 / 0.62);
+
     /* Mirrors MOTION in src/lib/motion.ts. Both exist because some consumers
        animate from JavaScript and some from a stylesheet; they must not drift. */
     --motion-enter-duration: 180ms;
@@ -34,6 +70,20 @@
     --motion-emphasis-easing: cubic-bezier(0.34, 1.56, 0.64, 1);
     --motion-seal-duration: 320ms;
     --motion-seal-easing: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  :root[data-surface='light'] {
+    --elev-overlay: 0 6px 16px rgb(0 0 0 / 0.13);
+    --elev-modal: 0 16px 40px rgb(0 0 0 / 0.18);
+    --elev-sheet: 0 -8px 24px rgb(0 0 0 / 0.14);
+    --scrim: rgb(0 0 0 / 0.42);
+  }
+
+  /* daisyUI hard-codes `#0006` on both the native ::backdrop and the
+     `.modal-backdrop` fallback. One token instead, so the scrim matches the
+     hand-rolled ones (AttachMenu, MediaLightbox) that are not <dialog>s. */
+  dialog.modal::backdrop {
+    background-color: var(--scrim);
   }
 
   html, body, #root {
@@ -183,6 +233,399 @@
       content: none;
     }
   }
+
+  /* ==========================================================================
+     The expressive set
+     --------------------------------------------------------------------------
+     Everything below is scoped to `:root[data-motion='expressive']`, which
+     `initMotionPreference()` in src/lib/motion.ts stamps on <html> before the
+     first render. Two things take it off again — the "Reduce motion" switch in
+     settings and the OS accessibility setting — and both leave the restrained
+     animations above in force, untouched. Nothing here is a new *state*: each
+     rule replaces the timing of a transition the app already had, so a build
+     where the attribute never lands still animates, just plainly.
+
+     The shared rule for what belongs here: motion attaches to something the
+     user did, or to something that genuinely arrived. Nothing loops except two
+     ambient details (a live presence dot, an idle empty state), and both fade
+     to nothing at the end of a cycle so the reduced-motion duration override
+     leaves them invisible rather than frozen mid-swell.
+     ========================================================================== */
+
+  :root[data-motion='expressive'] {
+    /* Overshoots, which is the whole point — an element that passes its
+       resting position and settles back reads as having mass. Reserved for
+       things that arrive; never used on anything leaving, where an overshoot
+       just looks like a mistake. */
+    --motion-spring: cubic-bezier(0.22, 1.4, 0.36, 1);
+    /* The same idea with a third of the bounce, for elements big enough that
+       a full spring would read as wobble. */
+    --motion-spring-soft: cubic-bezier(0.34, 1.26, 0.64, 1);
+  }
+
+  /* --- Arrivals ---------------------------------------------------------- */
+
+  /* The generic one, for menus, popovers and cards that have no side to come
+     from. Scales up from its own anchor rather than sliding. */
+  @keyframes pop-in {
+    from {
+      opacity: 0;
+      transform: translate3d(0, 8px, 0) scale(0.94);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  /* A message grows out of the corner it is anchored to — own messages from
+     the bottom right, the friend's from the bottom left — so the thread reads
+     as two people speaking from their own sides rather than one column of rows
+     appearing. The scale starts well under 1 and passes 1 on the way down;
+     that overshoot is what separates this from the restrained version, which
+     is the same gesture with the life taken out of it. */
+  @keyframes bubble-in-own {
+    0% {
+      opacity: 0;
+      transform: translate3d(16px, 10px, 0) scale(0.86);
+    }
+    55% {
+      opacity: 1;
+      transform: translate3d(0, 0, 0) scale(1.025);
+    }
+    100% {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  @keyframes bubble-in-peer {
+    0% {
+      opacity: 0;
+      transform: translate3d(-16px, 10px, 0) scale(0.86);
+    }
+    55% {
+      opacity: 1;
+      transform: translate3d(0, 0, 0) scale(1.025);
+    }
+    100% {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  :root[data-motion='expressive'] .animate-message-in {
+    animation: pop-in 260ms var(--motion-spring-soft);
+  }
+
+  /* `data-own` is set by MessageBubble and RoomView and by nothing else, so a
+     menu or a card carrying `.animate-message-in` keeps the generic pop above
+     instead of sliding in from a side it has no relationship to. */
+  :root[data-motion='expressive'] .animate-message-in[data-own='true'] {
+    transform-origin: bottom right;
+    animation: bubble-in-own 360ms var(--motion-spring);
+  }
+
+  :root[data-motion='expressive'] .animate-message-in[data-own='false'] {
+    transform-origin: bottom left;
+    animation: bubble-in-peer 360ms var(--motion-spring);
+  }
+
+  /* --- The seal ---------------------------------------------------------- */
+
+  /* Rides alongside the existing sheen, on the same clock, so the sweep across
+     the bubble and the glow leaving it are one gesture. Same rule as the
+     sheen: this fires on `pending` -> `sent` and on nothing else, so it marks
+     a body actually sealed and accepted rather than decorating a send button.
+     The ring is drawn in the accent, not white, because it radiates onto the
+     page behind a bubble that is itself accent-coloured.
+     `--motion-seal-duration` is mirrored from MOTION.seal in motion.ts, which
+     is also the timer MessageBubble uses to strip the class — lengthening it
+     here alone would cut the glow off mid-flight. */
+  @keyframes seal-glow {
+    from {
+      box-shadow:
+        0 1px 2px rgba(0, 0, 0, 0.28),
+        0 0 0 0 oklch(var(--p) / 0.5);
+    }
+    to {
+      box-shadow:
+        0 1px 2px rgba(0, 0, 0, 0.28),
+        0 0 0 7px oklch(var(--p) / 0);
+    }
+  }
+
+  :root[data-motion='expressive'] .seal-sweep {
+    animation: seal-glow var(--motion-seal-duration) var(--motion-seal-easing) 1;
+  }
+
+  /* --- Dialogs, sheets and toasts ---------------------------------------- */
+
+  /* Not `modal-pop`: daisyUI already ships a keyframe by that name and points
+     `.modal::backdrop` at it. A second definition does not scope itself to the
+     rule that follows it — the later one simply wins everywhere — so naming
+     this one `modal-pop` handed the scrim a translate and a 0.94 scale, and
+     for the 200ms of the open the page showed un-scrimmed strips down its
+     edges. daisyUI's own version is an opacity fade, which is what the
+     backdrop wants. */
+  @keyframes dialog-pop {
+    from {
+      opacity: 0;
+      transform: translate3d(0, 18px, 0) scale(0.94);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  @keyframes scrim-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  /* Applies to every Modal in the app at once — the shared <dialog> wrapper is
+     what makes that one rule rather than thirty. */
+  :root[data-motion='expressive'] dialog.modal[open] > .modal-box {
+    animation: dialog-pop 300ms var(--motion-spring-soft);
+  }
+
+  :root[data-motion='expressive'] dialog.modal[open]::backdrop {
+    animation: scrim-in 220ms var(--motion-enter-easing);
+  }
+
+  /* A bottom sheet rises to meet the thumb. Decelerating, not springy: a
+     spring would carry the sheet above its resting edge and open a strip of
+     scrim underneath it for a frame. */
+  @keyframes sheet-up {
+    from {
+      transform: translate3d(0, 100%, 0);
+    }
+    to {
+      transform: none;
+    }
+  }
+
+  :root[data-motion='expressive'] .motion-sheet {
+    animation: sheet-up 280ms var(--motion-enter-easing);
+  }
+
+  :root[data-motion='expressive'] .motion-scrim {
+    animation: scrim-in 200ms linear;
+  }
+
+  @keyframes toast-in {
+    0% {
+      opacity: 0;
+      transform: translate3d(0, 14px, 0) scale(0.95);
+    }
+    60% {
+      opacity: 1;
+      transform: translate3d(0, 0, 0) scale(1.02);
+    }
+    100% {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  :root[data-motion='expressive'] .motion-toast {
+    animation: toast-in 300ms var(--motion-spring);
+  }
+
+  /* --- Lists and screens -------------------------------------------------- */
+
+  @keyframes row-in {
+    from {
+      opacity: 0;
+      transform: translate3d(0, 10px, 0);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  /* A staggered cascade on the conversation list, capped at eight steps so a
+     long list finishes in roughly the time a short one does — an uncapped
+     stagger leaves the twentieth row arriving well after the user has started
+     reading the first. `both` holds the pre-delay state, or rows would flash
+     at full opacity before their turn. Rows are keyed by peer id and updated
+     in place, so this plays when the list first loads and when a genuinely new
+     conversation appears, not on every unread-count change. */
+  :root[data-motion='expressive'] .motion-stagger > * {
+    animation: row-in 300ms var(--motion-enter-easing) both;
+  }
+  :root[data-motion='expressive'] .motion-stagger > :nth-child(1) {
+    animation-delay: 0ms;
+  }
+  :root[data-motion='expressive'] .motion-stagger > :nth-child(2) {
+    animation-delay: 30ms;
+  }
+  :root[data-motion='expressive'] .motion-stagger > :nth-child(3) {
+    animation-delay: 60ms;
+  }
+  :root[data-motion='expressive'] .motion-stagger > :nth-child(4) {
+    animation-delay: 90ms;
+  }
+  :root[data-motion='expressive'] .motion-stagger > :nth-child(5) {
+    animation-delay: 120ms;
+  }
+  :root[data-motion='expressive'] .motion-stagger > :nth-child(6) {
+    animation-delay: 150ms;
+  }
+  :root[data-motion='expressive'] .motion-stagger > :nth-child(7) {
+    animation-delay: 180ms;
+  }
+  :root[data-motion='expressive'] .motion-stagger > :nth-child(n + 8) {
+    animation-delay: 210ms;
+  }
+
+  @keyframes screen-in {
+    from {
+      opacity: 0;
+      transform: translate3d(3.5%, 0, 0);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  /* Phone only: opening a conversation is a navigation there, so the thread
+     comes in from the edge it will leave by. On desktop both panes are already
+     on screen and there is nothing to travel. Short, and the only transform on
+     an ancestor of the thread — anything longer would keep `position: fixed`
+     descendants (the message menu, the emoji popover) resolving against this
+     element instead of the viewport. */
+  @media (max-width: 1023px) {
+    :root[data-motion='expressive'] main[data-chat-open='true'] {
+      animation: screen-in 240ms var(--motion-enter-easing);
+    }
+  }
+
+  /* --- Small, repeated feedback ------------------------------------------ */
+
+  /* A chip appears the instant a reaction lands, so it gets the biggest
+     overshoot in the app: it is small, it is the direct result of a tap, and
+     nothing else moves with it. */
+  @keyframes chip-pop {
+    0% {
+      opacity: 0;
+      transform: scale(0.5);
+    }
+    60% {
+      opacity: 1;
+      transform: scale(1.12);
+    }
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  :root[data-motion='expressive'] .motion-chip {
+    animation: chip-pop 300ms var(--motion-spring);
+  }
+
+  /* The tab that just became current lifts and settles. Driven off
+     `aria-current`, which TabBar already sets — when that attribute flips, the
+     computed animation-name changes from `none`, and that is what restarts it,
+     so no key or state is needed on the React side. */
+  @keyframes tab-pop {
+    0% {
+      transform: translate3d(0, 0, 0) scale(1);
+    }
+    45% {
+      transform: translate3d(0, -3px, 0) scale(1.16);
+    }
+    100% {
+      transform: translate3d(0, 0, 0) scale(1);
+    }
+  }
+
+  :root[data-motion='expressive'] [aria-current='page'] .motion-tab-icon {
+    animation: tab-pop 360ms var(--motion-spring);
+  }
+
+  /* Deeper than the 0.97 every button gets, and it springs rather than snaps
+     back — this is the one piece of motion in the app that fires on every
+     single tap, so it is where a lively feel is cheapest to buy. */
+  :root[data-motion='expressive'] .btn:active:not(:disabled) {
+    transform: scale(0.93);
+  }
+
+  /* --- Ambient ------------------------------------------------------------ */
+
+  /* One halo per live conversation, on the chat header only. Deliberately not
+     on the conversation list: a dozen dots breathing out of phase behind a
+     list you are trying to read is the exact "overdone" this set is trying to
+     avoid. Ends fully transparent, so a duration override freezes it into
+     nothing.
+
+     1.9 and no further: the header's only status dot sits inside a `truncate`
+     line, whose overflow:hidden clips at the line box. An 8px dot can grow to
+     just over 15px there; a halo sized past that gets a flat edge sliced off
+     its top and bottom. */
+  @keyframes presence-pulse {
+    0% {
+      opacity: 0.45;
+      transform: scale(1);
+    }
+    70%,
+    100% {
+      opacity: 0;
+      transform: scale(1.9);
+    }
+  }
+
+  :root[data-motion='expressive'] .motion-presence[data-presence='active']::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 9999px;
+    background: oklch(var(--su));
+    animation: presence-pulse 2.6s ease-out infinite;
+    pointer-events: none;
+  }
+
+  /* The desktop "pick a conversation" placeholder, which is the one screen a
+     user can sit on with nothing happening. Five seconds and five pixels: it
+     should be noticed only if you are looking for it. */
+  @keyframes float-soft {
+    0%,
+    100% {
+      transform: translate3d(0, 0, 0);
+    }
+    50% {
+      transform: translate3d(0, -5px, 0);
+    }
+  }
+
+  :root[data-motion='expressive'] .motion-float {
+    animation: float-soft 5s ease-in-out infinite;
+  }
+
+  /* The recording indicator, in place of Tailwind's flat opacity pulse: a dot
+     that emits rings reads as picking something up, which is exactly the doubt
+     this indicator exists to answer. */
+  @keyframes rec-ring {
+    0% {
+      box-shadow: 0 0 0 0 oklch(var(--er) / 0.6);
+    }
+    70%,
+    100% {
+      box-shadow: 0 0 0 7px oklch(var(--er) / 0);
+    }
+  }
+
+  :root[data-motion='expressive'] .motion-recording {
+    animation: rec-ring 1.4s ease-out infinite;
+  }
 }
 
 /* emoji-mart lives in a shadow DOM, so only its exposed custom properties are
@@ -191,7 +634,10 @@
    reads as part of the app instead of a bare, square-cornered popover. */
 em-emoji-picker {
   --border-radius: 14px;
-  --shadow: 0 12px 34px rgba(0, 0, 0, 0.5);
+  /* Custom properties inherit through the shadow boundary, so the panel takes
+     the same elevation token as every other popover — including its
+     light-surface variant. Only *colours* have to be literal here (below). */
+  --shadow: var(--elev-overlay);
   /* emoji-mart only accepts RGB triples through its shadow DOM boundary, so
      these must stay literal — they cannot reference the theme's CSS custom
      properties. Keep them mirrored by hand: this must match `primary` in

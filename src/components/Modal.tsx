@@ -61,7 +61,7 @@ export function Modal({ title, onClose, children, actions, className = '' }: Mod
           100vh counts the status bar and the gesture pill as usable height —
           so a modal tall enough to hit the cap runs under both. */}
       <div
-        className={`modal-box bg-base-100 border border-base-content/5 shadow-2xl max-h-[calc(100dvh-5em-var(--safe-top)-var(--safe-bottom))]${className ? ` ${className}` : ''}`}
+        className={`modal-box bg-base-100 border border-base-content/10 shadow-modal max-h-[calc(100dvh-5em-var(--safe-top)-var(--safe-bottom))]${className ? ` ${className}` : ''}`}
       >
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-bold text-lg">{title}</h3>

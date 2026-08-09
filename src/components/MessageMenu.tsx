@@ -151,7 +151,7 @@ export function MessageMenu({
       ref={panelRef}
       role="menu"
       aria-label="Message actions"
-      className="fixed z-50 w-max max-w-[calc(100vw-1rem)] rounded-2xl bg-base-100 border border-base-content/10 shadow-xl overflow-hidden animate-message-in"
+      className="fixed z-50 w-max max-w-[calc(100vw-1rem)] rounded-2xl bg-base-100 border border-base-content/10 shadow-overlay overflow-hidden animate-message-in"
       style={{
         top: pos?.top ?? 0,
         left: pos?.left ?? 0,
