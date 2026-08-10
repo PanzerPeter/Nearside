@@ -80,10 +80,22 @@ export function MessageBubble({
   formatTime,
 }: MessageBubbleProps) {
   const isDeleted = !!msg.deleted_at;
+  // A picture or a video — the two that fill the bubble edge to edge. A voice
+  // note is a control with its own padding and behaves like text here.
+  const hasVisualMedia =
+    !isDeleted && !!msg.media_path && !!msg.media_type && msg.media_type !== 'audio';
+  // Nothing above or below the picture inside the bubble. Then it is the whole
+  // bubble, and the footer has no line of its own to sit on: rather than leave
+  // a bare band of bubble colour under the image, it floats over the corner.
+  const mediaAlone =
+    hasVisualMedia && !msg.text && !msg.forwarded && !msg.reply_to_id && !msg.decrypt_failed;
   const [menuOpen, setMenuOpen] = useState(false);
   const bubbleRef = useRef<HTMLDivElement>(null);
   const editTextareaRef = useRef<HTMLTextAreaElement>(null);
   const hasReactions = reactions.length > 0;
+  // Chips straddle the bubble's bottom edge and need the padded band under the
+  // content to land on, so a reacted-to picture keeps its ordinary footer row.
+  const floatFooter = mediaAlone && !hasReactions;
   // A queued message has no server row yet, so nothing can be done to it.
   const hasMenu = !isDeleted && status !== 'pending';
   // The seal sweep, fired once when the server accepts an own message.
@@ -321,8 +333,9 @@ export function MessageBubble({
               // Reaction chips hang about 12px up into the bubble from
               // -bottom-2.5. Without extra bottom padding they land on the
               // right-aligned footer; the pad keeps them over dead space
-              // rather than over the timestamp.
-              !isDeleted && hasReactions ? 'pb-5' : 'pb-2'
+              // rather than over the timestamp. A bare picture keeps no bottom
+              // padding at all — its footer floats over the image instead.
+              !isDeleted && hasReactions ? 'pb-5' : floatFooter ? 'pb-0' : 'pb-2'
             } ${
               isDeleted
                 ? 'bg-base-300/60 text-base-content/60 italic'
@@ -407,6 +420,10 @@ export function MessageBubble({
                         path={msg.media_path}
                         type={msg.media_type}
                         mediaKey={msg.media_key}
+                        // Anything else in the bubble can be wider than the
+                        // picture and would otherwise leave bubble colour
+                        // beside it.
+                        fill={!mediaAlone}
                       />
                     </div>
                   ))}
@@ -433,7 +450,16 @@ export function MessageBubble({
                 individual items rather than this row so MessageStatus can opt
                 out of it for a "read" tick; a parent opacity would clamp the
                 child no matter what the child asks for. */}
-            <div className="text-[0.65rem] leading-none flex items-center gap-1 justify-end mt-1 -mb-0.5">
+            {/* Over a bare picture the row leaves the bubble's colour behind
+                and rides on its own scrim, because the image underneath it is
+                any colour at all. */}
+            <div
+              className={`text-[0.65rem] leading-none flex items-center gap-1 ${
+                floatFooter
+                  ? 'absolute bottom-1.5 right-1.5 rounded-full bg-black/50 px-1.5 py-1 text-white'
+                  : 'justify-end mt-1 -mb-0.5'
+              }`}
+            >
               <time className={isDeleted ? '' : 'opacity-75'}>{formatTime(msg.created_at)}</time>
               {msg.edited_at && !isDeleted && <span className="opacity-75">(edited)</span>}
               {isOwn && status && !isDeleted && <MessageStatus status={status} />}

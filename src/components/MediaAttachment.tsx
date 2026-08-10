@@ -13,6 +13,11 @@ interface MediaAttachmentProps {
   mediaKey?: Uint8Array | null;
   /** Voice notes are not routed here — see `VoiceNote`. */
   type: VisualMediaType;
+  /** Stretch the thumbnail to the bubble's full width, cropping what won't
+   *  fit. Set when a caption is what sizes the bubble: left at its natural
+   *  width, a picture narrower than the text leaves a band of bubble colour
+   *  down one side that reads as a rendering fault. */
+  fill?: boolean;
 }
 
 /**
@@ -25,13 +30,19 @@ interface MediaAttachmentProps {
  * never reveals, the browser's own overflow menu, and the viewer. One way is
  * enough, and it is the one you reach by tapping the thing you want.
  */
-export function MediaAttachment({ messageId, path, type, mediaKey }: MediaAttachmentProps) {
+export function MediaAttachment({ messageId, path, type, mediaKey, fill }: MediaAttachmentProps) {
   const { url, failed, reload } = useSignedMediaUrl(path, mediaKey, type, messageId);
   const [viewing, setViewing] = useState(false);
 
+  // The caller pulls this component out to the bubble's edges with a negative
+  // margin; the placeholder and the failure notice are text, and text wants the
+  // padding back.
   if (failed) {
     return (
-      <div className="flex items-center gap-2 text-xs text-base-content/60 py-2">
+      // The bubble may be floating its timestamp over the bottom-right corner
+      // on the assumption that a picture is there; the extra right pad keeps
+      // the words clear of it.
+      <div className="flex items-center gap-2 py-2 pl-3.5 pr-16 text-xs text-base-content/60">
         <ImageOff className="w-4 h-4" />
         This file is no longer available
       </div>
@@ -40,11 +51,22 @@ export function MediaAttachment({ messageId, path, type, mediaKey }: MediaAttach
 
   if (!url) {
     return (
-      <div className="flex items-center justify-center w-40 h-40 rounded-lg bg-base-content/5">
+      <div
+        className={`flex items-center justify-center bg-base-content/5 ${
+          fill ? 'w-full h-40' : 'mx-3.5 w-40 h-40 rounded-lg'
+        }`}
+      >
         <span className="loading loading-spinner loading-sm" />
       </div>
     );
   }
+
+  // `w-full` on a replaced element still contributes its intrinsic width to the
+  // bubble's shrink-to-fit sizing, so a wide photo keeps setting the bubble's
+  // width and only a picture narrower than the caption is stretched up to it.
+  // max-h keeps a portrait crop from taking the whole screen; the full frame is
+  // one tap away in the viewer.
+  const frame = fill ? 'block w-full max-h-72 object-cover' : 'block max-w-full max-h-72 object-cover';
 
   return (
     <>
@@ -53,7 +75,10 @@ export function MediaAttachment({ messageId, path, type, mediaKey }: MediaAttach
         // Square corners, and the caller rounds. The thumbnail sits flush
         // against the bubble's edges now, so any radius of its own would cut
         // four notches of bubble colour into the picture's corners.
-        className="relative block overflow-hidden cursor-zoom-in"
+        // `w-full` on the button as well as the image: a form control sizes to
+        // fit-content even as a block, so on its own the image's 100% resolved
+        // against a box already shrunk to the picture.
+        className={`relative block overflow-hidden cursor-zoom-in ${fill ? 'w-full' : ''}`}
         onClick={(e) => {
           e.stopPropagation();
           setViewing(true);
@@ -68,7 +93,7 @@ export function MediaAttachment({ messageId, path, type, mediaKey }: MediaAttach
             // `block`: an inline image leaves a baseline gap under it, which
             // used to hide inside the bubble's padding and now would show as a
             // strip of bubble colour along the bottom edge.
-            className="block max-w-full max-h-72 object-cover"
+            className={frame}
             onError={reload}
           />
         ) : (
@@ -84,7 +109,7 @@ export function MediaAttachment({ messageId, path, type, mediaKey }: MediaAttach
               preload="metadata"
               muted
               playsInline
-              className="block max-w-full max-h-72 pointer-events-none"
+              className={`${frame} pointer-events-none`}
               onError={reload}
             />
             <span className="absolute inset-0 flex items-center justify-center">
