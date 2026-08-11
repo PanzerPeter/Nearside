@@ -12,7 +12,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # 22, not 20: @supabase/supabase-js warns on every import under 20 and
+          # will drop support for it.
+          node-version: 22
           cache: npm
       - run: npm ci
       - run: npm run test

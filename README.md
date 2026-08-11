@@ -103,6 +103,28 @@ whether that was a reinstall or an interception.
 **Private nicknames.** Name someone whatever you like. They are never told, and
 the name follows them into the sidebar, the chat header and your notifications.
 
+**Disappearing messages.** A timer belongs to the conversation, not to one
+side's preference, because a per-user setting would let one party keep a copy
+the other believed was gone. Off, five minutes, an hour, a day or a week. The
+server stamps `expires_at` in a trigger and a `pg_cron` job deletes the rows;
+the device sweeps its own mirror to match. Screenshots are still possible, and
+the app says so beside the setting.
+
+**App lock.** A passphrase in front of the app and the decrypted local mirror,
+locking immediately or after a delay, with the twelve words as the way back in
+if the passphrase is forgotten. It is not a second layer of encryption and does
+not claim to be: the seed is already in the Keystore. It stops someone who picks
+up an unlocked phone.
+
+**Screenshots blocked where it matters.** A small Android plugin holds
+`FLAG_SECURE` over the recovery phrase and the lock screen, which also keeps
+them out of the recents thumbnail. More than one screen can hold it at once, so
+leaving one does not clear another's.
+
+**Chat backgrounds.** A picture behind a conversation, per person and per
+conversation. Your choice and your peer's are separate rows and separate
+objects; neither can see the other's.
+
 **Survives bad networks.** The app detects wake from three signals, including a
 wall-clock jump that is the only thing that fires on a woken desktop. One
 `generation` counter rebuilds every realtime subscription and re-runs the
