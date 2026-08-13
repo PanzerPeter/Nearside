@@ -185,6 +185,11 @@ export function PresenceProvider({
 }
 
 /** Live status for a single user id (defaults to offline). */
+// react-refresh/only-export-components fires because this file exports a
+// component (PresenceProvider) alongside a hook. The pairing is required by
+// this hook's contract — it reads a context only that provider supplies — so
+// it is suppressed rather than split, the same call `useToast.tsx` makes.
+// eslint-disable-next-line react-refresh/only-export-components
 export function usePresenceStatus(userId: string | null | undefined): PresenceStatus {
   const { raw, now } = useContext(PresenceContext);
   if (!userId) return 'offline';

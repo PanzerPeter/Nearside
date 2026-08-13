@@ -10,11 +10,14 @@ import {
   MoreVertical,
   NotebookPen,
   Pencil,
+  Phone,
   Search,
   ShieldAlert,
   ShieldCheck,
   Timer,
+  Video,
 } from 'lucide-react';
+import type { CallKind } from '../lib/call/types';
 import { formatTtl, TTL_OPTIONS, type ConversationTimer } from '../lib/disappearing';
 
 interface ChatHeaderProps {
@@ -41,6 +44,12 @@ interface ChatHeaderProps {
    *  participant may change it; `setBy` is who did last. */
   timer: ConversationTimer | null;
   onSetTimer: (seconds: number | null) => void;
+  /** Place a call. Absent in the self-chat, where there is nobody to call. */
+  onCall: (kind: CallKind) => void;
+  /** False while another call is running, or when the peer has published no
+   *  key — a call is sealed to that key exactly like a message, so there is
+   *  nothing to dial. */
+  canCall: boolean;
 }
 
 /** A daisyUI dropdown is held open by focus, so a menu item that only runs its
@@ -66,6 +75,8 @@ export function ChatHeader({
   onOpenBackground,
   timer,
   onSetTimer,
+  onCall,
+  canCall,
 }: ChatHeaderProps) {
   // The phone's top edge: this bar is the first thing under the status bar, so
   // it carries the inset itself and puts its own background behind the clock.
@@ -154,6 +165,30 @@ export function ChatHeader({
           )}
         </p>
       </button>
+      {/* Not in the self-chat: the vault has no second party, and a call
+          button there would be a button that cannot do anything. Disabled
+          rather than hidden when the peer has no key, so the reason is
+          discoverable from the tooltip instead of the control vanishing. */}
+      {!isSelf && (
+        <>
+          <button
+            className="btn btn-ghost btn-sm btn-square hover:bg-base-content/10 transition-colors"
+            onClick={() => onCall('voice')}
+            disabled={!canCall}
+            title={canCall ? 'Voice call' : 'Cannot call this contact yet'}
+          >
+            <Phone className="w-5 h-5" />
+          </button>
+          <button
+            className="btn btn-ghost btn-sm btn-square hover:bg-base-content/10 transition-colors"
+            onClick={() => onCall('video')}
+            disabled={!canCall}
+            title={canCall ? 'Video call' : 'Cannot call this contact yet'}
+          >
+            <Video className="w-5 h-5" />
+          </button>
+        </>
+      )}
       <button
         className="btn btn-ghost btn-sm btn-square hover:bg-base-content/10 transition-colors"
         onClick={onToggleSearch}

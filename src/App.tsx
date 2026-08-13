@@ -22,6 +22,9 @@ import { IdentitySetup } from './components/IdentitySetup';
 import { NotificationsPrompt } from './components/NotificationsPrompt';
 import { useAppBadge } from './hooks/useAppBadge';
 import { PresenceProvider } from './hooks/usePresence';
+import { CallProvider } from './hooks/useCall';
+import { CallScreen } from './components/CallScreen';
+import { forgetIceServers } from './lib/call/ice';
 import { initSoundUnlock } from './lib/sound';
 import {
   clearExternalUserId,
@@ -212,6 +215,10 @@ function App() {
     // session.
     forgetAllPeerKeys();
     forgetAllRoomKeys();
+    // TURN credentials are minted against the signed-in user's JWT. Left
+    // behind, the next account on this phone would relay its calls under the
+    // previous owner's credentials.
+    forgetIceServers();
     await clearExternalUserId().catch(() => {});
     await logOutPurchases().catch(() => {});
     await supabase.auth.signOut();
@@ -363,6 +370,12 @@ function App() {
 
   return (
     <PresenceProvider session={session} friendIds={friendIds}>
+    {/* Above the layout, not inside it: a call outlives the conversation that
+        started it, and one answered from a notification has no chat open at
+        all. The provider unmounts with the session, which is what stops a call
+        surviving a sign-out with the microphone still open. */}
+    <CallProvider session={session} identity={identity} friendIds={friendIds}>
+    <CallScreen />
     {/* Rendered only past the identity gate, so the first thing a new install
         is asked is never "can we notify you" before it knows what the app is.
         The component decides for itself whether there is anything to ask. */}
@@ -523,6 +536,7 @@ function App() {
         />
       )}
     </div>
+    </CallProvider>
     </PresenceProvider>
   );
 }

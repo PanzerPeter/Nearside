@@ -43,4 +43,10 @@ export function StatusDot({ status, size = 12, className = '', pulse = false }: 
   );
 }
 
+// The same three-status vocabulary the dot already renders as its aria-label,
+// shared with ChatHeader so the written status and the coloured dot can never
+// disagree. react-refresh/only-export-components fires on it; splitting a
+// three-entry lookup into a module of its own to satisfy a dev-only HMR rule
+// costs more than it buys.
+// eslint-disable-next-line react-refresh/only-export-components
 export { LABELS as presenceLabels };

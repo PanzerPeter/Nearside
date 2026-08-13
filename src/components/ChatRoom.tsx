@@ -26,6 +26,8 @@ import { useChatThread } from '../hooks/useChatThread';
 import { usePeerTrust } from '../hooks/usePeerTrust';
 import { useMediaSend } from '../hooks/useMediaSend';
 import { useMessageEditing } from '../hooks/useMessageEditing';
+import { useCall } from '../hooks/useCall';
+import { isEngaged } from '../lib/call/state';
 
 interface ChatRoomProps {
   session: Session;
@@ -112,6 +114,8 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
     onError: toast.error,
   });
 
+  const call = useCall();
+
   const editing = useMessageEditing({ me, peerId: friend.id, identity, onError: toast.error });
   // Read out once so the composer's save callback closes over a `string` rather
   // than the nullable field.
@@ -165,6 +169,11 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
         onOpenBackground={() => setBackgroundOpen(true)}
         timer={thread.timer}
         onSetTimer={(seconds) => void thread.changeTimer(seconds)}
+        onCall={(kind) => call.placeCall(friend, kind)}
+        // A call is sealed to the peer's published key exactly like a message,
+        // so no key means nothing to dial. `isEngaged` keeps the button from
+        // starting a second call over a live one.
+        canCall={!!peerKey && !isEngaged(call.state)}
       />
 
       {verifyOpen && peerKey && (

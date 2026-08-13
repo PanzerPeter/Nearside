@@ -17,6 +17,21 @@ function getCtx(): AudioContext | null {
   return ctx;
 }
 
+/**
+ * The one AudioContext this app has, for anything else that needs to synthesize
+ * a tone (see `lib/call/ringtone.ts`).
+ *
+ * Shared rather than one per feature: an Android WebView caps how many contexts
+ * a page may hold, and the second one is created exactly when a call arrives
+ * during a busy session — the worst moment for audio to stop working. Sharing
+ * also means the gesture unlock below covers every caller.
+ */
+export function sharedAudioContext(): AudioContext | null {
+  const c = getCtx();
+  if (c && c.state === 'suspended') c.resume().catch(() => {});
+  return c;
+}
+
 /** Wire once at startup: unlock audio on the first user gesture. */
 export function initSoundUnlock(): void {
   if (typeof window === 'undefined') return;

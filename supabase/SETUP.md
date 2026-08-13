@@ -139,8 +139,10 @@ Policies key `chat-media` off the conversation folder
 
 ## Edge functions — **none are deployed**
 
-`list_edge_functions` on this project returns an empty list. Both functions in
-`supabase/functions/` exist only as source:
+`list_edge_functions` on this project returned an empty list when this file was
+last checked against it, and the call functions are newer than that check — so
+confirm the live list before trusting this section. Everything in
+`supabase/functions/` is source until deployed:
 
 - **`delete-account`** — needed. Settings → Danger zone calls it, and the call
   fails until it is deployed. It resolves the caller from their JWT, removes
@@ -158,6 +160,40 @@ Policies key `chat-media` off the conversation folder
   It runs with `verify_jwt` on and needs no secrets — `SUPABASE_URL`,
   `SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY` are injected by the Edge
   runtime. Test it with a throwaway account: there is no undo and no backup.
+
+- **`call-ring`** — needed for calls to reach a phone that is not already
+  showing the app. It resolves the caller from their JWT, checks the two are
+  friends, and sends a OneSignal push carrying a caller id, a display name, a
+  call id and `voice`/`video` — nothing else, because there is nothing else about
+  a call the server holds. `CallNotificationExtension` intercepts it on the
+  device and raises a full-screen ring in its place.
+
+  ```bash
+  supabase functions deploy call-ring --project-ref "$SUPABASE_PROJECT_REF"
+  ```
+
+  Shares `ONESIGNAL_APP_ID` and `ONESIGNAL_REST_API_KEY` with `send-push`.
+  Without it a call still rings a friend who has the app open — the offer goes
+  over the realtime topic either way — and reaches nobody else.
+
+- **`call-ice`** — needed for calls behind carrier-grade NAT, which on mobile
+  networks is most of them. It mints Cloudflare TURN credentials against the
+  caller's JWT, one set per call and good for an hour, inside a monthly egress
+  budget it checks before minting (default 900 GB, under the free 1,000). The
+  client falls back to STUN alone when this is unreachable, so a missing
+  deployment is calls that mostly work and sometimes never connect — the worst
+  failure mode there is to debug.
+
+  ```bash
+  supabase functions deploy call-ice --project-ref "$SUPABASE_PROJECT_REF"
+  supabase secrets set CLOUDFLARE_TURN_KEY_ID=... CLOUDFLARE_TURN_API_TOKEN=...
+  ```
+
+  Optional beside those: `CLOUDFLARE_ACCOUNT_ID` and
+  `CLOUDFLARE_ANALYTICS_API_TOKEN` for the relayed-bytes check, and
+  `TURN_MONTHLY_BUDGET_GB` to stop minting credentials past a spend cap. The
+  API token is server-side only — a long-lived TURN secret in the bundle is a
+  free relay for anyone who unzips the APK.
 
 - **`send-push`** — the Web Push transport, and probably not worth deploying.
   `VITE_VAPID_PUBLIC_KEY` is unset in `.env`, so `pushSupported()` is false and

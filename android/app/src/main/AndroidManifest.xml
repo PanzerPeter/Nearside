@@ -37,6 +37,30 @@
 
         </activity>
 
+        <!-- Keeps a call alive once the screen goes off. Without a foreground
+             service Android freezes the WebView within seconds of the phone
+             being pocketed and the call dies mid-sentence. The type is not
+             optional from Android 14: a microphone-using service started
+             without declaring one throws and takes the process with it. -->
+        <service
+            android:name=".CallService"
+            android:exported="false"
+            android:foregroundServiceType="microphone|camera" />
+
+        <!-- Decline, from the ring notification. Answer is a getActivity
+             PendingIntent instead — see CallNotifications for why a receiver
+             cannot start one. -->
+        <receiver
+            android:name=".CallActionReceiver"
+            android:exported="false" />
+
+        <!-- Lets a call push become a ring rather than a banner in the shade.
+             Resolved by name from OneSignal's own code, so there is no
+             reference R8 can see; proguard-rules.pro keeps it. -->
+        <meta-data
+            android:name="com.onesignal.NotificationServiceExtension"
+            android:value="app.nearside.CallNotificationExtension" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -70,6 +94,27 @@
 
     <!-- Haptics on send. A normal permission: granted at install, no prompt. -->
     <uses-permission android:name="android.permission.VIBRATE" />
+
+    <!-- Calls.
+
+         The foreground service is what keeps a call alive with the screen off;
+         the two typed variants are mandatory from Android 14, where starting a
+         microphone service without the matching permission throws.
+
+         USE_FULL_SCREEN_INTENT is the ring taking over the screen. Android 14
+         stopped granting it at install to anything Play does not classify as a
+         calling app, so declaring it is necessary and not sufficient —
+         CallNative.fullScreenIntentAllowed reports what the phone actually
+         decided, and Settings offers the grant rather than the app assuming it.
+
+         WAKE_LOCK because a foreground service does not keep the CPU awake on
+         its own, and a video call whose peer has muted has stretches with no
+         audio path holding one implicitly. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <!-- Notifications on Android 13+. Requested from the Settings toggle, at
          the moment the user turns them on, and never at launch. -->

@@ -1,4 +1,4 @@
-import { AlertTriangle, Check, Clock, Lock, ShieldAlert, Timer, X } from 'lucide-react';
+import { AlertTriangle, Check, Clock, Lock, PhoneCall, ShieldAlert, Timer, X } from 'lucide-react';
 import { Modal } from './Modal';
 
 interface SecurityLimitsProps {
@@ -51,6 +51,26 @@ export function SecurityLimits({ onClose }: SecurityLimitsProps) {
             metadata is visible to the server, and it is shown to you in full on the &ldquo;What the
             server knows&rdquo; screen. Room titles and the nicknames you give contacts are stored
             as ordinary text too.
+          </p>
+        </section>
+
+        <section className="rounded-xl border border-base-content/10 bg-base-200/40 p-3.5">
+          <h4 className="flex items-center gap-2 font-medium text-sm">
+            <PhoneCall className="w-4 h-4 text-base-content/60" />
+            Calls show your IP address to the person you call
+          </h4>
+          <p className="text-sm text-base-content/75 leading-relaxed mt-2">
+            Voice and video go straight between the two phones, encrypted end to end, and no server
+            ever holds the audio or a key to it. Nothing about a call is stored anywhere &mdash; not
+            that it happened, not who to, not how long. The cost of connecting directly is that each
+            phone learns the other&rsquo;s IP address, which is roughly a city and an internet
+            provider. You already accepted this person as a contact, but it is more than a message
+            reveals.
+          </p>
+          <p className="text-sm text-base-content/75 leading-relaxed mt-2">
+            When a direct connection cannot be made &mdash; common on mobile networks &mdash; the
+            call is relayed through Cloudflare instead. The relay carries encrypted packets it cannot
+            open, and sees only that two addresses exchanged traffic.
           </p>
         </section>
 

@@ -45,6 +45,13 @@
 -keep class com.onesignal.** { *; }
 -dontwarn com.onesignal.**
 
+# The call notification extension is resolved by class name from OneSignal's
+# own code, via the `com.onesignal.NotificationServiceExtension` meta-data in
+# the manifest. Nothing in this app ever constructs it, so R8 sees a class with
+# no callers and strips it — and the failure is not a build error but a call
+# push that arrives as a silent banner months later, on somebody's phone.
+-keep class app.nearside.CallNotificationExtension { *; }
+
 # RevenueCat deserialises the Play Billing responses into Kotlin data classes.
 -keep class com.revenuecat.purchases.** { *; }
 -keep class com.android.billingclient.** { *; }

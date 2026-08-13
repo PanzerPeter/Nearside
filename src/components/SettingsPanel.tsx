@@ -19,6 +19,7 @@ import { clearLocalDb } from '../lib/localdb';
 import { clearPinnedMedia } from '../lib/pins';
 import { clearSeed } from '../lib/keystore';
 import { permissionSettingsLocation } from '../lib/device';
+import { fullScreenRingAllowed, openFullScreenRingSettings } from '../lib/call/native';
 import { useToast } from '../hooks/useToast';
 import { AvatarCropper } from './AvatarCropper';
 import { ServerView } from './ServerView';
@@ -37,6 +38,7 @@ import {
   Lock,
   LogOut,
   Palette,
+  PhoneCall,
   Scale,
   ShieldAlert,
   Sparkles,
@@ -132,6 +134,10 @@ export function SettingsPanel({
   const [pushOn, setPushOn] = useState(false);
   const [pushBusy, setPushBusy] = useState(false);
   const [muted, setMuted] = useState(isSoundMuted());
+  // Null until the phone has been asked. Rendering the warning before the
+  // answer arrives would flash "calls will not ring" on every phone that
+  // opens Settings, including the ones where they do.
+  const [ringAllowed, setRingAllowed] = useState<boolean | null>(null);
   const [reducedMotion, setReducedMotion] = useState(isMotionReduced());
   // Read once per mount, not per render: the OS setting decides whether the
   // switch below can do anything at all, and a value that changed between two
@@ -160,6 +166,20 @@ export function SettingsPanel({
       setGranted(ok);
       setPushOn(ok);
       setCanRequest(askable);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // Whether an incoming call would take over the screen. Re-read on every
+  // mount rather than once per session: the user leaves for Android's settings
+  // to grant it and comes straight back here, and a cached "no" would still be
+  // warning them about a phone that now rings.
+  useEffect(() => {
+    let active = true;
+    void fullScreenRingAllowed().then((ok) => {
+      if (active) setRingAllowed(ok);
     });
     return () => {
       active = false;
@@ -434,6 +454,31 @@ export function SettingsPanel({
             />
           )}
         </div>
+
+        {/* Only when Android has actually withheld the permission. A row that
+            says "calls will ring" on every phone is noise; this one appears
+            exactly when the phone will buzz instead, which is the one case
+            worth a user's attention. */}
+        {native && ringAllowed === false && (
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <PhoneCall className="w-4 h-4 text-warning shrink-0" />
+              <div className="min-w-0">
+                <p className="text-sm font-medium">Calls will not ring</p>
+                <p className="text-xs text-base-content/60">
+                  Android is holding back full-screen notifications, so an incoming call arrives as a
+                  banner and a locked phone shows nothing.
+                </p>
+              </div>
+            </div>
+            <button
+              className="btn btn-sm btn-outline shrink-0"
+              onClick={() => void openFullScreenRingSettings()}
+            >
+              Allow
+            </button>
+          </div>
+        )}
 
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5 min-w-0">

@@ -192,6 +192,23 @@ export function ServerView({ onClose, onOpenLimits }: ServerViewProps) {
             </p>
           </div>
 
+          {/* No table above it, because there is no table. Said here rather
+              than left as an absence: a screen that lists what the server holds
+              is the screen where "and calls leave nothing behind" is a claim
+              worth making explicitly, and the only one on it whose evidence is
+              that no row exists. */}
+          <div className="rounded-xl border border-base-content/10 bg-base-200/40 p-3.5 mt-3">
+            <h4 className="font-medium text-sm">Calls</h4>
+            <p className="text-xs text-base-content/70 leading-relaxed mt-2">
+              A call leaves no row anywhere above. Voice and video travel directly between the two
+              phones, encrypted end to end; the offers and answers that set the call up are sealed
+              to your contact&rsquo;s key and sent over a channel the server relays without storing.
+              Nothing records that a call happened, who it was with, or how long it lasted. What each
+              phone does learn is the other&rsquo;s IP address &mdash; see &ldquo;Where this
+              protection stops&rdquo;.
+            </p>
+          </div>
+
           <button
             className="btn btn-outline w-full mt-4 gap-2"
             onClick={() => void handleExport()}

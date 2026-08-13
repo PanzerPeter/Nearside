@@ -6,7 +6,7 @@ device and nothing readable on the server.
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 ![Platform](https://img.shields.io/badge/platform-Android%20%7C%20iOS-lightgrey)
-![Tests](https://img.shields.io/badge/tests-478%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-599%20passing-brightgreen)
 
 React + TypeScript + Vite, wrapped in Capacitor, backed by Supabase for auth,
 Postgres, realtime and storage. The browser build is a development convenience;
@@ -78,6 +78,17 @@ Losing the twelve words loses the history. There is no reset path.
   minutes with a live level meter. Server-side pruning keeps the newest 20
   photos/videos and 50 voice notes per conversation; pinning writes a decrypted
   copy into app-private storage so it survives that. Pinning is free.
+- **Voice and video calls.** Peer-to-peer WebRTC: the media keys come out of a
+  DTLS handshake between the two phones, so a TURN relay in the path forwards
+  SRTP it cannot read. Signalling is sealed `crypto_box` over a Realtime
+  broadcast topic — SDP and ICE candidates both, because a candidate line carries
+  the device's addresses — and broadcast leaves no row, so there is no `calls`
+  table and no record that a call happened. A locked phone rings through a
+  full-screen notification, and answering it from the lock screen goes straight
+  to "Connecting…": the caller's topic is joined from the notification rather
+  than after the friend list loads, the answering phone asks for the offer
+  instead of waiting for the next repeat of it, and the TURN credentials and the
+  microphone are opened during the wait rather than after it.
 - **Trust.** Safety numbers, a verified badge in the header, and a blocked
   composer when a contact's key changes. The app does not guess whether that was
   a reinstall or an interception.
@@ -114,6 +125,10 @@ The app ships a screen that says this too. In short:
 
 - The server knows who talks to whom, and when. Metadata is not encrypted.
 - `profiles.display_name` and `last_seen_at` are readable by the server.
+- A call that cannot find a direct path is relayed by a TURN provider, which
+  sees that two addresses exchanged packets and not what was in them. The
+  credentials are minted per call with a short life, and the transparency screen
+  names the provider.
 - A compromised device is a compromised account. The seed lives in hardware
   storage, but a rooted or jailbroken phone can reach it.
 - Removing someone from a room does not claw back what they already hold.
@@ -172,6 +187,20 @@ Then, on the Supabase side:
 
    The REST key is server-side only. Vite inlines every `VITE_`-prefixed variable
    into the bundle, so putting it in `.env` would publish it inside every APK.
+4. **Deploy the call functions** (optional; calling degrades without them):
+
+   ```bash
+   supabase functions deploy call-ring
+   supabase functions deploy call-ice
+   supabase secrets set CLOUDFLARE_TURN_KEY_ID=... CLOUDFLARE_TURN_API_TOKEN=...
+   ```
+
+   `call-ring` is the push that wakes a locked phone — without it a call only
+   reaches a friend who already has the app open. `call-ice` mints short-lived
+   TURN credentials per call; without it calls fall back to STUN alone and the
+   ones behind carrier-grade NAT do not connect. A long-lived TURN secret in the
+   bundle would be a free relay for anyone who unzips the APK, which is why it
+   is minted server-side and never shipped.
 
 ## Scripts
 
@@ -216,9 +245,13 @@ src/
                 boundary), message-queries.ts (returns rows still sealed),
                 localdb.ts (the local SQLite mirror), connection.ts (wake and
                 the generation counter), rooms.ts, purchases.ts
+  lib/call/     A call end to end: session.ts (the peer connection),
+                signaling.ts (sealed broadcast), state.ts + routing.ts (the
+                interleavings, as pure functions), warmup.ts (capture that
+                starts before the call needs it)
 supabase/
   migrations/   Applied by hand. Read each header banner first
-  functions/    send-push and delete-account (Deno)
+  functions/    send-push, delete-account, call-ring, call-ice (Deno)
 android/        Capacitor shell, the mature target
 ios/            Capacitor shell, configured but never compiled
 ```

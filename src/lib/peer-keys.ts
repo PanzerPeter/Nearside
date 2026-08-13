@@ -3,7 +3,8 @@ import { supabase } from './supabase';
 import { recordPeerKey } from './verification';
 
 /** Keys change rarely and are read constantly, so they are cached for the
- *  session. Task 7's key-change detection is what invalidates an entry. */
+ *  session. `lib/verification.ts` is what invalidates an entry, via
+ *  `forgetPeerKey`, when it decides a peer's published key has changed. */
 const cache = new Map<string, Uint8Array>();
 
 export async function peerPublicKey(peerId: string): Promise<Uint8Array | null> {
