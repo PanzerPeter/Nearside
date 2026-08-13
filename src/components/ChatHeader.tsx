@@ -25,7 +25,9 @@ interface ChatHeaderProps {
   /** How to name the other participant — a nickname if one is set,
    *  `@display_name` otherwise. */
   peerLabel: string;
-  /** The nickname itself, shown alongside the real handle when one is set. */
+  /** Set when the label above is a nickname, in which case the real handle is
+   *  not on screen at all — the header is narrow and two names for one person
+   *  crowd it. The nickname editor behind this button is where it lives. */
   nickname: string | null;
   isSelf: boolean;
   trust: VerificationState;
@@ -105,7 +107,9 @@ export function ChatHeader({
         type="button"
         className="min-w-0 flex-1 text-left rounded-lg px-1 -mx-1 hover:bg-base-content/5 transition-colors"
         onClick={onOpenNickname}
-        title={isSelf ? 'Name this chat' : 'Set a nickname'}
+        title={
+          isSelf ? 'Name this chat' : nickname ? `@${friend.display_name}` : 'Set a nickname'
+        }
       >
         <p className="font-semibold text-sm truncate flex items-center gap-1.5">
           <span className="truncate">{peerLabel}</span>
@@ -128,11 +132,6 @@ export function ChatHeader({
             >
               <ShieldAlert className="w-3 h-3" />
               Key changed
-            </span>
-          )}
-          {nickname && !isSelf && (
-            <span className="shrink-0 font-normal text-xs text-base-content/60">
-              @{friend.display_name}
             </span>
           )}
         </p>
