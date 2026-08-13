@@ -113,6 +113,9 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
   });
 
   const editing = useMessageEditing({ me, peerId: friend.id, identity, onError: toast.error });
+  // Read out once so the composer's save callback closes over a `string` rather
+  // than the nullable field.
+  const editingId = editing.editingId;
 
   const { byMessage, toggle } = useReactions(
     me,
@@ -280,6 +283,16 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
               : null
           }
           onCancelReply={() => setReplyingTo(null)}
+          editing={
+            editingId
+              ? {
+                  canSave: editing.editingText.trim().length > 0,
+                  saving: editing.savingEdit,
+                  onSave: () => void editing.saveEdit(editingId),
+                  onCancel: editing.cancelEdit,
+                }
+              : null
+          }
         />
       )}
     </div>

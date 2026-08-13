@@ -103,10 +103,34 @@ export function useMediaSend({
     }
 
     setUploading(true);
+    try {
+      await uploadStaged(file, kind, caption, replyToId);
+    } catch {
+      // `sealBody` throws outright when the peer has published no key, and
+      // `compressImage` can throw on an image the decoder refuses. Neither
+      // used to be caught: the rejection escaped the submit handler and left
+      // `uploading` true, so the composer sat spinning with no way back and
+      // nothing said about why.
+      onError('Could not send media.');
+    } finally {
+      // In `finally`, not after each exit: this flag is what disables the
+      // whole composer.
+      setUploading(false);
+    }
+  }
+
+  /** The upload itself. Split out so `send` owns the `uploading` flag on every
+   *  path, including a thrown one. */
+  async function uploadStaged(
+    file: File,
+    kind: NonNullable<ReturnType<typeof classifyMedia>>,
+    caption: string,
+    replyToId: string | null
+  ): Promise<void> {
     // Images are re-encoded before they leave the device — a phone photo is
     // typically megabytes of resolution this UI never paints. Videos and voice
     // notes go up as recorded (voice is already ~180 KB a minute).
-    const upload =
+    const body =
       kind === 'image' ? await compressImage(file, { maxEdge: CHAT_IMAGE_MAX_EDGE }) : file;
 
     // Sealed after compression, never before: compressImage decodes an image,
@@ -115,7 +139,7 @@ export function useMediaSend({
     // below.
     const peerKey = await peerPublicKey(peerId);
     const { blob: sealedUpload, key: fileKey } = await sealFile(
-      new Uint8Array(await upload.arrayBuffer())
+      new Uint8Array(await body.arrayBuffer())
     );
 
     // The extension is kept for the download filename only — the object itself
@@ -123,13 +147,12 @@ export function useMediaSend({
     // last thing in Storage that still hints at the file's kind. That is a
     // deliberate, disclosed limit rather than an oversight: the path is already
     // visible to anyone who can list the bucket.
-    const path = mediaPath(me, peerId, `${crypto.randomUUID()}.${fileExtension(upload)}`);
+    const path = mediaPath(me, peerId, `${crypto.randomUUID()}.${fileExtension(body)}`);
     const { error: uploadError } = await supabase.storage
       .from('chat-media')
       .upload(path, sealedUpload, { contentType: sealedUpload.type });
 
     if (uploadError) {
-      setUploading(false);
       onError(uploadError.message);
       return;
     }
@@ -151,7 +174,6 @@ export function useMediaSend({
       })
       .select('id')
       .single();
-    setUploading(false);
 
     if (insertError) {
       await supabase.storage.from('chat-media').remove([path]);

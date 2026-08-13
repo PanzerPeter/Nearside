@@ -48,7 +48,13 @@ import { useAppLock } from './hooks/useAppLock';
 import { AppLockScreen } from './components/AppLockScreen';
 import { clearLock } from './lib/app-lock';
 import { setScreenGuard } from './lib/screen-guard';
+import { useConnection } from './lib/connection';
 import { MessageSquare, Settings } from 'lucide-react';
+
+/** Gap between retries of the profile fetch the settings tab waits on. Long
+ *  enough that a phone with no signal isn't spinning on it, short enough that
+ *  the tab heals itself before anyone reaches for the app switcher. */
+const PROFILE_RETRY_MS = 4_000;
 
 function App() {
   const { session, loading, recovering, endRecovery } = useAuth();
@@ -108,6 +114,12 @@ function App() {
     void setScreenGuard(appLock.state !== 'off', 'app-lock');
   }, [appLock.state]);
 
+  // Whether the last attempt came back with nothing. The settings tab waits on
+  // `myProfile`, so a single failed fetch used to be terminal: the row was
+  // asked for once per session and nothing ever asked again, leaving the tab on
+  // its spinner until the app was restarted.
+  const [profileFailed, setProfileFailed] = useState(false);
+
   const fetchMyProfile = useCallback(async () => {
     if (!session) return;
     const { data } = await supabase
@@ -115,12 +127,29 @@ function App() {
       .select('id, display_name, avatar_url, last_seen_at')
       .eq('id', session.user.id)
       .maybeSingle();
-    if (data) setMyProfile(data);
+    if (data) {
+      setMyProfile(data);
+      setProfileFailed(false);
+    } else {
+      setProfileFailed(true);
+    }
   }, [session]);
 
+  // Keyed on the connection's generation like every other fetch in the app, so
+  // a wake that rebuilds the subscriptions re-asks for the profile too.
+  const { generation } = useConnection();
   useEffect(() => {
-    fetchMyProfile();
-  }, [fetchMyProfile]);
+    void fetchMyProfile();
+  }, [fetchMyProfile, generation]);
+
+  // Wake is not the only way out of a failed fetch — the phone can simply
+  // regain signal while the app stays in the foreground. Retrying sets the flag
+  // again on another failure, which reschedules this.
+  useEffect(() => {
+    if (!profileFailed || !session) return;
+    const timer = setTimeout(() => void fetchMyProfile(), PROFILE_RETRY_MS);
+    return () => clearTimeout(timer);
+  }, [profileFailed, session, fetchMyProfile]);
 
   // Foreground sound + notifications for incoming messages from any friend.
   useMessageNotifications(session, selectedFriend?.id ?? null);
@@ -458,6 +487,17 @@ function App() {
                   onSignOut={() => void signOut()}
                   appLock={appLock}
                 />
+              ) : profileFailed ? (
+                // Retrying on its own already, but a spinner that has been
+                // turning for a while needs to say what it is waiting for.
+                <div className="flex flex-col items-center gap-3 py-10 text-center">
+                  <p className="text-sm text-base-content/60">
+                    Could not load your profile. Retrying…
+                  </p>
+                  <button className="btn btn-sm btn-outline" onClick={() => void fetchMyProfile()}>
+                    Try now
+                  </button>
+                </div>
               ) : (
                 <div className="flex justify-center py-10">
                   <span className="loading loading-spinner text-primary" />

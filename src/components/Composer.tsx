@@ -7,7 +7,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { Mic, Send, Paperclip, Smile, Trash2, X } from 'lucide-react';
+import { Check, Mic, Send, Paperclip, Pencil, Smile, Trash2, X } from 'lucide-react';
 import { EmojiPopover } from './EmojiPopover';
 import { AttachMenu } from './AttachMenu';
 import { MAX_MESSAGE_LENGTH } from '../lib/conversation';
@@ -35,6 +35,22 @@ interface ComposerProps {
   uploading: boolean;
   replyingTo: { display_name: string; snippet: string } | null;
   onCancelReply: () => void;
+  /** The edit in progress, when the thread has one, and null otherwise.
+   *
+   *  Committing an edit used to mean hitting a `btn-xs` circle beside the
+   *  bubble — under the hand that is already holding the phone, and nowhere
+   *  near where a thumb expects "send" to be. The composer takes the controls
+   *  instead: the action button becomes the checkmark exactly as it does when
+   *  there is something to send, and the input narrows to leave room for the
+   *  cancel, because the typing is happening up in the bubble. */
+  editing: {
+    /** False while the edit is empty — nothing to commit. */
+    canSave: boolean;
+    /** True while the update is in flight; the button spins. */
+    saving: boolean;
+    onSave: () => void;
+    onCancel: () => void;
+  } | null;
   /** Surfaced by the parent as a toast (mic permission, unsupported browser). */
   onError: (message: string) => void;
 }
@@ -64,6 +80,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
     uploading,
     replyingTo,
     onCancelReply,
+    editing,
     onError,
   },
   ref
@@ -146,8 +163,13 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   const busy = sending || uploading;
   const canSend = !busy && (!!value.trim() || !!stagedFile);
   // While recording the button has to stay the mic, whatever else is in the
-  // composer — it is the element the finger is still holding.
-  const showMic = recorder.recording || (!canSend && voiceCapable && !busy);
+  // composer — it is the element the finger is still holding. An edit in
+  // progress otherwise claims the slot for its checkmark: recording a voice
+  // note is not one of the things you can do to a message you are rewriting.
+  const showMic = recorder.recording || (!editing && !canSend && voiceCapable && !busy);
+  // Recording outranks editing in the row below for the same reason: the mic
+  // may already be live and holding a pointer capture.
+  const editBar = editing && !recorder.recording ? editing : null;
 
   /** Reset the gesture bookkeeping, then start. Callers own the reset because
    *  the release that `beginRecording` reads back may land while `start` is
@@ -463,6 +485,27 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
               </span>
             </div>
           </>
+        ) : editBar ? (
+          <>
+            {/* The narrowed "typing box". It is a label, not an input: the text
+                is being typed in the bubble, and a second box to type in here
+                would be two carets asking for the same message. */}
+            <div className="flex-1 min-w-0 flex items-center gap-2 h-12 px-4 rounded-2xl bg-base-300 border border-base-content/10">
+              <Pencil className="w-4 h-4 shrink-0 text-primary" aria-hidden />
+              <span className="text-sm truncate text-base-content/70">Editing message</span>
+            </div>
+
+            <button
+              type="button"
+              className="btn btn-ghost btn-circle"
+              onClick={editBar.onCancel}
+              disabled={editBar.saving}
+              title="Cancel edit"
+              aria-label="Cancel edit"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </>
         ) : (
           <>
             <button
@@ -542,14 +585,17 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
           </button>
         ) : (
           <button
-            type="submit"
+            type={editBar ? 'button' : 'submit'}
             className="btn btn-primary btn-circle"
-            disabled={!canSend}
-            title="Send"
-            aria-label="Send message"
+            disabled={editBar ? !editBar.canSave || editBar.saving : !canSend}
+            onClick={editBar ? editBar.onSave : undefined}
+            title={editBar ? 'Save changes' : 'Send'}
+            aria-label={editBar ? 'Save changes' : 'Send message'}
           >
-            {busy ? (
+            {busy || editBar?.saving ? (
               <span className="loading loading-spinner loading-sm" />
+            ) : editBar ? (
+              <Check className="w-[18px] h-[18px]" />
             ) : (
               <Send className="w-[18px] h-[18px]" />
             )}

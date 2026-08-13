@@ -4,7 +4,7 @@
 // the realtime UPDATE handler is what folds the result into the thread — for
 // this device exactly as for the other one.
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { Message } from '../lib/types';
 import { MAX_MESSAGE_LENGTH, tombstonePatch } from '../lib/conversation';
@@ -16,6 +16,10 @@ import type { Identity } from '../lib/crypto/keys';
 export interface MessageEditing {
   editingId: string | null;
   editingText: string;
+  /** True while an edit is on its way to the server. The editor stays open and
+   *  the save control spins, because the text only exists here until the row
+   *  comes back changed. */
+  savingEdit: boolean;
   setEditingText: (v: string) => void;
   startEdit: (msg: Message) => void;
   cancelEdit: () => void;
@@ -38,20 +42,32 @@ export function useMessageEditing({
 }: MessageEditingOptions): MessageEditing {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
+  // What the message said when the editor opened, so an unchanged body can be
+  // recognised as the no-op it is.
+  const originalText = useRef('');
 
   function startEdit(msg: Message) {
     setEditingId(msg.id);
     setEditingText(msg.text ?? '');
+    originalText.current = msg.text ?? '';
   }
 
   async function saveEdit(id: string) {
+    if (savingEdit) return;
     const trimmed = editingText.trim();
     if (!trimmed) return;
     if (trimmed.length > MAX_MESSAGE_LENGTH) {
       onError(`Message is too long (${MAX_MESSAGE_LENGTH} characters max).`);
       return;
     }
-    setEditingId(null);
+    // The same text back is not an edit. Writing it anyway would re-seal the
+    // row and stamp `edited_at`, hanging "(edited)" on a message nobody changed.
+    if (trimmed === originalText.current.trim()) {
+      setEditingId(null);
+      return;
+    }
+    setSavingEdit(true);
     // Re-sealed, not written back as plaintext: an edit in the vault must
     // leave the row exactly as unreadable as the send did.
     const { error: updateError } = await supabase
@@ -61,7 +77,15 @@ export function useMessageEditing({
         edited_at: new Date().toISOString(),
       })
       .eq('id', id);
-    if (updateError) onError('Could not edit message.');
+    setSavingEdit(false);
+    // Closed only once the row is actually changed. Closing first and failing
+    // afterwards threw away the text the user had just typed, leaving a toast
+    // and the old message as the only trace of it.
+    if (updateError) {
+      onError('Could not edit message.');
+      return;
+    }
+    setEditingId(null);
   }
 
   async function deleteMessage(msg: Message) {
@@ -86,6 +110,7 @@ export function useMessageEditing({
   return {
     editingId,
     editingText,
+    savingEdit,
     setEditingText,
     startEdit,
     cancelEdit: () => setEditingId(null),

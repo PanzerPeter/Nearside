@@ -33,7 +33,9 @@ android/keystore.properties
 # which already covers Pods/, DerivedData and the copied web assets.
 
 CLAUDE.md
-docs/
+docs/*
+!docs/BUILDING.md
+!docs/APPEARANCE.md
 
 # Supabase CLI scratch. `linked-project.json` records the project ref and the
 # organization id — nothing that grants access, but nothing the repo needs either.

@@ -14,7 +14,7 @@ import { isCoarsePointer } from '../lib/device';
 import { motionDuration } from '../lib/motion';
 import type { MessageStatusKind } from '../lib/receipts';
 import { MessageStatus } from './MessageStatus';
-import { Copy, CornerUpRight, MoreVertical, Pencil, Trash2, Check, X, Reply } from 'lucide-react';
+import { Copy, CornerUpRight, MoreVertical, Pencil, Trash2, Reply } from 'lucide-react';
 
 interface MessageBubbleProps {
   msg: Message;
@@ -202,6 +202,20 @@ export function MessageBubble({
     // height with the content scrolling inside it.
   }, [editingText, isEditing]);
 
+  // Open the editor with the caret after the last character. `autoFocus` alone
+  // leaves a textarea's caret at index 0, so choosing "Edit" on a sentence put
+  // you in front of it and every keystroke typed backwards into your own
+  // message. Keyed on `isEditing` only: re-running per keystroke would drag the
+  // caret to the end mid-word.
+  useEffect(() => {
+    if (!isEditing) return;
+    const el = editTextareaRef.current;
+    if (!el) return;
+    el.focus();
+    const end = el.value.length;
+    el.setSelectionRange(end, end);
+  }, [isEditing]);
+
   // Gesture reply: swipe on touch, double-click on desktop, either side's
   // messages. A pending message has no server row, so a reply built against
   // its id would point `reply_to_id` at something the server has never seen.
@@ -234,14 +248,27 @@ export function MessageBubble({
       )}
 
       {isEditing ? (
-        // items-end, not items-center: once the textarea grows past one line
-        // the save/cancel buttons should sit at its bottom edge, by the
-        // caret's usual resting place, not float centred against its height.
-        <div className={`flex items-end gap-1.5 ${isOwn ? 'flex-row-reverse' : ''}`}>
+        // The bubble keeps its own shape and colour while it is being edited:
+        // swapping it for a bare form control made the message look deleted for
+        // as long as the edit lasted, and left the text being typed with no
+        // visible connection to the message it belongs to. A fixed width rather
+        // than `w-fit`, because a box that resizes under the caret as you type
+        // is worse than one that starts wide.
+        //
+        // The save and cancel controls live in the composer, not here — see
+        // `Composer`'s `editing` prop.
+        <div
+          className={`w-[85%] sm:w-[70%] px-3.5 py-2 rounded-2xl shadow-[0_1px_2px_rgba(0,0,0,0.28)] ring-2 ring-primary/60 ${
+            isOwn ? 'rounded-br-md bg-primary text-primary-content' : 'rounded-bl-md bg-neutral text-neutral-content'
+          }`}
+        >
           <textarea
             ref={editTextareaRef}
             rows={1}
-            className="textarea textarea-bordered textarea-sm text-base bg-base-100 w-full max-w-[85%] sm:max-w-md resize-none min-h-0 leading-6 py-1.5"
+            // Transparent and borderless: the bubble around it is the box. The
+            // caret and selection inherit the bubble's own text colour, which
+            // is the only thing keeping them visible on the primary fill.
+            className="block w-full bg-transparent border-0 outline-none resize-none p-0 text-base leading-6 caret-current placeholder:opacity-60"
             value={editingText}
             onChange={(e) => onEditingTextChange(e.target.value)}
             onKeyDown={(e) => {
@@ -252,14 +279,7 @@ export function MessageBubble({
               if (e.key === 'Escape') onCancelEdit();
             }}
             maxLength={MAX_MESSAGE_LENGTH}
-            autoFocus
           />
-          <button className="btn btn-success btn-xs btn-circle" onClick={() => onSaveEdit(msg.id)}>
-            <Check className="w-3 h-3" />
-          </button>
-          <button className="btn btn-ghost btn-xs btn-circle" onClick={onCancelEdit}>
-            <X className="w-3 h-3" />
-          </button>
         </div>
       ) : (
         // w-fit lets the bubble hug short text (no vertical "H e y"), while

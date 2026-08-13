@@ -20,6 +20,7 @@ import { clearPinnedMedia } from '../lib/pins';
 import { clearSeed } from '../lib/keystore';
 import { permissionSettingsLocation } from '../lib/device';
 import { useToast } from '../hooks/useToast';
+import { AvatarCropper } from './AvatarCropper';
 import { ServerView } from './ServerView';
 import { ThemeStore } from './ThemeStore';
 import { OpenSourceLicenses } from './OpenSourceLicenses';
@@ -91,6 +92,8 @@ export function SettingsPanel({
   const toast = useToast();
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  /** A picked photo waiting to be framed. */
+  const [pendingAvatar, setPendingAvatar] = useState<File | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [lockSetup, setLockSetup] = useState(false);
@@ -219,7 +222,9 @@ export function SettingsPanel({
             ? `Blocked by Android. Turn them on in ${permissionSettingsLocation()}.`
             : 'Tap to turn on. Android will ask you to allow it.';
 
-  async function handleAvatar(e: React.ChangeEvent<HTMLInputElement>) {
+  // Framing happens before the upload, so a picked photo waits here for the
+  // cropper rather than going straight up centred.
+  function handleAvatar(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
@@ -227,11 +232,16 @@ export function SettingsPanel({
       toast.error('Avatar must be an image.');
       return;
     }
+    setPendingAvatar(file);
+  }
+
+  async function uploadAvatar(file: File) {
     setUploading(true);
 
     // An avatar is never painted above ~64 px, so the full camera resolution
     // is pure upload cost — and the 5 MB bucket limit would otherwise reject
-    // an ordinary phone photo outright.
+    // an ordinary phone photo outright. The cropper already caps its output,
+    // so this is a no-op on that path and the guard for the fallbacks.
     const upload = await compressImage(file, { maxEdge: AVATAR_MAX_EDGE });
     const ext = upload.name.split('.').pop()?.toLowerCase() || 'png';
     const path = `${session.user.id}/avatar.${ext}`;
@@ -352,7 +362,13 @@ export function SettingsPanel({
               )}
             </div>
           </div>
-          <span className="absolute inset-0 flex items-center justify-center rounded-full bg-neutral/60 opacity-0 group-hover:opacity-100 transition-opacity">
+          {/* A phone has no hover, so an upload would otherwise show nothing
+              at all while it runs. */}
+          <span
+            className={`absolute inset-0 flex items-center justify-center rounded-full bg-neutral/60 transition-opacity ${
+              uploading ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+            }`}
+          >
             {uploading ? (
               <span className="loading loading-spinner loading-sm text-neutral-content" />
             ) : (
@@ -732,6 +748,16 @@ export function SettingsPanel({
       {showThemes && <ThemeStore onClose={() => setShowThemes(false)} />}
       {showLicenses && <OpenSourceLicenses onClose={() => setShowLicenses(false)} />}
       {legalDoc && <LegalDocModal doc={legalDoc} onClose={() => setLegalDoc(null)} />}
+      {pendingAvatar && (
+        <AvatarCropper
+          file={pendingAvatar}
+          onCancel={() => setPendingAvatar(null)}
+          onCropped={(cropped) => {
+            setPendingAvatar(null);
+            void uploadAvatar(cropped);
+          }}
+        />
+      )}
     </>
   );
 }
