@@ -397,7 +397,7 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
       <div className="bg-base-100 border-t border-base-content/5 p-2.5 pb-[calc(0.625rem+var(--safe-bottom))] shrink-0">
         <div className="flex items-end gap-2">
           <textarea
-            className="textarea flex-1 bg-base-200/50 border border-base-content/10 focus:border-primary resize-none min-h-[2.75rem] max-h-40"
+            className="textarea flex-1 bg-base-200/50 border border-base-content/10 focus:border-primary resize-none min-h-[2.75rem] max-h-40 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
             rows={1}
             value={draft}
             maxLength={MAX_MESSAGE_LENGTH}

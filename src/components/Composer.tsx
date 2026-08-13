@@ -542,7 +542,11 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
               rows={1}
               maxLength={MAX_MESSAGE_LENGTH}
               placeholder={stagedFile ? 'Add a caption...' : 'Type a message...'}
-              className="textarea flex-1 resize-none min-h-0 leading-6 py-2.5 px-4 rounded-2xl bg-base-300 border border-base-content/10 focus:border-primary/60 focus:bg-base-300 focus:outline-none transition-colors"
+              // The scrollbar is hidden, not the scrolling: auto-grow stops at
+              // MAX_TEXTAREA_PX, so a long draft still has to scroll. The bar
+              // itself is a grey stripe down a rounded pill and the WebView
+              // paints it even on the one empty line.
+              className="textarea flex-1 resize-none min-h-0 leading-6 py-2.5 px-4 rounded-2xl bg-base-300 border border-base-content/10 focus:border-primary/60 focus:bg-base-300 focus:outline-none transition-colors [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
               value={value}
               onChange={(e) => onChange(e.target.value)}
               onKeyDown={handleKeyDown}

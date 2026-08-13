@@ -268,7 +268,7 @@ export function MessageBubble({
             // Transparent and borderless: the bubble around it is the box. The
             // caret and selection inherit the bubble's own text colour, which
             // is the only thing keeping them visible on the primary fill.
-            className="block w-full bg-transparent border-0 outline-none resize-none p-0 text-base leading-6 caret-current placeholder:opacity-60"
+            className="block w-full bg-transparent border-0 outline-none resize-none p-0 text-base leading-6 caret-current placeholder:opacity-60 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
             value={editingText}
             onChange={(e) => onEditingTextChange(e.target.value)}
             onKeyDown={(e) => {
