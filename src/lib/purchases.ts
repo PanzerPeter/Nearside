@@ -108,10 +108,41 @@ export const PACKS: Pack[] = [
   },
 ];
 
+/**
+ * The entitlement the largest donation tier grants (`lib/donations.ts`).
+ *
+ * Held here rather than there because `packsFromEntitlements` is what expands
+ * it, and an entitlement id that only the donations module knows about would
+ * be a pack unlock that the ownership check never sees.
+ */
+export const ALL_PACKS_ENTITLEMENT = 'packs.all';
+
 const THEME_KEY = 'nearside-theme';
 
 export function packById(id: string): Pack | undefined {
   return PACKS.find((p) => p.id === id);
+}
+
+/**
+ * Active entitlement ids, as pack ids.
+ *
+ * Shared by the ownership read and the restore, which must agree: the
+ * appearance screen replaces its owned set with whatever restore returns, so a
+ * restore that skipped this would lock every pack for a supporter the moment
+ * they tapped the button.
+ */
+function packsFromActive(active: Record<string, unknown> | undefined): Set<string> {
+  const ids = Object.keys(active ?? {});
+
+  // The largest donation tier grants one entitlement rather than six, so it
+  // has to be expanded. Left as it is, a supporter sees an id that matches no
+  // pack and every pack still locked.
+  if (ids.includes(ALL_PACKS_ENTITLEMENT)) return new Set(PACKS.map((p) => p.id));
+
+  // Filtered rather than passed through: an entitlement that is not a pack
+  // reaches `themeForOwnership` as a theme name with no daisyUI block behind
+  // it, which renders as unstyled HTML rather than as a wrong colour.
+  return new Set(ids.filter((id) => PACKS.some((p) => p.id === id)));
 }
 
 /**
@@ -123,12 +154,28 @@ export async function packsFromEntitlements(): Promise<Set<string>> {
   if (!Capacitor.isNativePlatform()) return new Set();
   try {
     const { customerInfo } = await Purchases.getCustomerInfo();
-    const active = customerInfo?.entitlements?.active ?? {};
-    return new Set(Object.keys(active));
+    return packsFromActive(customerInfo?.entitlements?.active);
   } catch {
     // Not configured, offline, or Play unavailable. Owning nothing is the
     // honest answer and keeps the store renderable.
     return new Set();
+  }
+}
+
+/**
+ * Whether the packs are owned by donation rather than bought one at a time.
+ *
+ * `packsFromEntitlements` expands the entitlement, which makes a supporter
+ * indistinguishable from someone who bought all six — so the appearance screen
+ * has to ask separately to say where they came from.
+ */
+export async function hasAllPacksEntitlement(): Promise<boolean> {
+  if (!Capacitor.isNativePlatform()) return false;
+  try {
+    const { customerInfo } = await Purchases.getCustomerInfo();
+    return Boolean(customerInfo?.entitlements?.active?.[ALL_PACKS_ENTITLEMENT]);
+  } catch {
+    return false;
   }
 }
 
@@ -207,7 +254,7 @@ export async function purchasePack(offer: PackOffer): Promise<boolean> {
 export async function restorePurchases(): Promise<Set<string>> {
   if (!Capacitor.isNativePlatform()) return new Set();
   const { customerInfo } = await Purchases.restorePurchases();
-  return new Set(Object.keys(customerInfo?.entitlements?.active ?? {}));
+  return packsFromActive(customerInfo?.entitlements?.active);
 }
 
 /**

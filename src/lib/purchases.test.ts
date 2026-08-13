@@ -15,22 +15,70 @@ const customerInfo: { entitlements: { active: Record<string, object> } } = {
 vi.mock('@revenuecat/purchases-capacitor', () => ({
   Purchases: {
     getCustomerInfo: async () => ({ customerInfo }),
+    restorePurchases: async () => ({ customerInfo }),
   },
 }));
 
 import { readFileSync } from 'node:fs';
 import {
+  ALL_PACKS_ENTITLEMENT,
   DEFAULT_THEME,
   FREE_THEMES,
   PACKS,
+  hasAllPacksEntitlement,
   packById,
   packsFromEntitlements,
+  restorePurchases,
   themeForOwnership,
 } from './purchases';
 
 describe('purchases', () => {
   it('reads owned packs from active entitlements', async () => {
     expect(await packsFromEntitlements()).toEqual(new Set(['pack.midnight']));
+  });
+
+  it('expands the all-packs entitlement into every pack', async () => {
+    // The largest donation tier grants one entitlement, not six. Without the
+    // expansion the appearance screen shows a supporter an entitlement id that
+    // matches no pack, and every pack still locked.
+    const saved = customerInfo.entitlements.active;
+    customerInfo.entitlements.active = { [ALL_PACKS_ENTITLEMENT]: {} };
+    expect(await packsFromEntitlements()).toEqual(new Set(PACKS.map((p) => p.id)));
+    customerInfo.entitlements.active = saved;
+  });
+
+  it('never reports the all-packs entitlement as a pack of its own', async () => {
+    // `themeForOwnership` would keep a theme called `packs.all`, and the store
+    // would render a seventh card with no theme behind it.
+    const saved = customerInfo.entitlements.active;
+    customerInfo.entitlements.active = { [ALL_PACKS_ENTITLEMENT]: {} };
+    expect(await packsFromEntitlements()).not.toContain(ALL_PACKS_ENTITLEMENT);
+    customerInfo.entitlements.active = saved;
+  });
+
+  it('reports whether the packs came from a donation', async () => {
+    // The appearance screen says "included with your support" instead of a
+    // price, and it cannot tell from the expanded pack ids alone — after
+    // expansion a supporter looks identical to someone who bought all six.
+    const saved = customerInfo.entitlements.active;
+
+    customerInfo.entitlements.active = { [ALL_PACKS_ENTITLEMENT]: {} };
+    expect(await hasAllPacksEntitlement()).toBe(true);
+
+    customerInfo.entitlements.active = { 'pack.midnight': {} };
+    expect(await hasAllPacksEntitlement()).toBe(false);
+
+    customerInfo.entitlements.active = saved;
+  });
+
+  it('expands the all-packs entitlement on restore too', async () => {
+    // The appearance screen replaces its owned set with whatever restore
+    // returns. Handing back the bare entitlement id there would lock every
+    // pack for a supporter the moment they tapped Restore purchases.
+    const saved = customerInfo.entitlements.active;
+    customerInfo.entitlements.active = { [ALL_PACKS_ENTITLEMENT]: {} };
+    expect(await restorePurchases()).toEqual(new Set(PACKS.map((p) => p.id)));
+    customerInfo.entitlements.active = saved;
   });
 
   it('treats no entitlements as owning nothing rather than throwing', async () => {

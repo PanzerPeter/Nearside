@@ -5,6 +5,7 @@ import {
   FREE_THEMES,
   PACKS,
   applyTheme,
+  hasAllPacksEntitlement,
   packOffers,
   purchasePack,
   restorePurchases,
@@ -35,6 +36,9 @@ export function ThemeStore({ onClose }: ThemeStoreProps) {
   const [active, setActive] = useState(storedTheme);
   const [busy, setBusy] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  // Owned by donation rather than bought one at a time. Only changes the words
+  // on the section, never what is unlocked.
+  const [bySupport, setBySupport] = useState(false);
   // One preview open at a time: side by side they stop being a preview and
   // become a wall of tiny chats to compare against each other.
   const [previewing, setPreviewing] = useState<string | null>(null);
@@ -42,9 +46,14 @@ export function ThemeStore({ onClose }: ThemeStoreProps) {
   const native = Capacitor.isNativePlatform();
 
   const load = useCallback(async () => {
-    const [mine, live] = await Promise.all([ownedPacks(), packOffers()]);
+    const [mine, live, donated] = await Promise.all([
+      ownedPacks(),
+      packOffers(),
+      hasAllPacksEntitlement(),
+    ]);
     setOwned(mine);
     setOffers(live);
+    setBySupport(donated);
     setLoading(false);
   }, []);
 
@@ -88,7 +97,15 @@ export function ThemeStore({ onClose }: ThemeStoreProps) {
       // refunded pack disappears here as it should. Granted packs are re-read
       // beside it: they were never purchases, and dropping them would take the
       // showcase account's themes away the first time someone tapped this.
-      const [restored, granted] = await Promise.all([restorePurchases(), grantedPacks()]);
+      const [restored, granted, donated] = await Promise.all([
+        restorePurchases(),
+        grantedPacks(),
+        hasAllPacksEntitlement(),
+      ]);
+      // A restore that came back without the donation entitlement — a refund —
+      // has to take the line away too, or the screen keeps thanking someone the
+      // store no longer counts as a supporter.
+      setBySupport(donated);
       setOwned(new Set([...restored, ...granted]));
       toast.success(
         restored.size > 0 ? 'Purchases restored.' : 'Nothing to restore on this account.'
@@ -138,6 +155,11 @@ export function ThemeStore({ onClose }: ThemeStoreProps) {
       <h3 className="text-xs font-medium uppercase tracking-wide text-base-content/50 mt-6 mb-2">
         Packs
       </h3>
+      {bySupport && (
+        <p className="text-xs text-base-content/60 mb-2">
+          Included with your support. Thank you.
+        </p>
+      )}
       <div className="space-y-3">
         {PACKS.map((pack) => {
           const isOwned = owned.has(pack.id);

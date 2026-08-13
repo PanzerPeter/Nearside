@@ -24,6 +24,7 @@ import { useToast } from '../hooks/useToast';
 import { AvatarCropper } from './AvatarCropper';
 import { ServerView } from './ServerView';
 import { ThemeStore } from './ThemeStore';
+import { SupportNearside } from './SupportNearside';
 import { OpenSourceLicenses } from './OpenSourceLicenses';
 import { SecurityLimits } from './SecurityLimits';
 import { LegalDocModal, type LegalDoc } from './LegalFooter';
@@ -35,6 +36,7 @@ import {
   ChevronRight,
   Database,
   FileText,
+  Heart,
   Lock,
   LogOut,
   Palette,
@@ -150,6 +152,7 @@ export function SettingsPanel({
   const [showServerView, setShowServerView] = useState(false);
   const [showLimits, setShowLimits] = useState(false);
   const [showThemes, setShowThemes] = useState(false);
+  const [showSupport, setShowSupport] = useState(false);
   const [showLicenses, setShowLicenses] = useState(false);
   const [legalDoc, setLegalDoc] = useState<LegalDoc | null>(null);
 
@@ -633,6 +636,23 @@ export function SettingsPanel({
 
       <div className="divider my-4" />
 
+      {/* Its own section rather than a line under Appearance: a donation is
+          not a look, and filing it there would make the theme packs read as
+          the thing being asked for. */}
+      <div className="space-y-2">
+        <p className="text-xs font-medium uppercase tracking-wider text-base-content/60">Support</p>
+        <button
+          className="btn btn-ghost btn-sm w-full justify-start gap-2.5 px-2"
+          onClick={() => setShowSupport(true)}
+        >
+          <Heart className="w-4 h-4 text-base-content/60 shrink-0" />
+          <span className="flex-1 text-left">Support Nearside</span>
+          <ChevronRight className="w-4 h-4 text-base-content/40 shrink-0" />
+        </button>
+      </div>
+
+      <div className="divider my-4" />
+
       <div className="space-y-2">
         <p className="text-xs font-medium uppercase tracking-wider text-base-content/60">Privacy</p>
         <button
@@ -791,6 +811,7 @@ export function SettingsPanel({
       )}
       {showLimits && <SecurityLimits onClose={() => setShowLimits(false)} />}
       {showThemes && <ThemeStore onClose={() => setShowThemes(false)} />}
+      {showSupport && <SupportNearside onClose={() => setShowSupport(false)} />}
       {showLicenses && <OpenSourceLicenses onClose={() => setShowLicenses(false)} />}
       {legalDoc && <LegalDocModal doc={legalDoc} onClose={() => setLegalDoc(null)} />}
       {pendingAvatar && (
