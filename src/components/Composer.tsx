@@ -11,6 +11,7 @@ import { Check, Mic, Send, Paperclip, Pencil, Smile, Trash2, X } from 'lucide-re
 import { EmojiPopover } from './EmojiPopover';
 import { AttachMenu } from './AttachMenu';
 import { MAX_MESSAGE_LENGTH } from '../lib/conversation';
+import { stagedIsRecording, type StagedMedia } from '../lib/staging';
 import { formatDuration, MAX_VOICE_MS, voiceRecordingSupported } from '../lib/audio';
 import { isCoarsePointer, permissionSettingsLocation, supportsCameraCapture } from '../lib/device';
 import { useVoiceRecorder, type VoiceRecording } from '../hooks/useVoiceRecorder';
@@ -23,14 +24,16 @@ interface ComposerProps {
   value: string;
   onChange: (v: string) => void;
   onSend: () => void;
-  /** Stage a picked/pasted/recorded file for preview; it isn't uploaded until
+  /** Stage picked/pasted/recorded files for preview; nothing is uploaded until
    *  Send. `durationMs` is set only for voice recordings. */
-  onStageFile: (file: File, durationMs?: number) => void;
-  /** The file currently staged for sending, if any. */
-  stagedFile: File | null;
-  /** Length of the staged recording, when the staged file is a voice note. */
-  stagedDurationMs: number | null;
+  onStageFile: (files: File | File[], durationMs?: number) => void;
+  /** Everything queued for this send, in send order. */
+  staged: StagedMedia[];
+  /** Drop one entry from the queue. */
+  onUnstage: (id: string) => void;
   onClearStaged: () => void;
+  /** How many of the batch are already up, for the count while it sends. */
+  sentCount: number;
   sending: boolean;
   uploading: boolean;
   replyingTo: { display_name: string; snippet: string } | null;
@@ -73,9 +76,10 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
     onChange,
     onSend,
     onStageFile,
-    stagedFile,
-    stagedDurationMs,
+    staged,
+    onUnstage,
     onClearStaged,
+    sentCount,
     sending,
     uploading,
     replyingTo,
@@ -92,7 +96,9 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   const emojiBtnRef = useRef<HTMLButtonElement>(null);
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [attachOpen, setAttachOpen] = useState(false);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  // Keyed by staged id: the same photo can be picked twice, and the file gives
+  // nothing else to tell those two entries apart.
+  const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({});
   const [hint, setHint] = useState<string | null>(null);
   // Whether the staged recording is the one the meter heard nothing during.
   const [silentTake, setSilentTake] = useState(false);
@@ -107,23 +113,25 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
     focus: () => textareaRef.current?.focus(),
   }));
 
-  const isAudio = !!stagedFile?.type.startsWith('audio/');
+  const isAudio = stagedIsRecording(staged);
+  const stagedDurationMs = staged[0]?.durationMs ?? null;
 
-  // A local object URL to preview the staged image/video; revoked on change.
+  // A local object URL per staged image/video; revoked when the queue changes.
   // Voice notes get their duration rendered instead, so they need no URL.
   useEffect(() => {
-    // The warning belongs to one recording. Anything else taking the staged
-    // slot, including a photo, clears it.
-    if (!stagedFile) setSilentTake(false);
-    if (!stagedFile || stagedFile.type.startsWith('audio/')) {
-      setPreviewUrl(null);
-      return;
+    // The warning belongs to one recording. Anything else taking the composer,
+    // including a photo, clears it.
+    if (!stagedIsRecording(staged)) setSilentTake(false);
+    const urls: Record<string, string> = {};
+    for (const item of staged) {
+      if (item.file.type.startsWith('audio/')) continue;
+      urls[item.id] = URL.createObjectURL(item.file);
     }
-    setSilentTake(false);
-    const url = URL.createObjectURL(stagedFile);
-    setPreviewUrl(url);
-    return () => URL.revokeObjectURL(url);
-  }, [stagedFile]);
+    setPreviewUrls(urls);
+    return () => {
+      for (const url of Object.values(urls)) URL.revokeObjectURL(url);
+    };
+  }, [staged]);
 
   useEffect(() => {
     if (!hint) return;
@@ -161,7 +169,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   const pendingReleaseRef = useRef<'none' | 'stop' | 'cancel'>('none');
 
   const busy = sending || uploading;
-  const canSend = !busy && (!!value.trim() || !!stagedFile);
+  const canSend = !busy && (!!value.trim() || staged.length > 0);
   // While recording the button has to stay the mic, whatever else is in the
   // composer — it is the element the finger is still holding. An edit in
   // progress otherwise claims the slot for its checkmark: recording a voice
@@ -294,18 +302,21 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   }
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
+    const files = Array.from(e.target.files ?? []);
+    // Cleared before staging, not after: the same photo picked twice in a row
+    // fires no change event while the input still holds it.
     e.target.value = '';
-    if (file) onStageFile(file);
+    if (files.length) onStageFile(files);
   }
 
   function handlePaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
-    const item = Array.from(e.clipboardData.items).find((i) => i.type.startsWith('image/'));
-    if (!item) return;
-    const file = item.getAsFile();
-    if (!file) return;
+    const files = Array.from(e.clipboardData.items)
+      .filter((i) => i.type.startsWith('image/'))
+      .map((i) => i.getAsFile())
+      .filter((f): f is File => !!f);
+    if (!files.length) return;
     e.preventDefault();
-    onStageFile(file);
+    onStageFile(files);
   }
 
   function openAttach() {
@@ -316,7 +327,14 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
     else libraryRef.current?.click();
   }
 
-  const stagedKind = isAudio ? 'Voice message' : stagedFile?.type.startsWith('video/') ? 'Video' : 'Image';
+  // The one staged item, when there is exactly one. A batch renders as a strip
+  // instead: names and sizes stop being readable past the first thumbnail.
+  const only = staged.length === 1 ? staged[0] : null;
+  const stagedKind = isAudio
+    ? 'Voice message'
+    : only?.file.type.startsWith('video/')
+      ? 'Video'
+      : 'Image';
 
   return (
     <form
@@ -342,22 +360,22 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
         </div>
       )}
 
-      {stagedFile && (isAudio || previewUrl) && (
+      {only && (isAudio || previewUrls[only.id]) && (
         <div className="flex items-center gap-3 mb-2 p-2 rounded-lg bg-base-200/70 border border-base-content/10">
           <div className="relative shrink-0">
             {isAudio ? (
               <div className="w-16 h-16 rounded-md bg-primary/15 text-primary flex items-center justify-center">
                 <Mic className="w-6 h-6" />
               </div>
-            ) : stagedFile.type.startsWith('video/') ? (
+            ) : only.file.type.startsWith('video/') ? (
               <video
-                src={previewUrl ?? undefined}
+                src={previewUrls[only.id]}
                 className="w-16 h-16 rounded-md object-cover bg-black"
                 muted
               />
             ) : (
               <img
-                src={previewUrl ?? undefined}
+                src={previewUrls[only.id]}
                 alt="Attachment preview"
                 className="w-16 h-16 rounded-md object-cover"
               />
@@ -365,7 +383,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-xs font-medium truncate">
-              {isAudio ? 'Voice message' : stagedFile.name}
+              {isAudio ? 'Voice message' : only.file.name}
             </p>
             {/* The name above already says which kind this is for a voice note,
                 so repeating it here left the preview reading "Voice message /
@@ -375,7 +393,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
                 ? stagedDurationMs !== null
                   ? formatDuration(stagedDurationMs)
                   : 'Recorded'
-                : `${stagedKind} · ${(stagedFile.size / (1024 * 1024)).toFixed(1)} MB`}{' '}
+                : `${stagedKind} · ${(only.file.size / (1024 * 1024)).toFixed(1)} MB`}{' '}
               · press Send
             </p>
             {silentTake && (
@@ -397,10 +415,70 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
         </div>
       )}
 
+      {/* A batch. Thumbnails only: a column of file names is unreadable at this
+          height, and what the sender is checking is which photos are going. */}
+      {staged.length > 1 && (
+        <div className="mb-2 p-2 rounded-lg bg-base-200/70 border border-base-content/10">
+          <div className="flex items-center gap-2 mb-2 px-0.5">
+            <p className="text-xs text-base-content/60 flex-1 truncate">
+              {uploading
+                ? `Sending ${Math.min(sentCount + 1, staged.length)} of ${staged.length}...`
+                : `${staged.length} files · the caption goes on the first`}
+            </p>
+            <button
+              type="button"
+              className="btn btn-ghost btn-xs"
+              onClick={onClearStaged}
+              disabled={busy}
+            >
+              Clear
+            </button>
+          </div>
+          <div className="flex gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {staged.map((item, index) => (
+              <div key={item.id} className="relative shrink-0">
+                {item.file.type.startsWith('video/') ? (
+                  <video
+                    src={previewUrls[item.id]}
+                    className="w-16 h-16 rounded-md object-cover bg-black"
+                    muted
+                  />
+                ) : (
+                  <img
+                    src={previewUrls[item.id]}
+                    alt={`Attachment ${index + 1}`}
+                    className="w-16 h-16 rounded-md object-cover"
+                  />
+                )}
+                {/* The order matters — the first one carries the caption — so
+                    the strip numbers itself rather than leaving it to be
+                    inferred from left-to-right. */}
+                <span className="absolute bottom-0.5 left-0.5 rounded bg-black/60 px-1 text-[0.6rem] text-white">
+                  {index + 1}
+                </span>
+                <button
+                  type="button"
+                  className="absolute -top-1 -right-1 btn btn-xs btn-circle btn-neutral"
+                  onClick={() => onUnstage(item.id)}
+                  disabled={busy}
+                  title="Remove this file"
+                  aria-label={`Remove attachment ${index + 1}`}
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* `multiple` on the library picker only. The two below open the camera,
+          which takes one shot at a time whatever the input says. */}
       <input
         ref={libraryRef}
         type="file"
         accept="image/*,video/*"
+        multiple
         className="hidden"
         onChange={handleFileChange}
       />
@@ -541,7 +619,13 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
               ref={textareaRef}
               rows={1}
               maxLength={MAX_MESSAGE_LENGTH}
-              placeholder={stagedFile ? 'Add a caption...' : 'Type a message...'}
+              placeholder={
+                staged.length > 1
+                  ? 'Add a caption to the first...'
+                  : staged.length
+                    ? 'Add a caption...'
+                    : 'Type a message...'
+              }
               // The scrollbar is hidden, not the scrolling: auto-grow stops at
               // MAX_TEXTAREA_PX, so a long draft still has to scroll. The bar
               // itself is a grey stripe down a rounded pill and the WebView

@@ -1,10 +1,15 @@
-// Attachments: staging one, sealing and uploading it, and trimming the
+// Attachments: staging them, sealing and uploading each, and trimming the
 // conversation's older files back to the keep limits.
 //
 // Media stays synchronous — there is no outbox for it. Queueing a 50 MB video
 // in IndexedDB is a different problem than the text queue solves, and the
 // staged-file preview already gives the user feedback while the upload is in
 // flight.
+//
+// A pick of several photos is sent as several messages, one per file, in the
+// order they were picked. Each seals its own file key and its own row, so a
+// batch is exactly N ordinary sends — nothing that reads messages has to know
+// a batch happened.
 
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
@@ -14,8 +19,8 @@ import {
   fileExtension,
   mediaPath,
   MAX_MESSAGE_LENGTH,
-  MEDIA_MAX_BYTES,
 } from '../lib/conversation';
+import { stageFiles, type StagedMedia } from '../lib/staging';
 import { sealBody, sealMediaKey } from '../lib/sealed-body';
 import { sealFile } from '../lib/media-crypto';
 import { peerPublicKey } from '../lib/peer-keys';
@@ -26,14 +31,18 @@ import { notifyReceiver } from '../lib/push';
 import type { Identity } from '../lib/crypto/keys';
 
 export interface MediaSend {
-  stagedFile: File | null;
-  /** Length of a staged voice recording. Kept beside the file because a
-   *  MediaRecorder blob carries no duration of its own, and the composer, the
-   *  message row and the bubble all need it. */
-  stagedDurationMs: number | null;
+  /** The pick waiting on Send, in the order it will be sent. Empty when there
+   *  is nothing attached. A voice recording is a queue of exactly one. */
+  staged: StagedMedia[];
   uploading: boolean;
-  /** Validate a picked/pasted/recorded file and stage it before sending. */
-  stage: (file: File, durationMs?: number) => void;
+  /** How many of the batch are already in, so the composer can count them off
+   *  while the rest go up. */
+  sentCount: number;
+  /** Validate picked/pasted/recorded files and add them to the queue.
+   *  `durationMs` is set only for a recording. */
+  stage: (files: File | File[], durationMs?: number) => void;
+  /** Drop one entry from the queue — the strip's per-thumbnail remove. */
+  unstage: (id: string) => void;
   clearStaged: () => void;
   send: (caption: string, replyToId: string | null) => Promise<void>;
 }
@@ -59,52 +68,71 @@ export function useMediaSend({
   onSent,
   onError,
 }: MediaSendOptions): MediaSend {
-  const [stagedFile, setStagedFile] = useState<File | null>(null);
-  const [stagedDurationMs, setStagedDurationMs] = useState<number | null>(null);
+  const [staged, setStaged] = useState<StagedMedia[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [sentCount, setSentCount] = useState(0);
 
   useEffect(() => {
-    setStagedFile(null);
-    setStagedDurationMs(null);
+    setStaged([]);
     void cleanupOldMedia();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [peerId]);
 
-  function stage(file: File, durationMs?: number) {
-    if (!classifyMedia(file)) {
-      onError('Unsupported file type. Use an image, video or voice message.');
-      return;
-    }
-    if (file.size > MEDIA_MAX_BYTES) {
-      onError('File is too large (50 MB max).');
-      return;
-    }
-    setStagedFile(file);
-    setStagedDurationMs(durationMs ?? null);
-    onStaged();
+  function stage(files: File | File[], durationMs?: number) {
+    const incoming = Array.isArray(files) ? files : [files];
+    // Computed outside `setStaged` rather than inside its updater: an updater
+    // runs during render and may run twice, so a toast raised from in there
+    // fires late, and twice.
+    const result = stageFiles(staged, incoming, durationMs);
+    setStaged(result.staged);
+    if (result.error) onError(result.error);
+    if (result.staged.length > staged.length) onStaged();
+  }
+
+  function unstage(id: string) {
+    setStaged((current) => current.filter((item) => item.id !== id));
   }
 
   function clearStaged() {
-    setStagedFile(null);
-    setStagedDurationMs(null);
+    setStaged([]);
   }
 
   async function send(caption: string, replyToId: string | null): Promise<void> {
-    const file = stagedFile;
-    if (!file) return;
+    if (!staged.length) return;
     if (caption.length > MAX_MESSAGE_LENGTH) {
       onError(`Caption is too long (${MAX_MESSAGE_LENGTH} characters max).`);
       return;
     }
-    const kind = classifyMedia(file);
-    if (!kind) {
-      onError('Unsupported file type. Use an image, video or voice message.');
-      return;
-    }
 
     setUploading(true);
+    setSentCount(0);
+    // The id of the last row that went in. Only that one raises a push: ten
+    // photos are one act of sending, and ten notifications for it is a phone
+    // buzzing in someone's pocket ten times.
+    let lastInsertedId: string | null = null;
+    let sent = 0;
+
     try {
-      await uploadStaged(file, kind, caption, replyToId);
+      for (const [index, item] of staged.entries()) {
+        const kind = classifyMedia(item.file);
+        if (!kind) {
+          onError('Unsupported file type. Use an image, video or voice message.');
+          break;
+        }
+        // The caption and the reply belong to the batch, not to every file in
+        // it: repeating them would post the same sentence under each photo and
+        // quote the same message N times.
+        const insertedId = await uploadStaged(
+          item,
+          kind,
+          index === 0 ? caption : '',
+          index === 0 ? replyToId : null
+        );
+        if (!insertedId) break;
+        lastInsertedId = insertedId;
+        sent += 1;
+        setSentCount(sent);
+      }
     } catch {
       // `sealBody` throws outright when the peer has published no key, and
       // `compressImage` can throw on an image the decoder refuses. Neither
@@ -116,17 +144,36 @@ export function useMediaSend({
       // In `finally`, not after each exit: this flag is what disables the
       // whole composer.
       setUploading(false);
+      setSentCount(0);
     }
+
+    // What went in is dropped from the queue; whatever stopped the run stays
+    // staged, so Send again retries the rest instead of re-sending the photos
+    // the friend already has.
+    const remaining = staged.slice(sent);
+    setStaged(remaining);
+    if (!sent) return;
+    // Cleared as soon as anything went in, even if the rest of the batch did
+    // not: the caption and the reply rode on the first row. Left in the box
+    // they would go again with the retry, posting the same sentence twice and
+    // quoting the same message twice.
+    onSent();
+    if (lastInsertedId) notifyReceiver(lastInsertedId, isSelf);
+    void cleanupOldMedia();
   }
 
-  /** The upload itself. Split out so `send` owns the `uploading` flag on every
-   *  path, including a thrown one. */
+  /** One file: seal, upload, insert. Returns the new row's id, or null when it
+   *  did not go — the batch stops on the first null rather than carrying on
+   *  past an error the sender has already been told about.
+   *
+   *  Split out so `send` owns the `uploading` flag on every path, including a
+   *  thrown one. */
   async function uploadStaged(
-    file: File,
+    { file, durationMs }: StagedMedia,
     kind: NonNullable<ReturnType<typeof classifyMedia>>,
     caption: string,
     replyToId: string | null
-  ): Promise<void> {
+  ): Promise<string | null> {
     // Images are re-encoded before they leave the device — a phone photo is
     // typically megabytes of resolution this UI never paints. Videos and voice
     // notes go up as recorded (voice is already ~180 KB a minute).
@@ -154,7 +201,7 @@ export function useMediaSend({
 
     if (uploadError) {
       onError(uploadError.message);
-      return;
+      return null;
     }
 
     const { data: inserted, error: insertError } = await supabase
@@ -169,7 +216,7 @@ export function useMediaSend({
         ...(await sealMediaKey(identity, peerKey, me, peerId, fileKey)),
         media_path: path,
         media_type: kind,
-        media_duration_ms: kind === 'audio' ? stagedDurationMs : null,
+        media_duration_ms: kind === 'audio' ? durationMs : null,
         reply_to_id: replyToId,
       })
       .select('id')
@@ -182,13 +229,9 @@ export function useMediaSend({
           ? "You're sending messages too quickly. Give it a moment."
           : 'Could not send media.'
       );
-      return;
+      return null;
     }
-    // Sent: clear the composer and staged attachment.
-    clearStaged();
-    onSent();
-    if (inserted) notifyReceiver(inserted.id, isSelf);
-    void cleanupOldMedia();
+    return inserted?.id ?? null;
   }
 
   /** Trim this conversation's media back to the per-kind keep limits. */
@@ -247,5 +290,5 @@ export function useMediaSend({
     }
   }
 
-  return { stagedFile, stagedDurationMs, uploading, stage, clearStaged, send };
+  return { staged, uploading, sentCount, stage, unstage, clearStaged, send };
 }

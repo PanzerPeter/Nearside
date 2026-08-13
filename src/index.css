@@ -647,5 +647,11 @@ em-emoji-picker {
      `--surface-ring` token — same surface, mirrored by hand for the same reason. */
   --rgb-background: 42, 44, 49;
   --font-family: Inter, system-ui, sans-serif;
+  /* The category strip is ten tabs sharing the panel's width, and at
+     emoji-mart's default 18px the icons meet each other with no gap left
+     between them. The tabs keep their hit area; only the glyph inside shrinks,
+     which is the whole of the spacing this row can be given from outside the
+     shadow boundary. */
+  --category-icon-size: 15px;
   max-height: min(435px, 60vh);
 }

@@ -20,8 +20,10 @@ interface EmojiPopoverProps {
   onClose: () => void;
 }
 
-// emoji-mart's default panel size. Width flexes down via `dynamicWidth`.
-const PICKER_W = 352;
+// emoji-mart's default panel size, widened a little: the ten category tabs
+// divide this width between them, so every pixel here is a third of a pixel of
+// air around each icon. Width flexes down via `dynamicWidth`.
+const PICKER_W = 384;
 const PICKER_H = 435;
 const MARGIN = 8;
 

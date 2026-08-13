@@ -143,7 +143,7 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
     // bubble is already on screen.
     void tapSend();
     const replyToId = replyingTo?.id ?? null;
-    if (media.stagedFile) {
+    if (media.staged.length) {
       await media.send(newMessage.trim(), replyToId);
     } else {
       await thread.outbox.send(newMessage.trim(), replyToId);
@@ -277,9 +277,10 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
           }}
           onSend={handleSend}
           onStageFile={media.stage}
-          stagedFile={media.stagedFile}
-          stagedDurationMs={media.stagedDurationMs}
+          staged={media.staged}
+          onUnstage={media.unstage}
           onClearStaged={media.clearStaged}
+          sentCount={media.sentCount}
           onError={toast.error}
           sending={thread.outbox.sending}
           uploading={media.uploading}

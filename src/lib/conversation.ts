@@ -162,3 +162,7 @@ export const MEDIA_KEEP_LIMIT = 20;
  *  was said rather than a file that can be sent again. */
 export const AUDIO_KEEP_LIMIT = 50;
 export const MEDIA_MAX_BYTES = 50 * 1024 * 1024; // 50 MB, matches chat-media bucket
+/** How many files one pick may stage. Held well under `MEDIA_KEEP_LIMIT`: a
+ *  batch that filled the keep limit would evict the conversation's whole photo
+ *  history in a single send, which is not what picking ten photos asks for. */
+export const MEDIA_BATCH_LIMIT = 10;
