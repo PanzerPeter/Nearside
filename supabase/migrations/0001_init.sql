@@ -1,5 +1,5 @@
 /*
-  Chatly — consolidated initial schema
+  Nearside — consolidated initial schema
   Run once in the Supabase SQL editor of a fresh project.
 
   Contents:

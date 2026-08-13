@@ -26,7 +26,7 @@ const HOSTING_REGION = 'Paris, France (Supabase region eu-west-3)';
  *
  * These are written from the code rather than from a template, and that is the
  * point of them. Every claim below matches something checkable: the table list
- * in `lib/server-view.ts`, the bucket policies in `supabase/storage-setup.sql`,
+ * in `lib/server-view.ts`, the bucket policies in `supabase/storage/setup.sql`,
  * the keep limits in `lib/conversation.ts`, the plugins in `package.json`.
  * Where the app cannot deliver on a promise, the promise is not made. A privacy
  * policy for an encrypted messenger is read by people deciding whether to trust

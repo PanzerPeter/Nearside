@@ -7,6 +7,7 @@ import { cachedPreview } from '../lib/localdb';
 import { Avatar } from './Avatar';
 import { ConversationRow } from './ConversationRow';
 import { ConnectModal } from './ConnectModal';
+import { FirstRunInvite } from './FirstRunInvite';
 import { RoomList } from './RoomList';
 import { advanceRead, fetchUnreadCounts } from '../lib/receipts';
 import { useConnection, reportChannelStatus, forgetChannel } from '../lib/connection';
@@ -56,7 +57,16 @@ export function FriendsList({
   const [previews, setPreviews] = useState<Map<string, string | null>>(new Map());
   const [pendingRequests, setPendingRequests] = useState<Friendship[]>([]);
   const [unread, setUnread] = useState<Map<string, number>>(new Map());
-  const [showAddModal, setShowAddModal] = useState(false);
+  const [connectTab, setConnectTab] = useState<'show' | 'scan' | null>(null);
+  /** Room count as last reported by RoomList, null until its first successful
+   *  load. Both this and `loaded` gate the first-run card: painted off the
+   *  initial empty state instead, it would flash on every cold start for
+   *  accounts that have plenty of contacts. */
+  const [roomCount, setRoomCount] = useState<number | null>(null);
+  const [loaded, setLoaded] = useState(false);
+  /** Owned here rather than in RoomList, which is not on screen at all in the
+   *  state where the first-run card offers to create the first room. */
+  const [creatingRoom, setCreatingRoom] = useState(false);
   const { generation, live } = useConnection();
 
   // Live refs so the realtime handler always sees current friends and
@@ -82,6 +92,7 @@ export function FriendsList({
     // component.
     const rows = sortConversations((data ?? []) as ConversationSummary[], me);
     setConversations(rows);
+    setLoaded(true);
 
     // Previews come from the local mirror, since 0023 took the body away from
     // the server. Resolved after the rows are on screen: a row briefly showing
@@ -381,6 +392,12 @@ export function FriendsList({
 
   /** Whether any conversation is with someone other than yourself. */
   const hasFriendRows = conversations.some((c) => !isSelfChat(me, c.peer_id));
+  /** Nothing on this pane but the self-chat — where a new sign-up lands, and
+   *  the only state worth spending a whole card on. */
+  const firstRun = loaded && roomCount === 0 && !hasFriendRows;
+  /** Section labels are structure; with one row under each of them they are
+   *  louder than the content they label. */
+  const showSections = hasFriendRows || (roomCount ?? 0) > 0;
 
   async function acceptRequest(friendshipId: string) {
     await supabase.from('friendships').update({ status: 'accepted' }).eq('id', friendshipId);
@@ -406,8 +423,9 @@ export function FriendsList({
           </div>
           <button
             className="btn btn-primary btn-sm btn-circle shadow-md shadow-primary/20 hover:shadow-primary/30 transition-shadow"
-            onClick={() => setShowAddModal(true)}
-            title="Connect"
+            onClick={() => setConnectTab('show')}
+            title="Add a contact"
+            aria-label="Add a contact"
           >
             <UserPlus className="w-4 h-4" />
           </button>
@@ -456,69 +474,81 @@ export function FriendsList({
 
       {/* Conversation List */}
       <div className="flex-1 overflow-y-auto">
+        {firstRun && (
+          <FirstRunInvite
+            onShowCode={() => setConnectTab('show')}
+            onScan={() => setConnectTab('scan')}
+            onCreateRoom={() => setCreatingRoom(true)}
+          />
+        )}
+
         <RoomList
           me={me}
           identity={identity}
           selectedRoomId={selectedRoomId}
           onSelectRoom={onSelectRoom}
+          onCountChange={setRoomCount}
+          hideWhenEmpty={firstRun}
+          creating={creatingRoom}
+          onCreatingChange={setCreatingRoom}
         />
 
-        <div className="px-3 sm:px-4 pt-2">
-          <p className="text-xs font-semibold uppercase tracking-wider text-base-content/55">
-            Direct
-          </p>
-        </div>
-
-        {conversations.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-10 p-6 text-center">
-            <div className="w-16 h-16 rounded-2xl bg-base-content/5 flex items-center justify-center mb-3">
-              <Users className="w-8 h-8 text-base-content/55" />
-            </div>
-            <p className="text-sm text-base-content/55 font-medium">No conversations yet</p>
-            <p className="text-xs text-base-content/55 mt-1">
-              Tap + to scan a friend&apos;s code, or show them yours
+        {showSections && (
+          <div className="px-4 sm:px-5 pt-2">
+            <p className="text-xs font-semibold uppercase tracking-wider text-base-content/55">
+              Direct
             </p>
           </div>
-        ) : (
-          <ul className="motion-stagger p-2 sm:p-3 space-y-1">
-            {conversations.map((conversation) => (
-              <li key={conversation.peer_id}>
-                <ConversationRow
-                  conversation={conversation}
-                  me={me}
-                  unread={unread.get(conversation.peer_id) ?? 0}
-                  lastText={previews.get(conversation.peer_id) ?? null}
-                  selected={selectedFriendId === conversation.peer_id}
-                  onSelect={() =>
-                    onSelectFriend({
-                      id: conversation.peer_id,
-                      display_name: conversation.display_name,
-                      avatar_url: conversation.avatar_url,
-                      last_seen_at: conversation.last_seen_at,
-                    })
-                  }
-                />
-              </li>
-            ))}
-          </ul>
         )}
 
-        {/* The self-chat means the list is never empty, so the "add a friend"
-            hint above would never be seen by the person who most needs it.
-            Repeat it under the rows while yours is the only conversation. */}
-        {conversations.length > 0 && !hasFriendRows && (
-          <p className="px-4 pb-4 text-xs text-base-content/55 text-center">
-            Tap + to scan a friend&apos;s code, or show them yours
-          </p>
+        {/* No empty state here: `conversation_list` always returns the self-chat,
+            so the only genuinely empty render is the one before the first fetch
+            lands, and a spinner-shaped hole in a list that paints in a moment is
+            worse than the space it fills. */}
+        <ul className="motion-stagger p-2 sm:p-3 space-y-1">
+          {conversations.map((conversation) => (
+            <li key={conversation.peer_id}>
+              <ConversationRow
+                conversation={conversation}
+                me={me}
+                unread={unread.get(conversation.peer_id) ?? 0}
+                lastText={previews.get(conversation.peer_id) ?? null}
+                selected={selectedFriendId === conversation.peer_id}
+                onSelect={() =>
+                  onSelectFriend({
+                    id: conversation.peer_id,
+                    display_name: conversation.display_name,
+                    avatar_url: conversation.avatar_url,
+                    last_seen_at: conversation.last_seen_at,
+                  })
+                }
+              />
+            </li>
+          ))}
+        </ul>
+
+        {/* Someone who has rooms but no contacts gets no first-run card, and
+            their only direct row is the self-chat — still the person who most
+            needs to be told how connecting works here. */}
+        {loaded && !hasFriendRows && !firstRun && (
+          <div className="px-4 pb-4 text-center">
+            <button
+              className="btn btn-ghost btn-xs font-normal text-base-content/60"
+              onClick={() => setConnectTab('show')}
+            >
+              Show your code, or scan a friend&apos;s
+            </button>
+          </div>
         )}
       </div>
 
       {/* Connect Modal */}
-      {showAddModal && (
+      {connectTab && (
         <ConnectModal
           session={session}
           identity={identity}
-          onClose={() => setShowAddModal(false)}
+          initialTab={connectTab}
+          onClose={() => setConnectTab(null)}
         />
       )}
     </div>

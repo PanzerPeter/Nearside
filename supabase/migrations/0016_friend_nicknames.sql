@@ -1,5 +1,5 @@
 /*
-  Chatly — private friend nicknames
+  Nearside — private friend nicknames
   Run once in the Supabase SQL editor after 0015. Re-runnable.
 
   What this is:

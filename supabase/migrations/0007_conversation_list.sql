@@ -1,5 +1,5 @@
 /*
-  Chatly — conversation list RPC
+  Nearside — conversation list RPC
   Run once in the Supabase SQL editor after 0006.
 
   !! SUPERSEDED BY 0011 — DO NOT RE-RUN AFTER 0011 !!

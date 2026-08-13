@@ -1,0 +1,43 @@
+# Canonical apply order.
+#
+# NOT numeric order. 0022b was authored alongside 0022 but could not be applied
+# until the connect-code flow that replaces the directory worked on a device,
+# so it lands after 0025. The number records authorship; this file records
+# application, and it is the order supabase/verify/verify.sh replays.
+#
+# Blank lines and lines starting with # are ignored. storage/setup.sql is
+# applied after 0001 by the script and is not listed here.
+
+0001_init.sql
+0002_push_subscriptions.sql
+0003_reactions_replies.sql
+0004_friendships_realtime.sql
+0005_messages_immutable_participants.sql
+0006_message_receipts.sql
+0007_conversation_list.sql
+0008_invite_codes.sql
+0009_rate_limits.sql
+0010_message_search.sql
+0011_last_seen.sql
+0012_chat_backgrounds.sql
+0013_chat_backgrounds_per_user.sql
+0014_server_side_push.sql
+0015_voice_messages.sql
+0016_friend_nicknames.sql
+0017_self_chat.sql
+0018_forwarded_messages.sql
+0019_open_signup.sql
+0019a_revoke_trigger_function_execute.sql
+0020_identity_keys.sql
+0021_encrypted_bodies.sql
+0022_display_name.sql
+0023_server_stops_reading_bodies.sql
+0024_encrypted_media.sql
+0025_sealed_media_mime.sql
+0022b_no_directory.sql
+0026_rooms.sql
+0027_transparency.sql
+0028_drop_web_push.sql
+0029_disappearing.sql
+0030_theme_grants.sql
+0031_grant_hygiene.sql

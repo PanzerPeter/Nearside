@@ -1,5 +1,5 @@
 /*
-  Chatly — lock message participants on UPDATE
+  Nearside — lock message participants on UPDATE
   Run once in the Supabase SQL editor after 0004.
 
   Why:

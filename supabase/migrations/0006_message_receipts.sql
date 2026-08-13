@@ -1,5 +1,5 @@
 /*
-  Chatly — message delivery & read receipts
+  Nearside — message delivery & read receipts
   Safe to re-run in the Supabase SQL editor after 0005.
 
   Contents:

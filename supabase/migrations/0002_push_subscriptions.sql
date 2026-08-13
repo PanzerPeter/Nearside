@@ -1,5 +1,5 @@
 /*
-  Chatly — Web Push subscriptions
+  Nearside — Web Push subscriptions
   Run once in the Supabase SQL editor (or applied via MCP).
 
   Stores one row per device push endpoint. The `send-push` Edge Function reads

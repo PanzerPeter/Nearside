@@ -1,5 +1,5 @@
 /*
-  Chatly — flood limits
+  Nearside — flood limits
   Run once in the Supabase SQL editor after 0008.
 
   Contents:

@@ -1,5 +1,5 @@
 /*
-  Chatly — voice messages
+  Nearside — voice messages
   Run once in the Supabase SQL editor after 0014.
 
   Adds 'audio' as a third kind of message media, plus the recorded length.

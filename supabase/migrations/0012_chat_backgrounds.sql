@@ -1,5 +1,5 @@
 /*
-  Chatly — per-conversation chat backgrounds
+  Nearside — per-conversation chat backgrounds
   Run once in the Supabase SQL editor after 0011.
 
   Contents:
@@ -19,7 +19,7 @@
       with no window in which a conversation has two.
     - The image itself lives in the existing private `chat-media` bucket under
       the same {uidA}_{uidB} folder the conversation's media already uses, so
-      storage-setup.sql needs no new bucket or policy. The per-conversation
+      storage/setup.sql needs no new bucket or policy. The per-conversation
       media cap trims by walking `messages` rows, never by listing the folder,
       so it will not sweep a background out from under this table.
 

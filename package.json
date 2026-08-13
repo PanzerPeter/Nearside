@@ -13,7 +13,8 @@
     "android:open": "cap open android",
     "ios:sync": "NEARSIDE_NATIVE=1 vite build && cap sync ios",
     "ios:open": "cap open ios",
-    "typecheck": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.worker.json"
+    "typecheck": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.worker.json",
+    "db:verify": "bash supabase/verify/verify.sh"
   },
   "dependencies": {
     "@capacitor-community/media": "^9.1.0",

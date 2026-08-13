@@ -1,5 +1,5 @@
 /*
-  Chatly — invite-gated signup & profile lockdown
+  Nearside — invite-gated signup & profile lockdown
   Run once in the Supabase SQL editor after 0007.
 
   Contents:

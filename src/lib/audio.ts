@@ -19,7 +19,7 @@ export const VOICE_BITRATE = 24_000;
 /**
  * Preference order. Opus first (best quality per byte at speech bitrates),
  * then Safari's MP4/AAC. Every entry's base type must be allowed on the
- * `chat-media` bucket — see supabase/storage-setup.sql.
+ * `chat-media` bucket — see supabase/storage/setup.sql.
  */
 const CANDIDATE_MIMES = [
   'audio/webm;codecs=opus',

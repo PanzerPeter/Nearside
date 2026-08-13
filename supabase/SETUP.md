@@ -1,38 +1,53 @@
-# Supabase setup
+# The live project
 
-Migrations `0001`–`0025`, `0029` and `0030` are live on the project named in `.env`. The project ref
-is deliberately not written down here: it is the API host, it is not rotatable,
-and a public repo is no place to hand out a target for free.
+What is actually deployed, as against [`README.md`](README.md) (what the folder
+is) and [`migrations/README.md`](migrations/README.md) (what each file does).
+The project ref is deliberately not written down here: it is the API host, it is
+not rotatable, and a public repo is no place to hand out a target for free. It
+lives in `.env` and in `supabase/.temp/`, both gitignored.
+
+Anything below that says "confirm with" is a claim this file cannot keep true on
+its own. Run the query before trusting it.
+
+## Migrations
+
+`0001`–`0030`, in the order given by
+[`migrations/apply-order.txt`](migrations/apply-order.txt), are live.
 
 `0001`–`0019a` were replayed onto this project during Plan 1; `0020` onward were
-applied individually and are the ones the migration history table records. The
-`.sql` files are kept for reproducibility, but **later migrations supersede parts
-of earlier ones** — re-running an early file can revert a later one. Every file
-that is dangerous to re-run says so in its header banner. Read it first.
+applied individually and are the ones the platform's migration history records.
 
-The migrations that changed what the server can see, in order:
+**`0031_grant_hygiene.sql` is not applied.** It is two corrections found by
+replaying the folder into a throwaway Postgres (`npm run db:verify`), neither
+reachable from the app:
 
-| File | Effect |
-|------|--------|
-| `0019_open_signup.sql` | dropped the invite gate and `invite_codes`; anyone can register |
-| `0020_identity_keys.sql` | `profiles.public_key` / `signing_key` / `key_updated_at` |
-| `0021_encrypted_bodies.sql` | `messages.ciphertext` / `nonce` alongside the old `content` |
-| `0022_display_name.sql` | `profiles.username` → `display_name`, UNIQUE and format constraints dropped |
-| `0023_server_stops_reading_bodies.sql` | dropped `messages.content` and `search_messages()` |
-| `0024_encrypted_media.sql` | `media_key_ciphertext` / `media_key_nonce` |
-| `0025_sealed_media_mime.sql` | `chat-media` accepts `application/octet-stream` |
-| `0029_disappearing.sql` | `conversation_timers`, `rooms.ttl_seconds`, a trigger-stamped `expires_at`, and a `pg_cron` sweep that hard-deletes expired rows |
-| `0030_theme_grants.sql` | `theme_grants`, readable by its owner and writable by nobody through the API |
+- `conversation_list()` is executable by `anon`. `0022` revoked it; `0023`
+  rebuilt the function with `DROP FUNCTION` — required, because removing
+  `last_message` changes the return type — and the new one was created without
+  a REVOKE, so the default `EXECUTE TO PUBLIC` came back. Not a disclosure: with
+  no JWT `auth.uid()` is NULL, `peers` is empty and the join to `profiles`
+  matches nothing, so an anonymous call returns zero rows. It is an unintended
+  endpoint at `/rest/v1/rpc/conversation_list`, which is the class `0019a`
+  exists to close.
+- `chat_backgrounds`'s primary key is named `chat_backgrounds_pkey1`, because
+  `0013` renamed the pair-shaped table aside before creating the new one beside
+  it. Cosmetic, and the one place a database built from `schema.sql` would
+  legitimately differ from a replay of this folder.
 
-**`0029` is applied**, along with the two things the file itself cannot do:
+Confirm the first before and after applying it:
 
-1. **The `pg_cron` extension** (1.6.4, in `pg_catalog`). Enabled first; the
-   file's functions do not depend on it, but the sweep never runs without it.
-2. **A one-off `cron.schedule` call**, quoted in the comment block at the bottom
-   of the file and deliberately left out of the main body — it fails with a
-   duplicate-jobname error if re-run, which would make the rest of the file
-   unsafe to re-run. Without it the columns and triggers exist and stamp
-   correctly, and nothing is ever deleted.
+```sql
+SELECT has_function_privilege('anon', 'public.conversation_list()', 'EXECUTE')
+       AS should_be_false;
+```
+
+### `0029_disappearing.sql` — applied, plus two things the file cannot do
+
+1. **The `pg_cron` extension** (1.6.4, in `pg_catalog`). The file's functions do
+   not depend on it, but the sweep never runs without it.
+2. **A one-off `cron.schedule` call**, quoted at the bottom of the file and
+   deliberately left out of its body — it fails with a duplicate-jobname error
+   if re-run, which would make the rest of the file unsafe to re-run.
 
 Job `nearside-expire`, `* * * * *`, active. Confirm with:
 
@@ -43,37 +58,26 @@ SELECT status, return_message, start_time FROM cron.job_run_details
  ORDER BY start_time DESC LIMIT 5;
 ```
 
-The two new RPCs show up in the security advisor as `SECURITY DEFINER`
-functions callable by `authenticated`. That is intentional and is the same
-notice `redeem_connect_code` and `rooms_for_me` already carry: going through a
-definer function is what lets the pair be normalized and `set_by` recorded as
-the caller rather than trusted from the client. `expire_messages` and the two
-stamping triggers are revoked from `anon` and `authenticated` and raise no
-notice.
+Without it the columns and triggers exist and stamp `expires_at` correctly, and
+nothing is ever deleted — which is the failure mode that looks like the feature
+working.
 
-## `0030_theme_grants.sql` — applied
+### `0030_theme_grants.sql` — applied, no rows
 
-Adds `theme_grants` plus `grant_theme_packs()` / `revoke_theme_grants()`, so a
-demo or review account can own theme packs nobody paid for. Nothing else depends
-on it: without the table the client's grant read fails and every account falls
-back to whatever RevenueCat says it owns, which is the behaviour that shipped.
-
-Live, with no rows. The file is idempotent and safe to re-run in the SQL editor
-as `postgres`. Per account:
+Lets a demo or review account own theme packs nobody paid for. Nothing else
+depends on it: without the table the client's grant read fails and every account
+falls back to whatever RevenueCat says it owns, which is the behaviour that
+shipped. Idempotent and safe to re-run as `postgres`. Per account:
 
 ```sql
 SELECT public.grant_theme_packs('tester@example.com');   -- all six packs
 SELECT public.revoke_theme_grants('tester@example.com'); -- take them back
 ```
 
-Both functions are `SECURITY DEFINER` and **revoked from `authenticated` and
-`anon`** — they read `auth.users` by email, and a client that could call them
-would be able to award itself the entire catalogue. Unlike the `0029` pair they
-raise no advisor notice at all, because a definer function nobody can execute is
-not reachable through the API. The table grants `SELECT` only, so the app can
-see what it owns and has no write path.
-
-Confirm the lockdown survived a later migration with:
+Both are `SECURITY DEFINER` and revoked from `authenticated` and `anon` — they
+read `auth.users` by email, and a client that could call them would be able to
+award itself the entire catalogue. Confirm the lockdown survived a later
+migration with:
 
 ```sql
 SELECT has_function_privilege('authenticated',
@@ -125,9 +129,8 @@ Always create users through the app; the trigger needs that metadata.
 
 ## Storage
 
-`storage-setup.sql` creates both buckets and their policies. Run it once, after
-`0001`, and note that it carries the same mime list as `0025` — if you edit one,
-edit the other, or re-running the setup script silently reverts the migration.
+[`storage/setup.sql`](storage/setup.sql) creates both buckets and their
+policies. Run it once, after the schema.
 
 - `avatars` — public, 5 MB, image types. Avatars are not sealed.
 - `chat-media` — private, 50 MB, `application/octet-stream` plus image types.
@@ -137,29 +140,41 @@ edit the other, or re-running the setup script silently reverts the migration.
 Policies key `chat-media` off the conversation folder
 (`{sortedUidA}_{sortedUidB}/`), so only the two participants can read or write.
 
-## Edge functions — **none are deployed**
+The mime list appears both here and in `0025_sealed_media_mime.sql`, which used
+to be a standing invitation to edit one and not the other. `npm run db:verify`
+now applies the setup script down both paths and compares the resulting bucket
+rows, so that drift fails instead of shipping.
 
-`list_edge_functions` on this project returned an empty list when this file was
-last checked against it, and the call functions are newer than that check — so
-confirm the live list before trusting this section. Everything in
-`supabase/functions/` is source until deployed:
+## Edge functions
+
+**Deployment state is not recorded here, because this file cannot keep it true.**
+`list_edge_functions` returned an empty list the last time it was checked, and
+the call functions are newer than that check. Confirm before trusting anything
+below:
+
+```bash
+supabase functions list --project-ref "$SUPABASE_PROJECT_REF"
+```
+
+Everything in `supabase/functions/` is source until deployed. `verify_jwt` for
+each is declared in [`config.toml`](config.toml).
 
 - **`delete-account`** — needed. Settings → Danger zone calls it, and the call
   fails until it is deployed. It resolves the caller from their JWT, removes
   their `avatars/{uid}/` objects and every `chat-media` conversation folder they
   participate in, then deletes the `auth.users` row (cascading messages,
-  friendships, reactions, receipts and push subscriptions through
-  `profiles.id`). Storage is cleared before the auth user, because the paths are
-  derived from ids that disappear with the account; a failure after that point
-  leaves the account intact and the call safe to retry.
+  friendships, reactions, receipts and room membership through `profiles.id`).
+  Storage is cleared before the auth user, because the paths are derived from
+  ids that disappear with the account; a failure after that point leaves the
+  account intact and the call safe to retry.
 
   ```bash
   supabase functions deploy delete-account --project-ref "$SUPABASE_PROJECT_REF"
   ```
 
-  It runs with `verify_jwt` on and needs no secrets — `SUPABASE_URL`,
-  `SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY` are injected by the Edge
-  runtime. Test it with a throwaway account: there is no undo and no backup.
+  Needs no secrets — `SUPABASE_URL`, `SUPABASE_ANON_KEY` and
+  `SUPABASE_SERVICE_ROLE_KEY` are injected by the Edge runtime. Test it with a
+  throwaway account: there is no undo and no backup.
 
 - **`call-ring`** — needed for calls to reach a phone that is not already
   showing the app. It resolves the caller from their JWT, checks the two are
@@ -195,45 +210,55 @@ confirm the live list before trusting this section. Everything in
   API token is server-side only — a long-lived TURN secret in the bundle is a
   free relay for anyone who unzips the APK.
 
-- **`send-push`** — the Web Push transport, and probably not worth deploying.
-  `VITE_VAPID_PUBLIC_KEY` is unset in `.env`, so `pushSupported()` is false and
-  the client never subscribes; only the foreground sound and notification path
-  runs. Plan 5 Task 3 replaces this whole transport with OneSignal and deletes
-  `src/lib/vapid.ts`, `src/lib/push.ts` and the service worker's push handlers.
-  Deploy it only if you want background push working before then, in which case
-  it needs `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` (Edge Function secrets only,
-  never the repo) and a plain `mailto:`/`https:` `VAPID_SUBJECT`.
-
-`0014_server_side_push.sql` is applied but inert: `push_config` is empty, so the
-`AFTER INSERT` trigger returns immediately. It exists so delivery does not depend
-on the sender's browser outliving the request. Turning it on means deploying
-`send-push` with `--no-verify-jwt`, setting `PUSH_TRIGGER_SECRET`, and inserting
-a `push_config` row pointing at the function URL with the same secret — in that
-order, and it is also superseded by Plan 5.
+- **`send-push`** — the Web Push transport, superseded by OneSignal and
+  probably not worth deploying. `0028` dropped `push_subscriptions` and the
+  client-side VAPID code is gone, so the only caller left is `0014`'s database
+  trigger. That trigger is applied but inert: `push_config` is empty, so it
+  returns immediately. Turning it on means deploying with `--no-verify-jwt`,
+  setting `PUSH_TRIGGER_SECRET`, and inserting a `push_config` row pointing at
+  the function URL with the same secret — in that order.
 
 ## Security advisors — current state
 
-Nine notices, all understood:
+- **`message_pushes` and `push_config` have RLS enabled with no policies**
+  (INFO). Intentional: both are server-side, reached only by the service role
+  and the trigger. No policy is the lockdown, because RLS with no policy fails
+  closed.
+- **`connect_tokens` likewise.** Reachable only through `mint_connect_code()`
+  and `redeem_connect_code()`, which are `SECURITY DEFINER` and revoked from
+  `anon`. A client that could read the table could enumerate live codes.
+- **`pg_trgm` and `pg_net` live in `public`** (WARN) — where `0010` and `0014`
+  put them. `pg_trgm` is now unused: `0023` dropped both the trigram index and
+  the column it covered. It is kept because moving an extension between schemas
+  on a live project is not worth the risk of the move failing halfway.
+- **`SECURITY DEFINER` functions callable by `authenticated`** (WARN):
+  `redeem_connect_code`, `mint_connect_code`, `rooms_for_me`, `is_room_member`,
+  `is_room_owner`, `set_conversation_timer`, `set_room_timer`,
+  `public_table_names`. Going through a definer function is the point in each
+  case — it is what lets the connect pair be normalized, `set_by` recorded as
+  the caller rather than trusted from the client, and the room-membership policy
+  escape its own recursion.
+- **`rls_auto_enable()` is executable by both client roles** (WARN). It backs
+  the platform's `ensure_rls` event trigger, is owned by `postgres`, and appears
+  in no migration here — it is platform configuration, not ours to revoke.
+- **Leaked-password protection is disabled** (WARN) — see the auth section.
 
-- `message_pushes` and `push_config` have RLS enabled with no policies (INFO).
-  Intentional: both are server-side, reached only by the service role and the
-  trigger. No policy is the lockdown.
-- `pg_trgm` and `pg_net` live in `public` (WARN) — where `0010` and `0014` put
-  them.
-- `search_profiles(text)` is `SECURITY DEFINER` and callable by `anon` and
-  `authenticated` (WARN). That is the point of the function: it reads past the
-  narrowed profile policy on purpose, fenced by a 3-character minimum prefix and
-  a `LIMIT 10`. **Plan 3 Task 6 deletes it** — it is the last piece of stranger
-  discovery, and it survives only until Task 5's connect codes work on a device.
-- `rls_auto_enable()` is likewise executable by both roles (WARN). Worth
-  revoking; it is an event-trigger helper with no reason to be in the API
-  surface.
-- Leaked-password protection is disabled (WARN) — see the auth section.
+Two things deliberately **not** changed:
+
+- The four tables above still carry Supabase's default table grants to `anon`
+  and `authenticated`. `0008` revoked them from `invite_codes` as
+  belt-and-suspenders, and its descendant `connect_tokens` did not inherit that.
+  Revoking now would turn the transparency screen's row count from `0` into
+  `null` (which the screen already handles, and which is arguably more honest)
+  but would also put a permission-denied string into the user's data export
+  where an empty list is today. Not worth it while RLS already fails closed.
+- `conversation_list()` is `SECURITY INVOKER`. It reads past nothing; the
+  existing RLS on `friendships`, `profiles` and `messages` scopes every row.
 
 ## Notes
 
 - Media cleanup is client-side: the newest 20 media per conversation are kept,
-  older files removed on upload and re-checked when a chat opens. Plan 5 replaces
-  this with a server-side sweep.
-- `.env` holds the project URL and publishable key. Keys are not pasted into this
-  file, and secrets never belong in the repo at all.
+  older files removed on upload and re-checked when a chat opens. The
+  disappearing-message sweep (`0029`) is the only server-side deletion.
+- `.env` holds the project URL and publishable key. Keys are not pasted into
+  this file, and secrets never belong in the repo at all.

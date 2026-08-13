@@ -1,5 +1,5 @@
 /*
-  Chatly — chat backgrounds become per-user
+  Nearside — chat backgrounds become per-user
   Run once in the Supabase SQL editor after 0012.
 
   0012 gave each conversation one background that both participants shared.

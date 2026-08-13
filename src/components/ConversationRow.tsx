@@ -56,7 +56,7 @@ export function ConversationRow({
 
   return (
     <button
-      className={`relative w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors ${
+      className={`relative w-full flex items-center gap-3 px-2 py-2.5 rounded-xl transition-colors ${
         selected ? 'bg-primary/15 text-primary' : 'hover:bg-base-content/5 text-base-content'
       }`}
       onClick={onSelect}

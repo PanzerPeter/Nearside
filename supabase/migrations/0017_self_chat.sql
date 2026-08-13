@@ -1,5 +1,5 @@
 /*
-  Chatly — the conversation with yourself
+  Nearside — the conversation with yourself
   Run once in the Supabase SQL editor after 0016. Re-runnable.
 
   What this is:

@@ -161,13 +161,24 @@ npm run dev
 
 Then, on the Supabase side:
 
-1. **Apply the migrations** by hand in the SQL editor, in the order given in
-   [`supabase/SETUP.md`](supabase/SETUP.md). Two warnings that cost real time:
-   **apply order is not numeric order** (`0022b_no_directory.sql` goes after
-   `0025`), and later files supersede parts of earlier ones, so re-running an
-   early file can revert a later one. Every dangerous file says so in its header
-   banner. Finish with `supabase/storage-setup.sql` for the `avatars` and
-   `chat-media` buckets.
+1. **Build the schema.** On a fresh project, run
+   [`supabase/schema.sql`](supabase/schema.sql) then
+   [`supabase/storage/setup.sql`](supabase/storage/setup.sql) in the SQL editor
+   — one file for the whole database, with no dead columns and nothing to
+   replay in the right order.
+
+   To bring an *existing* project forward instead, apply
+   [`supabase/migrations/`](supabase/migrations/) by hand in the order given by
+   `apply-order.txt`, and read
+   [`supabase/migrations/README.md`](supabase/migrations/README.md) first. Two
+   warnings that cost real time: **apply order is not numeric order**
+   (`0022b_no_directory.sql` goes after `0025`), and later files supersede parts
+   of earlier ones, so re-running an early file can revert a later one.
+
+   `npm run db:verify` proves the two paths produce the same database, by
+   building both in a throwaway Postgres container and diffing their catalogs.
+   It needs Docker and nothing else, and is the safe place to dry-run a new
+   migration before pasting it into an editor with no undo.
 2. **Authentication → URL Configuration**: add your site URL and a `/*` redirect
    so password-reset links come back. For native builds add both deep links to
    **Additional Redirect URLs**. GoTrue rejects any `redirect_to` not on the
@@ -250,8 +261,11 @@ src/
                 interleavings, as pure functions), warmup.ts (capture that
                 starts before the call needs it)
 supabase/
-  migrations/   Applied by hand. Read each header banner first
+  schema.sql    The whole database as it stands. One file, for a fresh project
+  migrations/   How it got there. Applied by hand, in apply-order.txt's order
+  storage/      Buckets and their policies
   functions/    send-push, delete-account, call-ring, call-ice (Deno)
+  verify/       npm run db:verify — replays both paths and diffs them
 android/        Capacitor shell, the mature target
 ios/            Capacitor shell, configured but never compiled
 ```

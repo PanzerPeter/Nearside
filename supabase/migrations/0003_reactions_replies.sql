@@ -1,5 +1,5 @@
 /*
-  Chatly — reactions + replies
+  Nearside — reactions + replies
   Run once in the Supabase SQL editor after 0002.
 
   Contents:

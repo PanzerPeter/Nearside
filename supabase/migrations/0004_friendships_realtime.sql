@@ -1,5 +1,5 @@
 /*
-  Chatly — friendships realtime
+  Nearside — friendships realtime
   Run once in the Supabase SQL editor after 0003.
 
   Contents:

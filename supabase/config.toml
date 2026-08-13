@@ -1,0 +1,46 @@
+# Supabase CLI configuration.
+#
+# Scope: this file exists for `supabase functions deploy`, and for nothing else.
+# Schema changes go through the SQL editor by hand (see migrations/README.md),
+# and the local `supabase start` stack is not used — `npm run db:verify` covers
+# what it would have been used for, with one Postgres container instead of ten
+# services.
+#
+# `project_id` is a local label used to name Docker resources. It is not the
+# project ref: the ref is the API host, it is not rotatable, and a public repo
+# is no place to hand out a target for free. `supabase link --project-ref` keeps
+# it in supabase/.temp/, which is gitignored.
+
+project_id = "nearside"
+
+# ---------------------------------------------------------------------------
+# Edge functions
+#
+# `verify_jwt` is the whole authentication story for three of these four: they
+# resolve the caller from the token the gateway has already checked, and none
+# of them accepts a user id as an argument. See SETUP.md for what each needs in
+# the way of secrets, and which are actually deployed.
+# ---------------------------------------------------------------------------
+
+# Deletes the caller's storage objects, then their auth.users row. No undo and
+# no backup — everything else cascades off profiles.id.
+[functions.delete-account]
+verify_jwt = true
+
+# Wakes a locked phone for an incoming call. Sends a caller id, a display name,
+# a call id and voice/video — nothing else, because there is nothing else about
+# a call the server holds.
+[functions.call-ring]
+verify_jwt = true
+
+# Mints short-lived Cloudflare TURN credentials, one set per call. A long-lived
+# TURN secret inside the APK would be a free relay for anyone who unzips it.
+[functions.call-ice]
+verify_jwt = true
+
+# The older Web Push transport, called by a database trigger rather than by a
+# signed-in user — so there is no JWT to verify, and `PUSH_TRIGGER_SECRET` in a
+# header is what authenticates the caller instead. Superseded by OneSignal and
+# not currently deployed.
+[functions.send-push]
+verify_jwt = false

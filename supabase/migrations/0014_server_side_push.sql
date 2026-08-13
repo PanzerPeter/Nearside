@@ -1,5 +1,5 @@
 /*
-  Chatly — server-side push delivery
+  Nearside — server-side push delivery
   Run once in the Supabase SQL editor after 0013. See supabase/SETUP.md.
 
   Why:

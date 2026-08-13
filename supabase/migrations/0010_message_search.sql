@@ -1,5 +1,5 @@
 /*
-  Chatly — message search
+  Nearside — message search
   Run once in the Supabase SQL editor after 0009.
 
   Contents:

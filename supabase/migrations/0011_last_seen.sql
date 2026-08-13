@@ -1,5 +1,5 @@
 /*
-  Chatly — persisted last-seen
+  Nearside — persisted last-seen
   Run once in the Supabase SQL editor after 0010.
 
   Realtime presence is ephemeral: it says whether someone is connected right

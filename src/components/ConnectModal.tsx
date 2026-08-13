@@ -20,6 +20,11 @@ interface ConnectModalProps {
   session: Session;
   identity: Identity;
   onClose: () => void;
+  /** Which side of the exchange the caller is offering. Defaults to showing a
+   *  code; the first-run card opens straight onto the camera when the user
+   *  picked "Scan", since landing on the wrong tab costs a tap at exactly the
+   *  moment two people are holding phones up at each other. */
+  initialTab?: Tab;
 }
 
 type Tab = 'show' | 'scan';
@@ -33,8 +38,8 @@ type Tab = 'show' | 'scan';
  * gesture that adds them; a code typed from memory cannot, and lands as an
  * ordinary unverified contact.
  */
-export function ConnectModal({ session, identity, onClose }: ConnectModalProps) {
-  const [tab, setTab] = useState<Tab>('show');
+export function ConnectModal({ session, identity, onClose, initialTab = 'show' }: ConnectModalProps) {
+  const [tab, setTab] = useState<Tab>(initialTab);
   const toast = useToast();
 
   return (

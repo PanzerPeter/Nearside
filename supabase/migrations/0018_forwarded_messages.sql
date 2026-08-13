@@ -1,5 +1,5 @@
 /*
-  Chatly — forwarded messages
+  Nearside — forwarded messages
   Run once in the Supabase SQL editor after 0017. Re-runnable.
 
   What this is:

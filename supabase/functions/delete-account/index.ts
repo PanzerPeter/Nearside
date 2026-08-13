@@ -72,7 +72,7 @@ type StorageClient = ReturnType<typeof createClient>["storage"];
  * `folder.includes(uid)`. A substring test widens the match to anything that
  * merely embeds the id, and this deletes the other participant's media with no
  * undo. The two-segment shape is required too, so a malformed folder name
- * cannot be swept in. Mirrors the split_part() check in storage-setup.sql.
+ * cannot be swept in. Mirrors the split_part() check in storage/setup.sql.
  *
  * This file is Deno and sits outside tsconfig, eslint and vitest, so nothing
  * here is checked by the gate. `isConversationFolder` in
