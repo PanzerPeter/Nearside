@@ -41,3 +41,4 @@
 0029_disappearing.sql
 0030_theme_grants.sql
 0031_grant_hygiene.sql
+0032_sealed_exchange.sql

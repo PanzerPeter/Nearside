@@ -6,7 +6,9 @@ import { StatusDot, presenceLabels } from './StatusDot';
 import { formatLastSeen } from '../lib/time';
 import {
   ArrowLeft,
+  CalendarClock,
   Image as ImageIcon,
+  Lock,
   MoreVertical,
   NotebookPen,
   Pencil,
@@ -42,6 +44,10 @@ interface ChatHeaderProps {
   onToggleSearch: () => void;
   onOpenVerify: () => void;
   onOpenBackground: () => void;
+  /** Open the sealed-question composer. Never reached in the self-chat. */
+  onAskSealed: () => void;
+  /** Open the dates-and-links panel for this conversation. */
+  onOpenPanel: () => void;
   /** The conversation's timer, or null when there has never been one. Either
    *  participant may change it; `setBy` is who did last. */
   timer: ConversationTimer | null;
@@ -75,6 +81,8 @@ export function ChatHeader({
   onToggleSearch,
   onOpenVerify,
   onOpenBackground,
+  onAskSealed,
+  onOpenPanel,
   timer,
   onSetTimer,
   onCall,
@@ -212,6 +220,40 @@ export function ChatHeader({
           tabIndex={0}
           className="dropdown-content menu bg-base-100 rounded-box z-30 w-72 p-2 shadow"
         >
+          {/* First in the menu because it is the one entry here that does
+              something rather than configures something. Absent in the
+              self-chat: an exchange with yourself has nothing to withhold, and
+              the CHECK constraint on `sealed_prompt` refuses the row anyway. */}
+          {!isSelf && (
+            <li>
+              <button
+                onClick={() => {
+                  closeMenu();
+                  onAskSealed();
+                }}
+                disabled={!peerKey}
+              >
+                <Lock className="w-4 h-4" />
+                Ask a sealed question
+              </button>
+            </li>
+          )}
+          {/* Beside the sealed question rather than under the settings below:
+              both are things to do with the conversation, and this one is the
+              way back into what was already said in it. Present in the
+              self-chat too — notes collect links and dates like any other
+              conversation. */}
+          <li>
+            <button
+              onClick={() => {
+                closeMenu();
+                onOpenPanel();
+              }}
+            >
+              <CalendarClock className="w-4 h-4" />
+              In this conversation
+            </button>
+          </li>
           {!isSelf && (
             <li>
               <button

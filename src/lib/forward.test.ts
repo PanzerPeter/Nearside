@@ -30,6 +30,7 @@ function message(overrides: Partial<Message> = {}): Message {
     media_duration_ms: null,
     reply_to_id: null,
     forwarded: false,
+    sealed_prompt: false,
     edited_at: null,
     deleted_at: null,
     expires_at: null,

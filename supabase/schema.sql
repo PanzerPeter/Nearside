@@ -424,6 +424,10 @@ CREATE TABLE IF NOT EXISTS public.messages (
   media_key_ciphertext text,
   media_key_nonce      text,
   forwarded            boolean NOT NULL DEFAULT false,
+  -- This row is a sealed exchange's question (section 5c). Immutable in both
+  -- directions: a row flipped into a prompt after the fact, or out of one,
+  -- would change what the answers beneath it were answering.
+  sealed_prompt        boolean NOT NULL DEFAULT false,
   edited_at            timestamptz,
   deleted_at           timestamptz,
   expires_at           timestamptz,
@@ -450,6 +454,15 @@ CREATE TABLE IF NOT EXISTS public.messages (
   CONSTRAINT media_duration_range CHECK (
     media_duration_ms IS NULL
     OR (media_type = 'audio' AND media_duration_ms > 0 AND media_duration_ms <= 120000)
+  ),
+
+  -- A question is text and only text. The file key rides in the row, so an
+  -- attachment would open the moment the prompt did — a prompt that reveals
+  -- half of itself early is worse than no prompt. The self-chat is excluded
+  -- for the obvious reason: an exchange with yourself withholds nothing.
+  CONSTRAINT sealed_prompt_shape CHECK (
+    NOT sealed_prompt
+    OR (ciphertext IS NOT NULL AND media_path IS NULL AND user_id <> receiver_id)
   )
 );
 
@@ -515,7 +528,7 @@ CREATE POLICY "messages_delete_sender" ON public.messages
   later being repointed at a stranger.
 
   `forwarded` is frozen alongside them: provenance that can be edited
-  afterwards is not provenance.
+  afterwards is not provenance. `sealed_prompt` too — see section 5c.
 */
 CREATE OR REPLACE FUNCTION public.messages_prevent_reassign()
 RETURNS trigger
@@ -529,6 +542,9 @@ BEGIN
   END IF;
   IF NEW.forwarded IS DISTINCT FROM OLD.forwarded THEN
     RAISE EXCEPTION 'messages.forwarded is immutable';
+  END IF;
+  IF NEW.sealed_prompt IS DISTINCT FROM OLD.sealed_prompt THEN
+    RAISE EXCEPTION 'messages.sealed_prompt is immutable';
   END IF;
   RETURN NEW;
 END;
@@ -714,6 +730,167 @@ DROP TRIGGER IF EXISTS message_receipts_monotonic ON public.message_receipts;
 CREATE TRIGGER message_receipts_monotonic
   BEFORE INSERT OR UPDATE ON public.message_receipts
   FOR EACH ROW EXECUTE FUNCTION public.receipts_monotonic();
+
+-- ---------------------------------------------------------------------------
+-- 5c. Sealed exchange
+-- ---------------------------------------------------------------------------
+
+/*
+  A question whose answers stay unreadable to both sides until both sides have
+  answered.
+
+  A fair exchange between two parties who do not trust each other is impossible
+  without a referee: whoever reads second can always read and then walk away.
+  So there is a referee, and it is this database, and the whole design exists so
+  that the referee learns nothing. It holds two ciphertexts it cannot open and
+  arbitrates one thing — the order in which they are handed out.
+
+  The question itself is an ordinary `messages` row carrying `sealed_prompt`,
+  sealed to the peer like any other body: both sides read it immediately, which
+  is what makes it a question rather than a puzzle.
+
+  Nothing in the client enforces the withholding. It cannot: this repository is
+  public, and a check that lives in the app is a check anyone can delete.
+
+  The limit worth stating plainly, because SECURITY.md states it too: you can
+  answer with nonsense to force the reveal. What stops that being free is that
+  the nonsense is immutable and stays in the thread under your name.
+*/
+
+CREATE TABLE IF NOT EXISTS public.sealed_answers (
+  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  prompt_id  uuid NOT NULL REFERENCES public.messages(id) ON DELETE CASCADE,
+  user_id    uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  ciphertext text NOT NULL,
+  nonce      text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+
+  -- One answer each. Without it the INSERT policy would let a participant
+  -- stack answers, and "which one is theirs" has no good answer.
+  CONSTRAINT sealed_answers_one_each UNIQUE (prompt_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS sealed_answers_prompt_idx
+  ON public.sealed_answers (prompt_id);
+
+/*
+  SECURITY DEFINER because the SELECT policy on `sealed_answers` has to ask a
+  question about `sealed_answers`. Written inline as an EXISTS it recurses:
+  evaluating the policy runs the subquery, which evaluates the policy. A
+  definer-rights function is not subject to RLS and so terminates.
+
+  It answers one bit — "has this person answered this prompt" — and that bit is
+  already implied by what the caller can see, so granting it costs nothing.
+*/
+CREATE OR REPLACE FUNCTION public.has_answered(prompt uuid, who uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.sealed_answers a
+    WHERE a.prompt_id = prompt AND a.user_id = who
+  );
+$$;
+
+REVOKE ALL ON FUNCTION public.has_answered(uuid, uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.has_answered(uuid, uuid) TO authenticated;
+
+ALTER TABLE public.sealed_answers ENABLE ROW LEVEL SECURITY;
+
+/*
+  The feature, in four lines.
+
+  Your own answer is always yours: the client needs it to render your side
+  while it waits. Anyone else's is released only once you have committed one of
+  your own. A non-participant satisfies neither branch — they cannot hold an
+  answer row at all, so `has_answered` is false for them.
+*/
+DROP POLICY IF EXISTS "sealed_answers_select_after_own" ON public.sealed_answers;
+CREATE POLICY "sealed_answers_select_after_own" ON public.sealed_answers
+  FOR SELECT TO authenticated
+  USING (
+    user_id = (select auth.uid())
+    OR public.has_answered(prompt_id, (select auth.uid()))
+  );
+
+/*
+  You may answer a live prompt in a conversation you are part of, as yourself.
+
+  `deleted_at IS NULL` is what makes cancelling final. Cancelling goes through
+  the ordinary delete path, which tombstones the row; a tombstoned prompt can
+  no longer be answered, so the asker's own answer can never be unlocked after
+  they withdrew the question.
+*/
+DROP POLICY IF EXISTS "sealed_answers_insert_participant" ON public.sealed_answers;
+CREATE POLICY "sealed_answers_insert_participant" ON public.sealed_answers
+  FOR INSERT TO authenticated
+  WITH CHECK (
+    user_id = (select auth.uid())
+    AND EXISTS (
+      SELECT 1 FROM public.messages m
+      WHERE m.id = prompt_id
+        AND m.sealed_prompt
+        AND m.deleted_at IS NULL
+        AND m.user_id <> m.receiver_id
+        AND (select auth.uid()) IN (m.user_id, m.receiver_id)
+    )
+  );
+
+/*
+  No UPDATE and no DELETE, as policies or as grants. Immutability is half the
+  protocol: an answer that can be edited after the reveal was not committed
+  before it, and one that can be withdrawn lets the second player read and then
+  take the reveal back. Rows still disappear with their prompt — a cascade runs
+  as the table owner and is not subject to RLS.
+*/
+REVOKE ALL ON public.sealed_answers FROM anon;
+REVOKE ALL ON public.sealed_answers FROM authenticated;
+GRANT SELECT, INSERT ON public.sealed_answers TO authenticated;
+
+/*
+  Asking is two inserts, and the gap between them is a real state: the question
+  exists and the asker has not answered it. The peer could answer into that gap,
+  unlocking nothing and being left with a permanent answer to a question whose
+  other half never arrived.
+
+  SECURITY INVOKER, deliberately — every policy above still applies, the rate
+  limit still fires, the expiry trigger still stamps. All this buys is that both
+  rows land or neither does. The id comes from the client, as the outbox's do,
+  so a retry after a lost response collides on the primary key rather than
+  asking twice.
+*/
+CREATE OR REPLACE FUNCTION public.ask_sealed(
+  prompt_id         uuid,
+  receiver          uuid,
+  prompt_ciphertext text,
+  prompt_nonce      text,
+  answer_ciphertext text,
+  answer_nonce      text
+)
+RETURNS public.messages
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = ''
+AS $$
+DECLARE
+  msg public.messages;
+BEGIN
+  INSERT INTO public.messages (id, user_id, receiver_id, ciphertext, nonce, sealed_prompt)
+  VALUES (prompt_id, (select auth.uid()), receiver, prompt_ciphertext, prompt_nonce, true)
+  RETURNING * INTO msg;
+
+  INSERT INTO public.sealed_answers (prompt_id, user_id, ciphertext, nonce)
+  VALUES (msg.id, (select auth.uid()), answer_ciphertext, answer_nonce);
+
+  RETURN msg;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.ask_sealed(uuid, uuid, text, text, text, text) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.ask_sealed(uuid, uuid, text, text, text, text) TO authenticated;
 
 -- ===========================================================================
 -- 6. Private per-user settings
@@ -1656,7 +1833,11 @@ BEGIN
     'chat_backgrounds',
     'friend_nicknames',
     'room_messages',
-    'room_participants'
+    'room_participants',
+    -- INSERT events only, which carry the new record, so the SELECT policy can
+    -- be evaluated against it and REPLICA IDENTITY FULL is unnecessary. The
+    -- event that matters is the peer's answer landing: both sides open on it.
+    'sealed_answers'
   ] LOOP
     IF NOT EXISTS (
       SELECT 1 FROM pg_publication_tables

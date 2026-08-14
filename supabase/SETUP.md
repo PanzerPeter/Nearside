@@ -11,11 +11,24 @@ its own. Run the query before trusting it.
 
 ## Migrations
 
-`0001`–`0030`, in the order given by
-[`migrations/apply-order.txt`](migrations/apply-order.txt), are live.
+`0001`–`0030` and `0032`, in the order given by
+[`migrations/apply-order.txt`](migrations/apply-order.txt), are live. `0031` is
+the one gap, described below.
 
 `0001`–`0019a` were replayed onto this project during Plan 1; `0020` onward were
 applied individually and are the ones the platform's migration history records.
+
+`0032_sealed_exchange.sql` is applied. It adds `sealed_answers`,
+`messages.sealed_prompt`, the `has_answered()` helper the SELECT policy needs,
+and the `ask_sealed()` RPC. Confirm with:
+
+```sql
+SELECT to_regclass('public.sealed_answers') IS NOT NULL AS table_live,
+       (SELECT count(*) FROM pg_policies WHERE tablename = 'sealed_answers') AS policies;
+```
+
+Two policies, SELECT and INSERT. There is deliberately no UPDATE policy and no
+UPDATE grant — an editable answer would defeat the protocol.
 
 **`0031_grant_hygiene.sql` is not applied.** It is two corrections found by
 replaying the folder into a throwaway Postgres (`npm run db:verify`), neither

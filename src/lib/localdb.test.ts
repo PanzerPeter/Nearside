@@ -1,5 +1,12 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { cacheMessage, cachedPreview, clearLocalDb, openLocalDb, searchCached } from './localdb';
+import {
+  cacheMessage,
+  cachedConversation,
+  cachedPreview,
+  clearLocalDb,
+  openLocalDb,
+  searchCached,
+} from './localdb';
 
 const PEER = '22222222-2222-2222-2222-222222222222';
 const ME = '11111111-1111-1111-1111-111111111111';
@@ -81,6 +88,34 @@ describe('local store', () => {
       await clearLocalDb();
       await openLocalDb(ME);
       expect((await cachedPreview(PEER))?.text).toBe('mine');
+    });
+  });
+
+  describe('cachedConversation', () => {
+    it('returns every cached message in the conversation, newest first', async () => {
+      await cacheMessage(msg('a', 'first', '2026-08-06T10:00:00Z'));
+      await cacheMessage(msg('b', 'second', '2026-08-06T11:00:00Z'));
+      const rows = await cachedConversation(PEER);
+      expect(rows.map((r) => r.text)).toEqual(['second', 'first']);
+    });
+
+    it('scopes to one conversation', async () => {
+      await cacheMessage(msg('a', 'ours', '2026-08-06T10:00:00Z'));
+      await cacheMessage({ ...msg('b', 'theirs', '2026-08-06T11:00:00Z'), peer_id: 'other' });
+      expect((await cachedConversation(PEER)).map((r) => r.text)).toEqual(['ours']);
+    });
+
+    it('caps how much it reads back', async () => {
+      for (let i = 0; i < 5; i++) {
+        await cacheMessage(msg(`m${i}`, `line ${i}`, `2026-08-06T1${i}:00:00Z`));
+      }
+      expect(await cachedConversation(PEER, 2)).toHaveLength(2);
+    });
+
+    it('does not show one account another account’s conversation', async () => {
+      await cacheMessage(msg('a', 'private to me', '2026-08-06T10:00:00Z'));
+      await openLocalDb(OTHER_ACCOUNT);
+      expect(await cachedConversation(PEER)).toEqual([]);
     });
   });
 });

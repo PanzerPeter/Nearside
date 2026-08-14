@@ -102,6 +102,20 @@ export function SecurityLimits({ onClose }: SecurityLimitsProps) {
         <section className="rounded-xl border border-base-content/10 bg-base-200/40 p-3.5">
           <h4 className="flex items-center gap-2 font-medium text-sm">
             <Lock className="w-4 h-4 text-base-content/60" />
+            A sealed answer can be forced open with a junk one
+          </h4>
+          <p className="text-sm text-base-content/75 leading-relaxed mt-2">
+            Neither side&rsquo;s answer is released until both have answered, and the server enforces
+            that without being able to read either one. What it cannot check is whether an answer is
+            sincere: somebody who only wants to see yours can type anything and get it. The cost is
+            that their answer is permanent &mdash; answers cannot be edited or withdrawn once sent
+            &mdash; and it stays in the conversation with their name on it.
+          </p>
+        </section>
+
+        <section className="rounded-xl border border-base-content/10 bg-base-200/40 p-3.5">
+          <h4 className="flex items-center gap-2 font-medium text-sm">
+            <Lock className="w-4 h-4 text-base-content/60" />
             The app lock is not encryption
           </h4>
           <p className="text-sm text-base-content/75 leading-relaxed mt-2">

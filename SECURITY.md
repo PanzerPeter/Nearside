@@ -76,6 +76,27 @@ transparency screen and in [README.md](README.md#where-the-protection-stops):
   construction.
 - **Notifications** carry a sender and never content. Not as a policy: after
   `0023` the push function has no body it could leak.
+- **Sealed exchange.** A question whose two answers are released only once both
+  exist. Fair exchange between parties who distrust each other is impossible
+  without a referee, so there is one — the RLS policy on `sealed_answers`
+  (`schema.sql` section 5c) — and it holds two ciphertexts it cannot open. The
+  withholding is not enforced anywhere in the client, deliberately: this
+  repository is public, and a check that lives in the app is a check anyone can
+  delete.
+
+  Its limit, stated rather than implied away: you can answer with nonsense to
+  force the reveal. Nothing prevents that. What it costs is that the nonsense is
+  immutable — there is no UPDATE policy and no UPDATE grant — and stays in the
+  thread under your name. A compromised server could also release your answer
+  early, which would let the other side read before writing; it could not let
+  them change what they wrote, and it still cannot read either answer.
+
+- **"In this conversation"** extracts dates and links from the decrypted copy in
+  the device's own SQLite mirror (`src/lib/localdb.ts`, one file per account).
+  No network call is made to build it and nothing about it is uploaded — there
+  is nothing to upload it to, since the server holds no bodies. It is a second
+  reader of plaintext already at rest on the device, so it inherits exactly the
+  exposure that mirror already has, and nothing more.
 
 Two tests are load-bearing and should be treated as part of the product's
 claims, not as coverage: `src/lib/no-plaintext.test.ts` (no body ever reaches an

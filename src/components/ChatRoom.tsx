@@ -10,9 +10,11 @@ import { formatDisplayName, useNickname } from '../lib/nicknames';
 import { tapSend, tapSuccess } from '../lib/haptics';
 import { Composer, ComposerHandle } from './Composer';
 import { ConversationSearch } from './ConversationSearch';
+import { ConversationPanel } from './ConversationPanel';
 import { ChatBackgroundModal } from './ChatBackgroundModal';
 import { NicknameModal } from './NicknameModal';
 import { ForwardModal } from './ForwardModal';
+import { AskSealedModal } from './AskSealedModal';
 import { VerifyContact } from './VerifyContact';
 import { ChatHeader } from './ChatHeader';
 import { MessageThread } from './MessageThread';
@@ -26,6 +28,7 @@ import { useChatThread } from '../hooks/useChatThread';
 import { usePeerTrust } from '../hooks/usePeerTrust';
 import { useMediaSend } from '../hooks/useMediaSend';
 import { useMessageEditing } from '../hooks/useMessageEditing';
+import { useSealedExchange } from '../hooks/useSealedExchange';
 import { useCall } from '../hooks/useCall';
 import { isEngaged } from '../lib/call/state';
 
@@ -62,9 +65,13 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
   const [newMessage, setNewMessage] = useState('');
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
+  // Docked in the same slot as the search panel, so only one of them is open:
+  // two stacked panels would push the thread off a phone screen entirely.
+  const [panelOpen, setPanelOpen] = useState(false);
   const [backgroundOpen, setBackgroundOpen] = useState(false);
   const [nicknameOpen, setNicknameOpen] = useState(false);
   const [verifyOpen, setVerifyOpen] = useState(false);
+  const [askSealedOpen, setAskSealedOpen] = useState(false);
   // The message whose "Forward" was chosen, and so the one the picker will
   // copy. Null when the picker is closed.
   const [forwarding, setForwarding] = useState<Message | null>(null);
@@ -117,6 +124,18 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
   const call = useCall();
 
   const editing = useMessageEditing({ me, peerId: friend.id, identity, onError: toast.error });
+
+  // Sealed exchanges live beside the thread rather than in it: the answers are
+  // a different table with a different visibility rule, released by policy
+  // only once this account has committed one of its own.
+  const sealed = useSealedExchange({
+    me,
+    peerId: friend.id,
+    identity,
+    isSelf,
+    messages: thread.messages,
+    onError: toast.error,
+  });
   // Read out once so the composer's save callback closes over a `string` rather
   // than the nullable field.
   const editingId = editing.editingId;
@@ -164,9 +183,17 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
         searchOpen={searchOpen}
         onBack={onBack}
         onOpenNickname={() => setNicknameOpen(true)}
-        onToggleSearch={() => setSearchOpen((open) => !open)}
+        onToggleSearch={() => {
+          setPanelOpen(false);
+          setSearchOpen((open) => !open);
+        }}
         onOpenVerify={() => setVerifyOpen(true)}
         onOpenBackground={() => setBackgroundOpen(true)}
+        onAskSealed={() => setAskSealedOpen(true)}
+        onOpenPanel={() => {
+          setSearchOpen(false);
+          setPanelOpen(true);
+        }}
         timer={thread.timer}
         onSetTimer={(seconds) => void thread.changeTimer(seconds)}
         onCall={(kind) => call.placeCall(friend, kind)}
@@ -210,6 +237,20 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
         />
       )}
 
+      {askSealedOpen && (
+        <AskSealedModal
+          peerLabel={peerLabel}
+          busy={sealed.busy.size > 0}
+          onAsk={(question, answer) => {
+            void tapSend();
+            void sealed.ask(question, answer).then((row) => {
+              if (row) setAskSealedOpen(false);
+            });
+          }}
+          onClose={() => setAskSealedOpen(false)}
+        />
+      )}
+
       {nicknameOpen && (
         <NicknameModal
           me={me}
@@ -235,6 +276,22 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
         />
       )}
 
+      {panelOpen && (
+        <ConversationPanel
+          key={friend.id}
+          peerId={friend.id}
+          me={me}
+          peerLabel={peerLabel}
+          isSelf={isSelf}
+          revision={thread.messages.length}
+          onJump={(messageId, createdAt) => {
+            setPanelOpen(false);
+            void thread.jumpToMessage(messageId, createdAt);
+          }}
+          onClose={() => setPanelOpen(false)}
+        />
+      )}
+
       <MessageThread
         me={me}
         peerLabel={peerLabel}
@@ -251,6 +308,12 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
         timerChange={describeTimerChange(thread.timer, me, peerLabel)}
         editingId={editing.editingId}
         editingText={editing.editingText}
+        sealedAnswers={sealed.answers}
+        sealedBusy={sealed.busy}
+        onAnswerSealed={(promptId, text) => {
+          void tapSend();
+          void sealed.answer(promptId, text);
+        }}
         isAlreadySeen={thread.isAlreadySeen}
         onLoadOlder={() => void thread.loadOlder()}
         onToggleReaction={toggle}

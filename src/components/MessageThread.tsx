@@ -6,6 +6,8 @@ import { timerChangeIndex, type TimerChange } from '../lib/disappearing';
 import type { ReplyTargets } from '../hooks/useReplyTargets';
 import type { ThreadScroll } from '../hooks/useThreadScroll';
 import { MessageBubble } from './MessageBubble';
+import { SealedExchange } from './SealedExchange';
+import type { OpenedAnswer } from '../lib/sealed-exchange';
 import { ChevronDown, Timer } from 'lucide-react';
 
 /** Group consecutive messages from the same sender within this window. */
@@ -35,6 +37,12 @@ interface MessageThreadProps {
   timerChange: TimerChange | null;
   editingId: string | null;
   editingText: string;
+  /** Answers to the sealed questions in this thread, by prompt id — only the
+   *  ones the server has released to this account. */
+  sealedAnswers: Map<string, OpenedAnswer[]>;
+  /** Prompt ids with a write in flight. */
+  sealedBusy: Set<string>;
+  onAnswerSealed: (promptId: string, text: string) => void;
   /** False for a message that was on screen before this conversation's first
    *  paint, which is what keeps opening a chat from cascading the entrance
    *  animation across every message in it. */
@@ -92,6 +100,9 @@ export function MessageThread({
   timerChange,
   editingId,
   editingText,
+  sealedAnswers,
+  sealedBusy,
+  onAnswerSealed,
   isAlreadySeen,
   onLoadOlder,
   onToggleReaction,
@@ -215,6 +226,22 @@ export function MessageThread({
                   </div>
                 )}
                 {timerChange && noticeIndex === i && <TimerNotice label={timerChange.label} />}
+                {/* A sealed exchange is a two-sided object with a state, not
+                    something one person said, so it takes the whole width
+                    instead of hanging off the asker's edge. */}
+                {msg.sealed_prompt ? (
+                  <SealedExchange
+                    msg={msg}
+                    me={me}
+                    peerLabel={peerLabel}
+                    isOwn={isOwn}
+                    answers={sealedAnswers.get(msg.id) ?? []}
+                    busy={sealedBusy.has(msg.id)}
+                    onAnswer={onAnswerSealed}
+                    onCancel={onDelete}
+                    formatTime={formatTime}
+                  />
+                ) : (
                 <MessageBubble
                   msg={msg}
                   isOwn={isOwn}
@@ -244,6 +271,7 @@ export function MessageThread({
                   onDelete={onDelete}
                   formatTime={formatTime}
                 />
+                )}
               </div>
             );
           })}

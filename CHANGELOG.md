@@ -12,6 +12,20 @@ app, with the reason where the reason is the interesting part.
 
 ### Added
 
+- **"In this conversation".** A panel behind the chat header listing the dates
+  somebody named and the links somebody sent, each row jumping to the message it
+  came from. Built by reading the decrypted copy already on this device — the
+  server has no message bodies to index — so nothing is uploaded to produce it,
+  and a conversation this device has never opened is honestly reported as empty
+  rather than silently so.
+- **Sealed exchange.** Ask a question and commit your own answer to it; neither
+  side can read the other's until both have answered, and then both open at
+  once. The withholding is a row-level policy on the server, not a check in the
+  app — this repository is public, and a client-side check is one anyone can
+  delete. The server holds two ciphertexts it cannot open and arbitrates only
+  the order they are handed out in. Answers cannot be edited or withdrawn once
+  sent, which is what stops reading first and revising after; a question can be
+  withdrawn while it is still unanswered.
 - **Voice and video calls.** Peer-to-peer WebRTC, answerable from the lock
   screen of a phone whose app the system has killed. SDP and ICE candidates are
   both sealed, and broadcast signalling leaves no row, so there is no record

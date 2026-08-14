@@ -139,8 +139,10 @@ export function pendingAsMessage(msg: PendingMessage): Message {
     media_duration_ms: null,
     reply_to_id: msg.reply_to_id,
     // The outbox only ever queues typed text; a forward is inserted directly
-    // by the forward picker and never passes through here.
+    // by the forward picker and never passes through here, and a sealed
+    // question is written by an RPC that has to be online to run at all.
     forwarded: false,
+    sealed_prompt: false,
     edited_at: null,
     deleted_at: null,
     // Not stamped yet: the trigger runs on insert, and this row has not reached

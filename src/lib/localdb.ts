@@ -54,6 +54,7 @@ const NEWEST_FIRST = (a: CachedMessage, b: CachedMessage) =>
   a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : 0;
 
 const SEARCH_LIMIT = 100;
+const CONVERSATION_LIMIT = 1000;
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS messages_cache (
@@ -213,6 +214,30 @@ export async function searchCached(peerId: string, query: string): Promise<Cache
      WHERE peer_id = ? AND text LIKE ? ESCAPE '\\'
      ORDER BY created_at DESC LIMIT ${SEARCH_LIMIT}`,
     [peerId, `%${escaped}%`]
+  );
+  return (res?.values as CachedMessage[]) ?? [];
+}
+
+/**
+ * The whole conversation as this device decrypted it, newest first.
+ *
+ * What `extract.ts` reads. Capped because the panel scans every row it is
+ * given: a conversation years deep would spend that scan on messages whose
+ * "friday" resolved to a Friday long gone.
+ */
+export async function cachedConversation(
+  peerId: string,
+  limit = CONVERSATION_LIMIT
+): Promise<CachedMessage[]> {
+  if (!native()) {
+    return [...(memoryStore()?.values() ?? [])]
+      .filter((r) => r.peer_id === peerId)
+      .sort(NEWEST_FIRST)
+      .slice(0, limit);
+  }
+  const res = await db?.query(
+    'SELECT * FROM messages_cache WHERE peer_id = ? ORDER BY created_at DESC LIMIT ?',
+    [peerId, limit]
   );
   return (res?.values as CachedMessage[]) ?? [];
 }

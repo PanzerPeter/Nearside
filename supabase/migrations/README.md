@@ -62,6 +62,7 @@ current state; this table is about what each file *does*.
 | 31 | `0029_disappearing.sql` | `conversation_timers`, trigger-stamped `expires_at`, `pg_cron` sweep |
 | 32 | `0030_theme_grants.sql` | `theme_grants` + grant/revoke helpers, readable by its owner and writable by nobody |
 | 33 | `0031_grant_hygiene.sql` | Re-revokes `conversation_list()` from `anon`; renames `chat_backgrounds_pkey1` |
+| 34 | `0032_sealed_exchange.sql` | `sealed_answers` and `messages.sealed_prompt`: answers released only once both exist |
 
 ## The two files that do not follow the numbering
 

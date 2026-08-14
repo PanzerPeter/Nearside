@@ -101,7 +101,7 @@ connection and the native side for the whole app, because a call outlives the
 conversation that started it.
 
 The `CallSession` deliberately sits **outside** the generation effect described
-in §7: its media is peer-to-peer and survives a Supabase socket that does not,
+in §9: its media is peer-to-peer and survives a Supabase socket that does not,
 so rebuilding it on a reconnect would drop every call the moment a screen came
 back on. The signalling hub, which is Supabase's, *is* keyed on generation.
 
@@ -138,7 +138,84 @@ Enforcement is server-side: a trigger stamps `expires_at` and `pg_cron` deletes.
 mirror in step. Screenshots remain possible and the app says so directly beside
 the setting.
 
-## 7. One `generation` counter instead of per-hook reconnect logic
+## 7. Sealed exchange: the referee that cannot read
+
+A sealed question carries the asker's own answer, and neither answer is
+readable until both exist. Everything else in this app protects a message from
+the server; this is the one feature where the server is doing something for the
+user, and the design is about making that possible without trusting it.
+
+Fair exchange between two parties who distrust each other is impossible without
+a referee — whoever reads second can always read and then walk away. So there
+is one, and it is a row-level policy: `sealed_answers` releases the peer's row
+to you only once your own exists (`supabase/schema.sql`, section 5c). The rows
+are sealed `crypto_box` between the pair like any other body, so the referee
+holds two ciphertexts it cannot open and arbitrates one thing, the order.
+
+Three consequences worth naming, because each one is a place the obvious
+implementation is wrong:
+
+- **Nothing in the client enforces it.** A client-side "don't render yet" is
+  theatre in an open-source app: anyone can delete the check and read early.
+  The rule has to live where the reader cannot reach it.
+- **There is no UPDATE policy and no UPDATE grant.** Immutability is half the
+  protocol. An answer that can be revised after the reveal was not committed
+  before it.
+- **`awaiting_you` cannot distinguish "they have not answered" from "they have,
+  and the policy is withholding it".** That is the design working. Reporting
+  the peer's progress would hand back the ordering advantage the feature exists
+  to remove, so `exchangeState` deliberately collapses both cases.
+
+Withdrawing a question uses the ordinary delete path, and the INSERT policy
+refuses a tombstoned prompt — so a question cannot be answered after it was
+withdrawn, and the asker's own answer stays sealed for good.
+
+What none of this stops is answering with junk to force the reveal. Nothing can:
+the server cannot read the answers, so it cannot judge them. The cost is that
+the junk is permanent and attributed, and both `SECURITY.md` and the in-app
+limits screen say so rather than implying the protocol is tighter than it is.
+
+## 8. In this conversation: reading back what is already on the device
+
+Every messenger accumulates the same two things in a chat — the day somebody
+proposed, and the link somebody sent — and then makes you scroll for them. The
+usual fix is a server that indexes the conversation. This app cannot have that
+one: `messages.content` was dropped in 0023, so there is nothing on the server
+to index.
+
+What is left is the only copy of the plaintext that exists, the local mirror
+this device built as it decrypted messages (§3). `src/lib/extract.ts` reads it
+and pulls out two categories, dates and links. No model, no server, no
+network call: a pass over text this phone already had.
+
+The constraints that shape it:
+
+- **Extraction, not summary.** Every row carries the phrase that produced it
+  and jumps to the message it came from. The panel's only claim is "this line
+  said this", which the reader can check in one tap. A summary would be a claim
+  about what the conversation *meant*, and there is nothing here that could
+  stand behind it.
+- **Narrow matching beats wide.** Numeric dates (`3/4`) are skipped, because
+  they are day-first in one half of the world and month-first in the other.
+  A time needs a meridiem or a colon: "at 7" is as likely a price or a seat.
+  Three-letter weekday abbreviations are out, because "sun", "sat" and "mon"
+  are also ordinary words. A panel with fewer rows is worth more than a panel
+  with wrong ones.
+- **A phrase is resolved against the message that said it, never against now.**
+  "Friday" only means a date because of when it was typed. Resolving against
+  the clock would slide every plan in a year-old conversation forward to this
+  week.
+- **Links come from `linkify`**, the same matcher the thread renders anchors
+  with — the panel and the message must not disagree about what is a link.
+- **The empty state says which empty it is.** A conversation this device never
+  loaded looks exactly like a conversation with nothing in it, and the panel
+  distinguishes them rather than implying the second.
+
+The same limit as search applies, for the same reason, and is stated in the
+panel: this is what *this device* has decrypted, not what the conversation
+contains.
+
+## 9. One `generation` counter instead of per-hook reconnect logic
 
 `src/lib/connection.ts` detects wake from three signals — visibility/pageshow,
 `online`, and a wall-clock jump between watchdog ticks, the only one that fires
@@ -156,7 +233,7 @@ retried POST would double-insert a message. The outbox
 IndexedDB with client-generated uuids, so a retry after a lost response collides
 on the primary key instead of writing a second copy.
 
-## 8. Composition: logic out of components, so it can be tested
+## 10. Composition: logic out of components, so it can be tested
 
 There is no DOM test setup, on purpose. `src/lib/**` is pure and covered; the
 components are thin. `ChatRoom` is a shell, `useChatThread` is the hub
@@ -164,7 +241,7 @@ components are thin. `ChatRoom` is a shell, `useChatThread` is the hub
 scrolling and trust each hang off their own hook. Anything worth asserting gets
 pushed down into `lib/` rather than tested through a rendered tree.
 
-## 9. Two mechanisms for the system bars, one set of variables
+## 11. Two mechanisms for the system bars, one set of variables
 
 targetSdk 36 makes edge-to-edge mandatory. Capacitor's `SystemBars` handles it
 two different ways depending on the WebView version — real
@@ -177,7 +254,7 @@ Bar icon contrast comes from the active theme rather than the phone's dark-mode
 setting, which is Capacitor's default and is wrong whenever a purchased pack
 disagrees with the OS.
 
-## 10. Money, and what it is not allowed to buy
+## 12. Money, and what it is not allowed to buy
 
 Revenue is cosmetic theme packs and donation tiers, both non-consumable, through
 RevenueCat. Nothing behind a paywall touches encryption, message limits, or
@@ -185,7 +262,7 @@ pinning, and there is no advertising SDK — `src/lib/no-ads.test.ts` fails the
 build if one appears in `package.json` or the Gradle build. An encrypted
 messenger funded by an ad network is not an encrypted messenger.
 
-## 11. Two paths to the schema, kept in step by a container
+## 13. Two paths to the schema, kept in step by a container
 
 `supabase/schema.sql` is the current shape of the database in one file and is
 the fastest answer to "what does the server hold?". `supabase/migrations/*.sql`
@@ -198,7 +275,7 @@ catalogs — tables, constraints, policies, function bodies, grants, buckets —
 doing one without the other fails locally rather than in production, which has
 no undo.
 
-## 12. Conventions that follow from all of this
+## 14. Conventions that follow from all of this
 
 - **Comments explain *why*, and usually name the failure the code prevents.** A
   comment restating the line below it does not belong. Most of this document

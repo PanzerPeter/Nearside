@@ -54,6 +54,11 @@ export interface Message {
    *  by typing it. A flag, not a pointer: see 0018 for why the original is
    *  deliberately not named. Immutable once written. */
   forwarded: boolean;
+  /** True when this row is a sealed exchange's question — see
+   *  `lib/sealed-exchange.ts`. The body is the question and opens normally;
+   *  the answers live in their own table and are released by policy, not by
+   *  this client. Immutable once written. */
+  sealed_prompt: boolean;
   edited_at: string | null;
   deleted_at: string | null;
   /** Server-stamped, never client-supplied — see the BEFORE INSERT trigger in
