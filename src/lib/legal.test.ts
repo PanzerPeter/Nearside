@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { privacySections } from '../components/LegalPrivacy';
 import { termsSections } from '../components/LegalTerms';
-import { CONTACT_EMAIL, CONTACT_EMAIL_IS_PLACEHOLDER } from './legal';
+import { CONTACT_EMAIL, CONTACT_EMAIL_IS_PLACEHOLDER, PLACEHOLDER_EMAIL } from './legal';
 
 const DOCUMENTS: [string, typeof termsSections][] = [
   ['terms', termsSections],
@@ -67,6 +67,12 @@ describe('contact address', () => {
     // The documents render a warning banner off this flag. A real address left
     // flagged as a placeholder tells every reader the working address does not
     // work.
-    expect(CONTACT_EMAIL_IS_PLACEHOLDER).toBe(CONTACT_EMAIL === 'you@example.com');
+    expect(CONTACT_EMAIL_IS_PLACEHOLDER).toBe(CONTACT_EMAIL === PLACEHOLDER_EMAIL);
+  });
+
+  it('is an address and not the placeholder', () => {
+    // The documents promise a route to exercise GDPR rights; this is it.
+    expect(CONTACT_EMAIL).not.toBe(PLACEHOLDER_EMAIL);
+    expect(CONTACT_EMAIL).toMatch(/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i);
   });
 });

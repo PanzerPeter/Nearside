@@ -22,15 +22,19 @@ export const LAST_UPDATED = 'August 13, 2026';
 /**
  * The address a data request actually reaches.
  *
- * SET THIS BEFORE RELEASE. Google Play requires a contact on the listing, and
- * a privacy policy describing rights it offers no route to exercise is worse
- * than one that promises less. While it is still the placeholder below, both
- * documents say so in the app rather than printing an address that bounces.
- * See `CONTACT_EMAIL_IS_PLACEHOLDER`.
+ * Google Play requires a contact on the listing, and a privacy policy
+ * describing rights it offers no route to exercise is worse than one that
+ * promises less. Should this ever go back to the placeholder, both documents
+ * say so in the app rather than printing an address that bounces. See
+ * `CONTACT_EMAIL_IS_PLACEHOLDER`.
  */
-export const CONTACT_EMAIL = 'you@example.com';
+export const PLACEHOLDER_EMAIL = 'you@example.com';
 
-export const CONTACT_EMAIL_IS_PLACEHOLDER = CONTACT_EMAIL === 'you@example.com';
+// Annotated `string`, not left to inference: against the literal type of a real
+// address, the comparison below narrows to `never` and tsc rejects the file.
+export const CONTACT_EMAIL: string = 'Hi.Nearside@protonmail.com';
+
+export const CONTACT_EMAIL_IS_PLACEHOLDER = CONTACT_EMAIL === PLACEHOLDER_EMAIL;
 
 /** Where the Supabase project runs. Named because "the EU" is a claim someone
  *  may rely on, and eu-west-3 is Paris. */

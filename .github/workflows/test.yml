@@ -1,4 +1,4 @@
-name: test
+name: ci
 
 on:
   push:
@@ -6,8 +6,16 @@ on:
   pull_request:
 
 jobs:
-  test:
+  check:
     runs-on: ubuntu-latest
+    strategy:
+      # One red job should not hide the other two: a type error and a lint
+      # error are usually the same edit, and seeing both at once is one round
+      # trip instead of three.
+      fail-fast: false
+      matrix:
+        task: [test, lint, typecheck]
+    name: ${{ matrix.task }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -17,4 +25,4 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run test
+      - run: npm run ${{ matrix.task }}

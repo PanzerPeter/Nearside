@@ -76,7 +76,13 @@ describe('sealed signals', () => {
     // garbage on it is routine. It must read as noise, not as an exception.
     const { alice, bob } = await identities();
     const envelope = await sealSignal(alice, bob.boxPublic, 'alice', 'c', OFFER);
-    const tampered = { ...envelope, ciphertext: envelope.ciphertext.replace(/^./, 'A') };
+    // Substituting a fixed character is a coin flip that the character was
+    // already there — a 1-in-64 green run on a base64 body, which is how this
+    // first failed in CI and not locally. Flip to *something else* instead.
+    const tampered = {
+      ...envelope,
+      ciphertext: envelope.ciphertext.replace(/^./, (c) => (c === 'A' ? 'B' : 'A')),
+    };
     expect(await openSignal(bob, alice.boxPublic, tampered)).toBeNull();
     expect(await openSignal(bob, alice.boxPublic, { ...envelope, ciphertext: 'not base64 !!' }))
       .toBeNull();

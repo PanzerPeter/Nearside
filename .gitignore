@@ -40,3 +40,6 @@ docs/*
 # Supabase CLI scratch. `linked-project.json` records the project ref and the
 # organization id — nothing that grants access, but nothing the repo needs either.
 supabase/.temp/
+
+# Personal build notes: absolute SDK paths and an AVD name from one machine.
+commands.md

@@ -1,0 +1,92 @@
+# Changelog
+
+All notable changes to Nearside. The format follows
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/); the project has not
+tagged a public release yet, so everything below is grouped by the day the work
+landed rather than by a version number.
+
+Dates are the dates of the commits. Entries say what changed for a user of the
+app, with the reason where the reason is the interesting part.
+
+## [Unreleased]
+
+### Added
+
+- **Voice and video calls.** Peer-to-peer WebRTC, answerable from the lock
+  screen of a phone whose app the system has killed. SDP and ICE candidates are
+  both sealed, and broadcast signalling leaves no row, so there is no record
+  that a call happened.
+- **Donation tiers** alongside the theme packs, and the Terms and Privacy Policy
+  rendered in-app from one shared source of facts.
+- **First-run invite card**, and `supabase/schema.sql` as a single-file view of
+  the database.
+- **Multi-photo send** — several images in one pass through the composer.
+- **Disappearing messages**, keyed to the conversation rather than to one side's
+  preference. The server stamps `expires_at`; `pg_cron` deletes; the device
+  sweeps its mirror to match.
+- **App lock.** A passphrase in front of the app and the local mirror, stretched
+  with PBKDF2-HMAC-SHA256 at 600k iterations and verified against a per-account
+  verifier in secure storage. The recovery phrase is the way back in.
+- **`FLAG_SECURE` where it matters** via a small Android plugin, covering the
+  recovery phrase and the lock screen — which also keeps them out of the recents
+  thumbnail.
+- **Safety numbers as a sigil and four spoken words**, so verification can be
+  done over a call instead of by comparing sixty digits.
+- **Group rooms**, one symmetric key per room sealed to each member, with an
+  Ed25519 signature verified before decryption.
+- **Encrypted media**, local pinning that survives server-side pruning, and
+  voice notes with a live level meter.
+- **Connect by QR or an eight-character code.** Single-use, ten-minute expiry,
+  and a scan verifies the contact because the key travelled in the code.
+- **The transparency screen** — what the server knows, and where the protection
+  stops — built from live queries rather than hard-coded copy.
+- **Cosmetic theme packs** through RevenueCat, nine themes, three free, with
+  ownership by grant as well as by purchase.
+- **OneSignal push**, carrying a sender and never content.
+- **Two motion tiers** and a named elevation scale; the OS accessibility setting
+  is stricter than either and wins.
+- **iOS target** added and configured (CocoaPods, not SPM — the barcode scanner
+  ships no `Package.swift` and an SPM project drops it silently).
+
+### Changed
+
+- **The server no longer stores or reads message bodies.** Migration `0023`
+  dropped `messages.content` and the server-side search that read it. Search and
+  conversation previews moved to a local SQLite mirror of what this device
+  decrypted.
+- **There is no directory.** `search_profiles()` was removed; nobody can be
+  found by display name.
+- Identity and the local mirror are scoped **per account**, after a device-wide
+  key slot let a second account on the same phone inherit the first one's
+  private key.
+- `ChatRoom` split into hooks, which surfaced and fixed several bugs the single
+  component had hidden.
+- Comments across the codebase trimmed to the *why*.
+- Licensed under **GPL-3.0**: a closed fork is a fork whose crypto nobody can
+  check.
+
+### Fixed
+
+- Notifications were never initialised, and a silent recording looked like a
+  successful one.
+- Client `EXECUTE` revoked on trigger functions.
+- Chrome kept clear of the system bars under mandatory edge-to-edge, on both
+  WebView paths.
+- Assorted media handling: microphone permission, captionless media, video
+  posters, one save path to the gallery, and a QR scanner that could dead-end.
+
+### Security
+
+- No plaintext fallback anywhere: sealing throws when a peer has published no
+  key rather than degrading.
+- `src/lib/no-plaintext.test.ts` fails the build if a message body ever reaches
+  an insert payload; `src/lib/no-ads.test.ts` fails it if an advertising SDK
+  appears in `package.json` or the Gradle build.
+- Release builds run R8 with keep rules for everything reached reflectively.
+
+### Infrastructure
+
+- CI runs `test`, `lint` and `typecheck` on every push and pull request.
+- `npm run db:verify` replays the migrations against `schema.sql` in a
+  throwaway Postgres container and diffs the catalogs, so a schema change made
+  in only one of the two places fails locally rather than in production.

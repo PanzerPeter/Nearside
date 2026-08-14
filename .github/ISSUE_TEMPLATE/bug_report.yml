@@ -1,0 +1,118 @@
+name: Bug report
+description: Something in Nearside behaves wrongly
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Do not report a security problem here.** Anything that lets someone
+        read a message, impersonate a sender, or reach a key belongs in a
+        private security advisory — see [SECURITY.md](../blob/main/SECURITY.md).
+
+        **Do not paste your recovery phrase, a seed, a key, or a JWT.** Nothing
+        in this form needs one, and an issue is public forever.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you saw, and what you expected instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open a 1:1 conversation
+        2. Send a photo with a caption
+        3. Lock the phone, wait 30s, unlock
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Android (release build)
+        - Android (debug build)
+        - iOS
+        - Browser (npm run dev)
+    validations:
+      required: true
+
+  - type: input
+    id: device
+    attributes:
+      label: Device and OS version
+      placeholder: Pixel 7a, Android 15
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: App version or commit
+      description: Settings shows the version; a commit hash is fine for a local build.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part
+      options:
+        - Messaging (1:1)
+        - Rooms
+        - Calls
+        - Media and attachments
+        - Connecting, QR, verification
+        - Notifications
+        - App lock, recovery phrase
+        - Themes, purchases
+        - Something else
+    validations:
+      required: true
+
+  - type: dropdown
+    id: reproducible
+    attributes:
+      label: Does it happen every time?
+      options:
+        - Every time
+        - Often
+        - Rarely, or once
+    validations:
+      required: true
+
+  - type: textarea
+    id: network
+    attributes:
+      label: Network conditions, if relevant
+      description: >
+        Wi-Fi, mobile data, a VPN, a corporate proxy, or a phone that had been
+        asleep. Several bugs in this app only appear on a reconnect, so this is
+        worth a line.
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: >
+        `adb logcat` around the failure, or the browser console. Redact ids and
+        tokens; never include a recovery phrase.
+      render: shell
+
+  - type: checkboxes
+    id: hygiene
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues.
+          required: true
+        - label: This is not a security vulnerability (those go to a private advisory).
+          required: true
+        - label: I have not included a recovery phrase, key, or token.
+          required: true

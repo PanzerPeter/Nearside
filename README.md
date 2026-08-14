@@ -6,7 +6,7 @@ device and nothing readable on the server.
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 ![Platform](https://img.shields.io/badge/platform-Android%20%7C%20iOS-lightgrey)
-![Tests](https://img.shields.io/badge/tests-599%20passing-brightgreen)
+[![CI](https://github.com/PanzerPeter/Nearside/actions/workflows/test.yml/badge.svg)](https://github.com/PanzerPeter/Nearside/actions/workflows/test.yml)
 
 React + TypeScript + Vite, wrapped in Capacitor, backed by Supabase for auth,
 Postgres, realtime and storage. The browser build is a development convenience;
@@ -19,6 +19,12 @@ the shipping targets are the two native builds.
 - [How it makes money](#how-it-makes-money)
 - [Quick start](#quick-start) · [Scripts](#scripts) · [Native builds](#native-builds)
 - [Code tour](#code-tour) · [Testing](#testing) · [Contributing](#contributing)
+
+Longer reading: [DESIGN.md](DESIGN.md) for why it is built this way,
+[SECURITY.md](SECURITY.md) for the threat model and how to report a
+vulnerability, [CHANGELOG.md](CHANGELOG.md) for what has landed,
+[docs/APPEARANCE.md](docs/APPEARANCE.md) for themes and motion, and
+[docs/BUILDING.md](docs/BUILDING.md) for the native builds.
 
 ## Four decisions that shaped it
 
@@ -320,8 +326,17 @@ Issues and pull requests are welcome. Before opening one:
 - Privacy claims in the UI are built from live queries and real schema. Keep them
   checkable.
 
-Found a security problem? Please open a private security advisory on the
-repository rather than a public issue.
+Bug reports go through the [issue form](.github/ISSUE_TEMPLATE/bug_report.yml),
+which asks for the platform and the network conditions because several bugs here
+only appear on a reconnect. Never paste a recovery phrase, a key or a token into
+one.
+
+Found a security problem? Open a **private security advisory** on the repository
+rather than a public issue — [SECURITY.md](SECURITY.md) says what is in scope
+and what the app already admits to.
+
+This is a solo project built for a competition deadline, so reviews may be slow
+and a large unsolicited pull request may not be merged. Ask in an issue first.
 
 ## License
 
