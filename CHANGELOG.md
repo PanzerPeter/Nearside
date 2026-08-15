@@ -1,14 +1,23 @@
 # Changelog
 
 All notable changes to Nearside. The format follows
-[Keep a Changelog](https://keepachangelog.com/en/1.1.0/); the project has not
-tagged a public release yet, so everything below is grouped by the day the work
-landed rather than by a version number.
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the versions are
+[semantic](https://semver.org/spec/v2.0.0.html).
 
-Dates are the dates of the commits. Entries say what changed for a user of the
-app, with the reason where the reason is the interesting part.
+Entries say what changed for a user of the app, with the reason where the reason
+is the interesting part.
 
-## [Unreleased]
+The version lives in `package.json` and every other place that carries it — the
+Android `versionName`, the iOS `MARKETING_VERSION`, the Electron shell, the
+string in Settings — follows it. `src/lib/version.test.ts` fails the suite when
+one of them drifts.
+
+## [1.0.0] — 2026-08-15
+
+First complete version: everything below has shipped in an Android release build
+running on hardware. The iOS project is configured but has never compiled, and
+the browser and Electron builds are development conveniences rather than
+shipping targets.
 
 ### Added
 

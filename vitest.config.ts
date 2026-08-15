@@ -1,8 +1,16 @@
+import { readFileSync } from 'node:fs';
 import { defineConfig } from 'vitest/config';
+
+// Mirrors the define in vite.config.ts — without it `lib/version.ts` is an
+// undefined identifier under vitest and every importer throws.
+const pkgVersion = JSON.parse(readFileSync('./package.json', 'utf8')).version as string;
 
 // Standalone from vite.config.ts on purpose — the PWA plugin emits a service
 // worker whenever its config is loaded, which a test run has no use for.
 export default defineConfig({
+  define: {
+    __APP_VERSION__: JSON.stringify(pkgVersion),
+  },
   test: {
     environment: 'node',
     include: ['src/**/*.test.ts'],

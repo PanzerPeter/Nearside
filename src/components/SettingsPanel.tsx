@@ -29,6 +29,7 @@ import { SupportNearside } from './SupportNearside';
 import { OpenSourceLicenses } from './OpenSourceLicenses';
 import { SecurityLimits } from './SecurityLimits';
 import { LegalDocModal, type LegalDoc } from './LegalFooter';
+import { APP_VERSION } from '../lib/version';
 import { MIN_PASSPHRASE_LENGTH, type RelockAfter } from '../lib/app-lock';
 import type { AppLock } from '../hooks/useAppLock';
 import {
@@ -723,6 +724,9 @@ export function SettingsPanel({
           <span className="flex-1 text-left">Privacy Policy</span>
           <ChevronRight className="w-4 h-4 text-base-content/40 shrink-0" />
         </button>
+        {/* A bug report that names a version is worth several that don't, and
+            an app store's build number is not something anyone reads back. */}
+        <p className="px-2 pt-1 text-xs text-base-content/40">Nearside {APP_VERSION}</p>
       </div>
 
       <div className="divider my-4" />

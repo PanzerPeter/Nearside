@@ -1,6 +1,12 @@
+import { readFileSync } from 'node:fs';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
+
+// package.json is the one place the version is written; the Android
+// versionName, the Electron package and this define all follow it, and
+// src/lib/version.test.ts fails the suite when one of them drifts.
+const pkgVersion = JSON.parse(readFileSync('./package.json', 'utf8')).version as string;
 
 export default defineConfig(() => {
   // Set by the android:sync script. A Workbox precache inside a WebView serves
@@ -9,6 +15,9 @@ export default defineConfig(() => {
   const native = process.env.NEARSIDE_NATIVE === '1';
 
   return {
+    define: {
+      __APP_VERSION__: JSON.stringify(pkgVersion),
+    },
     plugins: [
       react(),
       VitePWA({
