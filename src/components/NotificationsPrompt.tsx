@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { Capacitor } from '@capacitor/core';
 import { Bell } from 'lucide-react';
 import {
   canRequestPushPermission,
@@ -11,6 +10,7 @@ import {
   shouldOfferPush,
 } from '../lib/notifications';
 import { Modal } from './Modal';
+import { isMobileNative } from '../lib/platform';
 
 interface NotificationsPromptProps {
   /** The signed-in account. The offer is remembered per account, so two people
@@ -51,7 +51,7 @@ export function NotificationsPrompt({ userId }: NotificationsPromptProps) {
       if (!alive) return;
       setOpen(
         shouldOfferPush({
-          native: Capacitor.isNativePlatform(),
+          native: isMobileNative(),
           granted,
           canRequest,
           alreadyAsked: pushOfferSeen(userId),

@@ -4,7 +4,8 @@
 // A no-op in a browser, like every other native surface here: there is no web
 // equivalent, and pretending otherwise would let a browser session be mistaken
 // for the protection the Android build actually has.
-import { Capacitor, registerPlugin } from '@capacitor/core';
+import { registerPlugin } from '@capacitor/core';
+import { isMobileNative } from './platform';
 
 interface ScreenGuardPlugin {
   enable(): Promise<void>;
@@ -35,7 +36,7 @@ export async function setScreenGuard(on: boolean, reason = 'default'): Promise<v
   if (on) holders.add(reason);
   else holders.delete(reason);
   const nowWanted = holders.size > 0;
-  if (!Capacitor.isNativePlatform() || nowWanted === wanted) return;
+  if (!isMobileNative() || nowWanted === wanted) return;
   try {
     await (nowWanted ? ScreenGuard.enable() : ScreenGuard.disable());
   } catch {

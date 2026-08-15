@@ -42,10 +42,18 @@ import {
 import { ownedPacks } from './lib/theme-grants';
 import { useNicknameSync } from './lib/nicknames';
 import { clearAll } from './lib/outbox';
-import { clearLocalDb, openLocalDb } from './lib/localdb';
+import { clearLocalDb, clearLocalDbFor, openLocalDb } from './lib/localdb';
+import {
+  forgetAccount,
+  loadAccounts,
+  rememberAccount,
+  type StoredAccount,
+} from './lib/accounts';
+import { clearSeed } from './lib/keystore';
 import { clearPinnedMedia } from './lib/pins';
 import { forgetAllPeerKeys } from './lib/peer-keys';
 import { forgetAllRoomKeys } from './lib/rooms';
+import { forgetStickers } from './lib/stickers';
 import { useMobileBackClose } from './hooks/useMobileBackClose';
 import { useAppLock } from './hooks/useAppLock';
 import { AppLockScreen } from './components/AppLockScreen';
@@ -97,6 +105,22 @@ function App() {
   // because the store holds decrypted text and the next person to sign in on
   // this phone gets their own.
   const userId = session?.user.id ?? null;
+
+  // Every account signed in on this device, for the switcher in settings. Device
+  // -wide rather than per-account on purpose; see `lib/accounts.ts`.
+  const [accounts, setAccounts] = useState<StoredAccount[]>([]);
+  useEffect(() => {
+    void loadAccounts().then(setAccounts).catch(() => {});
+  }, []);
+
+  // Showing the sign-in form while somebody is still signed in, to add a second
+  // account. Cleared by the account changing underneath it, which is what
+  // signing in successfully does — the form has no success callback of its own
+  // and does not need one.
+  const [addingAccount, setAddingAccount] = useState(false);
+  useEffect(() => {
+    setAddingAccount(false);
+  }, [userId]);
 
   const appLock = useAppLock(userId);
   const unlocked = appLock.state === 'off' || appLock.state === 'unlocked';
@@ -154,6 +178,31 @@ function App() {
     return () => clearTimeout(timer);
   }, [profileFailed, session, fetchMyProfile]);
 
+  // Keep this account resumable from the switcher.
+  //
+  // Keyed on the refresh token rather than the session object, and re-run every
+  // time that token changes: Supabase rotates it on each refresh and invalidates
+  // the one it replaced, so a roster written once at sign-in holds a spent
+  // credential within the hour. The failure would surface much later and look
+  // unrelated — someone taps an account and is asked to sign in instead.
+  //
+  // The profile is in the dependencies because it usually arrives after the
+  // session does; without it the first write files the account under an empty
+  // name and nothing ever corrects it.
+  const refreshToken = session?.refresh_token ?? null;
+  useEffect(() => {
+    if (!userId || !refreshToken) return;
+    void rememberAccount({
+      userId,
+      display_name: myProfile?.display_name ?? '',
+      avatar_url: myProfile?.avatar_url ?? null,
+      refresh_token: refreshToken,
+    })
+      .then(loadAccounts)
+      .then(setAccounts)
+      .catch(() => {});
+  }, [userId, refreshToken, myProfile?.display_name, myProfile?.avatar_url]);
+
   // Foreground sound + notifications for incoming messages from any friend.
   useMessageNotifications(session, selectedFriend?.id ?? null);
 
@@ -197,6 +246,34 @@ function App() {
   // bound to the previous user keeps receiving their notifications and reports
   // their purchases. Neither failing is a reason to leave someone signed in,
   // so both run first and neither can block the sign-out.
+  // Everything that must not survive into the *next* account on this device,
+  // and nothing that would destroy the account being left.
+  //
+  // Split out of `signOut` for the switcher: switching accounts has to drop the
+  // same in-memory keys and the same remote bindings, but must leave the seed,
+  // the mirror, the lock verifier, the outbox and the pinned files exactly where
+  // they are — the account is coming back, and a switch that quietly wiped its
+  // history would be a sign-out wearing a different label.
+  const releaseAccount = useCallback(async () => {
+    // See `forgetAllPeerKeys` for why a surviving peer key breaks key-change
+    // detection for the next account, and `forgetAllRoomKeys` for why room keys
+    // must not outlive the session.
+    forgetAllPeerKeys();
+    forgetAllRoomKeys();
+    // Decrypted sticker images, held in memory under the vault key of the
+    // account being left. Every new per-account cache belongs in this chain.
+    forgetStickers();
+    // TURN credentials are minted against the signed-in user's JWT. Left
+    // behind, the next account on this phone would relay its calls under the
+    // previous owner's credentials.
+    forgetIceServers();
+    await setScreenGuard(false, 'app-lock').catch(() => {});
+    // A device left bound keeps delivering the previous account's notifications
+    // and reporting its purchases. Neither failing may block the caller.
+    await clearExternalUserId().catch(() => {});
+    await logOutPurchases().catch(() => {});
+  }, []);
+
   const signOut = useCallback(async () => {
     await clearAll();
     // Before `clearLocalDb`, which drops the rows naming these files. Pinned
@@ -208,21 +285,72 @@ function App() {
     // account to sign in on this phone meets the previous owner's lock screen
     // and cannot get past it.
     if (userId) await clearLock(userId).catch(() => {});
-    await setScreenGuard(false, 'app-lock').catch(() => {});
-    // In-memory key caches, which no store clears. See `forgetAllPeerKeys` for
-    // why a surviving peer key breaks key-change detection for the next
-    // account, and `forgetAllRoomKeys` for why room keys must not outlive the
-    // session.
-    forgetAllPeerKeys();
-    forgetAllRoomKeys();
-    // TURN credentials are minted against the signed-in user's JWT. Left
-    // behind, the next account on this phone would relay its calls under the
-    // previous owner's credentials.
-    forgetIceServers();
-    await clearExternalUserId().catch(() => {});
-    await logOutPurchases().catch(() => {});
+    // Signing out drops the switcher entry too. Leaving it would make the row a
+    // one-tap undo of the sign-out that was just confirmed, which is not what
+    // anybody means by the word.
+    if (userId) await forgetAccount(userId).catch(() => {});
+    await releaseAccount();
     await supabase.auth.signOut();
-  }, [userId]);
+    setAccounts(await loadAccounts().catch(() => []));
+  }, [userId, releaseAccount]);
+
+  /**
+   * Resume a previously signed-in account from its stored refresh token.
+   *
+   * The teardown runs first, deliberately. `refreshSession` rewrites the stored
+   * session the instant it succeeds, so releasing afterwards would race the
+   * `[userId]` effects that re-bind OneSignal and RevenueCat and could clear the
+   * binding that had just been made for the *new* account.
+   *
+   * The cost of that ordering is the failure path: a token that has been revoked
+   * or already rotated on another device leaves nobody signed in. That is an
+   * honest state rather than a broken one — the sign-in screen is exactly where
+   * someone whose session expired belongs — and the dead row is dropped on the
+   * way so the switcher never offers it twice.
+   */
+  const switchAccount = useCallback(
+    async (target: StoredAccount) => {
+      if (target.userId === userId) return;
+      await releaseAccount();
+      const { error } = await supabase.auth.refreshSession({
+        refresh_token: target.refresh_token,
+      });
+      if (error) {
+        await forgetAccount(target.userId).catch(() => {});
+        await supabase.auth.signOut();
+      }
+      // Close the open chat either way: it belongs to the account being left,
+      // and its peer is not a contact of whoever is signed in now.
+      setSelectedFriend(null);
+      setSelectedRoom(null);
+      setMyProfile(null);
+      setTab('chats');
+      setAccounts(await loadAccounts().catch(() => []));
+    },
+    [userId, releaseAccount]
+  );
+
+  /**
+   * Remove an account this device is *not* signed into.
+   *
+   * The roster entry is the way back in, so dropping it alone would strand the
+   * rest of that account's device state — its mirror is decrypted message text
+   * and its seed is the private key — with nothing in the UI able to reach any
+   * of it again. Everything filed under the id goes together.
+   *
+   * The seed goes last: it is the piece with no recovery path other than the
+   * user's twelve words, so anything that can fail should have failed already.
+   */
+  const forgetAccountFully = useCallback(
+    async (target: StoredAccount) => {
+      await forgetAccount(target.userId).catch(() => {});
+      await clearLocalDbFor(target.userId, userId).catch(() => {});
+      await clearLock(target.userId).catch(() => {});
+      await clearSeed(target.userId).catch(() => {});
+      setAccounts(await loadAccounts().catch(() => []));
+    },
+    [userId]
+  );
 
   // Bind this device to the account for notifications, and start the store.
   // Both are best effort: neither failing may stop the messenger running.
@@ -308,6 +436,14 @@ function App() {
 
   if (!session) {
     return <AuthForm />;
+  }
+
+  // Adding a second account. Above the lock and identity gates because the form
+  // shows none of this account's content — and below the `!session` check, so
+  // the ordinary signed-out case still renders the form without a way to cancel
+  // back to nothing.
+  if (addingAccount) {
+    return <AuthForm onCancel={() => setAddingAccount(false)} />;
   }
 
   if (appLock.state === 'loading') {
@@ -499,6 +635,10 @@ function App() {
                   onUpdated={(p) => setMyProfile(p)}
                   onSignOut={() => void signOut()}
                   appLock={appLock}
+                  accounts={accounts}
+                  onSwitchAccount={(a) => void switchAccount(a)}
+                  onForgetAccount={(a) => void forgetAccountFully(a)}
+                  onAddAccount={() => setAddingAccount(true)}
                 />
               ) : profileFailed ? (
                 // Retrying on its own already, but a spinner that has been
@@ -533,6 +673,16 @@ function App() {
           onSignOut={() => void signOut()}
           onClose={() => setShowSettings(false)}
           appLock={appLock}
+          accounts={accounts}
+          onSwitchAccount={(a) => {
+            setShowSettings(false);
+            void switchAccount(a);
+          }}
+          onForgetAccount={(a) => void forgetAccountFully(a)}
+          onAddAccount={() => {
+            setShowSettings(false);
+            setAddingAccount(true);
+          }}
         />
       )}
     </div>

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-const isNativePlatform = vi.fn();
-vi.mock('@capacitor/core', () => ({ Capacitor: { isNativePlatform: () => isNativePlatform() } }));
+const getPlatform = vi.fn();
+vi.mock('@capacitor/core', () => ({ Capacitor: { getPlatform: () => getPlatform() } }));
 
 const { authRedirectTo } = await import('./authRedirect');
 
@@ -12,7 +12,7 @@ describe('authRedirectTo', () => {
 
   describe('on the device', () => {
     beforeEach(() => {
-      isNativePlatform.mockReturnValue(true);
+      getPlatform.mockReturnValue('android');
       // Capacitor serves the bundle from http://localhost, so an origin-based
       // redirect would send the user to a page that does not exist.
       (globalThis as { window?: unknown }).window = {
@@ -31,7 +31,7 @@ describe('authRedirectTo', () => {
 
   describe('on the web', () => {
     beforeEach(() => {
-      isNativePlatform.mockReturnValue(false);
+      getPlatform.mockReturnValue('web');
       (globalThis as { window?: unknown }).window = {
         location: { origin: 'https://nearside.example' },
       };
@@ -47,7 +47,7 @@ describe('authRedirectTo', () => {
   // GoTrue fall back to the project's Site URL instead of mailing a link to
   // the string "undefined".
   it('yields no redirect when there is no window to return to', () => {
-    isNativePlatform.mockReturnValue(false);
+    getPlatform.mockReturnValue('web');
     expect(authRedirectTo('confirm')).toBeUndefined();
   });
 });

@@ -16,9 +16,10 @@
 //   3. The full-screen ring, which is a notification with a full-screen intent
 //      and therefore a notification-manager job, not a page one.
 
-import { Capacitor, registerPlugin } from '@capacitor/core';
+import { registerPlugin } from '@capacitor/core';
 import type { PluginListenerHandle } from '@capacitor/core';
 import type { CallKind } from './types';
+import { isMobileNative } from '../platform';
 
 /** What a ring notification's buttons, or the lock-screen ring itself, reported
  *  back. `open` means the user tapped the notification body. */
@@ -70,7 +71,7 @@ interface CallNativePlugin {
 
 const CallNative = registerPlugin<CallNativePlugin>('CallNative');
 
-const native = () => Capacitor.isNativePlatform();
+const native = () => isMobileNative();
 
 /**
  * Every call below swallows its own failure.

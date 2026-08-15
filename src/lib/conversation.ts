@@ -14,6 +14,7 @@ export function messageSnippet(
   if (msg.media_type === 'audio') return '🎤 Voice message';
   if (msg.media_type === 'video') return '🎬 Video';
   if (msg.media_type === 'image') return '📷 Photo';
+  if (msg.media_type === 'sticker') return '🩷 Sticker';
   if (msg.media_path) return '📎 Media';
   return '';
 }

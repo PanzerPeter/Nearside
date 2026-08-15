@@ -10,11 +10,11 @@
 // sandbox, which no other app and no media scanner can read. Saving to the
 // gallery is a separate action the user takes in the viewer: a pin keeps
 // something in Nearside without publishing it to the phone.
-import { Capacitor } from '@capacitor/core';
 import { Directory, Filesystem } from '@capacitor/filesystem';
 import { allPins, cachedPin, pinnedIds, putPin, removePin } from './localdb';
 import { mimeForPath } from './media';
 import type { MediaType } from './types';
+import { isMobileNative } from './platform';
 
 /** Where pinned plaintext lives inside the sandbox. */
 const PIN_DIR = 'pins';
@@ -64,7 +64,7 @@ export async function pinMedia(
 ): Promise<void> {
   const path = pinPath(messageId, objectPath);
 
-  if (Capacitor.isNativePlatform()) {
+  if (isMobileNative()) {
     await Filesystem.writeFile({
       path,
       data: toBase64(bytes),
@@ -85,7 +85,7 @@ export async function pinnedObjectUrl(
   kind?: MediaType | null
 ): Promise<string | null> {
   const pin = await cachedPin(messageId);
-  if (!pin || !Capacitor.isNativePlatform()) return null;
+  if (!pin || !isMobileNative()) return null;
 
   try {
     const { data } = await Filesystem.readFile({ path: pin.file_path, directory: Directory.Data });
@@ -116,7 +116,7 @@ export async function pinnedObjectUrl(
 export async function clearPinnedMedia(): Promise<void> {
   const pins = await allPins();
   for (const pin of pins) {
-    if (Capacitor.isNativePlatform()) {
+    if (isMobileNative()) {
       await Filesystem.deleteFile({ path: pin.file_path, directory: Directory.Data }).catch(
         () => {}
       );
@@ -128,7 +128,7 @@ export async function clearPinnedMedia(): Promise<void> {
 export async function unpinMedia(messageId: string): Promise<void> {
   const pin = await cachedPin(messageId);
   await removePin(messageId);
-  if (pin && Capacitor.isNativePlatform()) {
+  if (pin && isMobileNative()) {
     await Filesystem.deleteFile({ path: pin.file_path, directory: Directory.Data }).catch(() => {});
   }
 }

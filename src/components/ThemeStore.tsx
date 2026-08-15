@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Capacitor } from '@capacitor/core';
 import { Check, CheckCheck, Eye, Palette, RotateCcw, Send } from 'lucide-react';
 import {
   FREE_THEMES,
@@ -15,6 +14,7 @@ import {
 import { grantedPacks, ownedPacks } from '../lib/theme-grants';
 import { useToast } from '../hooks/useToast';
 import { Modal } from './Modal';
+import { isMobileNative } from '../lib/platform';
 
 interface ThemeStoreProps {
   onClose: () => void;
@@ -43,7 +43,7 @@ export function ThemeStore({ onClose }: ThemeStoreProps) {
   // become a wall of tiny chats to compare against each other.
   const [previewing, setPreviewing] = useState<string | null>(null);
   const toast = useToast();
-  const native = Capacitor.isNativePlatform();
+  const native = isMobileNative();
 
   const load = useCallback(async () => {
     const [mine, live, donated] = await Promise.all([

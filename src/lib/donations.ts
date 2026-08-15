@@ -10,9 +10,9 @@
 // Everything degrades to "nothing for sale" off-device, which is the same
 // shape `packOffers` has: a tier with no offering behind it renders as
 // unavailable rather than at a price we invented.
-import { Capacitor } from '@capacitor/core';
 import { Purchases, type PurchasesPackage } from '@revenuecat/purchases-capacitor';
 import { ALL_PACKS_ENTITLEMENT } from './purchases';
+import { isMobileNative } from './platform';
 
 /** The RevenueCat offering the tiers live in. Deliberately not `current`,
  *  which is the theme packs: merging the two would put a donation on the
@@ -69,7 +69,7 @@ export interface DonationOffer {
 /** Live prices from the donations offering, keyed by tier id. */
 export async function donationOffers(): Promise<Map<string, DonationOffer>> {
   const offers = new Map<string, DonationOffer>();
-  if (!Capacitor.isNativePlatform()) return offers;
+  if (!isMobileNative()) return offers;
 
   try {
     const { all } = await Purchases.getOfferings();

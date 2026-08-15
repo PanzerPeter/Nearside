@@ -27,6 +27,8 @@ import { useToast } from '../hooks/useToast';
 import { useChatThread } from '../hooks/useChatThread';
 import { usePeerTrust } from '../hooks/usePeerTrust';
 import { useMediaSend } from '../hooks/useMediaSend';
+import { useStickers } from '../hooks/useStickers';
+import { StickerPicker } from './StickerPicker';
 import { useMessageEditing } from '../hooks/useMessageEditing';
 import { useSealedExchange } from '../hooks/useSealedExchange';
 import { useCall } from '../hooks/useCall';
@@ -124,6 +126,11 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
   const call = useCall();
 
   const editing = useMessageEditing({ me, peerId: friend.id, identity, onError: toast.error });
+
+  // The drawer is per account, not per conversation: it is fetched once here
+  // and its decrypted bytes are cached module-side, so opening a second chat
+  // does not re-download it.
+  const stickers = useStickers(me, identity);
 
   // Sealed exchanges live beside the thread rather than in it: the answers are
   // a different table with a different visibility rule, released by policy
@@ -365,6 +372,19 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
                   onCancel: editing.cancelEdit,
                 }
               : null
+          }
+          stickers={
+            <StickerPicker
+              drawer={stickers}
+              onSelect={(sticker) => {
+                // Sent on the tap, with no caption and no staging step. A
+                // sticker is chosen and sent in one gesture; routing it through
+                // the preview strip would put a Send button between the two.
+                void media.sendSticker(sticker, replyingTo?.id ?? null);
+                setReplyingTo(null);
+              }}
+              onError={toast.error}
+            />
           }
         />
       )}

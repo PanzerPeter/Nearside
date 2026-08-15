@@ -66,6 +66,12 @@ CREATE EXTENSION IF NOT EXISTS pg_trgm;
 -- It creates and owns the `net` schema, so there is no WITH SCHEMA clause.
 CREATE EXTENSION IF NOT EXISTS pg_net;
 
+-- pgcrypto backs `mint_connect_code()`'s gen_random_bytes(). It is
+-- pre-installed on a Supabase project, in the `extensions` schema, which is
+-- why the call has always worked and why this line is new (0034). Declared so
+-- the dependency is stated by this file rather than assumed of the host.
+CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions;
+
 -- ===========================================================================
 -- 2. Shared helper
 -- ===========================================================================
@@ -95,10 +101,16 @@ REVOKE ALL ON FUNCTION public.set_updated_at() FROM PUBLIC, anon, authenticated;
 /*
   One row per account, created by the signup trigger.
 
-  `display_name` is not unique and has no format constraint. A unique handle
-  is a namespace and a namespace is enumerable; display names are allowed to
-  collide, and that is what stops them being addresses. People are found by
-  connect code (section 4), never by name.
+  `display_name` is not unique. A unique handle is a namespace and a namespace
+  is enumerable; display names are allowed to collide, and that is what stops
+  them being addresses. People are found by connect code (section 4), never by
+  name.
+
+  It is bounded and single-line, for the reason `friend_nicknames.nickname` is:
+  both are rendered inline in the sidebar and the chat header, and a newline or
+  a two-thousand-character name breaks that line for everyone who has connected
+  with the person who chose it. The client has always enforced this (32
+  characters, trimmed); the CHECKs are for the callers that are not the client.
 
   `public_key` / `signing_key` are the PUBLIC halves of the device identity —
   X25519 for sealing to this user, Ed25519 for verifying room messages from
@@ -119,7 +131,12 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   signing_key    text,
   key_updated_at timestamptz,
   created_at     timestamptz NOT NULL DEFAULT now(),
-  updated_at     timestamptz NOT NULL DEFAULT now()
+  updated_at     timestamptz NOT NULL DEFAULT now(),
+
+  -- Measured after trimming, so "   " cannot pass as a name and leave a row
+  -- that renders blank everywhere it appears.
+  CONSTRAINT display_name_length CHECK (char_length(btrim(display_name)) BETWEEN 1 AND 32),
+  CONSTRAINT display_name_single_line CHECK (display_name ~ '^[^[:cntrl:]]+$')
 );
 
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
@@ -187,6 +204,11 @@ CREATE POLICY "profiles_delete_own" ON public.profiles
   `username` is still read as a fallback so a client mid-upgrade signs up
   successfully.
 
+  The name is repaired rather than rejected. GoTrue collapses any error raised
+  in here to "Database error saving new user" and logs the cause where the
+  person signing up cannot see it, so a name that trips a CHECK — or metadata
+  carrying no name at all — would reach them as "this app is broken".
+
   SECURITY DEFINER because it writes public.profiles from a trigger on
   auth.users, and REVOKEd from every client role.
 */
@@ -196,15 +218,21 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = ''
 AS $$
+DECLARE
+  proposed text;
 BEGIN
-  INSERT INTO public.profiles (id, display_name)
-  VALUES (
-    NEW.id,
-    coalesce(
-      NEW.raw_user_meta_data->>'display_name',
-      NEW.raw_user_meta_data->>'username'
-    )
+  proposed := coalesce(
+    NEW.raw_user_meta_data->>'display_name',
+    NEW.raw_user_meta_data->>'username',
+    -- Not an address, just something better than a failed signup. It is the
+    -- local part of what they typed, and Settings can change it immediately.
+    split_part(coalesce(NEW.email, ''), '@', 1),
+    ''
   );
+  proposed := btrim(left(btrim(regexp_replace(proposed, '[[:cntrl:]]+', ' ', 'g')), 32));
+
+  INSERT INTO public.profiles (id, display_name)
+  VALUES (NEW.id, coalesce(nullif(proposed, ''), 'Someone'));
   RETURN NEW;
 END;
 $$;
@@ -225,6 +253,27 @@ CREATE TRIGGER on_auth_user_created
 -- Covering index for the addressee_id FK (pending-requests lookup).
 CREATE INDEX IF NOT EXISTS friendships_addressee_idx
   ON public.friendships (addressee_id);
+
+/*
+  One row per pair, whichever way round it was made.
+
+  The table's `UNIQUE (requester_id, addressee_id)` dedupes an ordered pair,
+  and a friendship is not ordered: A→B and B→A are two rows describing one
+  relationship, which is what two people who add each other in the same minute
+  produce. The client checks for the reverse row first, but check-then-insert
+  is not atomic. Two rows is not cosmetic — removing a friend deletes the row
+  the client knows about and leaves the other one accepted, so the friendship
+  the user just ended still satisfies every policy that gates on it.
+  `conversation_list()`'s DISTINCT ON hides the symptom in the sidebar.
+
+  Normalized the same way `conversation_timers` is, as an index rather than a
+  CHECK because the columns keep their meaning — who asked and who accepted.
+  The ordered UNIQUE stays: it is the only index leading with requester_id, and
+  `profiles_select_connected` looks a friendship up by exactly that column for
+  every profile row anyone reads.
+*/
+CREATE UNIQUE INDEX IF NOT EXISTS friendships_unique_pair
+  ON public.friendships (least(requester_id, addressee_id), greatest(requester_id, addressee_id));
 
 ALTER TABLE public.friendships ENABLE ROW LEVEL SECURITY;
 
@@ -248,6 +297,46 @@ DROP POLICY IF EXISTS "friendships_delete_own" ON public.friendships;
 CREATE POLICY "friendships_delete_own" ON public.friendships
   FOR DELETE TO authenticated
   USING ((select auth.uid()) IN (requester_id, addressee_id));
+
+/*
+  `friendships_update_addressee` is checked before and after the write, so the
+  addressee stays the addressee — and `requester_id` is left free, because a
+  policy sees one row at a time and cannot compare the new version with the
+  old. That was a hole the size of the whole trust boundary: be the addressee
+  of a row you control (have a second account of your own send you a request),
+  point `requester_id` at someone else, set 'accepted', and the policy re-checks
+  the one thing that did not change. The result is an accepted friendship with
+  a person who was never asked, which is what `messages_insert_sender` and
+  `profiles_select_connected` both read.
+
+  So the pair is frozen here, exactly as `messages_prevent_reassign` freezes
+  its own. `created_at` goes with them: the rate limit counts rows by it, and a
+  row that can be back-dated is a row that can be moved out of the window it
+  was counted in.
+*/
+CREATE OR REPLACE FUNCTION public.friendships_prevent_reassign()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = ''
+AS $$
+BEGIN
+  IF NEW.requester_id IS DISTINCT FROM OLD.requester_id
+     OR NEW.addressee_id IS DISTINCT FROM OLD.addressee_id THEN
+    RAISE EXCEPTION 'friendships.requester_id and friendships.addressee_id are immutable';
+  END IF;
+  IF NEW.created_at IS DISTINCT FROM OLD.created_at THEN
+    RAISE EXCEPTION 'friendships.created_at is immutable';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.friendships_prevent_reassign() FROM PUBLIC, anon, authenticated;
+
+DROP TRIGGER IF EXISTS friendships_prevent_reassign ON public.friendships;
+CREATE TRIGGER friendships_prevent_reassign
+  BEFORE UPDATE ON public.friendships
+  FOR EACH ROW EXECUTE FUNCTION public.friendships_prevent_reassign();
 
 /*
   A runaway guard, not an anti-abuse perimeter. A looping client or a buggy
@@ -433,7 +522,11 @@ CREATE TABLE IF NOT EXISTS public.messages (
   expires_at           timestamptz,
   created_at           timestamptz NOT NULL DEFAULT now(),
 
-  CONSTRAINT messages_media_type_check CHECK (media_type IN ('image', 'video', 'audio')),
+  -- 'sticker' is a rendering hint and nothing else: it draws without a bubble,
+  -- without a caption box and at a fixed size, which the client cannot infer
+  -- from an image row. The row itself is an ordinary sealed attachment — see
+  -- section 5d for why a sticker deliberately does not get a cheaper path.
+  CONSTRAINT messages_media_type_check CHECK (media_type IN ('image', 'video', 'audio', 'sticker')),
 
   -- A row must carry something. Tombstones are exempt and must be:
   -- deleteMessage strips the body, the ciphertext and the media path, and
@@ -514,10 +607,24 @@ CREATE POLICY "messages_update_sender" ON public.messages
   USING ((select auth.uid()) = user_id)
   WITH CHECK ((select auth.uid()) = user_id);
 
+/*
+  No DELETE policy, and no DELETE privilege either.
+
+  Deleting a message is a tombstone (`tombstonePatch` in lib/conversation.ts),
+  which lands as an UPDATE: the row keeps its place in the thread and loses
+  everything that was in it. A client that could remove the row outright would
+  be doing something different — the transparency screen lists rows keyed to
+  you, receipts and reactions cascade off them, and the attachment in Storage
+  would be orphaned, since only `expire_messages()` deletes objects and only
+  for rows it expires.
+
+  Revoked as a privilege as well as absent as a policy, on the same reasoning
+  as `theme_grants`. The two paths that legitimately remove rows are
+  unaffected: `expire_messages()` runs as the owner, and account deletion
+  cascades from auth.users under the service role.
+*/
 DROP POLICY IF EXISTS "messages_delete_sender" ON public.messages;
-CREATE POLICY "messages_delete_sender" ON public.messages
-  FOR DELETE TO authenticated
-  USING ((select auth.uid()) = user_id);
+REVOKE DELETE ON public.messages FROM anon, authenticated;
 
 /*
   An RLS policy cannot compare the NEW row against the OLD one, so the UPDATE
@@ -528,7 +635,10 @@ CREATE POLICY "messages_delete_sender" ON public.messages
   later being repointed at a stranger.
 
   `forwarded` is frozen alongside them: provenance that can be edited
-  afterwards is not provenance. `sealed_prompt` too — see section 5c.
+  afterwards is not provenance. `sealed_prompt` too — see section 5c — and
+  `reply_to_id`, which is the same kind of claim: a reply that can be repointed
+  later makes the quoted message something the sender gets to revisit, in a
+  thread the other person has already read.
 */
 CREATE OR REPLACE FUNCTION public.messages_prevent_reassign()
 RETURNS trigger
@@ -546,6 +656,9 @@ BEGIN
   IF NEW.sealed_prompt IS DISTINCT FROM OLD.sealed_prompt THEN
     RAISE EXCEPTION 'messages.sealed_prompt is immutable';
   END IF;
+  IF NEW.reply_to_id IS DISTINCT FROM OLD.reply_to_id THEN
+    RAISE EXCEPTION 'messages.reply_to_id is immutable';
+  END IF;
   RETURN NEW;
 END;
 $$;
@@ -556,6 +669,62 @@ DROP TRIGGER IF EXISTS messages_prevent_reassign ON public.messages;
 CREATE TRIGGER messages_prevent_reassign
   BEFORE UPDATE ON public.messages
   FOR EACH ROW EXECUTE FUNCTION public.messages_prevent_reassign();
+
+/*
+  The body, and the three timestamps the server owns.
+
+  A tombstone is only worth something if it is final. `messages_update_sender`
+  and `has_body` between them would let a sender clear `deleted_at` and write a
+  fresh ciphertext in one statement: the message the recipient watched turn
+  into "deleted" comes back saying something else, with nothing on the row to
+  show it ever went away. Re-writing the same tombstone stays legal — delete is
+  retried on a lost response and pressed twice by people.
+
+  `edited_at` is the mirror image: nothing required it to be stamped, so a
+  re-sealed body with a null marker read to the recipient as the original text.
+  It is assigned here rather than checked, which makes what the client sends
+  irrelevant — the same move `stamp_message_expiry` makes for `expires_at`. The
+  media trim in useMediaSend replaces a body with a "media removed" placeholder
+  and so marks those rows edited, which is what happened to them.
+
+  `expires_at` and `created_at` are frozen for the reason the server stamps
+  them at all. A disappearing message whose sender can null its expiry
+  afterwards does not disappear, and `created_at` is what every read-receipt
+  watermark is compared against.
+*/
+CREATE OR REPLACE FUNCTION public.messages_body_guard()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = ''
+AS $$
+BEGIN
+  IF OLD.deleted_at IS NOT NULL THEN
+    IF NEW.deleted_at IS NULL THEN
+      RAISE EXCEPTION 'a deleted message cannot be restored';
+    END IF;
+    IF NEW.ciphertext IS NOT NULL OR NEW.media_path IS NOT NULL THEN
+      RAISE EXCEPTION 'a deleted message cannot be given a new body';
+    END IF;
+  END IF;
+
+  IF NEW.deleted_at IS NULL
+     AND (NEW.ciphertext IS DISTINCT FROM OLD.ciphertext
+          OR NEW.media_path IS DISTINCT FROM OLD.media_path) THEN
+    NEW.edited_at := now();
+  END IF;
+
+  NEW.expires_at := OLD.expires_at;
+  NEW.created_at := OLD.created_at;
+  RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.messages_body_guard() FROM PUBLIC, anon, authenticated;
+
+DROP TRIGGER IF EXISTS messages_body_guard ON public.messages;
+CREATE TRIGGER messages_body_guard
+  BEFORE UPDATE ON public.messages
+  FOR EACH ROW EXECUTE FUNCTION public.messages_body_guard();
 
 -- Sixty a minute is far above human speed; a person typing fast sends perhaps
 -- twenty. This stops a loop, not a spammer.
@@ -604,6 +773,11 @@ CREATE TABLE IF NOT EXISTS public.message_reactions (
 CREATE INDEX IF NOT EXISTS message_reactions_message_idx
   ON public.message_reactions (message_id);
 
+-- Covers the user_id FK and the rate limit's count below, which without it is
+-- a sequential scan on every insert that gets slower as the table grows.
+CREATE INDEX IF NOT EXISTS message_reactions_user_time
+  ON public.message_reactions (user_id, created_at);
+
 ALTER TABLE public.message_reactions ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "reactions_select_participant" ON public.message_reactions;
@@ -633,6 +807,37 @@ DROP POLICY IF EXISTS "reactions_delete_own" ON public.message_reactions;
 CREATE POLICY "reactions_delete_own" ON public.message_reactions
   FOR DELETE TO authenticated
   USING ((select auth.uid()) = user_id);
+
+-- The same runaway guard `messages` has. A reaction is a tap, and sixty a
+-- minute is well past the pace of one; the UNIQUE above bounds repeats of a
+-- single emoji but not a loop cycling through different ones.
+CREATE OR REPLACE FUNCTION public.enforce_reaction_rate()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = ''
+AS $$
+DECLARE
+  recent int;
+BEGIN
+  SELECT count(*) INTO recent
+  FROM public.message_reactions r
+  WHERE r.user_id = NEW.user_id
+    AND r.created_at > now() - interval '1 minute';
+
+  IF recent >= 60 THEN
+    RAISE EXCEPTION 'rate_limited_reactions';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.enforce_reaction_rate() FROM PUBLIC, anon, authenticated;
+
+DROP TRIGGER IF EXISTS message_reactions_rate_limit ON public.message_reactions;
+CREATE TRIGGER message_reactions_rate_limit
+  BEFORE INSERT ON public.message_reactions
+  FOR EACH ROW EXECUTE FUNCTION public.enforce_reaction_rate();
 
 -- ---------------------------------------------------------------------------
 -- 5b. Delivery and read receipts
@@ -893,6 +1098,86 @@ REVOKE ALL ON FUNCTION public.ask_sealed(uuid, uuid, text, text, text, text) FRO
 GRANT EXECUTE ON FUNCTION public.ask_sealed(uuid, uuid, text, text, text, text) TO authenticated;
 
 -- ===========================================================================
+-- 5d. Sticker library
+-- ===========================================================================
+
+/*
+  The stickers you own. Not the stickers you have sent — those are attachments
+  like any other, and the server cannot tell them apart from photos.
+
+  That separation is the design. The cheap build is a public bucket and a
+  sticker id on the message row: one upload, free dedup, no decryption. It also
+  puts "who sent which picture to whom, and when" back on the server in
+  plaintext, for the one message type where the picture is the entire message.
+  A server that holds no bodies but does hold that holds the conversation. So a
+  sticker send re-uploads a freshly sealed copy every time, and the cost is
+  paid deliberately.
+
+  Both the file key and the label are sealed under the owner's vault key — the
+  same key self-chat uses. A plaintext label column would be a searchable index
+  of everything in your drawer, sitting in Postgres.
+*/
+CREATE TABLE IF NOT EXISTS public.stickers (
+  id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id          uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  -- {user_id}/{uuid} inside the `stickers` bucket. The storage policies key off
+  -- the first folder segment, so this shape is load-bearing.
+  path             text NOT NULL,
+  -- Deleting the row destroys the only copy of the file key, so the bytes left
+  -- in the bucket become unopenable rather than merely unlisted.
+  key_ciphertext   text NOT NULL,
+  key_nonce        text NOT NULL,
+  label_ciphertext text NOT NULL,
+  label_nonce      text NOT NULL,
+  sort             integer NOT NULL DEFAULT 0,
+  created_at       timestamptz NOT NULL DEFAULT now(),
+
+  -- One row per object. Two rows pointing at the same bytes would make deletion
+  -- ambiguous: dropping one strands the other on an object whose key it holds.
+  CONSTRAINT stickers_path_unique UNIQUE (path)
+);
+
+CREATE INDEX IF NOT EXISTS stickers_user_idx
+  ON public.stickers (user_id, sort, created_at);
+
+ALTER TABLE public.stickers ENABLE ROW LEVEL SECURITY;
+
+/*
+  Owner-only on every verb, with no participant branch.
+
+  A sticker's recipient never reads this table: the message row carries its own
+  sealed copy of the file key, so the send is self-contained and the library is
+  not on the delivery path. That is what lets it stay completely private.
+
+  UPDATE is allowed here, unlike `sealed_answers` — renaming and reordering your
+  own drawer is not a protocol step and nothing is committed against it.
+*/
+DROP POLICY IF EXISTS "stickers_select_own" ON public.stickers;
+CREATE POLICY "stickers_select_own" ON public.stickers
+  FOR SELECT TO authenticated
+  USING (user_id = (select auth.uid()));
+
+DROP POLICY IF EXISTS "stickers_insert_own" ON public.stickers;
+CREATE POLICY "stickers_insert_own" ON public.stickers
+  FOR INSERT TO authenticated
+  WITH CHECK (user_id = (select auth.uid()));
+
+DROP POLICY IF EXISTS "stickers_update_own" ON public.stickers;
+CREATE POLICY "stickers_update_own" ON public.stickers
+  FOR UPDATE TO authenticated
+  USING (user_id = (select auth.uid()))
+  WITH CHECK (user_id = (select auth.uid()));
+
+DROP POLICY IF EXISTS "stickers_delete_own" ON public.stickers;
+CREATE POLICY "stickers_delete_own" ON public.stickers
+  FOR DELETE TO authenticated
+  USING (user_id = (select auth.uid()));
+
+REVOKE ALL ON public.stickers FROM anon;
+REVOKE ALL ON public.stickers FROM authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.stickers TO authenticated;
+
+-- ===========================================================================
 -- 6. Private per-user settings
 -- ===========================================================================
 
@@ -1121,6 +1406,9 @@ CREATE TABLE IF NOT EXISTS public.room_messages (
 );
 CREATE INDEX IF NOT EXISTS room_messages_room_time
   ON public.room_messages (room_id, created_at DESC);
+-- Keyed on the writer, for the rate limit's count below.
+CREATE INDEX IF NOT EXISTS room_messages_sender_time
+  ON public.room_messages (sender_id, created_at);
 CREATE INDEX IF NOT EXISTS room_messages_expiring
   ON public.room_messages (expires_at) WHERE expires_at IS NOT NULL;
 
@@ -1187,12 +1475,33 @@ DROP POLICY IF EXISTS participants_insert_creator ON public.room_participants;
 CREATE POLICY participants_insert_creator ON public.room_participants
   FOR INSERT TO authenticated WITH CHECK (public.is_room_owner(room_id));
 
--- The creator removes members; anyone may remove themselves. Leaving is not a
--- privilege the room owner should be able to withhold.
+/*
+  The creator removes members; anyone else may remove themselves. Leaving is
+  not a privilege the room owner should be able to withhold.
+
+  The creator cannot leave, and that asymmetry is what keeps ownership and
+  membership from separating. `is_room_owner()` reads `rooms.created_by`, which
+  is permanent, while everything else about a room is checked against
+  `room_participants`, which is not — so a creator who deleted their own
+  participant row kept the right to add members, seal and delete keys and drop
+  the room, in a room `rooms_select_member` had stopped showing them. With this
+  the creator's row can only disappear with the room it belongs to. The client
+  already draws it this way: RoomView offers the owner "Delete room" and
+  everyone else "Leave room".
+
+  Making `is_room_owner()` require membership would be the other way round, and
+  it deadlocks: `participants_insert_creator` calls it to insert the creator's
+  own row, which is the first membership there is.
+*/
 DROP POLICY IF EXISTS participants_delete_owner_or_self ON public.room_participants;
 CREATE POLICY participants_delete_owner_or_self ON public.room_participants
   FOR DELETE TO authenticated
-  USING (user_id = (SELECT auth.uid()) OR public.is_room_owner(room_id));
+  USING (
+    CASE WHEN public.is_room_owner(room_id)
+         THEN user_id <> (SELECT auth.uid())
+         ELSE user_id =  (SELECT auth.uid())
+    END
+  );
 
 -- A member may read only their OWN sealed copy. Someone else's would be
 -- useless (it is sealed to their key) but there is no reason to hand it over.
@@ -1220,6 +1529,36 @@ DROP POLICY IF EXISTS room_messages_insert_member ON public.room_messages;
 CREATE POLICY room_messages_insert_member ON public.room_messages
   FOR INSERT TO authenticated
   WITH CHECK (sender_id = (SELECT auth.uid()) AND public.is_room_member(room_id));
+
+-- A room body is a client insert like a message body, and gets the same
+-- runaway guard for the same reason: a loop, not a person.
+CREATE OR REPLACE FUNCTION public.enforce_room_message_rate()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = ''
+AS $$
+DECLARE
+  recent int;
+BEGIN
+  SELECT count(*) INTO recent
+  FROM public.room_messages m
+  WHERE m.sender_id = NEW.sender_id
+    AND m.created_at > now() - interval '1 minute';
+
+  IF recent >= 60 THEN
+    RAISE EXCEPTION 'rate_limited_messages';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.enforce_room_message_rate() FROM PUBLIC, anon, authenticated;
+
+DROP TRIGGER IF EXISTS room_messages_rate_limit ON public.room_messages;
+CREATE TRIGGER room_messages_rate_limit
+  BEFORE INSERT ON public.room_messages
+  FOR EACH ROW EXECUTE FUNCTION public.enforce_room_message_rate();
 
 -- ===========================================================================
 -- 8. Disappearing messages
@@ -1805,12 +2144,22 @@ GRANT EXECUTE ON FUNCTION public.public_table_names() TO authenticated;
 -- ===========================================================================
 
 /*
-  REPLICA IDENTITY FULL on four of these: without it, a DELETE's or UPDATE's
+  REPLICA IDENTITY FULL on five of these: without it, a DELETE's or UPDATE's
   old record arrives as bare key columns that realtime cannot evaluate the
   SELECT policy against, and the event never reaches the client. For
   chat_backgrounds and friend_nicknames — which nobody but the owner can see —
   realtime is not what makes the feature work; it keeps one user's own devices
   in step.
+
+  `message_reactions` is the one that was missed (fixed in 0034). The client
+  subscribes to its DELETE events, and `reactions_select_participant` reads
+  `message_id` — a column a default replica identity does not send — so every
+  removed reaction stayed on the other person's screen until they reloaded.
+
+  `messages` is deliberately NOT on this list. Nothing subscribes to DELETE on
+  it, an UPDATE is authorized against the new record, which is complete either
+  way, and FULL would copy every superseded ciphertext into the WAL on each
+  edit to produce an event nobody is listening for.
 
   ALTER PUBLICATION ... ADD TABLE has no IF NOT EXISTS: a second run raises
   42710 and aborts the whole script. Every add is guarded so this file stays
@@ -1818,6 +2167,7 @@ GRANT EXECUTE ON FUNCTION public.public_table_names() TO authenticated;
 */
 ALTER TABLE public.friendships       REPLICA IDENTITY FULL;
 ALTER TABLE public.message_receipts  REPLICA IDENTITY FULL;
+ALTER TABLE public.message_reactions REPLICA IDENTITY FULL;
 ALTER TABLE public.chat_backgrounds  REPLICA IDENTITY FULL;
 ALTER TABLE public.friend_nicknames  REPLICA IDENTITY FULL;
 
@@ -1867,8 +2217,8 @@ NOTIFY pgrst, 'reload schema';
   Two things this file cannot do
   ===========================================================================
 
-  1. Storage. Run `storage/setup.sql` after this file: it creates the `avatars`
-     and `chat-media` buckets and their policies on storage.objects.
+  1. Storage. Run `storage/setup.sql` after this file: it creates the `avatars`,
+     `chat-media` and `stickers` buckets and their policies on storage.objects.
 
   2. The expiry sweep. pg_cron must be enabled on the project first
      (Database → Extensions → pg_cron), and cron.schedule fails with a

@@ -6,9 +6,9 @@
 // that vibrates on every incoming message is a messenger people turn off. And
 // it is silent wherever haptics do not exist, which is every browser this ever
 // runs in.
-import { Capacitor } from '@capacitor/core';
 import { Haptics, ImpactStyle, NotificationType } from '@capacitor/haptics';
 import { prefersReducedMotion } from './motion';
+import { isMobileNative } from './platform';
 
 /**
  * Reduced motion covers this too.
@@ -18,7 +18,7 @@ import { prefersReducedMotion } from './motion';
  * asked for a quieter one and a buzzier one.
  */
 function enabled(): boolean {
-  return Capacitor.isNativePlatform() && !prefersReducedMotion();
+  return isMobileNative() && !prefersReducedMotion();
 }
 
 /** A message left the device. The lightest tap there is — this fires many

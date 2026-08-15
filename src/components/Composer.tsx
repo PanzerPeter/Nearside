@@ -1,5 +1,6 @@
 import {
   forwardRef,
+  type ReactNode,
   useCallback,
   useEffect,
   useImperativeHandle,
@@ -56,6 +57,9 @@ interface ComposerProps {
   } | null;
   /** Surfaced by the parent as a toast (mic permission, unsupported browser). */
   onError: (message: string) => void;
+  /** The sticker drawer, rendered as the picker's second tab. Only the composer
+   *  gets one — see `EmojiPopover`. */
+  stickers?: ReactNode;
 }
 
 // Shared with MessageBubble's edit textarea, which reuses this exact
@@ -86,6 +90,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
     onCancelReply,
     editing,
     onError,
+    stickers,
   },
   ref
 ) {
@@ -613,6 +618,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
               anchorRef={emojiBtnRef}
               onSelect={insertEmoji}
               onClose={() => setEmojiOpen(false)}
+              stickers={stickers}
             />
 
             <textarea

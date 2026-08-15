@@ -13,6 +13,10 @@
     "android:open": "cap open android",
     "ios:sync": "NEARSIDE_NATIVE=1 vite build && cap sync ios",
     "ios:open": "cap open ios",
+    "electron:sync": "NEARSIDE_NATIVE=1 vite build && cap sync @capawesome/capacitor-electron",
+    "electron:install": "cd electron && npm install",
+    "electron:start": "npm run electron:sync && cap run @capawesome/capacitor-electron",
+    "electron:pack": "npm run electron:sync && cd electron && npm run pack",
     "typecheck": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.worker.json",
     "db:verify": "bash supabase/verify/verify.sh"
   },
@@ -52,6 +56,7 @@
     "workbox-window": "^7.4.1"
   },
   "devDependencies": {
+    "@capawesome/capacitor-electron": "^0.1.0",
     "@eslint/js": "^9.9.1",
     "@types/libsodium-wrappers": "^0.7.14",
     "@types/node": "^26.1.2",

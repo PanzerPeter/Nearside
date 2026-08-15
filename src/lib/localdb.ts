@@ -5,13 +5,13 @@
 //
 // One store per account, never one per device: two people sharing a phone must
 // not find each other's decrypted messages in their own search results.
-import { Capacitor } from '@capacitor/core';
 import { hasExpired } from './disappearing';
 import {
   CapacitorSQLite,
   SQLiteConnection,
   type SQLiteDBConnection,
 } from '@capacitor-community/sqlite';
+import { isMobileNative } from './platform';
 
 export interface CachedMessage {
   id: string;
@@ -92,7 +92,7 @@ const contactMemory = new Map<string, Map<string, CachedContact>>();
 const pinMemory = new Map<string, Map<string, PinnedMedia>>();
 
 function native(): boolean {
-  return Capacitor.isNativePlatform();
+  return isMobileNative();
 }
 
 function scoped<T>(stores: Map<string, Map<string, T>>): Map<string, T> | null {
@@ -327,6 +327,33 @@ export async function clearLocalDb(): Promise<void> {
   await db?.execute('DELETE FROM messages_cache');
   await db?.execute('DELETE FROM contacts');
   await db?.execute('DELETE FROM pins');
+}
+
+/**
+ * Empties a *different* account's store, then reopens the caller's.
+ *
+ * Needed because the account switcher can drop an account the device is not
+ * currently signed into, and that account's mirror is decrypted message text
+ * sitting in the sandbox. Leaving it there would make "remove from this device"
+ * the one delete in the app that removes the way back in and keeps the contents.
+ *
+ * There is no second connection: every read and write in this file goes through
+ * the one `db`, so the only way to reach another store is to become its owner
+ * for the duration and hand ownership back. `restoreUserId` is passed rather
+ * than remembered so a caller with nobody signed in can pass null and leave the
+ * connection closed.
+ */
+export async function clearLocalDbFor(
+  userId: string,
+  restoreUserId: string | null
+): Promise<void> {
+  if (userId === restoreUserId) {
+    await clearLocalDb();
+    return;
+  }
+  await openLocalDb(userId);
+  await clearLocalDb();
+  if (restoreUserId) await openLocalDb(restoreUserId);
 }
 
 /**

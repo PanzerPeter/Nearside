@@ -14,9 +14,9 @@
 // That directory needs no storage permission at any API level: asking a
 // messenger for access to all your photos in order to save one of them is a
 // trade this app does not make.
-import { Capacitor } from '@capacitor/core';
 import { Media } from '@capacitor-community/media';
 import { Directory, Encoding, Filesystem } from '@capacitor/filesystem';
+import { isMobileNative } from './platform';
 
 /** The album saved attachments appear under in the gallery. */
 const GALLERY_ALBUM = 'Nearside';
@@ -80,7 +80,7 @@ function saveViaAnchor(blob: Blob, filename: string): void {
  * a file the app itself wrote.
  */
 export async function saveTextFile(text: string, filename: string): Promise<void> {
-  if (!Capacitor.isNativePlatform()) {
+  if (!isMobileNative()) {
     saveViaAnchor(new Blob([text], { type: 'application/json' }), filename);
     return;
   }
@@ -105,7 +105,7 @@ export async function saveToGallery(
   filename: string,
   kind: 'image' | 'video'
 ): Promise<void> {
-  if (!Capacitor.isNativePlatform()) {
+  if (!isMobileNative()) {
     saveViaAnchor(blob, filename);
     return;
   }

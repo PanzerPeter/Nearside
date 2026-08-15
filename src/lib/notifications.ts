@@ -1,3 +1,4 @@
+import { isMobileNative } from './platform';
 // Notifications, through OneSignal on Android, plus the browser-side helpers
 // the foreground banner path still uses. OneSignal owns the tray entry alone;
 // the Web Push (VAPID) transport that competed for it is gone.
@@ -7,7 +8,6 @@
 // not imply otherwise. "New message from Alice" is the most that can honestly
 // be said, and even the name comes from `profiles.display_name`, which the
 // transparency screen lists as something the server holds.
-import { Capacitor } from '@capacitor/core';
 
 /** Tags the In-App Messages and journeys target. Both are booleans about the
  *  state of the app on this account. Neither carries a message, a contact, or
@@ -49,7 +49,7 @@ export function resolveOneSignal(mod: unknown): OneSignalModule | null {
 }
 
 async function oneSignal(): Promise<OneSignalModule | null> {
-  if (!Capacitor.isNativePlatform()) return null;
+  if (!isMobileNative()) return null;
   if (plugin) return plugin;
   try {
     plugin = resolveOneSignal(await import('onesignal-cordova-plugin'));

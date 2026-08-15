@@ -11,6 +11,7 @@
 // it.
 import { Capacitor, SystemBars, SystemBarsStyle } from '@capacitor/core';
 import { Purchases, type PurchasesPackage } from '@revenuecat/purchases-capacitor';
+import { isMobileNative } from './platform';
 
 /** Anything the appearance screen can list, bought or not. */
 export interface ThemeOption {
@@ -151,7 +152,7 @@ function packsFromActive(active: Record<string, unknown> | undefined): Set<strin
  * ask.
  */
 export async function packsFromEntitlements(): Promise<Set<string>> {
-  if (!Capacitor.isNativePlatform()) return new Set();
+  if (!isMobileNative()) return new Set();
   try {
     const { customerInfo } = await Purchases.getCustomerInfo();
     return packsFromActive(customerInfo?.entitlements?.active);
@@ -170,7 +171,7 @@ export async function packsFromEntitlements(): Promise<Set<string>> {
  * has to ask separately to say where they came from.
  */
 export async function hasAllPacksEntitlement(): Promise<boolean> {
-  if (!Capacitor.isNativePlatform()) return false;
+  if (!isMobileNative()) return false;
   try {
     const { customerInfo } = await Purchases.getCustomerInfo();
     return Boolean(customerInfo?.entitlements?.active?.[ALL_PACKS_ENTITLEMENT]);
@@ -189,7 +190,7 @@ let configured = false;
  * configure has already run.
  */
 export async function initPurchases(userId: string): Promise<void> {
-  if (!Capacitor.isNativePlatform()) return;
+  if (!isMobileNative()) return;
   // One key per store, and they are not interchangeable. RevenueCat rejects an
   // App Store receipt presented under a Play key, and the failure surfaces as
   // "owns nothing": every paid-for pack gone, with no error to read.
@@ -211,7 +212,7 @@ export async function initPurchases(userId: string): Promise<void> {
 }
 
 export async function logOutPurchases(): Promise<void> {
-  if (!Capacitor.isNativePlatform() || !configured) return;
+  if (!isMobileNative() || !configured) return;
   await Purchases.logOut().catch(() => {});
 }
 
@@ -225,7 +226,7 @@ export interface PackOffer {
  *  no offering is shown as unavailable rather than at a price we made up. */
 export async function packOffers(): Promise<Map<string, PackOffer>> {
   const offers = new Map<string, PackOffer>();
-  if (!Capacitor.isNativePlatform()) return offers;
+  if (!isMobileNative()) return offers;
 
   try {
     const { current } = await Purchases.getOfferings();
@@ -252,7 +253,7 @@ export async function purchasePack(offer: PackOffer): Promise<boolean> {
 
 /** Play requires this, and a user on a second device needs it. */
 export async function restorePurchases(): Promise<Set<string>> {
-  if (!Capacitor.isNativePlatform()) return new Set();
+  if (!isMobileNative()) return new Set();
   const { customerInfo } = await Purchases.restorePurchases();
   return packsFromActive(customerInfo?.entitlements?.active);
 }
@@ -333,7 +334,7 @@ function surfaceIsLight(surface: string): boolean | null {
  * phone in dark mode gets white-on-cream icons.
  */
 function syncSystemBars(light: boolean | null): void {
-  if (!Capacitor.isNativePlatform() || light === null) return;
+  if (!isMobileNative() || light === null) return;
   void SystemBars.setStyle({
     // Capacitor's naming is by content, not by background: Dark means light
     // icons. A light surface therefore takes Light — dark icons.

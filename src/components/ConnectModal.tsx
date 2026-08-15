@@ -239,7 +239,13 @@ function AddSomeone({ me, onConnected, toastError }: AddSomeoneProps) {
           toastError(
             /rate_limited_requests/.test(error.message)
               ? 'Too many friend requests in the last hour.'
-              : error.message
+              : // `friendships_unique_pair` (0034) holds one row per pair in
+                // either direction, so the check above losing a race with the
+                // other person's own redeem lands here rather than creating a
+                // second, independently acceptable row.
+                /duplicate key|unique constraint/i.test(error.message)
+                ? 'They added you at the same moment. Accept their request from your pending list.'
+                : error.message
           );
           return;
         }

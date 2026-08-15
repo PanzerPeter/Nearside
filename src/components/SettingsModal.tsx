@@ -3,6 +3,7 @@ import { Profile } from '../lib/types';
 import { Modal } from './Modal';
 import { SettingsPanel } from './SettingsPanel';
 import type { AppLock } from '../hooks/useAppLock';
+import type { StoredAccount } from '../lib/accounts';
 
 interface SettingsModalProps {
   session: Session;
@@ -13,6 +14,10 @@ interface SettingsModalProps {
   /** Threaded from `App` rather than built here: one state machine, or the
    *  gate and the toggle disagree. */
   appLock: AppLock;
+  accounts: StoredAccount[];
+  onSwitchAccount: (account: StoredAccount) => void;
+  onForgetAccount: (account: StoredAccount) => void;
+  onAddAccount: () => void;
 }
 
 /**
@@ -30,6 +35,10 @@ export function SettingsModal({
   onSignOut,
   onClose,
   appLock,
+  accounts,
+  onSwitchAccount,
+  onForgetAccount,
+  onAddAccount,
 }: SettingsModalProps) {
   return (
     <Modal
@@ -48,6 +57,10 @@ export function SettingsModal({
         onUpdated={onUpdated}
         onSignOut={onSignOut}
         appLock={appLock}
+        accounts={accounts}
+        onSwitchAccount={onSwitchAccount}
+        onForgetAccount={onForgetAccount}
+        onAddAccount={onAddAccount}
       />
     </Modal>
   );

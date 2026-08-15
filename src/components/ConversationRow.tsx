@@ -4,7 +4,7 @@ import { formatListTime } from '../lib/time';
 import { formatUnread } from '../lib/receipts';
 import { isSelfChat } from '../lib/conversation';
 import { formatDisplayName, useNickname } from '../lib/nicknames';
-import type { ConversationSummary } from '../lib/types';
+import type { ConversationSummary, MediaType } from '../lib/types';
 import { NotebookPen } from 'lucide-react';
 
 interface ConversationRowProps {
@@ -37,7 +37,12 @@ export function ConversationRow({
   const title = formatDisplayName(nickname, display_name, isSelf);
   const handle = nickname && !isSelf ? `@${display_name}` : null;
 
-  const mediaLabels = { image: 'Photo', video: 'Video', audio: 'Voice message' };
+  const mediaLabels: Record<MediaType, string> = {
+    image: 'Photo',
+    video: 'Video',
+    audio: 'Voice message',
+    sticker: 'Sticker',
+  };
   const body = lastText?.trim() || (last_media_type ? mediaLabels[last_media_type] : '');
   // "You:" on a note to yourself would be noise — every message there is yours.
   const preview = body

@@ -42,3 +42,5 @@
 0030_theme_grants.sql
 0031_grant_hygiene.sql
 0032_sealed_exchange.sql
+0033_stickers.sql
+0034_write_guards.sql

@@ -12,7 +12,24 @@ export default tseslint.config(
   // not loaded for plain .js.
   // `ios/` is the same story: Xcode/CocoaPods output plus the web bundle
   // `cap sync` copies into App/App/public.
-  { ignores: ['dist', 'android/**', 'ios/**'] },
+  // `electron/` follows the same rule, but only for what the build writes:
+  // `main.ts` and the two configs beside it are hand-written source and are
+  // linted. Everything listed here is `cap sync` / electron-builder output —
+  // the copied web bundle, the compiled main process, the generated plugin
+  // manifest (which carries eslint-disable comments for rules that are not
+  // loaded for plain .mjs), the vendored runtime and the packaged artifacts.
+  {
+    ignores: [
+      'dist',
+      'android/**',
+      'ios/**',
+      'electron/app/**',
+      'electron/build/**',
+      'electron/generated/**',
+      'electron/vendor/**',
+      'electron/dist/**',
+    ],
+  },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ['**/*.{ts,tsx}'],

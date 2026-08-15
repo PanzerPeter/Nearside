@@ -11,9 +11,19 @@ its own. Run the query before trusting it.
 
 ## Migrations
 
-`0001`–`0030` and `0032`, in the order given by
-[`migrations/apply-order.txt`](migrations/apply-order.txt), are live. `0031` is
-the one gap, described below.
+Every migration in
+[`migrations/apply-order.txt`](migrations/apply-order.txt) is live, `0001`
+through `0034`, with no gaps. The live database and `schema.sql` now describe
+the same thing — which is the assumption `npm run db:verify` results are only
+worth anything under.
+
+`0034` was applied before `0033`, a departure from the apply order and a safe
+one: the two files touch nothing in common — `0033` adds the `stickers` table
+and widens the `messages_media_type_check` CHECK, `0034` adds triggers,
+constraints and policies elsewhere — and neither replaces a function or policy
+the other creates. `npm run db:verify` against the swapped order fingerprints
+identically to `schema.sql` (576 facts), so the database this project holds is
+the one this repo describes regardless of which of the two landed first.
 
 `0001`–`0019a` were replayed onto this project during Plan 1; `0020` onward were
 applied individually and are the ones the platform's migration history records.
@@ -30,24 +40,24 @@ SELECT to_regclass('public.sealed_answers') IS NOT NULL AS table_live,
 Two policies, SELECT and INSERT. There is deliberately no UPDATE policy and no
 UPDATE grant — an editable answer would defeat the protocol.
 
-**`0031_grant_hygiene.sql` is not applied.** It is two corrections found by
-replaying the folder into a throwaway Postgres (`npm run db:verify`), neither
-reachable from the app:
+`0031_grant_hygiene.sql` is applied. It was two corrections found by replaying
+the folder into a throwaway Postgres (`npm run db:verify`) rather than by
+anything the app did, and neither was reachable from the app:
 
-- `conversation_list()` is executable by `anon`. `0022` revoked it; `0023`
+- `conversation_list()` was executable by `anon`. `0022` revoked it; `0023`
   rebuilt the function with `DROP FUNCTION` — required, because removing
   `last_message` changes the return type — and the new one was created without
   a REVOKE, so the default `EXECUTE TO PUBLIC` came back. Not a disclosure: with
   no JWT `auth.uid()` is NULL, `peers` is empty and the join to `profiles`
-  matches nothing, so an anonymous call returns zero rows. It is an unintended
-  endpoint at `/rest/v1/rpc/conversation_list`, which is the class `0019a`
-  exists to close.
-- `chat_backgrounds`'s primary key is named `chat_backgrounds_pkey1`, because
+  matches nothing, so an anonymous call returned zero rows. What it closed is an
+  unintended endpoint at `/rest/v1/rpc/conversation_list`, which is the class
+  `0019a` exists to close.
+- `chat_backgrounds`'s primary key was named `chat_backgrounds_pkey1`, because
   `0013` renamed the pair-shaped table aside before creating the new one beside
-  it. Cosmetic, and the one place a database built from `schema.sql` would
-  legitimately differ from a replay of this folder.
+  it. Cosmetic, and it was the one place a database built from `schema.sql`
+  differed from a replay of this folder.
 
-Confirm the first before and after applying it:
+Both statements are guarded and re-running the file is safe. Confirm with:
 
 ```sql
 SELECT has_function_privilege('anon', 'public.conversation_list()', 'EXECUTE')
@@ -96,6 +106,57 @@ migration with:
 SELECT has_function_privilege('authenticated',
          'public.grant_theme_packs(text, text[], text)', 'EXECUTE') AS should_be_false;
 ```
+
+### `0033_stickers.sql` — applied, plus its bucket
+
+The sticker library: the `stickers` table, and `'sticker'` added to
+`messages_media_type_check`. It is two steps, because the table alone is half
+the feature — the migration, then `storage/setup.sql`, which is written to be
+re-run and creates the `stickers` bucket alongside the two that already exist.
+Both are in:
+
+```sql
+SELECT to_regclass('public.stickers') IS NOT NULL AS table_live,
+       (SELECT count(*) FROM pg_policies WHERE tablename = 'stickers') AS policies,
+       EXISTS (SELECT 1 FROM storage.buckets WHERE id = 'stickers') AS bucket_live;
+```
+
+Four policies on the table, four more on `storage.objects`. Sending a sticker is
+the ordinary attachment path into `chat-media`, so nothing about it reaches the
+`stickers` bucket — that bucket is the library, and it is owner-only on every
+verb.
+
+### `0034_write_guards.sql` — applied
+
+Closes what a row-level policy cannot see, because it is shown one row and not
+the change. The one that mattered: `friendships_update_addressee` pinned
+`addressee_id` and left `requester_id` free, so the addressee of any row they
+controlled could point it at a stranger, set `'accepted'`, and hold a friendship
+that stranger was never asked for — which is the only gate in front of DMs and
+published keys. Also: tombstones are final, `edited_at` is stamped by the server
+rather than claimed by the client, `expires_at` and `created_at` stop being
+writable after insert, `DELETE` on `messages` is gone as policy and as
+privilege, `display_name` gets the bounds nicknames already had, a room's
+creator can no longer leave it, `message_reactions` gets `REPLICA IDENTITY FULL`
+(without it realtime silently dropped every reaction removal), and
+`room_messages` and `message_reactions` get the rate limit `messages` has.
+
+```sql
+SELECT count(*) FILTER (WHERE tgname = 'friendships_prevent_reassign') AS friendship_guard,
+       count(*) FILTER (WHERE tgname = 'messages_body_guard')          AS body_guard
+  FROM pg_trigger WHERE NOT tgisinternal;
+
+SELECT has_table_privilege('authenticated', 'public.messages', 'DELETE') AS should_be_false;
+
+SELECT relreplident AS should_be_f
+  FROM pg_class WHERE oid = 'public.message_reactions'::regclass;
+```
+
+It also repaired data on the way through: any `profiles.display_name` outside
+1–32 trimmed characters or carrying a control character was rewritten, and any
+second friendship row for a pair that already had one was deleted (accepted
+kept over pending, then oldest). Both were no-ops on a project this client is
+the only writer for.
 
 ## What the server holds
 

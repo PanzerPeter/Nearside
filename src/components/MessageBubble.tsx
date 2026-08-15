@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Message, Reaction } from '../lib/types';
 import { MediaAttachment } from './MediaAttachment';
+import { StickerAttachment } from './StickerAttachment';
 import { VoiceNote } from './VoiceNote';
 import { MessageText } from './MessageText';
 import { MAX_TEXTAREA_PX } from './Composer';
@@ -83,7 +84,31 @@ export function MessageBubble({
   // A picture or a video — the two that fill the bubble edge to edge. A voice
   // note is a control with its own padding and behaves like text here.
   const hasVisualMedia =
-    !isDeleted && !!msg.media_path && !!msg.media_type && msg.media_type !== 'audio';
+    !isDeleted &&
+    !!msg.media_path &&
+    !!msg.media_type &&
+    msg.media_type !== 'audio' &&
+    msg.media_type !== 'sticker';
+  /**
+   * A sticker with nothing else in the bubble, which is how a sticker is
+   * normally sent.
+   *
+   * Then the bubble stops being a bubble: no background, no shadow, no padding.
+   * A sticker is drawn to read as a stamp on the conversation rather than as a
+   * picture someone attached, and a coloured rounded rectangle behind it is
+   * exactly the frame the form is supposed to not have.
+   *
+   * A sticker sent as a reply, or one that failed to decrypt, keeps the bubble:
+   * there is other content in there that needs a surface to sit on.
+   */
+  const stickerAlone =
+    !isDeleted &&
+    msg.media_type === 'sticker' &&
+    !!msg.media_path &&
+    !msg.text &&
+    !msg.forwarded &&
+    !msg.reply_to_id &&
+    !msg.decrypt_failed;
   // Nothing above or below the picture inside the bubble. Then it is the whole
   // bubble, and the footer has no line of its own to sit on: rather than leave
   // a bare band of bubble colour under the image, it floats over the corner.
@@ -347,7 +372,12 @@ export function MessageBubble({
               transition: swiping ? 'none' : 'transform 0.2s ease-out',
               touchAction: canReply ? 'pan-y' : undefined,
             }}
-            className={`px-3.5 pt-2 rounded-2xl whitespace-pre-wrap break-words shadow-[0_1px_2px_rgba(0,0,0,0.28)] cursor-default ${
+            className={`rounded-2xl whitespace-pre-wrap break-words cursor-default ${
+              // A bare sticker keeps the rounding (reaction chips and the menu
+              // ring still anchor to this box) and drops everything that would
+              // draw a frame around it.
+              stickerAlone ? 'p-0' : 'px-3.5 pt-2 shadow-[0_1px_2px_rgba(0,0,0,0.28)]'
+            } ${
               isOwn ? 'rounded-br-md' : 'rounded-bl-md'
             } ${
               // Reaction chips hang about 12px up into the bubble from
@@ -355,13 +385,26 @@ export function MessageBubble({
               // right-aligned footer; the pad keeps them over dead space
               // rather than over the timestamp. A bare picture keeps no bottom
               // padding at all — its footer floats over the image instead.
-              !isDeleted && hasReactions ? 'pb-5' : floatFooter ? 'pb-0' : 'pb-2'
+              stickerAlone
+                ? hasReactions
+                  ? 'pb-3'
+                  : 'pb-0'
+                : !isDeleted && hasReactions
+                  ? 'pb-5'
+                  : floatFooter
+                    ? 'pb-0'
+                    : 'pb-2'
             } ${
               isDeleted
                 ? 'bg-base-300/60 text-base-content/60 italic'
-                : isOwn
-                ? 'bg-primary text-primary-content'
-                : 'bg-neutral text-neutral-content'
+                : stickerAlone
+                  ? // No bubble colour at all. The footer below reads against the
+                    // thread background instead, which is why it is given its own
+                    // treatment there rather than inheriting `text-*-content`.
+                    'text-base-content'
+                  : isOwn
+                    ? 'bg-primary text-primary-content'
+                    : 'bg-neutral text-neutral-content'
             } ${
               // The menu is a floating card that can end up above or below its
               // bubble; the ring is what keeps it visibly attached to the
@@ -411,8 +454,16 @@ export function MessageBubble({
                     </span>
                   </button>
                 )}
+                {msg.media_path && msg.media_type === 'sticker' && (
+                  <StickerAttachment
+                    messageId={msg.id}
+                    path={msg.media_path}
+                    mediaKey={msg.media_key}
+                  />
+                )}
                 {msg.media_path &&
                   msg.media_type &&
+                  msg.media_type !== 'sticker' &&
                   (msg.media_type === 'audio' ? (
                     <VoiceNote
                       messageId={msg.id}

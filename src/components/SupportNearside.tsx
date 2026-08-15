@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Capacitor } from '@capacitor/core';
 import { Bell, Database, Heart, Palette } from 'lucide-react';
 import { DONATION_TIERS, donate, donationOffers, type DonationOffer } from '../lib/donations';
 import { useToast } from '../hooks/useToast';
 import { Modal } from './Modal';
+import { isMobileNative } from '../lib/platform';
 
 interface SupportNearsideProps {
   onClose: () => void;
@@ -26,7 +26,7 @@ export function SupportNearside({ onClose }: SupportNearsideProps) {
   const [busy, setBusy] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const toast = useToast();
-  const native = Capacitor.isNativePlatform();
+  const native = isMobileNative();
 
   const load = useCallback(async () => {
     setOffers(await donationOffers());

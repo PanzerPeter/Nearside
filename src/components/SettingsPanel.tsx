@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import { Session } from '@supabase/supabase-js';
-import { Capacitor } from '@capacitor/core';
 import { supabase } from '../lib/supabase';
 import { Profile, initial } from '../lib/types';
 import {
@@ -14,6 +13,8 @@ import { AVATAR_MAX_EDGE, compressImage } from '../lib/compress';
 import { isSoundMuted, setSoundMuted } from '../lib/sound';
 import { isMotionReduced, prefersReducedMotion, setMotionReduced } from '../lib/motion';
 import { confirmsUsername } from '../lib/account';
+import type { StoredAccount } from '../lib/accounts';
+import { AccountSwitcher } from './AccountSwitcher';
 import { clearAll } from '../lib/outbox';
 import { clearLocalDb } from '../lib/localdb';
 import { clearPinnedMedia } from '../lib/pins';
@@ -46,6 +47,7 @@ import {
   Sparkles,
   Volume2,
 } from 'lucide-react';
+import { isMobileNative } from '../lib/platform';
 
 /** Display names collide freely and keep their spaces and capitals; the only
  *  rule left is that there is one and that it fits. See 0022_display_name. */
@@ -73,6 +75,11 @@ interface SettingsPanelProps {
   /** The one instance owned by `App`. Calling `useAppLock` again here would
    *  build a second state machine and the gate would stop matching the toggle. */
   appLock: AppLock;
+  /** Every account signed in on this device, current one included. */
+  accounts: StoredAccount[];
+  onSwitchAccount: (account: StoredAccount) => void;
+  onForgetAccount: (account: StoredAccount) => void;
+  onAddAccount: () => void;
 }
 
 /**
@@ -90,6 +97,10 @@ export function SettingsPanel({
   onUpdated,
   onSignOut,
   appLock,
+  accounts,
+  onSwitchAccount,
+  onForgetAccount,
+  onAddAccount,
 }: SettingsPanelProps) {
   const [display_name, setUsername] = useState(profile.display_name);
   const [avatarUrl, setAvatarUrl] = useState(profile.avatar_url ?? null);
@@ -147,7 +158,7 @@ export function SettingsPanel({
   // A change to it is picked up on the next mount, and by the listener
   // `initMotionPreference` installed, which repaints the app either way.
   const [osReducedMotion] = useState(prefersReducedMotion);
-  const native = Capacitor.isNativePlatform();
+  const native = isMobileNative();
 
   const [showServerView, setShowServerView] = useState(false);
   const [showLimits, setShowLimits] = useState(false);
@@ -709,6 +720,15 @@ export function SettingsPanel({
 
       <div className="space-y-2">
         <p className="text-xs font-medium uppercase tracking-wider text-base-content/60">Account</p>
+        {/* Above sign-out rather than below it: switching is the everyday action
+            and signing out is the one you take once. */}
+        <AccountSwitcher
+          accounts={accounts}
+          currentUserId={session.user.id}
+          onSwitch={onSwitchAccount}
+          onForget={onForgetAccount}
+          onAddAccount={onAddAccount}
+        />
         {confirmingSignOut ? (
           <>
             {/* Confirmed rather than one-tap, which is what it was in the top

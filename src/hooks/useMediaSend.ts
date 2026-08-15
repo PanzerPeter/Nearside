@@ -28,7 +28,9 @@ import { MEDIA_SCAN_LIMIT, selectStaleMedia, type MediaRow } from '../lib/media'
 import { pinnedIds } from '../lib/pins';
 import { CHAT_IMAGE_MAX_EDGE, compressImage } from '../lib/compress';
 import { notifyReceiver } from '../lib/push';
+import { stickerFile, type Sticker } from '../lib/stickers';
 import type { Identity } from '../lib/crypto/keys';
+import type { MediaType } from '../lib/types';
 
 export interface MediaSend {
   /** The pick waiting on Send, in the order it will be sent. Empty when there
@@ -45,6 +47,9 @@ export interface MediaSend {
   unstage: (id: string) => void;
   clearStaged: () => void;
   send: (caption: string, replyToId: string | null) => Promise<void>;
+  /** Send one sticker on its own. Not part of the staged batch: a sticker is
+   *  picked and sent in a single tap, with no caption and nothing to review. */
+  sendSticker: (sticker: Sticker, replyToId: string | null) => Promise<void>;
 }
 
 interface MediaSendOptions {
@@ -170,7 +175,7 @@ export function useMediaSend({
    *  thrown one. */
   async function uploadStaged(
     { file, durationMs }: StagedMedia,
-    kind: NonNullable<ReturnType<typeof classifyMedia>>,
+    kind: MediaType,
     caption: string,
     replyToId: string | null
   ): Promise<string | null> {
@@ -234,6 +239,39 @@ export function useMediaSend({
     return inserted?.id ?? null;
   }
 
+  /**
+   * Send one sticker.
+   *
+   * Deliberately the *same* upload path as a photo, with no shortcut of its own:
+   * a fresh per-file key, a fresh sealed object in `chat-media`, the key sealed
+   * to the recipient on the row. The library copy is not referenced and the
+   * server cannot tell this send from any other attachment.
+   *
+   * That means the same small file goes up again every time it is sent. The
+   * alternative — a shared object and a sticker id on the row — would put "who
+   * sent which picture to whom, and when" back in plaintext for the one message
+   * type where the picture is the whole message. The bytes are the price.
+   */
+  async function sendSticker(sticker: Sticker, replyToId: string | null): Promise<void> {
+    if (uploading) return;
+    setUploading(true);
+    try {
+      const file = await stickerFile(sticker);
+      if (!file) {
+        onError('That sticker could not be opened on this device.');
+        return;
+      }
+      const id = await uploadStaged({ id: sticker.id, file, durationMs: null }, 'sticker', '', replyToId);
+      if (!id) return;
+      onSent();
+      notifyReceiver(id, isSelf);
+    } catch {
+      onError('Could not send that sticker.');
+    } finally {
+      setUploading(false);
+    }
+  }
+
   /** Trim this conversation's media back to the per-kind keep limits. */
   async function cleanupOldMedia() {
     const { data } = await supabase
@@ -290,5 +328,5 @@ export function useMediaSend({
     }
   }
 
-  return { staged, uploading, sentCount, stage, unstage, clearStaged, send };
+  return { staged, uploading, sentCount, stage, unstage, clearStaged, send, sendSticker };
 }

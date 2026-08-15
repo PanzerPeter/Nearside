@@ -1,5 +1,5 @@
-import { Capacitor } from '@capacitor/core';
 import type { AuthLinkKind } from './deepLink';
+import { isMobileNative } from './platform';
 
 /**
  * Where GoTrue should send the user after they click an emailed link.
@@ -14,7 +14,7 @@ import type { AuthLinkKind } from './deepLink';
  * Site URL.
  */
 export function authRedirectTo(kind: AuthLinkKind): string | undefined {
-  if (Capacitor.isNativePlatform()) return `app.nearside://auth/${kind}`;
+  if (isMobileNative()) return `app.nearside://auth/${kind}`;
   if (typeof window === 'undefined') return undefined;
   return window.location.origin;
 }

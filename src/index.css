@@ -655,3 +655,20 @@ em-emoji-picker {
   --category-icon-size: 15px;
   max-height: min(435px, 60vh);
 }
+
+/* Inside the tabbed picker the panel is no longer the popover — the popover is,
+   and it pins its own height so switching tabs does not resize it under the
+   finger. So the custom element has to fill the half it was given rather than
+   size itself, and it must drop the corners and elevation it draws for the
+   untabbed case, which would otherwise be a second card inside the first.
+
+   `height`, not just `max-height`: emoji-mart's own layout reads the host's
+   computed height to decide how many rows to virtualise, and a host that is
+   only capped renders its full list and overflows. */
+.emoji-fill em-emoji-picker {
+  height: 100%;
+  max-height: none;
+  min-height: 0;
+  --border-radius: 0;
+  --shadow: none;
+}

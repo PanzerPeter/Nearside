@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('@capacitor/core', () => ({
-  Capacitor: { isNativePlatform: () => false },
+  Capacitor: { getPlatform: () => 'web' },
   registerPlugin: () => ({
     enable: () => Promise.reject(new Error('not implemented on web')),
     disable: () => Promise.reject(new Error('not implemented on web')),

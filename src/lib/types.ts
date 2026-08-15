@@ -14,10 +14,14 @@ export interface Friendship {
   profiles?: Profile;
 }
 
-export type MediaType = 'image' | 'video' | 'audio';
+/** 'sticker' is a rendering hint, not a storage difference: on the wire it is an
+ *  ordinary sealed attachment. See `lib/stickers.ts` for why a sticker send does
+ *  not get a cheaper path than a photo. */
+export type MediaType = 'image' | 'video' | 'audio' | 'sticker';
 
-/** Media rendered as a visual attachment; a voice note gets its own player. */
-export type VisualMediaType = Exclude<MediaType, 'audio'>;
+/** Media rendered as a visual attachment; a voice note gets its own player, and
+ *  a sticker draws bare — no bubble, no frame, no lightbox. */
+export type VisualMediaType = Exclude<MediaType, 'audio' | 'sticker'>;
 
 export interface Message {
   id: string;

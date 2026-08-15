@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 // Native, so the store paths actually run. Off-device the module short circuits
 // to "nothing for sale", which would make every assertion below vacuous.
 vi.mock('@capacitor/core', () => ({
-  Capacitor: { isNativePlatform: () => true },
+  Capacitor: { getPlatform: () => 'android' },
   SystemBars: { setStyle: async () => undefined },
   SystemBarsStyle: { Light: 'LIGHT', Dark: 'DARK' },
 }));

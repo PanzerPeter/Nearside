@@ -4,7 +4,7 @@ import { authRedirectTo } from '../lib/authRedirect';
 import { subscribeToAuthLinkError } from '../lib/nativeAuthLinks';
 import { LegalDocModal, LegalFooter, type LegalDoc } from './LegalFooter';
 import { BrandMark } from './BrandMark';
-import { LogIn, UserPlus } from 'lucide-react';
+import { ArrowLeft, LogIn, UserPlus } from 'lucide-react';
 
 /** Display names are not addresses: they may collide, contain spaces and keep
  *  their capitals. All that is enforced is that there is something there and
@@ -21,7 +21,17 @@ const INPUT_CLASS =
 const LABEL_CLASS =
   'label-text text-xs font-medium uppercase tracking-wider text-base-content/60';
 
-export function AuthForm() {
+interface AuthFormProps {
+  /**
+   * Present only when this form was opened to add a *second* account, with
+   * somebody still signed in behind it. Absent on the ordinary signed-out
+   * route, where there is nothing to go back to and a cancel button would be a
+   * dead end.
+   */
+  onCancel?: () => void;
+}
+
+export function AuthForm({ onCancel }: AuthFormProps = {}) {
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -143,6 +153,16 @@ export function AuthForm() {
             </div>
             <h1 className="text-2xl font-bold tracking-tight text-base-content">Nearside</h1>
           </div>
+          {onCancel && (
+            <button
+              type="button"
+              className="btn btn-ghost btn-xs self-center -mt-1 mb-1 gap-1.5 text-base-content/60"
+              onClick={onCancel}
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              Back to the account you&apos;re using
+            </button>
+          )}
           <p className="text-center text-base-content/60 text-sm mb-6">
             {isSignUp ? 'Create your account' : 'Welcome back'}
           </p>

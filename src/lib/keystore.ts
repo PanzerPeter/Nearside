@@ -5,9 +5,9 @@
 // this file held until the multi-account fix — meant the second account to sign
 // in on a phone silently inherited the first one's private key, published it as
 // its own, and could open everything sealed to the first.
-import { Capacitor } from '@capacitor/core';
 import { SecureStoragePlugin } from 'capacitor-secure-storage-plugin';
 import { fromBase64, toBase64 } from './crypto/keys';
+import { isMobileNative } from './platform';
 
 const SEED_KEY = 'nearside.identity.seed';
 /** Set once the user has typed the check words back. Persisted rather than
@@ -24,7 +24,7 @@ const confirmedKey = (userId: string) => `${CONFIRMED_KEY}.${userId}`;
  *  localStorage. Surfaced in the UI so a browser session cannot be mistaken
  *  for the security properties the Android build actually has. */
 export function isSecureStorageAvailable(): boolean {
-  return Capacitor.isNativePlatform();
+  return isMobileNative();
 }
 
 async function read(key: string): Promise<string | null> {

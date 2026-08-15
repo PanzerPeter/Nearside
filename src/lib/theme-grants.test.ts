@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 // Native, so the entitlement half of `ownedPacks` runs rather than short
 // circuiting to an empty set and making the merge assertions vacuous.
 vi.mock('@capacitor/core', () => ({
-  Capacitor: { isNativePlatform: () => true },
+  Capacitor: { getPlatform: () => 'android' },
   SystemBars: { setStyle: async () => undefined },
   SystemBarsStyle: { Light: 'LIGHT', Dark: 'DARK' },
 }));

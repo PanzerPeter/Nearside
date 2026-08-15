@@ -109,7 +109,9 @@ export function useMessageNotifications(
             ? '🎥 Video'
             : msg.media_type === 'audio'
               ? '🎤 Voice message'
-              : 'New message';
+              : msg.media_type === 'sticker'
+                ? '🩷 Sticker'
+                : 'New message';
       await showNotification(title, body, `dm:${msg.user_id}`);
     }
 
