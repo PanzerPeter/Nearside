@@ -1,4 +1,15 @@
-import { AlertTriangle, Check, Clock, Lock, PhoneCall, ShieldAlert, Timer, X } from 'lucide-react';
+import {
+  AlertTriangle,
+  Check,
+  Clock,
+  Lock,
+  PhoneCall,
+  PhoneOff,
+  ShieldAlert,
+  Timer,
+  Users,
+  X,
+} from 'lucide-react';
 import { Modal } from './Modal';
 
 interface SecurityLimitsProps {
@@ -71,6 +82,35 @@ export function SecurityLimits({ onClose }: SecurityLimitsProps) {
             When a direct connection cannot be made &mdash; common on mobile networks &mdash; the
             call is relayed through Cloudflare instead. The relay carries encrypted packets it cannot
             open, and sees only that two addresses exchanged traffic.
+          </p>
+        </section>
+
+        <section className="rounded-xl border border-base-content/10 bg-base-200/40 p-3.5">
+          <h4 className="flex items-center gap-2 font-medium text-sm">
+            <Users className="w-4 h-4 text-base-content/60" />
+            A call only reaches the account you are signed into
+          </h4>
+          <p className="text-sm text-base-content/75 leading-relaxed mt-2">
+            Both halves of an incoming call &mdash; the notification that wakes the phone and the
+            channel the call itself arrives on &mdash; belong to the account currently signed in on
+            it. If you keep two accounts on this phone and someone calls the other one, that phone
+            does not ring, and you will see the call only after switching back. Messages behave the
+            same way. This is the price of an account&rsquo;s key never leaving the account: a
+            second one cannot be listened for without being unlocked.
+          </p>
+        </section>
+
+        <section className="rounded-xl border border-base-content/10 bg-base-200/40 p-3.5">
+          <h4 className="flex items-center gap-2 font-medium text-sm">
+            <PhoneOff className="w-4 h-4 text-base-content/60" />
+            Declining from the lock screen does not always tell the caller
+          </h4>
+          <p className="text-sm text-base-content/75 leading-relaxed mt-2">
+            Decline always silences your phone. Telling the caller means sending them a message
+            sealed with your key, and that key is reachable only once Nearside itself is running
+            &mdash; which, on a phone that was asleep with the app closed, it may not be yet. When
+            it is not, your phone goes quiet and theirs keeps ringing until it gives up, and they
+            see no answer rather than declined.
           </p>
         </section>
 

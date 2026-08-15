@@ -55,6 +55,19 @@ final class CallNotifications {
     static final String ACTION_ACCEPT = "accept";
     static final String ACTION_DECLINE = "decline";
     static final String ACTION_OPEN = "open";
+    /**
+     * The system launched the activity, not the user.
+     *
+     * A full-screen intent fires *by itself* on a locked or sleeping phone —
+     * that is what it is for — and the activity it starts is indistinguishable
+     * from a tapped notification unless the two carry different actions. They
+     * used to carry the same one, so the launch read as "the user has dealt
+     * with this ring": the ring was cancelled and the call marked settled about
+     * half a second after it was posted, on exactly the phones the push exists
+     * for. Screen-on phones never hit it, because a device in use gets a
+     * heads-up banner and no launch at all.
+     */
+    static final String ACTION_FULLSCREEN = "fullscreen";
 
     /** How long a ring can survive without anyone taking it down. */
     private static final long RING_TIMEOUT_MS = 60_000L;
@@ -198,6 +211,12 @@ final class CallNotifications {
 
         PendingIntent answer = activityFor(context, callId, peerId, kind, ACTION_ACCEPT, 2);
         PendingIntent open = activityFor(context, callId, peerId, kind, ACTION_OPEN, 3);
+        // Its own request code as well as its own action: two PendingIntents
+        // that differ only in their extras and share a request code are the
+        // same PendingIntent, and the second would silently take the first's
+        // extras.
+        PendingIntent fullScreen =
+            activityFor(context, callId, peerId, kind, ACTION_FULLSCREEN, 5);
 
         NotificationCompat.Builder builder = new NotificationCompat.Builder(context, CHANNEL_INCOMING)
             .setSmallIcon(android.R.drawable.sym_call_incoming)
@@ -225,7 +244,7 @@ final class CallNotifications {
             // banner when the app has not been granted USE_FULL_SCREEN_INTENT —
             // see CallNative.fullScreenIntentAllowed, which is what the app asks
             // before promising the user their phone will ring.
-            .setFullScreenIntent(open, true)
+            .setFullScreenIntent(fullScreen, true)
             .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Decline", decline)
             .addAction(android.R.drawable.sym_action_call, "Answer", answer);
 

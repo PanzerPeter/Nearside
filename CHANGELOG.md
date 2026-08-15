@@ -12,6 +12,28 @@ Android `versionName`, the iOS `MARKETING_VERSION`, the Electron shell, the
 string in Settings — follows it. `src/lib/version.test.ts` fails the suite when
 one of them drifts.
 
+## [1.1.0] — 2026-08-15
+
+### Fixed
+
+- **A call to a locked phone rings until it is answered.** It rang for about
+  half a second and then went silent, leaving nothing in the notification shade
+  and no way to answer but opening the app. The ring was cancelling itself: a
+  full-screen intent starts the app *by itself* on a sleeping phone, and that
+  launch arrived carrying the same "the user tapped the ring" marker as an
+  actual tap, so the app took the ring down and recorded the call as dealt with
+  — which then also stopped it ringing when the call proper arrived. A phone
+  whose screen was on never saw any of it, because a phone in use gets a banner
+  and no launch, which is why this only ever happened to a phone in a pocket.
+
+### Changed
+
+- **"Where this protection stops" names two limits about calls** it did not name
+  before: a call reaches only the account the phone is signed into, and
+  declining from the lock screen of a phone with the app closed silences your
+  phone without always being able to tell the caller — sealing that message
+  needs a key that is only reachable once the app is running.
+
 ## [1.0.0] — 2026-08-15
 
 First complete version: everything below has shipped in an Android release build

@@ -42,14 +42,25 @@ public class MainActivity extends BridgeActivity {
         if (intent == null) return;
         String callId = intent.getStringExtra(CallNotifications.EXTRA_CALL_ID);
         if (callId == null) return;
+        String action = intent.getStringExtra(CallNotifications.EXTRA_ACTION);
 
         showOverLockScreen();
-        CallNotifications.dismissRing(this);
+        // Only a decision takes the ring down. Opening the app — whether the
+        // user tapped the notification body or the full-screen intent launched
+        // it on a sleeping phone — leaves the call ringing, because the app
+        // being on screen is not an answer: the WebView still has to start, the
+        // offer still has to arrive over a socket that has only just opened, and
+        // a phone that goes back in a pocket in the meantime has to still be
+        // ringing when it comes out.
+        if (CallNotifications.ACTION_ACCEPT.equals(action)
+            || CallNotifications.ACTION_DECLINE.equals(action)) {
+            CallNotifications.dismissRing(this);
+        }
         CallNative.deliver(
             callId,
             intent.getStringExtra(CallNotifications.EXTRA_PEER_ID),
             intent.getStringExtra(CallNotifications.EXTRA_KIND),
-            intent.getStringExtra(CallNotifications.EXTRA_ACTION)
+            action
         );
 
         intent.removeExtra(CallNotifications.EXTRA_CALL_ID);

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Debug builds only. The receiver below raises a real ring notification on
+     demand, which is the only way to reproduce the case the push exists for —
+     a killed app on a locked phone — without a second phone and a caller. The
+     command is in DebugRingReceiver's own comment, where a double hyphen is
+     legal and in XML is not.
+
+     It is exported, so it must never ship: anything on the device could
+     otherwise post a fake incoming call. Living in src/debug means the release
+     manifest cannot contain it, rather than relying on somebody remembering. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <receiver
+            android:name=".DebugRingReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="app.nearside.DEBUG_RING" />
+            </intent-filter>
+        </receiver>
+    </application>
+</manifest>

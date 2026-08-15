@@ -68,10 +68,16 @@ public class CallNative extends Plugin {
     /** Called from MainActivity and CallActionReceiver. */
     static void deliver(String callId, String peerId, String kind, String action) {
         if (callId == null || action == null) return;
-        // The user has dealt with this ring. Said here rather than in each
-        // caller, so the push that is still on its way through Google's servers
-        // cannot raise the same call a second time whichever button was pressed.
-        CallNotifications.markSettled(callId);
+        // A *decision* settles the call, so the push still on its way through
+        // Google's servers cannot raise the same ring a second time whichever
+        // button was pressed. Merely opening the app does not: a call marked
+        // settled can never be rung again in this process, and settling on the
+        // full-screen intent's own launch is what left a woken phone unable to
+        // ring for the very call that woke it, even once the offer arrived.
+        if (CallNotifications.ACTION_ACCEPT.equals(action)
+            || CallNotifications.ACTION_DECLINE.equals(action)) {
+            CallNotifications.markSettled(callId);
+        }
         JSObject data = new JSObject();
         data.put("callId", callId);
         data.put("peerId", peerId == null ? "" : peerId);

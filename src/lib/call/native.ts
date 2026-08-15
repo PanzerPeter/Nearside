@@ -21,9 +21,15 @@ import type { PluginListenerHandle } from '@capacitor/core';
 import type { CallKind } from './types';
 import { isMobileNative } from '../platform';
 
-/** What a ring notification's buttons, or the lock-screen ring itself, reported
- *  back. `open` means the user tapped the notification body. */
-export type NativeCallAction = 'accept' | 'decline' | 'open';
+/**
+ * What a ring notification's buttons, or the lock-screen ring itself, reported
+ * back. `open` means the user tapped the notification body; `fullscreen` means
+ * nobody tapped anything and the system launched the app itself, which is what
+ * a full-screen intent does on a sleeping phone. Both prepare for the call and
+ * neither answers it — but only the native side may treat `fullscreen` as a
+ * decision, and it does not.
+ */
+export type NativeCallAction = 'accept' | 'decline' | 'open' | 'fullscreen';
 
 export interface PendingCall {
   callId: string;
