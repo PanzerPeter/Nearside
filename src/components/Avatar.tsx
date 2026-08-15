@@ -25,7 +25,12 @@ export function Avatar({ display_name, url, size = 40, className = '' }: AvatarP
         {url && !broken ? (
           <img
             src={url}
-            alt={display_name ?? 'avatar'}
+            // Empty on purpose. A broken image paints its alt text, and this
+            // box is 40px of circle: the name spills out of it as a few
+            // clipped letters that read as a rendering fault rather than as a
+            // missing picture. The name is already beside every avatar the app
+            // draws, so nothing is lost by not repeating it here.
+            alt=""
             className="w-full h-full object-cover"
             onError={() => setBroken(true)}
           />

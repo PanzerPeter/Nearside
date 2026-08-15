@@ -8,7 +8,7 @@
 import sodium from 'libsodium-wrappers';
 import { SecureStoragePlugin } from 'capacitor-secure-storage-plugin';
 import { fromBase64, toBase64 } from './crypto/keys';
-import { isValidMnemonic, seedFromMnemonic } from './crypto/mnemonic';
+import { isValidMnemonic, normalizeMnemonic, seedFromMnemonic } from './crypto/mnemonic';
 
 /** Short enough to type one-handed, long enough that the stretching below makes
  *  offline guessing pointless for the threat this actually addresses. */
@@ -117,7 +117,10 @@ export async function matchesRecoveryPhrase(
   seed: Uint8Array | null
 ): Promise<boolean> {
   if (!seed) return false;
-  const normalized = phrase.trim().toLowerCase().replace(/\s+/g, ' ');
+  // The same reading of a phrase the restore screen uses. A second copy of the
+  // rule here meant the unlock and the restore could disagree about the same
+  // twelve words.
+  const normalized = normalizeMnemonic(phrase);
   // Checked before deriving: `seedFromMnemonic` throws on a bad phrase, and a
   // throw on the lock screen is a user with no way back into their account.
   if (!isValidMnemonic(normalized)) return false;

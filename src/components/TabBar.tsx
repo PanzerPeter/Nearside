@@ -11,8 +11,9 @@ interface TabBarProps {
 
 /**
  * The phone's primary navigation. `lg:hidden` by construction: the desktop
- * layout shows both panes at once and reaches settings from the top bar, so a
- * tab bar there would be navigating between things already on screen.
+ * layout shows both panes at once and reaches settings from the account rail
+ * at the foot of the list, so a tab bar there would be navigating between
+ * things already on screen.
  *
  * The caller hides this while a conversation is open — the composer owns the
  * bottom edge there, and "chats" would be a no-op button anyway.

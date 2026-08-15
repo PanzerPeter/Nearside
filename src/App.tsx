@@ -7,9 +7,9 @@ import { ChatRoom } from './components/ChatRoom';
 import { RoomView } from './components/RoomView';
 import { SettingsModal } from './components/SettingsModal';
 import { SettingsPanel } from './components/SettingsPanel';
+import { ProfileUnavailable } from './components/ProfileUnavailable';
 import { TabBar, type Tab } from './components/TabBar';
-import { Avatar } from './components/Avatar';
-import { BrandMark } from './components/BrandMark';
+import { AccountRail } from './components/AccountRail';
 import { supabase } from './lib/supabase';
 import { Profile } from './lib/types';
 import type { RoomSummary } from './lib/rooms';
@@ -52,15 +52,17 @@ import {
 import { clearSeed } from './lib/keystore';
 import { clearPinnedMedia } from './lib/pins';
 import { forgetAllPeerKeys } from './lib/peer-keys';
-import { forgetAllRoomKeys } from './lib/rooms';
+import { forgetAllPublishedKeys, forgetAllRoomKeys } from './lib/rooms';
 import { forgetStickers } from './lib/stickers';
+import { forgetAllMedia } from './lib/media-cache';
+import { forgetAllBackgroundUrls } from './lib/background';
 import { useMobileBackClose } from './hooks/useMobileBackClose';
 import { useAppLock } from './hooks/useAppLock';
 import { AppLockScreen } from './components/AppLockScreen';
 import { clearLock } from './lib/app-lock';
 import { setScreenGuard } from './lib/screen-guard';
 import { useConnection } from './lib/connection';
-import { MessageSquare, Settings } from 'lucide-react';
+import { MessageSquare } from 'lucide-react';
 
 /** Gap between retries of the profile fetch the settings tab waits on. Long
  *  enough that a phone with no signal isn't spinning on it, short enough that
@@ -260,9 +262,18 @@ function App() {
     // must not outlive the session.
     forgetAllPeerKeys();
     forgetAllRoomKeys();
+    // Published box/signing keys, cached for the session by `lib/rooms.ts`.
+    // Public, but scoped to whoever this account can read.
+    forgetAllPublishedKeys();
     // Decrypted sticker images, held in memory under the vault key of the
     // account being left. Every new per-account cache belongs in this chain.
     forgetStickers();
+    // Decrypted attachments from the conversations of the account being left —
+    // photos, videos and voice notes, in memory, same rule.
+    forgetAllMedia();
+    // Signed URLs held for chat backgrounds. Each is a bearer token for one
+    // object this account could read; the next one on the device may not.
+    forgetAllBackgroundUrls();
     // TURN credentials are minted against the signed-in user's JWT. Left
     // behind, the next account on this phone would relay its calls under the
     // previous owner's credentials.
@@ -517,32 +528,11 @@ function App() {
         The component decides for itself whether there is anything to ask. */}
     <NotificationsPrompt userId={session.user.id} />
     <div className="h-dvh flex flex-col bg-base-300 overflow-hidden">
-      {/* Top Bar. Desktop only: on a phone the tab bar carries settings and the
-          list's own header carries the brand, so this row would be a second
-          header stacked on the screen with the least room for one. */}
-      <header className="hidden lg:flex navbar bg-base-100 px-4 sm:px-6 shrink-0 border-b border-base-content/5 shadow-[0_1px_3px_rgba(0,0,0,0.25)] z-20 min-h-[3.5rem] pt-safe">
-        <div className="flex-1 gap-2">
-          <BrandMark size={22} />
-          <span className="font-bold text-base sm:text-lg tracking-tight">Nearside</span>
-        </div>
-        {/* Sign-out is no longer a bare icon up here: it lives in settings
-            beside what it clears, next to the account it belongs to. */}
-        <div className="flex-none flex items-center gap-2">
-          {myProfile && (
-            <button
-              onClick={() => setShowSettings(true)}
-              className="flex items-center gap-2 btn btn-ghost btn-sm normal-case"
-              title="Profile settings"
-            >
-              <Avatar display_name={myProfile.display_name} url={myProfile.avatar_url} size={24} />
-              <span className="text-xs text-base-content/60 truncate max-w-[120px]">
-                @{myProfile.display_name}
-              </span>
-              <Settings className="w-4 h-4 text-base-content/60" />
-            </button>
-          )}
-        </div>
-      </header>
+      {/* No top bar. A row spanning both panes to hold a wordmark and an avatar
+          costs every conversation a line of height and leaves the desktop with
+          two stacked headers — one naming the app, one naming the person. The
+          account moved to the foot of the list (`AccountRail`), which is where
+          it is always reachable and never above the conversation. */}
 
       {/* Main Content */}
       <div className="flex flex-1 min-h-0 overflow-hidden">
@@ -556,21 +546,33 @@ function App() {
             chatOpen || tab === 'settings' ? 'hidden lg:flex lg:flex-col' : 'flex flex-col'
           }`}
         >
-          <FriendsList
-            session={session}
-            identity={identity}
-            selectedFriendId={selectedFriend?.id || null}
-            onSelectFriend={(friend) => {
-              setSelectedRoom(null);
-              setSelectedFriend(friend);
-            }}
-            onFriendsChange={setFriendIds}
-            onUnreadTotalChange={setUnreadTotal}
-            selectedRoomId={selectedRoom?.id ?? null}
-            onSelectRoom={(room) => {
-              setSelectedFriend(null);
-              setSelectedRoom(room);
-            }}
+          {/* The list is `h-full`, so it needs a box of its own to be full of:
+              without this the rail below would be pushed past the bottom. */}
+          <div className="flex-1 min-h-0">
+            <FriendsList
+              session={session}
+              identity={identity}
+              selectedFriendId={selectedFriend?.id || null}
+              onSelectFriend={(friend) => {
+                setSelectedRoom(null);
+                setSelectedFriend(friend);
+              }}
+              onFriendsChange={setFriendIds}
+              onUnreadTotalChange={setUnreadTotal}
+              selectedRoomId={selectedRoom?.id ?? null}
+              onSelectRoom={(room) => {
+                setSelectedFriend(null);
+                setSelectedRoom(room);
+              }}
+            />
+          </div>
+
+          {/* Desktop's only route into settings, and so into sign-out. It
+              renders whether or not the profile row loaded — see the rail. */}
+          <AccountRail
+            profile={myProfile}
+            profileFailed={profileFailed}
+            onOpenSettings={() => setShowSettings(true)}
           />
         </aside>
 
@@ -641,16 +643,10 @@ function App() {
                   onAddAccount={() => setAddingAccount(true)}
                 />
               ) : profileFailed ? (
-                // Retrying on its own already, but a spinner that has been
-                // turning for a while needs to say what it is waiting for.
-                <div className="flex flex-col items-center gap-3 py-10 text-center">
-                  <p className="text-sm text-base-content/60">
-                    Could not load your profile. Retrying…
-                  </p>
-                  <button className="btn btn-sm btn-outline" onClick={() => void fetchMyProfile()}>
-                    Try now
-                  </button>
-                </div>
+                <ProfileUnavailable
+                  onRetry={() => void fetchMyProfile()}
+                  onSignOut={() => void signOut()}
+                />
               ) : (
                 <div className="flex justify-center py-10">
                   <span className="loading loading-spinner text-primary" />
@@ -665,13 +661,17 @@ function App() {
           there, and "chats" would be a button leading to where you already are. */}
       {!chatOpen && <TabBar tab={tab} onSelect={setTab} unread={unreadTotal} />}
 
-      {showSettings && myProfile && (
+      {/* Not gated on the profile: the rail can be pressed without one, and the
+          dialog is where sign-out lives. */}
+      {showSettings && (
         <SettingsModal
           session={session}
           profile={myProfile}
           onUpdated={(p) => setMyProfile(p)}
           onSignOut={() => void signOut()}
           onClose={() => setShowSettings(false)}
+          profileFailed={profileFailed}
+          onRetryProfile={() => void fetchMyProfile()}
           appLock={appLock}
           accounts={accounts}
           onSwitchAccount={(a) => {

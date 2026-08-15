@@ -42,6 +42,53 @@ export function validateBackgroundFile(file: File): string | null {
   return null;
 }
 
+/**
+ * Signed URLs already minted for a background object, by path.
+ *
+ * A signature carries a fresh JWT in its query string, so re-signing the same
+ * object produces a URL no cache has ever seen. The background is re-signed on
+ * every conversation open, which meant switching back and forth between two
+ * chats re-downloaded both images every time — a megabyte a tap for a picture
+ * that had not changed.
+ *
+ * Handing back the same string instead lets the HTTP cache do its job. Nothing
+ * is stored but a URL the account was entitled to a moment ago, and the entry
+ * is dropped well before the signature it holds expires.
+ */
+const signedBackgrounds = new Map<string, { url: string; mintedAt: number }>();
+
+/** How long a minted URL is handed out again. Comfortably inside the hour the
+ *  signature is good for, so a URL taken from here always outlives the paint it
+ *  was taken for. */
+export const BACKGROUND_URL_REUSE_MS = 45 * 60 * 1000;
+
+/** A still-fresh signature for `path`, or null. */
+export function reusableBackgroundUrl(path: string, now: number = Date.now()): string | null {
+  const hit = signedBackgrounds.get(path);
+  if (!hit) return null;
+  if (now - hit.mintedAt >= BACKGROUND_URL_REUSE_MS) {
+    signedBackgrounds.delete(path);
+    return null;
+  }
+  return hit.url;
+}
+
+/** Remember a freshly minted signature. */
+export function rememberBackgroundUrl(path: string, url: string, now: number = Date.now()): void {
+  signedBackgrounds.set(path, { url, mintedAt: now });
+}
+
+/** Drop one — after the object behind it is replaced or removed, when the URL
+ *  points at bytes that are gone. */
+export function forgetBackgroundUrl(path: string): void {
+  signedBackgrounds.delete(path);
+}
+
+/** Drop everything. Belongs in the account teardown with the other caches. */
+export function forgetAllBackgroundUrls(): void {
+  signedBackgrounds.clear();
+}
+
 /** The shape of a PostgREST error, narrowed to what the message depends on. */
 export interface WriteError {
   code?: string;

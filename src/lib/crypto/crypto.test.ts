@@ -33,6 +33,49 @@ describe('mnemonic', () => {
     expect(a).toHaveLength(32);
     expect(Array.from(a)).toEqual(Array.from(b));
   });
+
+  // A phrase is typed on a phone and pasted on a desktop, and a paste carries
+  // whatever the source put around the words. bip39 splits on a single space
+  // and nothing else, so every one of these reaches it as twelve words or as
+  // an account the user cannot get back into.
+  it('accepts a pasted phrase whatever whitespace came with it', () => {
+    const wrapped = PHRASE.split(' ');
+    expect(isValidMnemonic(`  ${PHRASE}  `)).toBe(true);
+    expect(isValidMnemonic(PHRASE.replace(/ /g, '  '))).toBe(true);
+    expect(isValidMnemonic(`${wrapped.slice(0, 6).join(' ')}\n${wrapped.slice(6).join(' ')}`)).toBe(true);
+    expect(isValidMnemonic(PHRASE.replace(/ /g, '\t'))).toBe(true);
+    // NBSP: what a browser or a PDF hands over instead of a space.
+    expect(isValidMnemonic(PHRASE.replace(/ /g, '\u00A0'))).toBe(true);
+  });
+
+  it('accepts a phrase carrying invisible characters', () => {
+    // Zero-width space, zero-width joiner, soft hyphen, BOM. Nothing renders,
+    // so the user sees twelve correct words and is told they are wrong.
+    expect(isValidMnemonic(`\uFEFF${PHRASE.replace(/ /g, '\u200B ')}`)).toBe(true);
+    expect(isValidMnemonic(PHRASE.replace('winner', 'win\u00ADner'))).toBe(true);
+  });
+
+  it('still rejects a phrase whose words are wrong', () => {
+    expect(isValidMnemonic('')).toBe(false);
+    expect(isValidMnemonic(PHRASE.replace('yellow', 'yell'))).toBe(false);
+    expect(isValidMnemonic(PHRASE.split(' ').slice(0, 11).join(' '))).toBe(false);
+  });
+
+  // The load-bearing one. Normalization may only rescue phrases that were
+  // being rejected; it must not move the seed under an account that already
+  // works, because that seed is the account and there is no reset path.
+  it('does not change the seed of a phrase that was already valid', async () => {
+    // Pinned to the value this phrase derived before normalization was
+    // widened, not to a second call of the same function: a test that only
+    // compares the code to itself would pass while every existing account's
+    // keys moved underneath it.
+    const hex = (bytes: Uint8Array) =>
+      Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+    expect(hex(await seedFromMnemonic(PHRASE))).toBe(
+      '878386efb78845b3355bd15ea4d39ef97d179cb712b77d5c12b6be415fffeffe'
+    );
+    expect(hex(await seedFromMnemonic(`  ${PHRASE}\n`))).toBe(hex(await seedFromMnemonic(PHRASE)));
+  });
 });
 
 describe('identity', () => {

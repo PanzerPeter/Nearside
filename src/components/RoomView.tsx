@@ -128,6 +128,33 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
     setMessages(await openRoomRows(rows, roomKey, signing));
   }, [room.id, roomKey]);
 
+  /**
+   * Verify, open and append one row that arrived over the socket.
+   *
+   * The subscription used to call `loadMessages`, which re-read the newest
+   * fifty rows and every sender's profile for a row the event had already
+   * delivered in full. In a room of five that is five clients each pulling
+   * fifty messages for every one message anybody sends, and the cost grows with
+   * the room rather than with the conversation.
+   *
+   * De-duplicated by id because the sender's own insert is echoed back here as
+   * well as returned to `send`, and because a poll running underneath a
+   * recovering socket can deliver the same row twice.
+   */
+  const appendMessage = useCallback(
+    async (row: RoomMessage) => {
+      if (!roomKey) return;
+      const signing = await roomSigningKeys([row.sender_id]);
+      const [opened] = await openRoomRows([row], roomKey, signing);
+      setMessages((prev) =>
+        prev.some((m) => m.id === opened.id)
+          ? prev.map((m) => (m.id === opened.id ? opened : m))
+          : [...prev, opened]
+      );
+    },
+    [roomKey]
+  );
+
   useEffect(() => {
     void loadMembers();
   }, [loadMembers, generation]);
@@ -147,7 +174,7 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'room_messages', filter: `room_id=eq.${room.id}` },
-        () => void loadMessages()
+        (payload) => void appendMessage(payload.new as RoomMessage)
       )
       .on(
         'postgres_changes',
@@ -165,7 +192,7 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
       forgetChannel(channelKey);
       void supabase.removeChannel(channel);
     };
-  }, [room.id, roomKey, generation, loadMessages, loadMembers]);
+  }, [room.id, roomKey, generation, appendMessage, loadMembers]);
 
   // Polling fallback for networks that stall `wss://` while ordinary HTTPS
   // keeps working — the banner already says so; this is what keeps the room
@@ -189,9 +216,13 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
     void tapSend();
     setSending(true);
     try {
-      await sendRoomMessage(room.id, me, identity, roomKey, text);
+      const row = await sendRoomMessage(room.id, me, identity, roomKey, text);
       setDraft('');
-      await loadMessages();
+      // The insert returned the row, so the bubble is built from it rather than
+      // by re-reading the page it belongs to. The echo of our own insert
+      // arrives over the socket a moment later and `appendMessage`
+      // de-duplicates it by id.
+      await appendMessage(row);
     } catch {
       toast.error('Could not send. Check your connection.');
     } finally {
@@ -227,7 +258,7 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
     <div className="flex flex-col h-full bg-base-200/50 min-h-0">
       {/* Same top edge as ChatHeader, and inset the same way — see the comment
           there for why `lg:` puts it back. */}
-      <header className="navbar bg-base-100 px-2 sm:px-4 pt-[calc(0.5rem+var(--safe-top))] lg:pt-2 shrink-0 border-b border-base-content/5 min-h-[3.5rem] gap-1">
+      <header className="navbar bg-base-100 px-2 sm:px-4 pt-[calc(0.5rem+var(--safe-top))] shrink-0 border-b border-base-content/5 min-h-[3.5rem] gap-1">
         <button className="btn btn-ghost btn-sm btn-square lg:hidden" onClick={onBack} title="Back">
           <ArrowLeft className="w-4 h-4" />
         </button>

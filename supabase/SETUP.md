@@ -219,6 +219,33 @@ to be a standing invitation to edit one and not the other. `npm run db:verify`
 now applies the setup script down both paths and compares the resulting bucket
 rows, so that drift fails instead of shipping.
 
+## Wiping the demo data
+
+[`maintenance/reset-data.sql`](maintenance/reset-data.sql) empties the project:
+one `DELETE FROM auth.users` and the cascade takes every table with it. It is
+not a migration, it is not in `apply-order.txt`, and `db:verify` does not read
+it — no schema changes, only rows.
+
+Two things in it are easy to get wrong and are the reason it is a documented
+script rather than a one-liner someone types:
+
+- **The buckets have to be emptied first, and not in SQL.**
+  `storage.protect_delete()` raises on a direct DELETE from a storage table,
+  and because the SQL editor runs a script as one transaction, that raise
+  rolls back the `auth.users` delete with it — the reset does nothing at all.
+  [`maintenance/empty-buckets.mjs`](maintenance/empty-buckets.mjs) walks the
+  three buckets through the Storage API; it takes `SUPABASE_URL` and
+  `SUPABASE_SERVICE_ROLE_KEY` from the environment and has a `--dry-run`. The
+  service_role key must not go in `.env` — Vite reads that file and ships it.
+- **Every signed-in device has to sign out afterwards.** The server is not the
+  only copy — each install holds a decrypted SQLite mirror, an outbox, pinned
+  bytes, the account roster and a seed, and `App.signOut` is what clears them
+  together.
+
+`push_config` is left in place on purpose. `src/lib/reset-data.test.ts` checks
+the script still names every table in `schema.sql`, so a table added later
+cannot go quietly unaccounted for.
+
 ## Edge functions
 
 **Deployment state is not recorded here, because this file cannot keep it true.**

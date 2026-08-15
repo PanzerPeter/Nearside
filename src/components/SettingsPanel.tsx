@@ -281,7 +281,16 @@ export function SettingsPanel({
     const path = `${session.user.id}/avatar.${ext}`;
     const { error: uploadError } = await supabase.storage
       .from('avatars')
-      .upload(path, upload, { upsert: true, cacheControl: '3600', contentType: upload.type });
+      // A year, because the URL written to `profiles.avatar_url` below carries
+      // a `?v=` stamped at upload time: a replacement avatar is a different URL
+      // and can never be served from a cache holding the old one. An hour meant
+      // every device re-downloaded every avatar it had already seen, hourly,
+      // for no possible correctness gain.
+      .upload(path, upload, {
+        upsert: true,
+        cacheControl: '31536000',
+        contentType: upload.type,
+      });
 
     if (uploadError) {
       setUploading(false);

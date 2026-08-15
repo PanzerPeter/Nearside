@@ -99,6 +99,26 @@ export async function fetchOwnMessageRow(me: string, id: string): Promise<Messag
 }
 
 /**
+ * Whether `incoming` says anything `held` does not.
+ *
+ * Compared field by field rather than by identity, because every row that
+ * arrives has been through `open()` and is a fresh object even when the server
+ * sent back exactly what we already had. The columns listed are the ones a row
+ * can change in: an edit, a soft delete, and the expiry the trigger stamps.
+ * `text` covers the edit's payload, which is what `open()` produced from the
+ * ciphertext.
+ */
+export function rowChanged(held: Message, incoming: Message): boolean {
+  return (
+    held.text !== incoming.text ||
+    held.edited_at !== incoming.edited_at ||
+    held.deleted_at !== incoming.deleted_at ||
+    held.expires_at !== incoming.expires_at ||
+    held.ciphertext !== incoming.ciphertext
+  );
+}
+
+/**
  * Merge fetched rows into the list, de-duplicating by id and keeping the
  * conversation in `created_at` order.
  *
@@ -107,11 +127,27 @@ export async function fetchOwnMessageRow(me: string, id: string): Promise<Messag
  * arriving in that window is appended and then wiped by the query's result,
  * which was snapshotted before it existed. Merging instead of replacing keeps
  * it.
+ *
+ * Returns `prev` itself when nothing in `incoming` is new or different. That
+ * identity is load-bearing rather than a micro-optimisation: `fetchSince` uses
+ * `gte` and so re-fetches the cursor row on every tick by design, which means
+ * the poll delivers a row the thread already holds every 45 seconds — every 6
+ * while realtime is down. A fresh array for that re-render the whole thread,
+ * re-ran `useReplyTargets`'s map, and handed `MediaAttachment` a new key array
+ * for a key that had not changed.
  */
 export function mergeMessages(prev: Message[], incoming: Message[]): Message[] {
   if (incoming.length === 0) return prev;
+
   const byKey = new Map(prev.map((m) => [m.id, m]));
-  for (const m of incoming) byKey.set(m.id, m);
+  let differs = false;
+  for (const m of incoming) {
+    const held = byKey.get(m.id);
+    if (!held || rowChanged(held, m)) differs = true;
+    byKey.set(m.id, m);
+  }
+  if (!differs) return prev;
+
   return [...byKey.values()].sort((a, b) =>
     a.created_at === b.created_at
       ? a.id.localeCompare(b.id)
@@ -119,6 +155,30 @@ export function mergeMessages(prev: Message[], incoming: Message[]): Message[] {
         ? -1
         : 1
   );
+}
+
+/**
+ * The rows of `fetched` worth opening: ones the thread does not hold, or holds
+ * in an older shape.
+ *
+ * Decryption is the expensive half of a catch-up and the poll's usual result is
+ * a single row that has not changed since the last tick. Compared on the sealed
+ * columns, since this runs *before* `open()` — `ciphertext` is what an edit
+ * rewrites, and the two timestamps cover a soft delete and an expiry stamp.
+ */
+export function unseenRows(held: readonly Message[], fetched: readonly Message[]): Message[] {
+  if (fetched.length === 0) return [];
+  const byId = new Map(held.map((m) => [m.id, m]));
+  return fetched.filter((row) => {
+    const have = byId.get(row.id);
+    return (
+      !have ||
+      have.ciphertext !== row.ciphertext ||
+      have.edited_at !== row.edited_at ||
+      have.deleted_at !== row.deleted_at ||
+      have.expires_at !== row.expires_at
+    );
+  });
 }
 
 /** Shape a queued send as a `Message` so it can render through the same bubble. */

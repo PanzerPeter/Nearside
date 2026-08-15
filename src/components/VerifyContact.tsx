@@ -48,6 +48,17 @@ export function VerifyContact({
   const [art, setArt] = useState<SafetyArt | null>(null);
   const [compared, setCompared] = useState(false);
   const [scanMatched, setScanMatched] = useState(false);
+  /**
+   * A scan that came back with somebody else's number.
+   *
+   * Latched, and it outranks the checkbox. Two devices held together produced
+   * evidence that they do not agree, and a tick-box saying "I compared these
+   * and they are identical" cannot be true afterwards — offering it anyway
+   * turned a caught mismatch into one click of paperwork. Another scan that
+   * matches clears it, which is the recovery path for the ordinary cause: the
+   * wrong contact's code was in front of the camera.
+   */
+  const [scanMismatched, setScanMismatched] = useState(false);
   const [busy, setBusy] = useState(false);
   const [page, setPage] = useState(0);
   const track = useRef<HTMLDivElement>(null);
@@ -95,10 +106,13 @@ export function VerifyContact({
         // Not a soft failure. Either one of you is looking at the wrong
         // contact, or someone is sitting between you.
         setScanMatched(false);
+        setScanMismatched(true);
+        setCompared(false);
         toast.error('These do not match. Do not carry on until they do.');
         return;
       }
       setScanMatched(true);
+      setScanMismatched(false);
       toast.success('The numbers match.');
     } finally {
       setBusy(false);
@@ -133,7 +147,7 @@ export function VerifyContact({
           </button>
           <button
             className="btn btn-primary gap-1.5"
-            disabled={!number || busy || (!scanMatched && !compared)}
+            disabled={!number || busy || scanMismatched || (!scanMatched && !compared)}
             onClick={() => void confirm()}
           >
             <ShieldCheck className="w-4 h-4" />
@@ -219,6 +233,11 @@ export function VerifyContact({
             <p className="text-sm text-success flex items-center gap-1.5">
               <ShieldCheck className="w-4 h-4" />
               Scanned and matching.
+            </p>
+          ) : scanMismatched ? (
+            <p className="text-sm text-error">
+              These codes are not the same. Do not verify {peerLabel} until they are — scan
+              again once you are both on the right contact.
             </p>
           ) : (
             <label className="flex items-start gap-2.5 cursor-pointer">

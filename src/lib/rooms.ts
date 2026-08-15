@@ -72,20 +72,53 @@ export function roomColour(index: number): string {
   return ROOM_COLOURS[((index % ROOM_COLOURS.length) + ROOM_COLOURS.length) % ROOM_COLOURS.length];
 }
 
+interface PublishedKeys {
+  public_key: string | null;
+  signing_key: string | null;
+}
+
+/**
+ * Published keys already read this session, by user id.
+ *
+ * The same cache `lib/peer-keys.ts` keeps, for the same reason: keys change
+ * rarely and every room message read verifies a signature against one. Without
+ * it `roomSigningKeys` re-read every sender's profile on each pass, which is
+ * once per message with the subscription below.
+ *
+ * A row that came back with a null key is *not* cached — that is a key still
+ * publishing, and remembering it would keep a member unreachable for the rest
+ * of the session.
+ */
+const publishedKeyCache = new Map<string, PublishedKeys>();
+
+/** Drop the cache. Per-account like every other one in the app — a session that
+ *  ends must not leave the next account reading the previous one's answers. */
+export function forgetAllPublishedKeys(): void {
+  publishedKeyCache.clear();
+}
+
 /** Base64 public + signing keys for a set of accounts, in one query. */
-async function publishedKeys(
-  userIds: string[]
-): Promise<Map<string, { public_key: string | null; signing_key: string | null }>> {
-  const map = new Map<string, { public_key: string | null; signing_key: string | null }>();
+async function publishedKeys(userIds: string[]): Promise<Map<string, PublishedKeys>> {
+  const map = new Map<string, PublishedKeys>();
   if (userIds.length === 0) return map;
+
+  const missing: string[] = [];
+  for (const id of userIds) {
+    const hit = publishedKeyCache.get(id);
+    if (hit) map.set(id, hit);
+    else missing.push(id);
+  }
+  if (missing.length === 0) return map;
 
   const { data } = await supabase
     .from('profiles')
     .select('id, public_key, signing_key')
-    .in('id', userIds);
+    .in('id', missing);
 
   for (const row of data ?? []) {
-    map.set(row.id, { public_key: row.public_key, signing_key: row.signing_key });
+    const keys = { public_key: row.public_key, signing_key: row.signing_key };
+    map.set(row.id, keys);
+    if (keys.public_key && keys.signing_key) publishedKeyCache.set(row.id, keys);
   }
   return map;
 }
@@ -237,25 +270,39 @@ export async function sealRoomMessage(
   return { ...sealed, signature: await signBytes(identity.signPrivate, signedPayload(sealed)) };
 }
 
+/**
+ * Seal, sign and insert, returning the row the server wrote.
+ *
+ * The row comes back rather than just its id so the sender can paint its own
+ * bubble from it. `created_at` is the column the thread orders on and it is
+ * stamped by the database; a locally invented timestamp would put the message
+ * in the wrong place for anyone whose clock is off. `room_messages_select_
+ * member` is what makes the RETURNING legal, and we are a member by the time
+ * this runs or the insert itself would have been refused.
+ */
 export async function sendRoomMessage(
   roomId: string,
   me: string,
   identity: Identity,
   roomKey: Uint8Array,
   text: string
-): Promise<string> {
+): Promise<RoomMessage> {
   const sealed = await sealRoomMessage(roomKey, identity, text);
   const id = crypto.randomUUID();
-  const { error } = await supabase.from('room_messages').insert({
-    id,
-    room_id: roomId,
-    sender_id: me,
-    ciphertext: sealed.ciphertext,
-    nonce: sealed.nonce,
-    signature: sealed.signature,
-  });
+  const { data, error } = await supabase
+    .from('room_messages')
+    .insert({
+      id,
+      room_id: roomId,
+      sender_id: me,
+      ciphertext: sealed.ciphertext,
+      nonce: sealed.nonce,
+      signature: sealed.signature,
+    })
+    .select('id, room_id, sender_id, ciphertext, nonce, signature, created_at')
+    .single();
   if (error) throw error;
-  return id;
+  return data as RoomMessage;
 }
 
 /**

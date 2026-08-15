@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Check, Download, Pin, PinOff, X } from 'lucide-react';
+import { Check, Download, Pin, PinOff, VideoOff, X } from 'lucide-react';
 import type { VisualMediaType } from '../lib/types';
+import { videoTrackIsUnsupported } from '../lib/media';
 import { downloadName, saveToGallery } from '../lib/download';
 import { isPinned, pinMedia, unpinMedia } from '../lib/pins';
 import { useToast } from '../hooks/useToast';
@@ -15,6 +16,10 @@ interface MediaLightboxProps {
   /** The storage object path, which is where the saved file gets its name. */
   path: string;
   type: VisualMediaType;
+  /** The thumbnail already found that this platform decodes no picture out of
+   *  the file. Passed so the viewer never mounts a player that would play the
+   *  soundtrack of a video it cannot show. */
+  noPicture?: boolean;
   onClose: () => void;
 }
 
@@ -27,7 +32,17 @@ interface MediaLightboxProps {
  * user got was a black page of the decrypted bytes rendered as text, with no
  * way back and no way to save. Nothing leaves the WebView now.
  */
-export function MediaLightbox({ messageId, url, path, type, onClose }: MediaLightboxProps) {
+export function MediaLightbox({
+  messageId,
+  url,
+  path,
+  type,
+  noPicture: noPictureHint,
+  onClose,
+}: MediaLightboxProps) {
+  // Seeded from the thumbnail and confirmed here, because the viewer can also
+  // be reached without one having rendered.
+  const [noPicture, setNoPicture] = useState(!!noPictureHint);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [pinned, setPinned] = useState(false);
@@ -164,6 +179,17 @@ export function MediaLightbox({ messageId, url, path, type, onClose }: MediaLigh
       <div className="max-w-full max-h-full p-4" onClick={(e) => e.stopPropagation()}>
         {type === 'image' ? (
           <img src={url} alt="attachment" className="max-w-full max-h-[85dvh] object-contain" />
+        ) : noPicture ? (
+          // The file is here and intact — it is this build that has no decoder
+          // for it. Say that, rather than "no longer available", and point at
+          // the save button, which is the way out.
+          <div className="flex max-w-sm flex-col items-center gap-3 px-6 text-center text-white/75">
+            <VideoOff className="w-8 h-8" />
+            <p className="text-sm">
+              This video's format can't be played here. Save it and open it in a video
+              player.
+            </p>
+          </div>
         ) : (
           <video
             src={url}
@@ -176,6 +202,9 @@ export function MediaLightbox({ messageId, url, path, type, onClose }: MediaLigh
             controlsList="nodownload noplaybackrate"
             disablePictureInPicture
             className="max-w-full max-h-[85dvh]"
+            onLoadedMetadata={(e) => {
+              if (videoTrackIsUnsupported(e.currentTarget)) setNoPicture(true);
+            }}
           />
         )}
       </div>

@@ -62,6 +62,34 @@ export function mimeForPath(path: string, kind?: MediaType | null): string {
 }
 
 /**
+ * Whether a `<video>` that has read its metadata got no picture out of it.
+ *
+ * Phones record in HEVC by default, and an HEVC track fails differently
+ * depending on where it is opened. The Android WebView hands it to the
+ * platform decoder and it plays. Electron's Chromium is built without HEVC and
+ * *does not error*: it demuxes the file, keeps the AAC track, drops the video
+ * track, and reports `readyState: HAVE_ENOUGH_DATA` with the right duration
+ * and a 0×0 frame. What the user gets is a grey thumbnail and, on tapping it,
+ * two minutes of audio from a video — with no `error` event, so the reload
+ * path this component has for expired signatures never fires either.
+ *
+ * A decoded frame is the only thing that separates the two, so this is the
+ * test: metadata arrived, and there is still nothing to draw.
+ *
+ * `readyState` is checked rather than assumed from the event, because
+ * `loadedmetadata` is not the only place a caller might ask.
+ */
+export function videoTrackIsUnsupported(el: {
+  videoWidth: number;
+  readyState: number;
+}): boolean {
+  // HTMLMediaElement.HAVE_METADATA. Named by value because this module is
+  // node-tested and has no DOM to read the constant off.
+  const HAVE_METADATA = 1;
+  return el.readyState >= HAVE_METADATA && el.videoWidth === 0;
+}
+
+/**
  * A stable string standing in for a file key's *value*.
  *
  * `openRows` mints a fresh `Uint8Array` on every decrypt and `mergeMessages`

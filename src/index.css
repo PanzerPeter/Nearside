@@ -653,6 +653,16 @@ em-emoji-picker {
      which is the whole of the spacing this row can be given from outside the
      shadow boundary. */
   --category-icon-size: 15px;
+  /* emoji-mart's own host rule is `width: min-content`, which it expects the
+     embedder to override whenever `dynamicWidth` is on — with that prop the
+     panel's insides are all `width: 100%`, so min-content collapses to the
+     widest thing that cannot break: the ten category icons in a row, about
+     200px. The popover is up to 384px wide and the panel sat in the left half
+     of it. Invisible until the tabbed layout gave that dead space a background
+     to show up against, which is why this looks like the sticker tab broke it.
+     `100%`, not a fixed width: the popover clamps itself on a narrow phone and
+     the panel has to follow it down. */
+  width: 100%;
   max-height: min(435px, 60vh);
 }
 

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Eye, ShieldAlert } from 'lucide-react';
 import { setScreenGuard } from '../lib/screen-guard';
+import { restoreErrorMessage } from '../lib/restore-error';
 
 interface Props {
   onCreate: () => Promise<string>;
@@ -64,8 +65,8 @@ export function IdentitySetup({
   async function restore() {
     try {
       await onRestore(typed);
-    } catch {
-      setError('That phrase is not valid. Check the spelling and the order.');
+    } catch (e) {
+      setError(restoreErrorMessage(typed, e));
     }
   }
 

@@ -13,8 +13,39 @@ export function generateMnemonic(): string {
   return bip39Generate(wordlist, ENTROPY_BITS);
 }
 
+/**
+ * The one reading of a typed or pasted phrase, shared by everything that
+ * validates or derives from one.
+ *
+ * bip39 splits on a single U+0020 and compares against the wordlist directly,
+ * so anything else the clipboard brought along makes twelve correct words
+ * unrecognisable. That is not a cosmetic failure: the phrase is the only way
+ * back into an account, and the screen that rejects it tells the user their
+ * words are wrong. A phone is typed into and a desktop is pasted into, which
+ * is why this surfaced there first.
+ *
+ * NFKD runs before the collapse so a non-breaking space has already become a
+ * space; the strip covers the characters that survive NFKD and render as
+ * nothing — zero-width space/joiner/non-joiner, the directional marks, word
+ * joiner, soft hyphen and a leading BOM.
+ *
+ * Widening this can only rescue phrases that were being rejected. Every string
+ * that already validated contains twelve wordlist entries separated by single
+ * spaces, so it passes through unchanged and derives the seed it always did —
+ * `crypto.test.ts` pins that against a fixed vector, because a normalizer that
+ * moved an existing seed would lock every account out of its own messages.
+ */
+export function normalizeMnemonic(mnemonic: string): string {
+  return mnemonic
+    .normalize('NFKD')
+    .replace(/[\u00AD\u200B-\u200F\u2060\uFEFF]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
 export function isValidMnemonic(mnemonic: string): boolean {
-  return validateMnemonic(mnemonic.trim().toLowerCase(), wordlist);
+  return validateMnemonic(normalizeMnemonic(mnemonic), wordlist);
 }
 
 /**
@@ -23,7 +54,7 @@ export function isValidMnemonic(mnemonic: string): boolean {
  * fact that real users' phrases depend on it.
  */
 export async function seedFromMnemonic(mnemonic: string): Promise<Uint8Array> {
-  const normalized = mnemonic.trim().toLowerCase().replace(/\s+/g, ' ');
+  const normalized = normalizeMnemonic(mnemonic);
   if (!isValidMnemonic(normalized)) throw new Error('invalid recovery phrase');
   return mnemonicToSeedSync(normalized).slice(0, SEED_BYTES);
 }

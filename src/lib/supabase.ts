@@ -20,6 +20,26 @@ const READ_RETRIES = 2;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
+ * Whether a request is for the bytes of a Storage object, as opposed to a
+ * query, an RPC or a signature.
+ *
+ * `Request` and `URL` are both accepted because `fetch`'s first argument is a
+ * union and supabase-js is free to pass any of them; an input this cannot read
+ * falls through as "not storage", which is the pre-existing behaviour.
+ */
+export function isStorageObject(input: RequestInfo | URL): boolean {
+  const url =
+    typeof input === 'string'
+      ? input
+      : input instanceof URL
+        ? input.href
+        : typeof (input as Request).url === 'string'
+          ? (input as Request).url
+          : '';
+  return url.includes('/storage/v1/object/');
+}
+
+/**
  * `fetch` with a timeout and retries for reads.
  *
  * Reads only, deliberately: a retried POST would double-insert a message, and
@@ -32,6 +52,13 @@ const resilientFetch: typeof fetch = async (input, init) => {
   const method = (init?.method ?? 'GET').toUpperCase();
   const isRead = method === 'GET' || method === 'HEAD';
   if (!isRead) return fetch(input, init);
+
+  // Reading an object out of Storage is a read like any other and is excluded
+  // anyway. The timeout is sized for a query, and the bucket takes files up to
+  // 50 MB: a download that is merely slow would be aborted at 25 seconds and
+  // then started again from zero, twice, spending three times the bytes to
+  // fail. The same reasoning the upload path is exempted for.
+  if (isStorageObject(input)) return fetch(input, init);
 
   const external = init?.signal ?? undefined;
   let lastError: unknown;

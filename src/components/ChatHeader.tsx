@@ -94,7 +94,7 @@ export function ChatHeader({
   // has already paid it. The left padding is tighter than the right because on
   // a phone the back arrow's own hit area supplies the rest of the gap.
   return (
-    <header className="flex items-center gap-2 sm:gap-3 pl-2 pr-1.5 lg:pl-5 lg:pr-3 py-2.5 pt-[calc(0.625rem+var(--safe-top))] lg:pt-2.5 bg-base-100 border-b border-base-content/5 shadow-[0_1px_3px_rgba(0,0,0,0.25)] z-10 shrink-0">
+    <header className="flex items-center gap-2 sm:gap-3 pl-2 pr-1.5 lg:pl-5 lg:pr-3 py-2.5 pt-[calc(0.625rem+var(--safe-top))] bg-base-100 border-b border-base-content/5 shadow-[0_1px_3px_rgba(0,0,0,0.25)] z-10 shrink-0">
       <button
         className="btn btn-ghost btn-sm btn-square lg:hidden hover:bg-base-content/10 transition-colors"
         onClick={onBack}

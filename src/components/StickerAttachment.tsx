@@ -25,7 +25,16 @@ const SIZE = 128;
  * through exactly the same path as a photo.
  */
 export function StickerAttachment({ messageId, path, mediaKey }: StickerAttachmentProps) {
-  const { url, failed, reload } = useSignedMediaUrl(path, mediaKey, 'sticker', messageId);
+  // Deferred like a photo. A sticker is small, but sending one re-uploads the
+  // file every time by design (`lib/stickers.ts`), so a thread of them is a
+  // thread of distinct objects and a scroll through it fetched every one.
+  const { url, failed, reload, probeRef } = useSignedMediaUrl(
+    path,
+    mediaKey,
+    'sticker',
+    messageId,
+    true
+  );
 
   if (failed) {
     return (
@@ -37,7 +46,13 @@ export function StickerAttachment({ messageId, path, mediaKey }: StickerAttachme
   }
 
   if (!url) {
-    return <div className="rounded-lg bg-base-content/5" style={{ width: SIZE, height: SIZE }} />;
+    return (
+      <div
+        ref={probeRef}
+        className="rounded-lg bg-base-content/5"
+        style={{ width: SIZE, height: SIZE }}
+      />
+    );
   }
 
   return (

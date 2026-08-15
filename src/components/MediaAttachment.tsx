@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { VisualMediaType } from '../lib/types';
 import { useSignedMediaUrl } from '../hooks/useSignedMediaUrl';
 import { MediaLightbox } from './MediaLightbox';
-import { ImageOff, Play } from 'lucide-react';
+import { videoTrackIsUnsupported } from '../lib/media';
+import { ImageOff, Play, VideoOff } from 'lucide-react';
 
 interface MediaAttachmentProps {
   /** The owning message, so the viewer can pin it and so a pruned object can
@@ -31,8 +32,22 @@ interface MediaAttachmentProps {
  * enough, and it is the one you reach by tapping the thing you want.
  */
 export function MediaAttachment({ messageId, path, type, mediaKey, fill }: MediaAttachmentProps) {
-  const { url, failed, reload } = useSignedMediaUrl(path, mediaKey, type, messageId);
+  // Deferred: the placeholder below reserves the slot at the right size, so
+  // nothing jumps when the picture lands, and a page of thirty messages stops
+  // downloading the twenty-five attachments that are nowhere near the screen.
+  const { url, failed, reload, probeRef } = useSignedMediaUrl(
+    path,
+    mediaKey,
+    type,
+    messageId,
+    true
+  );
   const [viewing, setViewing] = useState(false);
+  // Set when this platform demuxed the file but could not decode its picture —
+  // an HEVC clip in the desktop shell. Without it the thumbnail is a grey box
+  // with a play glyph that promises a video and delivers its soundtrack.
+  const [noPicture, setNoPicture] = useState(false);
+  useEffect(() => setNoPicture(false), [url]);
 
   // The caller pulls this component out to the bubble's edges with a negative
   // margin; the placeholder and the failure notice are text, and text wants the
@@ -52,6 +67,7 @@ export function MediaAttachment({ messageId, path, type, mediaKey, fill }: Media
   if (!url) {
     return (
       <div
+        ref={probeRef}
         className={`flex items-center justify-center bg-base-content/5 ${
           fill ? 'w-full h-40' : 'mx-3.5 w-40 h-40 rounded-lg'
         }`}
@@ -96,6 +112,20 @@ export function MediaAttachment({ messageId, path, type, mediaKey, fill }: Media
             className={frame}
             onError={reload}
           />
+        ) : noPicture ? (
+          // Still a button, and still opening the viewer: saving the file is
+          // the only thing left that can be done with it, and the viewer is
+          // where saving lives.
+          <div
+            className={`flex flex-col items-center justify-center gap-1.5 bg-base-content/5 text-base-content/60 ${
+              fill ? 'w-full h-40' : 'w-40 h-40'
+            }`}
+          >
+            <VideoOff className="w-5 h-5" />
+            <span className="px-3 text-center text-[0.7rem] leading-tight">
+              Can't play this format here
+            </span>
+          </div>
         ) : (
           <>
             <video
@@ -111,6 +141,9 @@ export function MediaAttachment({ messageId, path, type, mediaKey, fill }: Media
               playsInline
               className={`${frame} pointer-events-none`}
               onError={reload}
+              onLoadedMetadata={(e) => {
+                if (videoTrackIsUnsupported(e.currentTarget)) setNoPicture(true);
+              }}
             />
             <span className="absolute inset-0 flex items-center justify-center">
               <span className="flex h-12 w-12 items-center justify-center rounded-full bg-black/55">
@@ -127,6 +160,10 @@ export function MediaAttachment({ messageId, path, type, mediaKey, fill }: Media
           url={url}
           path={path}
           type={type}
+          // What the thumbnail already learned, so the viewer does not mount a
+          // player that would start the soundtrack before finding out for
+          // itself.
+          noPicture={noPicture}
           onClose={() => setViewing(false)}
         />
       )}

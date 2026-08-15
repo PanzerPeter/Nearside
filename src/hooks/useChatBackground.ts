@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { fileExtension } from '../lib/conversation';
-import { backgroundPath, describeWriteError, validateBackgroundFile } from '../lib/background';
+import {
+  backgroundPath,
+  describeWriteError,
+  forgetBackgroundUrl,
+  rememberBackgroundUrl,
+  reusableBackgroundUrl,
+  validateBackgroundFile,
+} from '../lib/background';
 import { BACKGROUND_MAX_EDGE, compressImage } from '../lib/compress';
 
 /** How long a background's signed URL stays valid. Matches MediaAttachment. */
@@ -62,9 +69,19 @@ export function useChatBackground(me: string, friendId: string) {
       return;
     }
 
+    // Reuse the last signature for this object while it is still good. A new
+    // one is a new URL, which the browser has to fetch even though the image
+    // behind it is byte-for-byte what it painted a second ago.
+    const reusable = reusableBackgroundUrl(data.media_path);
+    if (reusable) {
+      apply(data, reusable);
+      return;
+    }
+
     const { data: signed } = await supabase.storage
       .from('chat-media')
       .createSignedUrl(data.media_path, SIGNED_URL_TTL);
+    if (signed?.signedUrl) rememberBackgroundUrl(data.media_path, signed.signedUrl);
     // A missing object degrades to no background rather than a broken paint —
     // same posture as MediaAttachment's "no longer available" fallback.
     apply(data, signed?.signedUrl ?? null);
@@ -149,6 +166,9 @@ export function useChatBackground(me: string, friendId: string) {
         }
 
         if (previousPath && previousPath !== path) {
+          // Before the object goes, or the reuse window would keep handing out
+          // a URL to bytes that are no longer there.
+          forgetBackgroundUrl(previousPath);
           await supabase.storage.from('chat-media').remove([previousPath]);
         }
         await load();
@@ -178,6 +198,7 @@ export function useChatBackground(me: string, friendId: string) {
 
       // Best-effort: the row is already gone, so nothing renders it any more.
       // A leftover object is swept when either account is deleted.
+      forgetBackgroundUrl(previousPath);
       await supabase.storage.from('chat-media').remove([previousPath]);
       rowRef.current = null;
       setUrl(null);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mergeMessages, pendingAsMessage } from './message-queries';
+import { mergeMessages, pendingAsMessage, unseenRows } from './message-queries';
 import type { Message, PendingMessage } from './types';
 
 const ME = '00000000-0000-0000-0000-00000000000a';
@@ -85,5 +85,58 @@ describe('pendingAsMessage', () => {
 
   it('keeps the queued id, so the server row can be paired with it by id', () => {
     expect(pendingAsMessage(queued).id).toBe('q1');
+  });
+});
+
+describe('mergeMessages identity', () => {
+  it('returns the previous array when the poll re-delivers a row unchanged', () => {
+    // `fetchSince` uses `gte`, so every tick returns the cursor row again. A
+    // fresh array for that re-rendered the whole thread every few seconds.
+    const prev = [msg('a', T1), msg('b', T2)];
+    expect(mergeMessages(prev, [msg('b', T2)])).toBe(prev);
+  });
+
+  it('still returns a new array when one of the re-delivered rows changed', () => {
+    const prev = [msg('a', T1), msg('b', T2)];
+    const edited = { ...msg('b', T2), text: 'edited', edited_at: T3 };
+    expect(mergeMessages(prev, [msg('a', T1), edited])).not.toBe(prev);
+  });
+
+  it('notices a soft delete that changes nothing else', () => {
+    const prev = [msg('a', T1)];
+    const removed = { ...msg('a', T1), deleted_at: T2 };
+    const merged = mergeMessages(prev, [removed]);
+    expect(merged).not.toBe(prev);
+    expect(merged[0].deleted_at).toBe(T2);
+  });
+
+  it('notices the expiry a trigger stamped on a row already held', () => {
+    const prev = [msg('a', T1)];
+    expect(mergeMessages(prev, [{ ...msg('a', T1), expires_at: T3 }])).not.toBe(prev);
+  });
+});
+
+describe('unseenRows', () => {
+  it('drops a fetched row the thread already holds unchanged', () => {
+    expect(unseenRows([msg('a', T1)], [msg('a', T1)])).toEqual([]);
+  });
+
+  it('keeps a row the thread has never seen', () => {
+    expect(unseenRows([msg('a', T1)], [msg('b', T2)]).map((m) => m.id)).toEqual(['b']);
+  });
+
+  it('keeps a held row whose ciphertext was rewritten by an edit', () => {
+    const held = [{ ...msg('a', T1), ciphertext: 'one' }];
+    const fetched = [{ ...msg('a', T1), ciphertext: 'two' }];
+    expect(unseenRows(held, fetched)).toHaveLength(1);
+  });
+
+  it('keeps a held row that has since been soft-deleted', () => {
+    const held = [msg('a', T1)];
+    expect(unseenRows(held, [{ ...msg('a', T1), deleted_at: T2 }])).toHaveLength(1);
+  });
+
+  it('is empty for an empty fetch', () => {
+    expect(unseenRows([msg('a', T1)], [])).toEqual([]);
   });
 });

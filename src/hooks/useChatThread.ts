@@ -14,6 +14,7 @@ import {
   fetchOlderPage,
   fetchSince,
   mergeMessages,
+  unseenRows,
   CATCHUP_LIMIT,
   PAGE_SIZE,
   type Cursor,
@@ -127,6 +128,10 @@ export function useChatThread({
   // from `messages`, because the pollers fire from timers that closed over an
   // older render.
   const newestAtRef = useRef<string | null>(null);
+  // The loaded window, for the same reason: `pullNew` runs from a timer and has
+  // to know what the thread already holds before it decrypts anything.
+  const messagesRef = useRef<Message[]>([]);
+  messagesRef.current = messages;
   // A degraded-mode poll every 6s over a link slow enough to be degraded would
   // otherwise stack requests.
   const catchupInFlight = useRef(false);
@@ -358,11 +363,17 @@ export function useChatThread({
         return;
       }
 
-      const rows = await open(await fetchSince(me, forFriend, since, CATCHUP_LIMIT));
+      const fetched = await fetchSince(me, forFriend, since, CATCHUP_LIMIT);
       if (loadedFor.current !== forFriend) return;
 
-      if (rows.length < CATCHUP_LIMIT) {
-        ingest(rows);
+      if (fetched.length < CATCHUP_LIMIT) {
+        // Filtered before `open`, not after: `fetchSince` is deliberately
+        // inclusive of the cursor row (`gte`, so a shared microsecond cannot
+        // step over a message), so the usual tick returns exactly one row the
+        // thread already holds. Opening it again re-decrypted a body every 45
+        // seconds, and every 6 while realtime is down, to produce state
+        // identical to what was already on screen.
+        ingest(await open(unseenRows(messagesRef.current, fetched)));
         return;
       }
 
@@ -485,7 +496,26 @@ export function useChatThread({
 
   function subscribe() {
     const channelKey = `dm:${[me, peerId].sort().join('_')}`;
-    const channel = supabase
+
+    /**
+     * Whose rows this channel asks for.
+     *
+     * Both bindings are needed and neither is wider than it has to be. The
+     * peer's covers what they send us — RLS already narrows their rows to the
+     * ones naming us, so `user_id` alone is the whole filter. Ours covers a
+     * send from another device of ours, which nothing else in this hook would
+     * ever hear about.
+     *
+     * There used to be no filter at all, which is not the same thing: an
+     * unfiltered binding is authorized per row against `messages_select_
+     * participant`, so the socket carried every message of every conversation
+     * this account has open elsewhere, for `isRelevant` to drop. In the
+     * self-chat the two ids are the same and one binding is registered, or the
+     * one row would arrive twice and be counted as two arrivals.
+     */
+    const senders = isSelf ? [me] : [peerId, me];
+
+    let channel = supabase
       .channel(channelKey, {
         config: { broadcast: { self: false } },
       })
@@ -499,49 +529,6 @@ export function useChatThread({
         if (typingTimeout.current) clearTimeout(typingTimeout.current);
         typingTimeout.current = setTimeout(() => setFriendTyping(false), TYPING_LINGER_MS);
       })
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'messages' },
-        (payload) => {
-          const msg = payload.new as Message;
-          if (!isRelevant(msg)) return;
-          // This event and `attemptSend`'s own response race back from the same
-          // insert, and either can land first. Adopting here too keeps the
-          // authoritative bubble from painting beside the optimistic one it
-          // replaces. The row carries the queued message's uuid, so pairing is
-          // an exact id match; an own row with no queued counterpart is a send
-          // from another device and animates in like any other arrival.
-          if (outbox.pendingRef.current.some((p) => p.id === msg.id)) {
-            // Opened before adoption, because the two state updates have to
-            // commit in one tick and nothing between them can await.
-            void open([msg]).then(([opened]) => {
-              adoptSentRow(opened);
-              outbox.dropPending(msg.id);
-            });
-            // The queue entry is settled. Left in place the next flush would
-            // re-attempt it, which the primary key makes harmless but useless.
-            void outbox.retire(msg.id);
-            return;
-          }
-          void open([msg]).then(([opened]) => {
-            setMessages((prev) => mergeMessages(prev, [opened]));
-          });
-          // Only arrivals the user didn't just cause. `countArrivals` skips a
-          // reader already at the bottom, who sees it land anyway.
-          if (msg.user_id === peerId) scroll.countArrivals(1);
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'messages' },
-        (payload) => {
-          const msg = payload.new as Message;
-          if (!isRelevant(msg)) return;
-          void open([msg]).then(([opened]) => {
-            setMessages((prev) => prev.map((m) => (m.id === opened.id ? opened : m)));
-          });
-        }
-      )
       .on(
         'postgres_changes',
         {
@@ -558,12 +545,62 @@ export function useChatThread({
           if (row?.peer_id !== me) return;
           receipts.setPeerReceipt(row);
         }
-      )
-      // This channel carries the open conversation, so its status answers "are
-      // messages arriving?" better than the socket's own, which can heartbeat
-      // happily while a channel sits in CHANNEL_ERROR. Anything other than
-      // SUBSCRIBED switches on the fast poll and raises the banner.
-      .subscribe((status) => reportChannelStatus(channelKey, status));
+      );
+
+    for (const sender of senders) {
+      channel = channel
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'messages', filter: `user_id=eq.${sender}` },
+          (payload) => {
+            const msg = payload.new as Message;
+            if (!isRelevant(msg)) return;
+            // This event and `attemptSend`'s own response race back from the
+            // same insert, and either can land first. Adopting here too keeps
+            // the authoritative bubble from painting beside the optimistic one
+            // it replaces. The row carries the queued message's uuid, so
+            // pairing is an exact id match; an own row with no queued
+            // counterpart is a send from another device and animates in like
+            // any other arrival.
+            if (outbox.pendingRef.current.some((p) => p.id === msg.id)) {
+              // Opened before adoption, because the two state updates have to
+              // commit in one tick and nothing between them can await.
+              void open([msg]).then(([opened]) => {
+                adoptSentRow(opened);
+                outbox.dropPending(msg.id);
+              });
+              // The queue entry is settled. Left in place the next flush would
+              // re-attempt it, which the primary key makes harmless but
+              // useless.
+              void outbox.retire(msg.id);
+              return;
+            }
+            void open([msg]).then(([opened]) => {
+              setMessages((prev) => mergeMessages(prev, [opened]));
+            });
+            // Only arrivals the user didn't just cause. `countArrivals` skips a
+            // reader already at the bottom, who sees it land anyway.
+            if (msg.user_id === peerId) scroll.countArrivals(1);
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: 'UPDATE', schema: 'public', table: 'messages', filter: `user_id=eq.${sender}` },
+          (payload) => {
+            const msg = payload.new as Message;
+            if (!isRelevant(msg)) return;
+            void open([msg]).then(([opened]) => {
+              setMessages((prev) => prev.map((m) => (m.id === opened.id ? opened : m)));
+            });
+          }
+        );
+    }
+
+    // This channel carries the open conversation, so its status answers "are
+    // messages arriving?" better than the socket's own, which can heartbeat
+    // happily while a channel sits in CHANNEL_ERROR. Anything other than
+    // SUBSCRIBED switches on the fast poll and raises the banner.
+    channel.subscribe((status) => reportChannelStatus(channelKey, status));
 
     channelRef.current = channel;
     channelKeyRef.current = channelKey;

@@ -32,12 +32,24 @@ export interface StickerDrawer {
   add: (file: File, label: string) => Promise<string | null>;
   remove: (sticker: Sticker) => Promise<void>;
   reload: () => Promise<void>;
+  /** Start loading. Called by the picker when it mounts — see below. */
+  activate: () => void;
 }
 
 export function useStickers(userId: string | null, identity: Identity | null): StickerDrawer {
   const [stickers, setStickers] = useState<Sticker[]>([]);
   const [urls, setUrls] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
+  /**
+   * Whether the drawer has been opened at all this session.
+   *
+   * This hook lives in `ChatRoom`, so it mounts with every conversation — and
+   * it used to list the library and then download and decrypt *every* sticker
+   * on that mount. A hundred stickers is a hundred objects fetched to draw a
+   * grid most sessions never open, before the user has touched the button that
+   * shows it. The picker asks for the library when it appears instead.
+   */
+  const [active, setActive] = useState(false);
 
   const reload = useCallback(async () => {
     if (!userId || !identity) {
@@ -52,8 +64,9 @@ export function useStickers(userId: string | null, identity: Identity | null): S
   }, [userId, identity]);
 
   useEffect(() => {
+    if (!active) return;
     void reload();
-  }, [reload]);
+  }, [active, reload]);
 
   // Bytes are fetched per sticker rather than as one batch: the cache in
   // `lib/stickers.ts` is module-level, so a second open of the drawer resolves
@@ -103,5 +116,16 @@ export function useStickers(userId: string | null, identity: Identity | null): S
     await deleteSticker(sticker.id, sticker.path);
   }, []);
 
-  return { stickers, urls, loading, full: stickers.length >= STICKER_LIMIT, add, remove, reload };
+  const activate = useCallback(() => setActive(true), []);
+
+  return {
+    stickers,
+    urls,
+    loading,
+    full: stickers.length >= STICKER_LIMIT,
+    add,
+    remove,
+    reload,
+    activate,
+  };
 }

@@ -1,15 +1,22 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { generateMnemonic, seedFromMnemonic } from '../lib/crypto/mnemonic';
-import { identityFromSeed, type Identity } from '../lib/crypto/keys';
+import { identityFromSeed } from '../lib/crypto/keys';
 import { isSeedConfirmed, loadSeed, markSeedConfirmed, storeSeed } from '../lib/keystore';
 import { setRecoveryConfirmed } from '../lib/notifications';
-
-type Status = 'loading' | 'missing' | 'unconfirmed' | 'ready';
+import {
+  scopedIdentity,
+  scopedStatus,
+  type IdentityStatus,
+  type ScopedIdentity,
+} from '../lib/identity-scope';
 
 export function useIdentity(session: Session | null) {
-  const [identity, setIdentity] = useState<Identity | null>(null);
-  const [status, setStatus] = useState<Status>('loading');
+  // The derivation and the account it belongs to, in one piece of state. They
+  // were two, and a caller reading both in the render where the session had
+  // already changed got the previous account's key paired with this account's
+  // id — see `lib/identity-scope.ts` for what that wrote to the server.
+  const [held, setHeld] = useState<ScopedIdentity | null>(null);
   // The user id, not the session object: Capacitor hands out a fresh session
   // on every app resume, and re-running this effect for the same account
   // re-reads the seed and re-derives keys for nothing.
@@ -20,32 +27,24 @@ export function useIdentity(session: Session | null) {
 
   useEffect(() => {
     if (!userId) {
-      setIdentity(null);
-      setStatus('missing');
+      setHeld(null);
       return;
     }
-    // Dropped before the load, not after it: the previous account's identity is
-    // still in state at this point, and 'ready' is still the status. Leaving
-    // either in place renders the app for the new account holding the old
-    // account's key for as long as the read takes.
-    setIdentity(null);
-    setStatus('loading');
 
     let cancelled = false;
     void (async () => {
       const seed = await loadSeed(userId);
       if (cancelled) return;
       if (!seed) {
-        setStatus('missing');
+        setHeld({ userId, identity: null, status: 'missing' });
         return;
       }
       const derived = await identityFromSeed(seed);
       const confirmed = await isSeedConfirmed(userId);
       if (cancelled) return;
-      setIdentity(derived);
       // A seed with no confirmation is a phrase the user was shown and never
       // copied. Reloading must put them back on that screen, not past it.
-      setStatus(confirmed ? 'ready' : 'unconfirmed');
+      setHeld({ userId, identity: derived, status: confirmed ? 'ready' : 'unconfirmed' });
       // Reported to OneSignal every load, not only at the moment of
       // confirming: the In-App Message that chases an unconfirmed phrase
       // targets the absence of this tag, and a device that confirmed while
@@ -70,8 +69,7 @@ export function useIdentity(session: Session | null) {
     const seed = await seedFromMnemonic(mnemonic);
     await storeSeed(userId, seed);
     void setRecoveryConfirmed(false);
-    setIdentity(await identityFromSeed(seed));
-    setStatus('unconfirmed');
+    setHeld({ userId, identity: await identityFromSeed(seed), status: 'unconfirmed' });
     return mnemonic;
   }, [userId]);
 
@@ -83,7 +81,13 @@ export function useIdentity(session: Session | null) {
     if (!userId) return;
     await markSeedConfirmed(userId);
     void setRecoveryConfirmed(true);
-    setStatus('ready');
+    // Merged rather than replaced, and only for this account: the identity
+    // beside the status is the thing being confirmed, and a switch that landed
+    // mid-confirmation must not have this write hand the new account the old
+    // one's key with a 'ready' beside it.
+    setHeld((current) =>
+      current && current.userId === userId ? { ...current, status: 'ready' } : current
+    );
   }, [userId]);
 
   const restoreIdentity = useCallback(
@@ -95,11 +99,16 @@ export function useIdentity(session: Session | null) {
       // to prove, so this is confirmed on arrival.
       await markSeedConfirmed(userId);
       void setRecoveryConfirmed(true);
-      setIdentity(await identityFromSeed(seed));
-      setStatus('ready');
+      setHeld({ userId, identity: await identityFromSeed(seed), status: 'ready' });
     },
     [userId]
   );
+
+  // Resolved during render, not in an effect. That is the whole point: an
+  // effect-based reset is exactly one render too late, and one render is all it
+  // took to publish the wrong key.
+  const identity = scopedIdentity(held, userId);
+  const status: IdentityStatus = scopedStatus(held, userId);
 
   return { identity, status, createIdentity, confirmIdentity, restoreIdentity };
 }

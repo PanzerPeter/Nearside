@@ -154,3 +154,19 @@ everywhere. What that costs:
 
 Messaging, calls, media and the sealed exchange all work: they are Supabase,
 WebRTC and libsodium, none of which need a native plugin.
+
+One thing that is not a plugin and still differs: **Electron's Chromium is
+built without an HEVC decoder**, and phones record in HEVC by default. It does
+not fail loudly — it demuxes the file, keeps the AAC track, drops the video
+track, and reports the right duration with a 0×0 frame and no `error` event.
+Left alone that is a grey thumbnail that plays a soundtrack. `MediaAttachment`
+and `MediaLightbox` test for it (`videoTrackIsUnsupported` in `src/lib/media.ts`)
+and say the format cannot be played here; the file is intact and the save
+button still works, so the way out is to open it in a real player. Nothing can
+be done about the decoder short of shipping a custom ffmpeg build, which is a
+patent question and not a build flag.
+
+The desktop CSP has to name the storage host for avatars — see the comment on
+`img-src` in `electron/capacitor.electron.config.ts`. The `avatars` bucket is
+public and rendered straight from its URL, unlike every other picture in the
+app, which arrives sealed over `fetch` and is painted from a `blob:`.

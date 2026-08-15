@@ -1,6 +1,6 @@
-// A readable URL for one object in the private `chat-media` bucket: sign the
-// path, decrypt the bytes, hold the result, and fall back to "no longer
-// available" when there is nothing behind it.
+// A readable URL for one object in the private `chat-media` bucket: read the
+// session cache, else sign the path, decrypt the bytes, hold the result, and
+// fall back to "no longer available" when there is nothing behind it.
 //
 // A signed URL expires after an hour, and the installed app routinely stays
 // open far longer. Without re-signing, an element that reaches for its source
@@ -12,16 +12,29 @@
 // <audio> or <video> restarts it, so re-signing on a schedule would interrupt
 // the one thing most likely to still be running an hour in. The element
 // reports its failure instead, and exactly one retry is spent on a fresh URL.
+//
+// Two things keep this off the network. `lib/media-cache.ts` owns the decrypted
+// blob for the session, so the same object is fetched once however many
+// components ask for it and however often the thread is scrolled past it. And
+// `defer` holds the first fetch until the attachment is near the viewport: a
+// page is thirty messages and a screen is about five, so an eager thread of
+// photos downloaded five times what anybody looked at.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { openFile } from '../lib/media-crypto';
 import { keyToken, mimeForPath } from '../lib/media';
+import { cachedMedia, forgetMedia, putMedia } from '../lib/media-cache';
 import { pinnedObjectUrl } from '../lib/pins';
 import type { MediaType } from '../lib/types';
 
 /** Lifetime asked for on each signature. */
 const SIGNED_URL_TTL_SECONDS = 3600;
+
+/** How far outside the viewport a deferred attachment starts loading. Wide
+ *  enough that an ordinary scroll never meets a placeholder, narrow enough that
+ *  opening a conversation does not fetch the whole page. */
+const PRELOAD_MARGIN = '800px';
 
 export interface SignedMedia {
   /** The URL to render, or null while the first signature is in flight. */
@@ -34,6 +47,12 @@ export interface SignedMedia {
    * fails twice settles on `failed` rather than looping.
    */
   reload: () => void;
+  /**
+   * Attach to the placeholder rendered while `url` is null. Under `defer` it is
+   * what decides the fetch has become worth making; without it a deferred
+   * attachment never loads at all.
+   */
+  probeRef: (el: Element | null) => void;
 }
 
 export function useSignedMediaUrl(
@@ -43,10 +62,19 @@ export function useSignedMediaUrl(
   /** The message this attachment belongs to, so a pruned object can fall back
    *  to the pinned copy on this device. A pin is only worth making if it
    *  survives the pruning it was made against. */
-  messageId?: string
+  messageId?: string,
+  /** Wait until the placeholder is near the viewport before fetching. Set by
+   *  the components that render a placeholder of the right size — anything that
+   *  reserves no space would load everything at once anyway. */
+  defer = false
 ): SignedMedia {
   const [url, setUrl] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
+  // Whether the attachment has come close enough to the viewport to be worth
+  // fetching. Starts true when nothing is deferring it, and when the platform
+  // has no IntersectionObserver — a missing API must mean "load it", never
+  // "never load it".
+  const [wanted, setWanted] = useState(!defer || typeof IntersectionObserver === 'undefined');
   // The key is depended on by *value*, not identity. `openRows` mints a fresh
   // array on every decrypt and `mergeMessages` replaces the newest row on
   // every poll tick, so an identity dependency re-ran this effect every few
@@ -55,16 +83,16 @@ export function useSignedMediaUrl(
   const token = keyToken(mediaKey);
   const keyRef = useRef<Uint8Array | null>(mediaKey ?? null);
   keyRef.current = mediaKey ?? null;
-  // The object URL currently handed out, so it can be revoked. A decrypted
-  // attachment stays in memory as long as its blob URL does, and the installed
-  // app stays open for days: leaking one per rendered image means holding
-  // every photo the session has scrolled past.
-  const objectUrlRef = useRef<string | null>(null);
+  // A URL this hook owns and must revoke, as opposed to one the media cache
+  // owns. Only the pinned-copy fallback mints one now: a decrypted object goes
+  // into the cache, where the thumbnail, the viewer opened over it and the same
+  // file forwarded elsewhere all read the one blob.
+  const ownedUrlRef = useRef<string | null>(null);
 
-  const releaseObjectUrl = useCallback(() => {
-    if (objectUrlRef.current) {
-      URL.revokeObjectURL(objectUrlRef.current);
-      objectUrlRef.current = null;
+  const releaseOwnedUrl = useCallback(() => {
+    if (ownedUrlRef.current) {
+      URL.revokeObjectURL(ownedUrlRef.current);
+      ownedUrlRef.current = null;
     }
   }, []);
   // Whether the one retry has been spent for the *current* path. A ref rather
@@ -88,8 +116,8 @@ export function useSignedMediaUrl(
         if (pinned) URL.revokeObjectURL(pinned);
         return false;
       }
-      releaseObjectUrl();
-      objectUrlRef.current = pinned;
+      releaseOwnedUrl();
+      ownedUrlRef.current = pinned;
       setUrl(pinned);
       return true;
     };
@@ -119,20 +147,16 @@ export function useSignedMediaUrl(
       const opened = await openFile(new Uint8Array(await response.arrayBuffer()), key);
       if (requestRef.current !== ticket) return;
 
-      // Revoke before replacing, or a re-sign after an expiry strands the old
-      // blob for the tab's lifetime.
-      releaseObjectUrl();
+      releaseOwnedUrl();
       // Typed from the object name, because Storage cannot say: every sealed
       // object uploads as application/octet-stream. A typeless blob leaves
       // videos showing a blank poster and renders an image as garbage text.
       //
       // Copied into a fresh buffer, since `opened` may be a view libsodium
       // hands back over a larger allocation that Blob would carry whole.
-      const blobUrl = URL.createObjectURL(
-        new Blob([opened.slice()], { type: mimeForPath(path, kind) })
+      setUrl(
+        putMedia(path, new Blob([opened.slice()], { type: mimeForPath(path, kind) }))
       );
-      objectUrlRef.current = blobUrl;
-      setUrl(blobUrl);
     } catch {
       if (requestRef.current !== ticket) return;
       if (!(await fallBackToPin())) setFailed(true);
@@ -143,13 +167,32 @@ export function useSignedMediaUrl(
     // first key it ever saw; a plain `mediaKey` dependency reintroduces the
     // re-decrypt loop described at the ref's declaration.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [path, token, kind, messageId, releaseObjectUrl]);
+  }, [path, token, kind, messageId, releaseOwnedUrl]);
 
+  // Attachment-scoped state, reset when this component is pointed at a
+  // different object.
   useEffect(() => {
-    setUrl(null);
     setFailed(false);
     retriedRef.current = false;
+    setWanted(!defer || typeof IntersectionObserver === 'undefined');
+  }, [path, defer]);
+
+  // The load itself. Deliberately *not* gated on the `url` state: that value is
+  // this render's, so on a path change it still holds the previous
+  // attachment's URL, and an effect that reads it as "already loaded" would
+  // never fetch the new one. The cache is consulted here instead, which answers
+  // the same question about the path actually being asked for.
+  useEffect(() => {
+    // A hit costs nothing and is taken whether or not the attachment is near
+    // the viewport: the bytes are already in memory, so deferring one the
+    // session has decrypted would paint a placeholder over a picture it could
+    // show this frame.
+    const hit = cachedMedia(path);
+    setUrl(hit);
+    if (hit || !wanted) return;
+
     void sign();
+
     return () => {
       // Bumping the ticket is what makes the in-flight signature a no-op.
       //
@@ -160,9 +203,32 @@ export function useSignedMediaUrl(
       // of itself and retires nothing.
       // eslint-disable-next-line react-hooks/exhaustive-deps
       requestRef.current++;
-      releaseObjectUrl();
+      releaseOwnedUrl();
     };
-  }, [sign, releaseObjectUrl]);
+  }, [path, wanted, sign, releaseOwnedUrl]);
+
+  const observerRef = useRef<IntersectionObserver | null>(null);
+  const probeRef = useCallback(
+    (el: Element | null) => {
+      observerRef.current?.disconnect();
+      observerRef.current = null;
+      if (!el || typeof IntersectionObserver === 'undefined') return;
+
+      const observer = new IntersectionObserver(
+        (entries) => {
+          if (!entries.some((e) => e.isIntersecting)) return;
+          observer.disconnect();
+          setWanted(true);
+        },
+        { rootMargin: PRELOAD_MARGIN }
+      );
+      observer.observe(el);
+      observerRef.current = observer;
+    },
+    []
+  );
+
+  useEffect(() => () => observerRef.current?.disconnect(), []);
 
   const reload = useCallback(() => {
     if (retriedRef.current) {
@@ -170,9 +236,13 @@ export function useSignedMediaUrl(
       return;
     }
     retriedRef.current = true;
+    // The cached blob is what just failed to render — an eviction revoked it,
+    // or the object behind it is gone. Left in place, the re-sign below would
+    // be answered by the same dead URL on the next mount.
+    forgetMedia(path);
     setUrl(null);
     void sign();
-  }, [sign]);
+  }, [sign, path]);
 
-  return { url, failed, reload };
+  return { url, failed, reload, probeRef };
 }

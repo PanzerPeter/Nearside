@@ -27,8 +27,16 @@ interface RoomListProps {
 }
 
 /** The room list is one RPC, so a cheap poll is a sufficient backstop for the
- *  cases realtime misses — a room someone else created and added you to. */
-const POLL_MS = 45_000;
+ *  cases realtime misses — a room someone else created and added you to.
+ *
+ *  "Cheap" is per call: `rooms_for_me()` runs two correlated subqueries per
+ *  room, and this used to run every 45 seconds for the life of the session
+ *  whether or not anyone was looking at the app. The conversation list beside
+ *  it has always been the two-speed poll below. */
+const POLL_HEALTHY_MS = 150_000;
+/** …and the cadence once realtime is known down, when a poll is the only thing
+ *  that will ever show a room somebody just added you to. */
+const POLL_DEGRADED_MS = 12_000;
 
 export function RoomList({
   me,
@@ -47,7 +55,7 @@ export function RoomList({
    *  *failed* attempt still counts — the create button is more use than a
    *  section that never appears because one RPC is down. */
   const [settled, setSettled] = useState(false);
-  const { generation } = useConnection();
+  const { generation, live } = useConnection();
 
   // Live ref rather than a dep: the callback is re-created on every render of
   // the list above, and keying `load` on it would restart the poll each time.
@@ -71,10 +79,17 @@ export function RoomList({
     void load();
   }, [load, generation]);
 
+  // Skipped while the app is hidden, like every other poll in the app: the
+  // wake path refetches on return, so a backgrounded tab polling on is spent
+  // requests for a list nobody can see. This was the one that did not check.
   useEffect(() => {
-    const id = setInterval(() => void load(), POLL_MS);
+    const period = live ? POLL_HEALTHY_MS : POLL_DEGRADED_MS;
+    const id = setInterval(() => {
+      if (document.visibilityState !== 'visible') return;
+      void load();
+    }, period);
     return () => clearInterval(id);
-  }, [load]);
+  }, [load, live]);
 
   const empty = rooms.length === 0;
 

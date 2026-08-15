@@ -15,12 +15,18 @@ import { UserPlus, Check, X, Users } from 'lucide-react';
 import type { Identity } from '../lib/crypto/keys';
 import type { RoomSummary } from '../lib/rooms';
 
-/** Conversation-list refresh cadence while realtime is healthy — a cheap
- *  backstop, since the list is one RPC. */
-const LIST_POLL_HEALTHY_MS = 60_000;
+/** Conversation-list refresh cadence while realtime is healthy — a backstop for
+ *  the one failure realtime cannot report about itself, not a delivery
+ *  mechanism. Two RPCs a tick, and `live` plus the wake generation already
+ *  cover everything else, so it is deliberately slow. */
+const LIST_POLL_HEALTHY_MS = 150_000;
 /** …and once realtime is known to be down, when it's the only thing keeping
  *  previews, ordering and unread badges moving. */
 const LIST_POLL_DEGRADED_MS = 12_000;
+/** Window a burst of message events is folded into before the list is re-read.
+ *  Short enough to read as immediate, long enough to catch the second binding
+ *  a self-note fires and the tail of a multi-photo send. */
+const LIST_REFRESH_COALESCE_MS = 400;
 
 interface FriendsListProps {
   session: Session;
@@ -102,6 +108,34 @@ export function FriendsList({
     );
     setPreviews(new Map(resolved));
   }, [me]);
+
+  /**
+   * Coalesce a burst of realtime events into one list refresh.
+   *
+   * Four bindings watch `messages` below, and a note to yourself matches two of
+   * them at once (`user_id` and `receiver_id` are both you), so a single row
+   * used to cost two `conversation_list` calls. A burst — someone sending three
+   * messages, or a batch of photos going out — cost one per row. The list only
+   * ever paints the newest of them.
+   *
+   * Trailing rather than leading: the row that matters is the last one in the
+   * burst, and the badge beside it is updated optimistically anyway.
+   */
+  const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduleConversationRefresh = useCallback(() => {
+    if (refreshTimer.current) return;
+    refreshTimer.current = setTimeout(() => {
+      refreshTimer.current = null;
+      void fetchConversations();
+    }, LIST_REFRESH_COALESCE_MS);
+  }, [fetchConversations]);
+
+  useEffect(
+    () => () => {
+      if (refreshTimer.current) clearTimeout(refreshTimer.current);
+    },
+    []
+  );
 
   const fetchPendingRequests = useCallback(async () => {
     const { data } = await supabase
@@ -304,7 +338,7 @@ export function FriendsList({
               return next;
             });
           }
-          void fetchConversations();
+          scheduleConversationRefresh();
         }
       )
       // Our own sends never touch unread state, but the row's preview and
@@ -313,7 +347,7 @@ export function FriendsList({
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'messages', filter: `user_id=eq.${me}` },
         () => {
-          void fetchConversations();
+          scheduleConversationRefresh();
         }
       )
       // An edit or soft-delete of a message we received, if it was the last
@@ -322,7 +356,7 @@ export function FriendsList({
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'messages', filter: `receiver_id=eq.${me}` },
         () => {
-          void fetchConversations();
+          scheduleConversationRefresh();
         }
       )
       // Same, for a message we sent.
@@ -330,7 +364,7 @@ export function FriendsList({
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'messages', filter: `user_id=eq.${me}` },
         () => {
-          void fetchConversations();
+          scheduleConversationRefresh();
         }
       )
       // This channel exists for the whole signed-in session, chat open or not,
@@ -341,7 +375,7 @@ export function FriendsList({
       supabase.removeChannel(channel);
       forgetChannel(unreadChannelKey);
     };
-  }, [me, generation, unreadChannelKey, fetchConversations]);
+  }, [me, generation, unreadChannelKey, scheduleConversationRefresh]);
 
   /** Recompute every conversation's unread badge from the server. */
   const refreshUnread = useCallback(async () => {
@@ -415,7 +449,7 @@ export function FriendsList({
       {/* Header. It carries the notch inset itself: on a phone this list is the
           top of the screen — the shared top bar is desktop-only — while on
           desktop that bar is above it and already paid for the inset. */}
-      <div className="p-4 pt-[calc(1rem+var(--safe-top))] sm:p-5 sm:pt-[calc(1.25rem+var(--safe-top))] lg:pt-5 border-b border-base-content/5">
+      <div className="p-4 pt-[calc(1rem+var(--safe-top))] sm:p-5 sm:pt-[calc(1.25rem+var(--safe-top))] border-b border-base-content/5">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <Users className="w-5 h-5 text-primary hidden lg:block" />

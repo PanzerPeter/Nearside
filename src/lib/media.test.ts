@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { keyToken, mimeForPath, MEDIA_SCAN_LIMIT, selectStaleMedia, type MediaRow } from './media';
+import {
+  keyToken,
+  mimeForPath,
+  videoTrackIsUnsupported,
+  MEDIA_SCAN_LIMIT,
+  selectStaleMedia,
+  type MediaRow,
+} from './media';
 import { AUDIO_KEEP_LIMIT, MEDIA_KEEP_LIMIT } from './conversation';
 import type { MediaType } from './types';
 
@@ -142,5 +149,24 @@ describe('keyToken', () => {
   it('has no token for no key', () => {
     expect(keyToken(null)).toBeNull();
     expect(keyToken(undefined)).toBeNull();
+  });
+});
+
+describe('videoTrackIsUnsupported', () => {
+  // Measured against Electron 43 on Linux with the same clip muxed twice: an
+  // H.264 track reports 320x240 at loadedmetadata, an HEVC one reports 0x0
+  // with the same duration and never fires `error`.
+  it('spots a container whose video track produced no frame', () => {
+    expect(videoTrackIsUnsupported({ videoWidth: 0, readyState: 4 })).toBe(true);
+  });
+
+  it('leaves a decoded video alone', () => {
+    expect(videoTrackIsUnsupported({ videoWidth: 320, readyState: 1 })).toBe(false);
+  });
+
+  it('does not condemn an element that has not read its metadata yet', () => {
+    // HAVE_NOTHING: videoWidth is 0 for every video at this point, including
+    // the ones about to play perfectly.
+    expect(videoTrackIsUnsupported({ videoWidth: 0, readyState: 0 })).toBe(false);
   });
 });

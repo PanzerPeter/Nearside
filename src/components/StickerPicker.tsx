@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ImagePlus, Search, Trash2 } from 'lucide-react';
 import { matchesLabel, STICKER_SOURCE_TYPES, type Sticker } from '../lib/stickers';
 import type { StickerDrawer } from '../hooks/useStickers';
@@ -24,6 +24,12 @@ export function StickerPicker({ drawer, onSelect, onError }: StickerPickerProps)
   const [armed, setArmed] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const holdTimer = useRef<number | null>(null);
+
+  // The drawer is owned by ChatRoom and loads nothing until something asks. The
+  // popover mounts this component the moment it opens, tab selected or not, so
+  // this is the earliest point at which the library is about to be looked at.
+  const { activate } = drawer;
+  useEffect(() => activate(), [activate]);
 
   const shown = useMemo(
     () => drawer.stickers.filter((s) => matchesLabel(s.label, query)),
