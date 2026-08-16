@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, Download, Eye, EyeOff, Lock, RefreshCw } from 'lucide-react';
-import { describeStoredData, exportEverything, type StoredDataReport } from '../lib/server-view';
+import {
+  describeStoredData,
+  exportEverything,
+  groupTables,
+  type StoredDataReport,
+} from '../lib/server-view';
 import { saveTextFile } from '../lib/download';
 import { useToast } from '../hooks/useToast';
 import { Modal } from './Modal';
@@ -122,67 +127,89 @@ export function ServerView({ onClose, onOpenLimits }: ServerViewProps) {
             </div>
           )}
 
-          <div className="space-y-3 mt-4">
-            {report.tables.map((t) => (
-              <section
-                key={t.table}
-                className="rounded-xl border border-base-content/10 bg-base-200/40 p-3.5"
-              >
-                <header className="flex items-baseline justify-between gap-3">
-                  <div className="min-w-0">
-                    <h4 className="font-medium text-sm">{t.label}</h4>
-                    <p className="font-mono text-[11px] text-base-content/60">{t.table}</p>
-                  </div>
-                  <span className="text-xs text-base-content/60 shrink-0 tabular-nums">
-                    {t.rows === null
-                      ? t.infrastructure
-                        ? 'not about you'
-                        : 'not readable by you'
-                      : `${t.rows.toLocaleString()} ${t.rows === 1 ? 'row' : 'rows'}`}
-                  </span>
-                </header>
+          {/* Grouped rather than one run of eighteen cards. Flat, the list read
+              as a pile of things the server holds; under headings, the shape of
+              the answer is visible before any single row is: sealed content,
+              routing metadata the server genuinely reads, and plumbing. */}
+          {groupTables(report.tables).map((group) => (
+            <section key={group.group} className="mt-5">
+              <h4 className="text-xs font-medium uppercase tracking-wider text-base-content/60">
+                {group.title}
+              </h4>
+              <p className="text-xs text-base-content/60 leading-relaxed mt-1">{group.blurb}</p>
 
-                <p className="text-xs text-base-content/70 leading-relaxed mt-2">{t.note}</p>
+              <div className="space-y-3 mt-3">
+                {group.tables.map((t) => (
+                  <section
+                    key={t.table}
+                    className="rounded-xl border border-base-content/10 bg-base-200/40 p-3.5"
+                  >
+                    <header className="flex items-baseline justify-between gap-3">
+                      <div className="min-w-0">
+                        <h5 className="font-medium text-sm">{t.label}</h5>
+                        <p className="font-mono text-[11px] text-base-content/60">{t.table}</p>
+                      </div>
+                      <span className="text-xs text-base-content/60 shrink-0 tabular-nums">
+                        {t.rows === null
+                          ? t.infrastructure
+                            ? 'not about you'
+                            : 'not readable by you'
+                          : `${t.rows.toLocaleString()} ${t.rows === 1 ? 'row' : 'rows'}`}
+                      </span>
+                    </header>
 
-                <dl className="mt-3 space-y-2">
-                  {t.readable.length > 0 && (
-                    <div className="flex gap-2">
-                      <dt className="flex items-center gap-1 text-[11px] font-medium uppercase tracking-wider text-warning shrink-0 w-28">
-                        <Eye className="w-3 h-3" />
-                        Server reads
-                      </dt>
-                      <dd className="font-mono text-[11px] text-base-content/60 break-all">
-                        {t.readable.join(' · ')}
-                      </dd>
-                    </div>
-                  )}
-                  {t.opaque.length > 0 && (
-                    <div className="flex gap-2">
-                      <dt className="flex items-center gap-1 text-[11px] font-medium uppercase tracking-wider text-success shrink-0 w-28">
-                        <EyeOff className="w-3 h-3" />
-                        Encrypted
-                      </dt>
-                      <dd className="font-mono text-[11px] text-base-content/60 break-all">
-                        {t.opaque.join(' · ')}
-                      </dd>
-                    </div>
-                  )}
-                  {t.opaque.length === 0 && (
-                    <div className="flex gap-2">
-                      <dt className="flex items-center gap-1 text-[11px] font-medium uppercase tracking-wider text-base-content/40 shrink-0 w-28">
-                        <Lock className="w-3 h-3" />
-                        Encrypted
-                      </dt>
-                      <dd className="text-[11px] text-base-content/60">nothing in this table</dd>
-                    </div>
-                  )}
-                </dl>
-              </section>
-            ))}
-          </div>
+                    <p className="text-xs text-base-content/70 leading-relaxed mt-2">{t.note}</p>
+
+                    <dl className="mt-3 space-y-2">
+                      {t.readable.length > 0 && (
+                        <div className="flex gap-2">
+                          <dt className="flex items-center gap-1 text-[11px] font-medium uppercase tracking-wider text-warning shrink-0 w-28">
+                            <Eye className="w-3 h-3" />
+                            Server reads
+                          </dt>
+                          <dd className="font-mono text-[11px] text-base-content/60 break-all">
+                            {t.readable.join(' · ')}
+                          </dd>
+                        </div>
+                      )}
+                      {t.opaque.length > 0 && (
+                        <div className="flex gap-2">
+                          <dt className="flex items-center gap-1 text-[11px] font-medium uppercase tracking-wider text-success shrink-0 w-28">
+                            <EyeOff className="w-3 h-3" />
+                            Encrypted
+                          </dt>
+                          <dd className="font-mono text-[11px] text-base-content/60 break-all">
+                            {t.opaque.join(' · ')}
+                          </dd>
+                        </div>
+                      )}
+                      {t.opaque.length === 0 && (
+                        <div className="flex gap-2">
+                          <dt className="flex items-center gap-1 text-[11px] font-medium uppercase tracking-wider text-base-content/40 shrink-0 w-28">
+                            <Lock className="w-3 h-3" />
+                            Encrypted
+                          </dt>
+                          <dd className="text-[11px] text-base-content/60">
+                            nothing in this table
+                          </dd>
+                        </div>
+                      )}
+                    </dl>
+                  </section>
+                ))}
+              </div>
+            </section>
+          ))}
+
+          {/* Its own heading, under the tables rather than among them: both
+              cards below describe things with no row anywhere above, and
+              trailing them off the last group made them read as more plumbing. */}
+          <h4 className="text-xs font-medium uppercase tracking-wider text-base-content/60 mt-5">
+            Held outside the tables
+          </h4>
 
           <div className="rounded-xl border border-base-content/10 bg-base-200/40 p-3.5 mt-3">
-            <h4 className="font-medium text-sm">Attachments and storage</h4>
+            <h5 className="font-medium text-sm">Attachments and storage</h5>
             <p className="text-xs text-base-content/70 leading-relaxed mt-2">
               Photos, videos and voice notes older than the newest 20 (50 for voice notes) are
               removed from the server to keep storage costs down. Anything you pin is saved to this
@@ -198,7 +225,7 @@ export function ServerView({ onClose, onOpenLimits }: ServerViewProps) {
               worth making explicitly, and the only one on it whose evidence is
               that no row exists. */}
           <div className="rounded-xl border border-base-content/10 bg-base-200/40 p-3.5 mt-3">
-            <h4 className="font-medium text-sm">Calls</h4>
+            <h5 className="font-medium text-sm">Calls</h5>
             <p className="text-xs text-base-content/70 leading-relaxed mt-2">
               A call leaves no row anywhere above. Voice and video travel directly between the two
               phones, encrypted end to end; the offers and answers that set the call up are sealed

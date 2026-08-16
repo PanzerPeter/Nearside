@@ -6,9 +6,14 @@
 // notification chimes is a statement about messages; someone who did that has
 // not asked for their phone to stay silent when a friend calls them. On Android
 // the notification channel's own ringtone covers the case where the app is not
-// in the foreground, so this is the in-app half.
+// in the foreground, so this is the in-app half — and its own switch, below, is
+// what someone who wants calls to arrive quietly reaches for instead.
 
 import { sharedAudioContext } from '../sound';
+
+/** Separate from `nearside.sound.muted` for the reason above: the two are
+ *  different statements and one key could only express one of them. */
+const RING_MUTE_KEY = 'nearside.call.ringtone.muted';
 
 /** Incoming: a two-note figure, repeating with a gap, like a phone ringing. */
 const RING_PERIOD_MS = 3_000;
@@ -69,12 +74,41 @@ function loop(notes: Note[], periodMs: number): void {
   timer = setInterval(() => playFigure(notes), periodMs);
 }
 
-/** The phone ringing, for an incoming call. */
+export function isRingtoneMuted(): boolean {
+  try {
+    return localStorage.getItem(RING_MUTE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+export function setRingtoneMuted(muted: boolean): void {
+  try {
+    localStorage.setItem(RING_MUTE_KEY, muted ? '1' : '0');
+  } catch {
+    /* ignore storage failures */
+  }
+}
+
+/**
+ * The phone ringing, for an incoming call.
+ *
+ * Read at ring time rather than captured once: the switch is two taps away in
+ * settings and a value cached at import would go on ringing for the rest of the
+ * session after someone turned it off.
+ */
 export function startRingtone(): void {
+  if (isRingtoneMuted()) return;
   loop(RING, RING_PERIOD_MS);
 }
 
-/** The tone the caller hears while the far end rings. */
+/**
+ * The tone the caller hears while the far end rings.
+ *
+ * Not covered by the switch above. That one silences a call arriving; this is
+ * feedback for a call you just placed, and someone who dialled is waiting to
+ * hear something.
+ */
 export function startRingback(): void {
   loop(RINGBACK, RINGBACK_PERIOD_MS);
 }

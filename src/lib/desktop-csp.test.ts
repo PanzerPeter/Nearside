@@ -14,7 +14,13 @@ const CONFIG = 'electron/capacitor.electron.config.ts';
 function directives(): string {
   return (
     readFileSync(CONFIG, 'utf8')
-      .replace(/\/\*[\s\S]*?\*\//g, '')
+      // Line-leading block comments only, for the same reason as below and
+      // then some: `https://*.supabase.co` contains `/*`, so an unanchored
+      // match opens a comment inside a source expression and swallows every
+      // directive up to the next `*/` in the file. That deletion is silent —
+      // the assertions simply start reading an empty string and passing or
+      // failing about nothing.
+      .replace(/^[ \t]*\/\*[\s\S]*?\*\//gm, '')
       // Whole comment lines only. A `//` anywhere on a line is not a comment
       // marker — `https://*.supabase.co` is a source expression whose scheme
       // separator would be read as one, and truncating it there turned the
@@ -25,16 +31,27 @@ function directives(): string {
 }
 
 /**
- * One directive's source list.
+ * The shipped policy's directives, one string each.
  *
  * Read off the string literals rather than by splitting on `;`, because the
  * separator is added by `.join('; ')` at runtime and is nowhere in the file:
  * a naive split returns the whole rest of the array as one directive, and an
  * assertion about `img-src` then quietly examines `connect-src` too.
+ *
+ * The dev relaxations in the same file are bare source expressions
+ * (`'unsafe-eval'`, `ws:`) rather than whole directives, so "starts with a
+ * name and a space" separates the two lists without the tests needing to know
+ * how the dev policy is assembled.
  */
+function policyDirectives(): string[] {
+  return [...directives().matchAll(/"([^"]*)"/g)]
+    .map((m) => m[1])
+    .filter((d) => /^[a-z][a-z-]*\s\S/.test(d));
+}
+
+/** One directive's source list. */
 function directive(name: string): string {
-  const quoted = [...directives().matchAll(/"([^"]*)"/g)].map((m) => m[1]);
-  return quoted.find((d) => d.startsWith(`${name} `)) ?? '';
+  return policyDirectives().find((d) => d.startsWith(`${name} `)) ?? '';
 }
 
 describe('desktop content security policy', () => {
@@ -48,7 +65,34 @@ describe('desktop content security policy', () => {
     // 'unsafe-eval' also permits WebAssembly and would make the symptom go
     // away. It hands the renderer `eval` and `new Function` back, in an app
     // built on not trusting what the server sends it.
-    expect(directives().replace(/'wasm-unsafe-eval'/g, '')).not.toContain("'unsafe-eval'");
+    //
+    // Asserted over the shipped directives rather than the whole file: the dev
+    // policy is the shell's, carries 'unsafe-eval' for HMR, and is never in a
+    // build anybody installs. What must not happen is that token reaching a
+    // directive in this list.
+    const shipped = policyDirectives().join('; ').replace(/'wasm-unsafe-eval'/g, '');
+    expect(shipped).not.toContain("'unsafe-eval'");
+  });
+
+  it('lets a blob: URL be fetched back', () => {
+    if (!existsSync(CONFIG)) return;
+    // Every decrypted picture in the app lives in a `blob:` URL, and sending a
+    // sticker reads one back with `fetch` to rebuild a File (`stickerFile`);
+    // saving an attachment does the same (`MediaLightbox`). `connect-src`
+    // governs that fetch and `'self'` does not cover `blob:`, so without this
+    // the desktop build shows the sticker drawer and then refuses to send from
+    // it. The URLs are minted by this renderer from bytes it already holds, so
+    // allowing them adds no reachable host.
+    expect(directive('connect-src').split(/\s+/)).toContain('blob:');
+  });
+
+  it('states each directive once, so the dev policy cannot drift', () => {
+    if (!existsSync(CONFIG)) return;
+    // The dev policy is derived from the shipped one. Written out a second
+    // time it would be a copy that stops matching — which is how `blob:` came
+    // to be missing from the shell's own two lists in the first place.
+    const names = policyDirectives().map((d) => d.split(' ')[0]);
+    expect([...new Set(names)]).toEqual(names);
   });
 
   it('lets an avatar load from Supabase storage', () => {

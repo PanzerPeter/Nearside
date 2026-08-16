@@ -20,7 +20,7 @@ import { defineConfig } from '@capawesome/capacitor-electron/config';
  * `DEFAULT_CSP` in @capawesome/capacitor-electron after an upgrade — a
  * directive tightened upstream will not reach us here.
  */
-const POLICY = [
+const DIRECTIVES = [
   "default-src 'self'",
   "script-src 'self' 'wasm-unsafe-eval'",
   "style-src 'self' 'unsafe-inline'",
@@ -40,12 +40,47 @@ const POLICY = [
   "img-src 'self' data: blob: https://*.supabase.co",
   "font-src 'self' data:",
   "media-src 'self' blob:",
-  "connect-src 'self' https: wss:",
+  // `blob:` is the one addition here, and it is not decoration. Every
+  // decrypted picture in this app is held as a `blob:` URL, and two paths read
+  // one back with `fetch`: `stickerFile` rebuilds a File to send, and the
+  // lightbox's save does the same for an attachment. `connect-src` governs
+  // that fetch and `'self'` does not cover `blob:`, so without it the desktop
+  // build draws the sticker drawer and then refuses to send from it — the
+  // error surfaces as "Could not send that sticker", which names the sticker
+  // and not the policy. The URLs are minted by this renderer out of bytes it
+  // already holds; allowing them reaches no host.
+  "connect-src 'self' https: wss: blob:",
   "object-src 'none'",
   "frame-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",
-].join('; ');
+];
+
+/**
+ * What the dev policy adds, per directive.
+ *
+ * A Vite dev server needs its own websocket, its inline bootstrap script and
+ * `eval` for the HMR runtime. Applied on top of the list above rather than
+ * written out beside it: the shell ships two hand-maintained lists for exactly
+ * this reason, and `blob:` was missing from both — a second copy is a copy
+ * that stops matching, and the packaged build is then the one place a bug
+ * cannot be reproduced.
+ *
+ * `'unsafe-eval'` appears here and must never move into the list above. It is
+ * the shell's own dev default, it never reaches a build anybody installs, and
+ * `src/lib/desktop-csp.test.ts` holds that line.
+ */
+const DEV_ADDITIONS: Record<string, string[]> = {
+  'script-src': ["'unsafe-inline'", "'unsafe-eval'"],
+  'connect-src': ['ws:', 'http:'],
+};
+
+function policy(additions: Record<string, string[]> = {}): string {
+  return DIRECTIVES.map((directive) => {
+    const extra = additions[directive.split(' ')[0]];
+    return extra ? `${directive} ${extra.join(' ')}` : directive;
+  }).join('; ');
+}
 
 export default defineConfig({
   window: {
@@ -53,6 +88,7 @@ export default defineConfig({
     height: 800,
   },
   csp: {
-    policy: POLICY,
+    policy: policy(),
+    devPolicy: policy(DEV_ADDITIONS),
   },
 });

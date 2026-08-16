@@ -1749,7 +1749,7 @@ REVOKE ALL ON FUNCTION public.expire_messages() FROM PUBLIC, anon, authenticated
 -- ===========================================================================
 
 /*
-  Both tables here are server-side. RLS is on and neither has a policy — that
+  Every table here is server-side. RLS is on and none has a policy — that
   absence IS the lockdown, since RLS with no policy fails closed. They are
   reached by the service role and by the trigger below, and by nothing else.
 
@@ -1768,6 +1768,32 @@ CREATE TABLE IF NOT EXISTS public.message_pushes (
   sent_at    timestamptz NOT NULL DEFAULT now()
 );
 ALTER TABLE public.message_pushes ENABLE ROW LEVEL SECURITY;
+
+/*
+  When a conversation last made a receiver's phone make a noise.
+
+  `send-push` alerts on the first message and delivers the rest of a burst
+  silently, so a back-and-forth is one sound rather than one per line. The
+  anchor is the last *alert*, which is why it is stored rather than derived
+  from `messages`: derived, a steady stream just inside the window always has a
+  predecessor inside it, and that conversation would go quiet permanently.
+
+  It is a coarser shadow of what `messages` already records — one row per pair,
+  overwritten in place — which is what makes it preferable to the alternative
+  of the client telling the server which chat is open. See `0035_push_alerts`.
+*/
+CREATE TABLE IF NOT EXISTS public.push_alerts (
+  receiver_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  sender_id   uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  -- Silent deliveries deliberately do not touch this: they are the ones inside
+  -- the window, and moving the anchor for them is what would slide it forever.
+  alerted_at  timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (receiver_id, sender_id)
+);
+ALTER TABLE public.push_alerts ENABLE ROW LEVEL SECURITY;
+
+REVOKE ALL ON public.push_alerts FROM anon;
+REVOKE ALL ON public.push_alerts FROM authenticated;
 
 -- A table rather than a database setting: `ALTER DATABASE ... SET` needs
 -- privileges the Supabase SQL editor does not hand out, and Vault would tie

@@ -306,12 +306,68 @@ export async function allPins(): Promise<PinnedMedia[]> {
   return (res?.values as PinnedMedia[]) ?? [];
 }
 
+/** How much of this account's mirror exists, for the storage screen. */
+export interface LocalDbStats {
+  /** Decrypted message bodies held on this device. */
+  messages: number;
+  /** Conversations they belong to — the number that explains why search finds
+   *  nothing in a chat this device has never opened. */
+  conversations: number;
+  pins: number;
+}
+
+/**
+ * Counts, never bodies.
+ *
+ * Deliberately not a size in bytes: SQLite's file is the account's whole store
+ * and Capacitor gives no honest way to ask how much of it is messages, so a
+ * number here would be a guess presented as a measurement. A count of what is
+ * mirrored is the fact the user can actually act on.
+ */
+export async function localDbStats(): Promise<LocalDbStats> {
+  if (!native()) {
+    const rows = [...(memoryStore()?.values() ?? [])];
+    return {
+      messages: rows.length,
+      conversations: new Set(rows.map((r) => r.peer_id)).size,
+      pins: pinStore()?.size ?? 0,
+    };
+  }
+  const res = await db?.query(
+    `SELECT COUNT(*) AS messages, COUNT(DISTINCT peer_id) AS conversations FROM messages_cache`
+  );
+  const pins = await db?.query('SELECT COUNT(*) AS pins FROM pins');
+  const row = (res?.values?.[0] as { messages?: number; conversations?: number }) ?? {};
+  return {
+    messages: row.messages ?? 0,
+    conversations: row.conversations ?? 0,
+    pins: (pins?.values?.[0] as { pins?: number })?.pins ?? 0,
+  };
+}
+
 export async function removePin(messageId: string): Promise<void> {
   if (!native()) {
     pinStore()?.delete(messageId);
     return;
   }
   await db?.run('DELETE FROM pins WHERE message_id = ?', [messageId]);
+}
+
+/**
+ * Drop the decrypted message bodies and nothing else.
+ *
+ * What the storage screen's "clear" offers, and deliberately narrower than
+ * `clearLocalDb`: that one also empties `contacts`, which is where a peer's key
+ * was first seen and whether a human ever verified it. Freeing space must not
+ * quietly reset trust-on-first-use and re-verify every contact — the one thing
+ * in this store the user cannot rebuild by scrolling.
+ */
+export async function clearCachedMessages(): Promise<void> {
+  if (!native()) {
+    memoryStore()?.clear();
+    return;
+  }
+  await db?.execute('DELETE FROM messages_cache');
 }
 
 /** Empties the open account's stores. Signing out must not take the other

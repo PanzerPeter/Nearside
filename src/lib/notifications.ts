@@ -227,6 +227,37 @@ export async function setHasContacts(has: boolean): Promise<void> {
   await setTag(CONTACTS_TAG, has);
 }
 
+/**
+ * Decide what to do with a push that arrives while the app is on screen.
+ *
+ * OneSignal owns the tray entry on Android whether the app is open or not, so
+ * without this a message from the person you are looking at raises a banner and
+ * a sound for a line that is already on screen. `preventDefault` is the only
+ * point where that can be stopped: the sound belongs to the notification
+ * channel, so a notification that never posts is the only silent one.
+ *
+ * `suppress` is asked per notification rather than given a chat id up front —
+ * which conversation is open changes constantly, and the listener is registered
+ * once because the plugin has no removal API.
+ *
+ * Discarded rather than deferred (`preventDefault(true)`): the message is on
+ * screen, so there is no later moment where showing it would be right.
+ */
+export async function onForegroundNotification(
+  suppress: (senderId: string | null) => boolean
+): Promise<void> {
+  const os = await oneSignal();
+  if (!os) return;
+  try {
+    os.Notifications.addEventListener('foregroundWillDisplay', (event) => {
+      const data = event.getNotification().additionalData as { senderId?: string } | undefined;
+      if (suppress(data?.senderId ?? null)) event.preventDefault(true);
+    });
+  } catch {
+    // No listener means every push displays, which is the old behaviour.
+  }
+}
+
 /** Which conversation a tapped notification meant, if the payload named one. */
 export async function onNotificationOpened(
   handler: (senderId: string) => void

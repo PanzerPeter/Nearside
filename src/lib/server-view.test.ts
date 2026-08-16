@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { TABLE_REPORTS, missingTables, unlistedTables } from './server-view';
+import {
+  TABLE_GROUPS,
+  TABLE_REPORTS,
+  groupTables,
+  missingTables,
+  type TableReport,
+  unlistedTables,
+} from './server-view';
+
+/** The specs as the screen renders them, with a row count stubbed in. */
+const asReports = (): TableReport[] => TABLE_REPORTS.map((t) => ({ ...t, rows: 0 }));
 
 describe('server view', () => {
   it('classifies every column of every listed table', () => {
@@ -70,5 +80,51 @@ describe('server view', () => {
   it('describes each table exactly once', () => {
     const names = TABLE_REPORTS.map((t) => t.table);
     expect(new Set(names).size).toBe(names.length);
+  });
+
+  it('describes the tables the newer features added', () => {
+    // Both shipped without a description, so the screen was showing its own
+    // "this screen is out of date" warning to every user.
+    const sealed = TABLE_REPORTS.find((t) => t.table === 'sealed_answers');
+    expect(sealed?.opaque).toContain('ciphertext');
+    // Honesty: the server sees *that* you answered — that is what unlocks the
+    // other answer — and the screen must not imply otherwise.
+    expect(sealed?.readable).toContain('created_at');
+
+    const stickers = TABLE_REPORTS.find((t) => t.table === 'stickers');
+    expect(stickers?.opaque).toContain('label_ciphertext');
+    expect(stickers?.opaque).toContain('key_ciphertext');
+    // A plaintext label would be a searchable index of the drawer.
+    expect(stickers?.readable).not.toContain('label');
+  });
+
+  it('admits the flag that marks a message as a sealed question', () => {
+    expect(TABLE_REPORTS.find((t) => t.table === 'messages')?.readable).toContain('sealed_prompt');
+  });
+
+  it('files every table under a heading that exists', () => {
+    const known = new Set(TABLE_GROUPS.map((g) => g.group));
+    for (const spec of TABLE_REPORTS) expect(known.has(spec.group)).toBe(true);
+  });
+
+  it('loses no table when grouping, and keeps heading order', () => {
+    const grouped = groupTables(asReports());
+    expect(grouped.flatMap((g) => g.tables).length).toBe(TABLE_REPORTS.length);
+    expect(grouped.map((g) => g.group)).toEqual(['content', 'about-you', 'plumbing']);
+  });
+
+  it('drops a heading with nothing under it rather than rendering it empty', () => {
+    const onlyPlumbing = asReports().filter((t) => t.group === 'plumbing');
+    expect(groupTables(onlyPlumbing).map((g) => g.group)).toEqual(['plumbing']);
+  });
+
+  it('files message bodies as content and routing metadata as about-you', () => {
+    expect(TABLE_REPORTS.find((t) => t.table === 'messages')?.group).toBe('content');
+    expect(TABLE_REPORTS.find((t) => t.table === 'friendships')?.group).toBe('about-you');
+    // Plumbing is the group whose promise is "nothing about you", so a table
+    // holding user rows must never land there.
+    for (const spec of TABLE_REPORTS.filter((t) => t.group === 'plumbing')) {
+      expect(spec.infrastructure).toBe(true);
+    }
   });
 });

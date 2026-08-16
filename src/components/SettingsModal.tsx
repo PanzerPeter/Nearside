@@ -31,7 +31,10 @@ interface SettingsModalProps {
  * tab instead — see `App`.
  *
  * There is no Save action down here: the panel commits the display name beside
- * the field, because as a full-screen tab it has no footer to reach.
+ * the field, because as a full-screen tab it has no footer to reach. The title
+ * stays "Settings" while a subpage is open rather than following it — the page
+ * carries its own heading and back chevron, and two titles disagreeing about
+ * where you are is worse than one being general.
  *
  * The dialog opens without a profile on purpose. Everything the panel edits
  * needs that row, but sign-out does not, and gating the whole dialog on it left
@@ -53,7 +56,7 @@ export function SettingsModal({
 }: SettingsModalProps) {
   return (
     <Modal
-      title="Profile settings"
+      title="Settings"
       onClose={onClose}
       className="max-w-md"
       actions={

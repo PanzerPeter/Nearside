@@ -103,6 +103,30 @@ export async function pinnedObjectUrl(
 }
 
 /**
+ * The size of every pinned file, in pin order, for the storage screen.
+ *
+ * `null` where the file could not be stat'd — the row survived and the bytes
+ * did not, which `totalPinBytes` reports as unmeasured rather than as nothing.
+ * Nothing is deleted here on a miss: unlike `pinnedObjectUrl`, which is a user
+ * asking to open one file, this is a readout of all of them, and a screen that
+ * silently prunes rows while showing you a total is not a readout.
+ */
+export async function pinnedFileSizes(): Promise<(number | null)[]> {
+  const pins = await allPins();
+  if (!isMobileNative()) return pins.map(() => null);
+  return Promise.all(
+    pins.map(async (pin) => {
+      try {
+        const { size } = await Filesystem.stat({ path: pin.file_path, directory: Directory.Data });
+        return size;
+      } catch {
+        return null;
+      }
+    })
+  );
+}
+
+/**
  * Delete every pinned file this account kept, and the rows naming them.
  *
  * Called before `clearLocalDb` on sign-out and on account deletion, and the

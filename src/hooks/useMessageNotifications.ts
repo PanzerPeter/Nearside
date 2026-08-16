@@ -3,6 +3,8 @@ import { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { Message } from '../lib/types';
 import { playNotificationSound } from '../lib/sound';
+import { noteAlert } from '../lib/alert-throttle';
+import { isMobileNative } from '../lib/platform';
 import { notificationPermission } from '../lib/notifications';
 import { advanceDelivered } from '../lib/receipts';
 import { useConnection } from '../lib/connection';
@@ -18,8 +20,18 @@ const USERNAME_TTL_MS = 5 * 60 * 1000;
  * tab or the installed PWA) it plays a sound and shows a notification for
  * messages from ANY friend — not just the currently open chat.
  *
- * Suppression: stays silent when the message belongs to the chat you're already
- * looking at AND the window is focused (you can already see it arrive live).
+ * Suppression, in three layers:
+ *
+ *   - nothing at all when the message belongs to the chat you're already
+ *     looking at AND the window is focused; you watched it arrive.
+ *   - no chime on a phone. OneSignal owns the tray entry and its channel owns
+ *     the sound there, so this path playing one as well is the same message
+ *     making two different noises.
+ *   - a chime at most once per sender per `ALERT_COOLDOWN_MS`. The banner still
+ *     appears for every message; it is the sound that is not worth repeating
+ *     while somebody finishes a thought. `send-push` applies the same rule to
+ *     the notification a closed app receives.
+ *
  * Background push (app closed) is handled separately by the service worker.
  */
 export function useMessageNotifications(
@@ -33,6 +45,11 @@ export function useMessageNotifications(
   const { generation } = useConnection();
 
   const usernameCache = useRef<Map<string, { name: string; at: number }>>(new Map());
+
+  // When each sender last made a sound. Outlives the channel rebuild a wake
+  // causes — a fresh map there would let one reconnect re-open every
+  // conversation's budget, which is exactly when a backlog arrives at once.
+  const alertAnchors = useRef<Map<string, number>>(new Map());
 
   useEffect(() => {
     if (!session) return;
@@ -91,7 +108,9 @@ export function useMessageNotifications(
         activeRef.current === msg.user_id;
       if (focusedOnThisChat) return;
 
-      playNotificationSound();
+      if (!isMobileNative() && noteAlert(alertAnchors.current, msg.user_id, Date.now())) {
+        playNotificationSound();
+      }
 
       // The nickname you gave them, if you gave them one — a banner that says
       // "Bobby" while the app says "Bobby" is the point of the feature. Read

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from './hooks/useAuth';
 import { AuthForm } from './components/AuthForm';
 import { SetNewPassword } from './components/SetNewPassword';
@@ -29,6 +29,7 @@ import { initSoundUnlock } from './lib/sound';
 import {
   clearExternalUserId,
   initNotifications,
+  onForegroundNotification,
   onNotificationOpened,
   setHasContacts,
 } from './lib/notifications';
@@ -207,6 +208,14 @@ function App() {
 
   // Foreground sound + notifications for incoming messages from any friend.
   useMessageNotifications(session, selectedFriend?.id ?? null);
+
+  // Whose messages the user is currently reading, for the push that would
+  // otherwise announce a line already on screen. Null while the app lock is up:
+  // a conversation behind the lock screen is open in state and not in front of
+  // anybody. Written on every render and read from a listener registered once,
+  // which is why it is a ref.
+  const readingRef = useRef<string | null>(null);
+  readingRef.current = unlocked ? selectedFriend?.id ?? null : null;
 
   // Throttled writer for this device's own last_seen_at.
   useLastSeen(session);
@@ -419,6 +428,24 @@ function App() {
   useEffect(() => {
     if (!session) return;
     void onNotificationOpened((senderId) => void openChatWith(senderId));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.user.id]);
+
+  // Nothing announces a message that is already on screen. Registered once for
+  // the same reason as the click listener above, which is why it reads the open
+  // chat through a ref rather than closing over it.
+  //
+  // Decided here rather than in `send-push`: the server would have to be told
+  // which conversation is open to make this call, and "who is reading whom,
+  // right now" is precisely the kind of thing this app does not hand it.
+  useEffect(() => {
+    if (!session) return;
+    // A payload with no sender names no conversation, so it can never be the
+    // one on screen — `null === null` would otherwise swallow every push that
+    // is not a direct message.
+    void onForegroundNotification(
+      (senderId) => senderId !== null && readingRef.current === senderId
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.user.id]);
 

@@ -70,7 +70,7 @@
 -- `messages`, `message_reactions`, `message_receipts`, `sealed_answers`,
 -- `stickers`, `chat_backgrounds`, `friend_nicknames`, `rooms`,
 -- `room_participants`, `room_keys`, `room_messages`, `conversation_timers`,
--- `message_pushes` and `theme_grants`.
+-- `message_pushes`, `push_alerts` and `theme_grants`.
 --
 -- Listing those tables here instead would be the same delete with more ways
 -- to get it wrong, and would go stale the first time a table is added.
@@ -115,6 +115,7 @@ UNION ALL SELECT 'room_keys',           count(*) FROM public.room_keys
 UNION ALL SELECT 'room_messages',       count(*) FROM public.room_messages
 UNION ALL SELECT 'conversation_timers', count(*) FROM public.conversation_timers
 UNION ALL SELECT 'message_pushes',      count(*) FROM public.message_pushes
+UNION ALL SELECT 'push_alerts',         count(*) FROM public.push_alerts
 UNION ALL SELECT 'theme_grants',        count(*) FROM public.theme_grants
 UNION ALL SELECT 'storage.objects',     count(*) FROM storage.objects
   WHERE bucket_id IN ('avatars', 'chat-media', 'stickers')
