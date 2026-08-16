@@ -1,4 +1,5 @@
 import { useSignedMediaUrl } from '../hooks/useSignedMediaUrl';
+import { mediaFailureNotice } from '../lib/media';
 import { ImageOff } from 'lucide-react';
 
 interface StickerAttachmentProps {
@@ -28,7 +29,7 @@ export function StickerAttachment({ messageId, path, mediaKey }: StickerAttachme
   // Deferred like a photo. A sticker is small, but sending one re-uploads the
   // file every time by design (`lib/stickers.ts`), so a thread of them is a
   // thread of distinct objects and a scroll through it fetched every one.
-  const { url, failed, reload, probeRef } = useSignedMediaUrl(
+  const { url, failure, reload, probeRef } = useSignedMediaUrl(
     path,
     mediaKey,
     'sticker',
@@ -36,11 +37,11 @@ export function StickerAttachment({ messageId, path, mediaKey }: StickerAttachme
     true
   );
 
-  if (failed) {
+  if (failure) {
     return (
       <div className="flex items-center gap-2 py-2 text-xs text-base-content/60">
-        <ImageOff className="w-4 h-4" />
-        This sticker is no longer available
+        <ImageOff className="w-4 h-4 shrink-0" />
+        {mediaFailureNotice(failure, 'sticker')}
       </div>
     );
   }

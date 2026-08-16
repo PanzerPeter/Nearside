@@ -117,6 +117,29 @@ async function mediaPaths(storage: StorageClient, uid: string): Promise<string[]
   return paths;
 }
 
+/**
+ * Every object in `chat-media/{roomId}/` for the rooms this deletion takes
+ * with it — the ones this user created, since `rooms.created_by` cascades from
+ * auth.users and the room row is what the attachments belong to.
+ *
+ * Rooms they merely joined are deliberately left alone. Their attachments
+ * belong to a conversation that carries on without this account, and deleting
+ * them would empty other people's history because somebody else closed theirs.
+ */
+async function roomMediaPaths(
+  admin: ReturnType<typeof createClient>,
+  uid: string,
+): Promise<string[]> {
+  const { data, error } = await admin.from("rooms").select("id").eq("created_by", uid);
+  if (error) throw new Error(`listing rooms: ${error.message}`);
+  const paths: string[] = [];
+  for (const room of data ?? []) {
+    const entries = await listNames(admin.storage, MEDIA_BUCKET, room.id as string);
+    for (const entry of entries) paths.push(`${room.id}/${entry.name}`);
+  }
+  return paths;
+}
+
 async function removeAll(storage: StorageClient, bucket: string, paths: string[]) {
   if (paths.length === 0) return;
   const { error } = await storage.from(bucket).remove(paths);
@@ -153,6 +176,7 @@ Deno.serve(async (req) => {
     // fully intact and the call can simply be retried.
     await removeAll(admin.storage, AVATARS_BUCKET, await avatarPaths(admin.storage, uid));
     await removeAll(admin.storage, MEDIA_BUCKET, await mediaPaths(admin.storage, uid));
+    await removeAll(admin.storage, MEDIA_BUCKET, await roomMediaPaths(admin, uid));
 
     // There is no table to clear by hand before this. The invite_codes cleanup
     // that used to sit here outlived its table — 0019 opened signup and dropped

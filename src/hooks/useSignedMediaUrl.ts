@@ -1,12 +1,15 @@
 // A readable URL for one object in the private `chat-media` bucket: read the
 // session cache, else sign the path, decrypt the bytes, hold the result, and
-// fall back to "no longer available" when there is nothing behind it.
+// report *why* when one of those cannot be done — see `MediaFailure`. The
+// reason is carried rather than flattened to a boolean because "the file was
+// deleted", "this device has no key" and "this build cannot decode it" are
+// three different problems, and only the first is the user's file being gone.
 //
 // A signed URL expires after an hour, and the installed app routinely stays
 // open far longer. Without re-signing, an element that reaches for its source
 // again after the hour is up (a video seeking, an evicted image re-decoding, a
-// voice note played that evening) gets a 400 and paints "Media no longer
-// available" for a file sitting right there.
+// voice note played that evening) gets a 400 and paints a failure notice for a
+// file sitting right there.
 //
 // The refresh is reactive rather than timed. Swapping the `src` of a playing
 // <audio> or <video> restarts it, so re-signing on a schedule would interrupt
@@ -23,7 +26,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { openFile } from '../lib/media-crypto';
-import { keyToken, mimeForPath } from '../lib/media';
+import { keyToken, mimeForPath, type MediaFailure } from '../lib/media';
 import { cachedMedia, forgetMedia, putMedia } from '../lib/media-cache';
 import { pinnedObjectUrl } from '../lib/pins';
 import type { MediaType } from '../lib/types';
@@ -39,12 +42,18 @@ const PRELOAD_MARGIN = '800px';
 export interface SignedMedia {
   /** The URL to render, or null while the first signature is in flight. */
   url: string | null;
-  /** True once the object is believed to be genuinely gone. */
-  failed: boolean;
+  /** Why the attachment cannot be shown, or null while it still can be. */
+  failure: MediaFailure | null;
   /**
-   * Report that the element could not load `url`. Re-signs once, covering the
-   * expired signature, then gives up. Safe to call repeatedly: an element that
-   * fails twice settles on `failed` rather than looping.
+   * Report that the element could not load `url`. Re-fetches once — the URL an
+   * element is given is a blob URL the media cache owns, and an eviction
+   * revokes it — then gives up. Safe to call repeatedly: an element that fails
+   * twice settles on a failure rather than looping.
+   *
+   * The second failure is what identifies an undecodable file. The retry hands
+   * the element bytes this device downloaded and decrypted a moment ago, so an
+   * element that refuses *those* is not looking at a missing object; it has no
+   * decoder for what it was given.
    */
   reload: () => void;
   /**
@@ -69,7 +78,7 @@ export function useSignedMediaUrl(
   defer = false
 ): SignedMedia {
   const [url, setUrl] = useState<string | null>(null);
-  const [failed, setFailed] = useState(false);
+  const [failure, setFailure] = useState<MediaFailure | null>(null);
   // Whether the attachment has come close enough to the viewport to be worth
   // fetching. Starts true when nothing is deferring it, and when the platform
   // has no IntersectionObserver — a missing API must mean "load it", never
@@ -122,12 +131,18 @@ export function useSignedMediaUrl(
       return true;
     };
 
+    /** Give up with a reason, unless this device kept a pinned copy — a pin is
+     *  an answer to every one of these. */
+    const giveUp = async (reason: MediaFailure) => {
+      if (!(await fallBackToPin())) setFailure(reason);
+    };
+
     const { data, error } = await supabase.storage
       .from('chat-media')
       .createSignedUrl(path, SIGNED_URL_TTL_SECONDS);
     if (requestRef.current !== ticket) return;
     if (error || !data) {
-      if (!(await fallBackToPin())) setFailed(true);
+      await giveUp('gone');
       return;
     }
 
@@ -137,14 +152,27 @@ export function useSignedMediaUrl(
     // encryption working.
     const key = keyRef.current;
     if (!key) {
-      if (!(await fallBackToPin())) setFailed(true);
+      await giveUp('sealed');
+      return;
+    }
+
+    // The download and the decrypt are caught separately because they fail for
+    // opposite reasons and the notice has to say which: a 404 is a file that
+    // was removed, where a secretbox that will not open is a key this device
+    // cannot use on bytes that are still there.
+    let sealed: Uint8Array;
+    try {
+      const response = await fetch(data.signedUrl);
+      if (!response.ok) throw new Error(String(response.status));
+      sealed = new Uint8Array(await response.arrayBuffer());
+    } catch {
+      if (requestRef.current !== ticket) return;
+      await giveUp('gone');
       return;
     }
 
     try {
-      const response = await fetch(data.signedUrl);
-      if (!response.ok) throw new Error(String(response.status));
-      const opened = await openFile(new Uint8Array(await response.arrayBuffer()), key);
+      const opened = await openFile(sealed, key);
       if (requestRef.current !== ticket) return;
 
       releaseOwnedUrl();
@@ -159,7 +187,7 @@ export function useSignedMediaUrl(
       );
     } catch {
       if (requestRef.current !== ticket) return;
-      if (!(await fallBackToPin())) setFailed(true);
+      await giveUp('sealed');
     }
     // `token` is listed on purpose. The rule is right that the body never
     // reads it: it stands in for `keyRef.current`, which the body does read
@@ -172,7 +200,7 @@ export function useSignedMediaUrl(
   // Attachment-scoped state, reset when this component is pointed at a
   // different object.
   useEffect(() => {
-    setFailed(false);
+    setFailure(null);
     retriedRef.current = false;
     setWanted(!defer || typeof IntersectionObserver === 'undefined');
   }, [path, defer]);
@@ -232,7 +260,10 @@ export function useSignedMediaUrl(
 
   const reload = useCallback(() => {
     if (retriedRef.current) {
-      setFailed(true);
+      // Second refusal, of bytes fetched and decrypted for this attempt. The
+      // object is there and the key opened it, so what is left is a format this
+      // platform has no decoder for.
+      setFailure('undecodable');
       return;
     }
     retriedRef.current = true;
@@ -244,5 +275,5 @@ export function useSignedMediaUrl(
     void sign();
   }, [sign, path]);
 
-  return { url, failed, reload, probeRef };
+  return { url, failure, reload, probeRef };
 }

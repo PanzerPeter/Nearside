@@ -1369,9 +1369,24 @@ CREATE TABLE IF NOT EXISTS public.rooms (
   created_by  uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   ttl_seconds integer,
   ttl_set_by  uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
+
+  -- The room picture: an attachment that happens to be an avatar. An object in
+  -- `chat-media` and a file key sealed under the room key. Profile avatars are
+  -- plaintext; a group photo names the group to the server, and sealing it
+  -- costs one reuse of lib/media-crypto.ts. Written through
+  -- `set_room_avatar()`, because `rooms` has no UPDATE policy — see below.
+  avatar_path           text,
+  avatar_key_ciphertext text,
+  avatar_key_nonce      text,
+
   created_at  timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT rooms_title_length CHECK (char_length(btrim(title)) BETWEEN 1 AND 60),
-  CONSTRAINT rooms_ttl_positive CHECK (ttl_seconds IS NULL OR ttl_seconds > 0)
+  CONSTRAINT rooms_ttl_positive CHECK (ttl_seconds IS NULL OR ttl_seconds > 0),
+
+  -- All three or none of them. A path whose key is missing is an image that
+  -- can never be opened, and it would be drawn as a broken picture forever.
+  CONSTRAINT rooms_avatar_complete
+    CHECK (num_nonnulls(avatar_path, avatar_key_ciphertext, avatar_key_nonce) IN (0, 3))
 );
 
 CREATE TABLE IF NOT EXISTS public.room_participants (
@@ -1398,14 +1413,74 @@ CREATE TABLE IF NOT EXISTS public.room_messages (
   id         uuid PRIMARY KEY,
   room_id    uuid NOT NULL REFERENCES public.rooms(id) ON DELETE CASCADE,
   sender_id  uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  ciphertext text NOT NULL,
-  nonce      text NOT NULL,
+  ciphertext text,
+  nonce      text,
   signature  text NOT NULL,
+
+  -- The file key is sealed under the ROOM key (secretbox), not to one
+  -- recipient (box): every member holds the room key, so one sealed key serves
+  -- the room, and a column per member is the alternative.
+  media_path           text,
+  media_type           text,
+  media_duration_ms    integer,
+  media_key_ciphertext text,
+  media_key_nonce      text,
+
+  reply_to_id uuid REFERENCES public.room_messages(id) ON DELETE SET NULL,
+  edited_at   timestamptz,
+  deleted_at  timestamptz,
+
+  /*
+    Which payload the signature covers (see `signedPayloadV2` in
+    src/lib/crypto/seal.ts):
+
+      1  nonce.ciphertext                      — every row written before 0036
+      2  the same, plus the media and reply columns
+
+    The signature is the only thing in a room that establishes authorship to a
+    *client*. RLS says only the sender may UPDATE a row, but RLS is enforced by
+    the server and this app's premise is that the server is not trusted with
+    content — so a column outside the signature is a column the server can
+    repoint on anybody's message and have every client still draw it as theirs.
+
+    New rows are always 2, text-only ones included: a version chosen per row by
+    what the row contains is a downgrade an attacker gets to pick.
+  */
+  sig_v      smallint NOT NULL DEFAULT 1,
+
   expires_at timestamptz,
-  created_at timestamptz NOT NULL DEFAULT now()
+  created_at timestamptz NOT NULL DEFAULT now(),
+
+  CONSTRAINT room_messages_media_type_check
+    CHECK (media_type IN ('image', 'video', 'audio', 'sticker')),
+
+  -- A media message with no caption has no body to seal, and inventing an
+  -- empty one would put a known plaintext under every attachment. Tombstones
+  -- carry neither, which is the point of them.
+  CONSTRAINT room_messages_has_body CHECK (deleted_at IS NOT NULL
+                                        OR ciphertext IS NOT NULL
+                                        OR media_path IS NOT NULL),
+
+  CONSTRAINT room_messages_sealed_pair    CHECK ((ciphertext IS NULL) = (nonce IS NULL)),
+  CONSTRAINT room_messages_media_pair     CHECK ((media_path IS NULL) = (media_type IS NULL)),
+  CONSTRAINT room_messages_media_key_pair
+    CHECK ((media_key_ciphertext IS NULL) = (media_key_nonce IS NULL)),
+
+  -- Bound matches MAX_VOICE_MS in src/lib/audio.ts, as on `messages`: the
+  -- client refuses to record past it and this refuses to store past it.
+  CONSTRAINT room_messages_media_duration_range CHECK (
+    media_duration_ms IS NULL
+    OR (media_type = 'audio' AND media_duration_ms > 0 AND media_duration_ms <= 120000)
+  ),
+
+  -- A row claiming a version no builder exists for would verify against
+  -- nothing at all.
+  CONSTRAINT room_messages_sig_v_known CHECK (sig_v IN (1, 2))
 );
 CREATE INDEX IF NOT EXISTS room_messages_room_time
   ON public.room_messages (room_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS room_messages_reply_to_idx
+  ON public.room_messages (reply_to_id);
 -- Keyed on the writer, for the rate limit's count below.
 CREATE INDEX IF NOT EXISTS room_messages_sender_time
   ON public.room_messages (sender_id, created_at);
@@ -1530,6 +1605,98 @@ CREATE POLICY room_messages_insert_member ON public.room_messages
   FOR INSERT TO authenticated
   WITH CHECK (sender_id = (SELECT auth.uid()) AND public.is_room_member(room_id));
 
+-- Sender-only, like `messages_update_sender`. The two triggers below are what
+-- the policy cannot express: a policy sees one row at a time and cannot
+-- compare the new version against the old one.
+DROP POLICY IF EXISTS room_messages_update_sender ON public.room_messages;
+CREATE POLICY room_messages_update_sender ON public.room_messages
+  FOR UPDATE TO authenticated
+  USING (sender_id = (SELECT auth.uid()))
+  WITH CHECK (sender_id = (SELECT auth.uid()));
+
+/*
+  Deleting a room message is a tombstone, the same as a 1:1 one: the row keeps
+  its place in the thread and loses everything that was in it. Revoked as a
+  privilege as well as absent as a policy, on the reasoning `messages` carries
+  — reactions and receipts cascade off these rows, and only `expire_messages()`
+  removes the attachment in Storage.
+*/
+REVOKE DELETE ON public.room_messages FROM anon, authenticated;
+
+/*
+  `room_id` decides who may read the row and `sender_id` is what the signature
+  is checked against. A member of two rooms could otherwise move their own
+  message from one to the other after the fact, in front of an audience that
+  never saw it sent.
+
+  `reply_to_id` is frozen for the reason it is frozen on `messages`: a reply
+  that can be repointed later makes the quoted message something the sender
+  gets to revisit, in a thread everyone else has already read.
+*/
+CREATE OR REPLACE FUNCTION public.room_messages_prevent_reassign()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = ''
+AS $$
+BEGIN
+  IF NEW.room_id IS DISTINCT FROM OLD.room_id
+     OR NEW.sender_id IS DISTINCT FROM OLD.sender_id THEN
+    RAISE EXCEPTION 'room_messages.room_id and room_messages.sender_id are immutable';
+  END IF;
+  IF NEW.reply_to_id IS DISTINCT FROM OLD.reply_to_id THEN
+    RAISE EXCEPTION 'room_messages.reply_to_id is immutable';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.room_messages_prevent_reassign() FROM PUBLIC, anon, authenticated;
+
+DROP TRIGGER IF EXISTS room_messages_prevent_reassign ON public.room_messages;
+CREATE TRIGGER room_messages_prevent_reassign
+  BEFORE UPDATE ON public.room_messages
+  FOR EACH ROW EXECUTE FUNCTION public.room_messages_prevent_reassign();
+
+/*
+  The body, and the two timestamps the server owns. `messages_body_guard` with
+  the room columns: a tombstone that can be un-deleted is not a tombstone, an
+  edit that forgets to stamp `edited_at` reads to everyone else as the original
+  text, and an expiry the sender can null does not expire.
+*/
+CREATE OR REPLACE FUNCTION public.room_messages_body_guard()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = ''
+AS $$
+BEGIN
+  IF OLD.deleted_at IS NOT NULL THEN
+    IF NEW.deleted_at IS NULL THEN
+      RAISE EXCEPTION 'a deleted message cannot be restored';
+    END IF;
+    IF NEW.ciphertext IS NOT NULL OR NEW.media_path IS NOT NULL THEN
+      RAISE EXCEPTION 'a deleted message cannot be given a new body';
+    END IF;
+  END IF;
+
+  IF NEW.deleted_at IS NULL
+     AND (NEW.ciphertext IS DISTINCT FROM OLD.ciphertext
+          OR NEW.media_path IS DISTINCT FROM OLD.media_path) THEN
+    NEW.edited_at := now();
+  END IF;
+
+  NEW.expires_at := OLD.expires_at;
+  NEW.created_at := OLD.created_at;
+  RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.room_messages_body_guard() FROM PUBLIC, anon, authenticated;
+
+DROP TRIGGER IF EXISTS room_messages_body_guard ON public.room_messages;
+CREATE TRIGGER room_messages_body_guard
+  BEFORE UPDATE ON public.room_messages
+  FOR EACH ROW EXECUTE FUNCTION public.room_messages_body_guard();
+
 -- A room body is a client insert like a message body, and gets the same
 -- runaway guard for the same reason: a loop, not a person.
 CREATE OR REPLACE FUNCTION public.enforce_room_message_rate()
@@ -1559,6 +1726,210 @@ DROP TRIGGER IF EXISTS room_messages_rate_limit ON public.room_messages;
 CREATE TRIGGER room_messages_rate_limit
   BEFORE INSERT ON public.room_messages
   FOR EACH ROW EXECUTE FUNCTION public.enforce_room_message_rate();
+
+/*
+  Written through an RPC, and `rooms` still has no UPDATE policy.
+
+  This is `set_room_timer` again, for the same reason it is a definer function
+  and not a policy: an UPDATE policy on `rooms` can say who may write the row
+  but not which columns they wrote, so "a member may set the picture" would
+  also read as "a member may rename the room, hand it to themselves by
+  rewriting created_by, or clear the disappearing timer everyone agreed on".
+  Naming the three columns in the function body is the whole guard.
+
+  Any member, not just the creator — a room has no roles by decision, and the
+  timer is already changeable by anyone in it.
+*/
+CREATE OR REPLACE FUNCTION public.set_room_avatar(
+  target       uuid,
+  path         text,
+  key_ct       text,
+  key_nonce    text
+)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  me uuid := auth.uid();
+BEGIN
+  IF me IS NULL OR NOT public.is_room_member(target) THEN
+    RAISE EXCEPTION 'not a member of that room';
+  END IF;
+  -- Clearing the picture means all three go, together. Half a pointer is a
+  -- path whose key nobody holds, which renders as a permanently broken image.
+  IF (path IS NULL) <> (key_ct IS NULL) OR (key_ct IS NULL) <> (key_nonce IS NULL) THEN
+    RAISE EXCEPTION 'a room picture needs a path and both key halves, or none';
+  END IF;
+
+  UPDATE public.rooms
+     SET avatar_path           = path,
+         avatar_key_ciphertext = key_ct,
+         avatar_key_nonce      = key_nonce
+   WHERE id = target;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.set_room_avatar(uuid, text, text, text) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.set_room_avatar(uuid, text, text, text) TO authenticated;
+
+-- ---------------------------------------------------------------------------
+-- 7a. Room reactions
+-- ---------------------------------------------------------------------------
+
+/*
+  The emoji is plaintext, exactly as `message_reactions` stores it. Not sealed,
+  deliberately: an inconsistency between a 1:1 reaction and a room reaction is
+  worse than the disclosure, and the transparency screen already declares
+  reactions server-visible. It has to declare room reactions too.
+*/
+CREATE TABLE IF NOT EXISTS public.room_message_reactions (
+  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  message_id uuid NOT NULL REFERENCES public.room_messages(id) ON DELETE CASCADE,
+  user_id    uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  emoji      text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (message_id, user_id, emoji),
+  CONSTRAINT room_emoji_length CHECK (char_length(emoji) <= 32)
+);
+
+CREATE INDEX IF NOT EXISTS room_message_reactions_message_idx
+  ON public.room_message_reactions (message_id);
+-- Covers the user_id FK and the rate limit's count below.
+CREATE INDEX IF NOT EXISTS room_message_reactions_user_time
+  ON public.room_message_reactions (user_id, created_at);
+
+ALTER TABLE public.room_message_reactions ENABLE ROW LEVEL SECURITY;
+
+-- Membership of the room the message is in, reached through the message.
+-- `is_room_member` is SECURITY DEFINER for the recursion reason above, and
+-- using it here keeps this policy one lookup deep.
+DROP POLICY IF EXISTS room_reactions_select_member ON public.room_message_reactions;
+CREATE POLICY room_reactions_select_member ON public.room_message_reactions
+  FOR SELECT TO authenticated
+  USING (EXISTS (
+    SELECT 1 FROM public.room_messages m
+     WHERE m.id = message_id AND public.is_room_member(m.room_id)
+  ));
+
+DROP POLICY IF EXISTS room_reactions_insert_own ON public.room_message_reactions;
+CREATE POLICY room_reactions_insert_own ON public.room_message_reactions
+  FOR INSERT TO authenticated
+  WITH CHECK (
+    user_id = (SELECT auth.uid())
+    AND EXISTS (
+      SELECT 1 FROM public.room_messages m
+       WHERE m.id = message_id AND public.is_room_member(m.room_id)
+    )
+  );
+
+DROP POLICY IF EXISTS room_reactions_delete_own ON public.room_message_reactions;
+CREATE POLICY room_reactions_delete_own ON public.room_message_reactions
+  FOR DELETE TO authenticated
+  USING (user_id = (SELECT auth.uid()));
+
+REVOKE ALL ON public.room_message_reactions FROM anon;
+REVOKE ALL ON public.room_message_reactions FROM authenticated;
+GRANT SELECT, INSERT, DELETE ON public.room_message_reactions TO authenticated;
+
+-- The runaway guard `message_reactions` has. The UNIQUE above bounds repeats
+-- of one emoji but not a loop cycling through different ones.
+CREATE OR REPLACE FUNCTION public.enforce_room_reaction_rate()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = ''
+AS $$
+DECLARE
+  recent int;
+BEGIN
+  SELECT count(*) INTO recent
+  FROM public.room_message_reactions r
+  WHERE r.user_id = NEW.user_id
+    AND r.created_at > now() - interval '1 minute';
+
+  IF recent >= 60 THEN
+    RAISE EXCEPTION 'rate_limited_reactions';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.enforce_room_reaction_rate() FROM PUBLIC, anon, authenticated;
+
+DROP TRIGGER IF EXISTS room_message_reactions_rate_limit ON public.room_message_reactions;
+CREATE TRIGGER room_message_reactions_rate_limit
+  BEFORE INSERT ON public.room_message_reactions
+  FOR EACH ROW EXECUTE FUNCTION public.enforce_room_reaction_rate();
+
+-- ---------------------------------------------------------------------------
+-- 7b. Room read receipts
+-- ---------------------------------------------------------------------------
+
+/*
+  One high-water mark per member per room, not a row per message per member: a
+  60-person room reading 200 messages is 12,000 rows of the same fact.
+
+  SELECT is every member, because "read by 4" is drawn from other people's
+  marks. INSERT and UPDATE stay owner-only, so nobody can forge a claim that
+  you read something. Clients must only ever write a timestamp they read off a
+  message row — `created_at` is stamped by the server clock, and a device with
+  a fast clock would otherwise mark unread messages read.
+*/
+CREATE TABLE IF NOT EXISTS public.room_receipts (
+  room_id    uuid NOT NULL REFERENCES public.rooms(id) ON DELETE CASCADE,
+  user_id    uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  read_at    timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (room_id, user_id)
+);
+
+ALTER TABLE public.room_receipts ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS room_receipts_select_member ON public.room_receipts;
+CREATE POLICY room_receipts_select_member ON public.room_receipts
+  FOR SELECT TO authenticated
+  USING (public.is_room_member(room_id));
+
+DROP POLICY IF EXISTS room_receipts_insert_own ON public.room_receipts;
+CREATE POLICY room_receipts_insert_own ON public.room_receipts
+  FOR INSERT TO authenticated
+  WITH CHECK (user_id = (SELECT auth.uid()) AND public.is_room_member(room_id));
+
+DROP POLICY IF EXISTS room_receipts_update_own ON public.room_receipts;
+CREATE POLICY room_receipts_update_own ON public.room_receipts
+  FOR UPDATE TO authenticated
+  USING (user_id = (SELECT auth.uid()))
+  WITH CHECK (user_id = (SELECT auth.uid()));
+
+REVOKE ALL ON public.room_receipts FROM anon;
+REVOKE ALL ON public.room_receipts FROM authenticated;
+GRANT SELECT, INSERT, UPDATE ON public.room_receipts TO authenticated;
+
+-- Clamped like `receipts_monotonic`: a realtime handler and a focus handler
+-- can write in either order, and an offline device flushes stale values on
+-- reconnect. A read mark that can move backwards is one a client bug un-reads.
+CREATE OR REPLACE FUNCTION public.room_receipts_monotonic()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = ''
+AS $$
+BEGIN
+  IF NEW.read_at < OLD.read_at THEN
+    NEW.read_at := OLD.read_at;
+  END IF;
+  NEW.updated_at := now();
+  RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.room_receipts_monotonic() FROM PUBLIC, anon, authenticated;
+
+DROP TRIGGER IF EXISTS room_receipts_monotonic ON public.room_receipts;
+CREATE TRIGGER room_receipts_monotonic
+  BEFORE UPDATE ON public.room_receipts
+  FOR EACH ROW EXECUTE FUNCTION public.room_receipts_monotonic();
 
 -- ===========================================================================
 -- 8. Disappearing messages
@@ -1727,14 +2098,19 @@ DECLARE
 BEGIN
   SELECT coalesce(array_agg(media_path), '{}')
     INTO doomed
-    FROM public.messages
-   WHERE expires_at IS NOT NULL AND expires_at <= now() AND media_path IS NOT NULL;
+    FROM (
+      SELECT media_path FROM public.messages
+       WHERE expires_at IS NOT NULL AND expires_at <= now() AND media_path IS NOT NULL
+      UNION ALL
+      SELECT media_path FROM public.room_messages
+       WHERE expires_at IS NOT NULL AND expires_at <= now() AND media_path IS NOT NULL
+    ) expiring;
 
   DELETE FROM public.messages      WHERE expires_at IS NOT NULL AND expires_at <= now();
   DELETE FROM public.room_messages WHERE expires_at IS NOT NULL AND expires_at <= now();
 
-  -- Best effort. The row above held the only copy of this file's key, so the
-  -- bytes are already unopenable; this reclaims the listing.
+  -- Best effort. The rows above held the only copies of these files' keys, so
+  -- the bytes are already unopenable; this reclaims the listing.
   IF array_length(doomed, 1) > 0 THEN
     DELETE FROM storage.objects
      WHERE bucket_id = 'chat-media' AND name = ANY (doomed);
@@ -1857,6 +2233,79 @@ CREATE TRIGGER notify_push_on_message
   FOR EACH ROW
   WHEN (NEW.user_id <> NEW.receiver_id)
   EXECUTE FUNCTION public.notify_push_on_message();
+
+/*
+  The same path for a room, and separate tables rather than the two above,
+  because both of those are keyed on something that cannot hold a room:
+  `message_pushes.message_id` references `messages`, and `push_alerts` is keyed
+  on a *sender*. A room's cooldown has to be per room — a busy group is one
+  conversation, and six people talking in it must not each carry their own
+  30-second licence to make the same phone ring.
+*/
+CREATE TABLE IF NOT EXISTS public.room_message_pushes (
+  message_id uuid PRIMARY KEY REFERENCES public.room_messages(id) ON DELETE CASCADE,
+  sent_at    timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE public.room_message_pushes ENABLE ROW LEVEL SECURITY;
+
+REVOKE ALL ON public.room_message_pushes FROM anon;
+REVOKE ALL ON public.room_message_pushes FROM authenticated;
+
+CREATE TABLE IF NOT EXISTS public.room_push_alerts (
+  receiver_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  room_id     uuid NOT NULL REFERENCES public.rooms(id) ON DELETE CASCADE,
+  alerted_at  timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (receiver_id, room_id)
+);
+ALTER TABLE public.room_push_alerts ENABLE ROW LEVEL SECURITY;
+
+REVOKE ALL ON public.room_push_alerts FROM anon;
+REVOKE ALL ON public.room_push_alerts FROM authenticated;
+
+CREATE OR REPLACE FUNCTION public.notify_push_on_room_message()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+  cfg public.push_config%ROWTYPE;
+BEGIN
+  IF NEW.deleted_at IS NOT NULL THEN
+    RETURN NEW;
+  END IF;
+
+  SELECT * INTO cfg FROM public.push_config LIMIT 1;
+  IF NOT FOUND THEN
+    RETURN NEW;
+  END IF;
+
+  PERFORM net.http_post(
+    url     := cfg.function_url,
+    headers := jsonb_build_object(
+                 'Content-Type', 'application/json',
+                 'x-push-secret', cfg.trigger_secret
+               ),
+    body    := jsonb_build_object('room_message_id', NEW.id),
+    timeout_milliseconds := 5000
+  );
+
+  RETURN NEW;
+EXCEPTION WHEN OTHERS THEN
+  RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.notify_push_on_room_message() FROM PUBLIC, anon, authenticated;
+
+-- No WHEN clause: there is no self-addressed room message. The fan-out in
+-- `send-push` excludes the sender, which is where that exclusion belongs when
+-- the audience is a participant list rather than one column.
+DROP TRIGGER IF EXISTS notify_push_on_room_message ON public.room_messages;
+CREATE TRIGGER notify_push_on_room_message
+  AFTER INSERT ON public.room_messages
+  FOR EACH ROW
+  EXECUTE FUNCTION public.notify_push_on_room_message();
 
 -- ===========================================================================
 -- 10. Theme grants
@@ -2196,6 +2645,9 @@ ALTER TABLE public.message_receipts  REPLICA IDENTITY FULL;
 ALTER TABLE public.message_reactions REPLICA IDENTITY FULL;
 ALTER TABLE public.chat_backgrounds  REPLICA IDENTITY FULL;
 ALTER TABLE public.friend_nicknames  REPLICA IDENTITY FULL;
+-- Removing a reaction has to reach the other members, and realtime evaluates
+-- the SELECT policy against the record carried in the event.
+ALTER TABLE public.room_message_reactions REPLICA IDENTITY FULL;
 
 DO $$
 DECLARE
@@ -2210,6 +2662,8 @@ BEGIN
     'friend_nicknames',
     'room_messages',
     'room_participants',
+    'room_message_reactions',
+    'room_receipts',
     -- INSERT events only, which carry the new record, so the SELECT policy can
     -- be evaluated against it and REPLICA IDENTITY FULL is unnecessary. The
     -- event that matters is the peer's answer landing: both sides open on it.

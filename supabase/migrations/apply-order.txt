@@ -45,3 +45,5 @@
 0033_stickers.sql
 0034_write_guards.sql
 0035_push_alerts.sql
+0036_room_parity.sql
+0037_room_push.sql

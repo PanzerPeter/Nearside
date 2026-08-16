@@ -311,13 +311,23 @@ each is declared in [`config.toml`](config.toml).
   API token is server-side only — a long-lived TURN secret in the bundle is a
   free relay for anyone who unzips the APK.
 
-- **`send-push`** — the Web Push transport, superseded by OneSignal and
-  probably not worth deploying. `0028` dropped `push_subscriptions` and the
-  client-side VAPID code is gone, so the only caller left is `0014`'s database
-  trigger. That trigger is applied but inert: `push_config` is empty, so it
-  returns immediately. Turning it on means deploying with `--no-verify-jwt`,
-  setting `PUSH_TRIGGER_SECRET`, and inserting a `push_config` row pointing at
-  the function URL with the same secret — in that order.
+- **`send-push`** — the OneSignal sender. Two callers: the sending device
+  (`src/lib/push.ts`, which is the live path) and `0014`/`0037`'s database
+  triggers. The triggers are applied but inert on this project — `push_config`
+  is empty, so both return immediately. Turning them on means deploying with
+  `--no-verify-jwt`, setting `PUSH_TRIGGER_SECRET`, and inserting a
+  `push_config` row pointing at the function URL with the same secret — in that
+  order.
+
+  It takes either `{ message_id }` or `{ room_message_id }`. The room branch
+  fans out to `room_participants` minus the sender, claims the send in
+  `room_message_pushes`, and throttles per receiver per room in
+  `room_push_alerts`. A room banner carries the room's title and the sender's
+  `@display_name` — never a private nickname, because one notification
+  addresses many people at once, and never a body, because the server has none.
+
+  Redeploy it after applying `0037`: an old copy ignores `room_message_id` and
+  answers "message_id required", so rooms stay silent.
 
 ## Security advisors — current state
 

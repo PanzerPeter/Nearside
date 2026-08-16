@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { VisualMediaType } from '../lib/types';
 import { useSignedMediaUrl } from '../hooks/useSignedMediaUrl';
 import { MediaLightbox } from './MediaLightbox';
-import { videoTrackIsUnsupported } from '../lib/media';
+import { mediaFailureNotice, videoTrackIsUnsupported } from '../lib/media';
 import { ImageOff, Play, VideoOff } from 'lucide-react';
 
 interface MediaAttachmentProps {
@@ -35,7 +35,7 @@ export function MediaAttachment({ messageId, path, type, mediaKey, fill }: Media
   // Deferred: the placeholder below reserves the slot at the right size, so
   // nothing jumps when the picture lands, and a page of thirty messages stops
   // downloading the twenty-five attachments that are nowhere near the screen.
-  const { url, failed, reload, probeRef } = useSignedMediaUrl(
+  const { url, failure, reload, probeRef } = useSignedMediaUrl(
     path,
     mediaKey,
     type,
@@ -52,14 +52,17 @@ export function MediaAttachment({ messageId, path, type, mediaKey, fill }: Media
   // The caller pulls this component out to the bubble's edges with a negative
   // margin; the placeholder and the failure notice are text, and text wants the
   // padding back.
-  if (failed) {
+  if (failure) {
+    // A video this build cannot decode gets the video glyph, matching the
+    // notice the viewer already draws for the same file (`MediaLightbox`).
+    const FailIcon = type === 'video' && failure === 'undecodable' ? VideoOff : ImageOff;
     return (
       // The bubble may be floating its timestamp over the bottom-right corner
       // on the assumption that a picture is there; the extra right pad keeps
       // the words clear of it.
       <div className="flex items-center gap-2 py-2 pl-3.5 pr-16 text-xs text-base-content/60">
-        <ImageOff className="w-4 h-4" />
-        This file is no longer available
+        <FailIcon className="w-4 h-4 shrink-0" />
+        {mediaFailureNotice(failure, type)}
       </div>
     );
   }

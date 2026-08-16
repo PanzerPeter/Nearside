@@ -68,7 +68,8 @@ export const privacySections: LegalSection[] = [
         </p>
         <p>
           Four more things are stored as ordinary text and people are often surprised by them. Emoji
-          reactions are not encrypted. Delivery and read timestamps are not encrypted. The private
+          reactions are not encrypted, in conversations and in rooms alike. Delivery and read
+          timestamps are not encrypted, and in a room that includes who has read it. The private
           nicknames you give contacts are hidden from the contact but not from the server. Room
           titles are readable, because the server has to list your rooms, so treat a room title like
           the outside of an envelope.

@@ -6,7 +6,6 @@ import { UpdatePrompt } from './components/UpdatePrompt';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ToastProvider } from './hooks/useToast';
 import { Toast } from './components/Toast';
-import { ConnectionBanner } from './components/ConnectionBanner';
 import { startConnectionMonitor } from './lib/connection';
 import { initMotionPreference } from './lib/motion';
 import { registerAuthLinkHandler } from './lib/nativeAuthLinks';
@@ -49,7 +48,6 @@ createRoot(document.getElementById('root')!).render(
       <ToastProvider>
         <App />
         <Toast />
-        <ConnectionBanner />
         <UpdatePrompt />
       </ToastProvider>
     </ErrorBoundary>

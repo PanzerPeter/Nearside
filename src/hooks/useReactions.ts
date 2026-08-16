@@ -4,11 +4,25 @@ import { Reaction } from '../lib/types';
 import { useConnection } from '../lib/connection';
 
 /**
- * Loads and live-syncs reactions for the currently loaded messages of a
- * conversation. Reactions are keyed by message id; `toggle` adds the current
- * user's reaction or removes it if it already exists.
+ * Which table the reactions live in.
+ *
+ * A parameter rather than a second copy of this hook: the optimistic toggle,
+ * the delta fetch, the wake re-query and the realtime de-duplication are the
+ * behaviour that makes reactions feel instant, and two copies of it drift the
+ * first time one of them is fixed.
  */
-export function useReactions(me: string, messageIds: string[]) {
+export type ReactionTable = 'message_reactions' | 'room_message_reactions';
+
+/**
+ * Loads and live-syncs reactions for the currently loaded messages of a
+ * conversation or a room. Reactions are keyed by message id; `toggle` adds the
+ * current user's reaction or removes it if it already exists.
+ */
+export function useReactions(
+  me: string,
+  messageIds: string[],
+  table: ReactionTable = 'message_reactions'
+) {
   const [reactions, setReactions] = useState<Reaction[]>([]);
   // Message ids whose reactions we've already fetched. Prevents a full
   // re-query on every new message — realtime keeps the set fresh after the
@@ -40,7 +54,7 @@ export function useReactions(me: string, messageIds: string[]) {
     missing.forEach((id) => fetchedIds.current.add(id));
 
     supabase
-      .from('message_reactions')
+      .from(table)
       .select('*')
       .in('message_id', missing)
       .then(({ data, error }) => {
@@ -61,7 +75,7 @@ export function useReactions(me: string, messageIds: string[]) {
       active = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [idsKey, generation]);
+  }, [idsKey, generation, table]);
 
   // The live set of message ids on screen, read by the subscription without
   // re-subscribing every time the list grows.
@@ -72,11 +86,14 @@ export function useReactions(me: string, messageIds: string[]) {
     // A fixed topic. This used to carry a `Date.now()` suffix, which minted a
     // new topic per mount for no benefit — the effect's own cleanup already
     // removes the channel, so nothing was ever left behind to collide with.
+    // The table is in the topic as well as in the filter: a conversation and a
+    // room can be mounted at once, and one topic per subscriber is what keeps
+    // their two streams from arriving on the same channel.
     const channel = supabase
-      .channel(`reactions:${me}`)
+      .channel(`reactions:${table}:${me}`)
       .on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'message_reactions' },
+        { event: 'INSERT', schema: 'public', table },
         (payload) => {
           const r = payload.new as Reaction;
           // The stream is RLS-scoped to us, not to this conversation, so rows
@@ -87,7 +104,7 @@ export function useReactions(me: string, messageIds: string[]) {
       )
       .on(
         'postgres_changes',
-        { event: 'DELETE', schema: 'public', table: 'message_reactions' },
+        { event: 'DELETE', schema: 'public', table },
         (payload) => {
           const old = payload.old as { id: string };
           setReactions((prev) => prev.filter((x) => x.id !== old.id));
@@ -97,7 +114,7 @@ export function useReactions(me: string, messageIds: string[]) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [me, generation]);
+  }, [me, generation, table]);
 
   const byMessage = new Map<string, Reaction[]>();
   for (const r of reactions) {
@@ -113,10 +130,10 @@ export function useReactions(me: string, messageIds: string[]) {
       );
       if (mine) {
         setReactions((prev) => prev.filter((r) => r.id !== mine.id));
-        await supabase.from('message_reactions').delete().eq('id', mine.id);
+        await supabase.from(table).delete().eq('id', mine.id);
       } else {
         const { data } = await supabase
-          .from('message_reactions')
+          .from(table)
           .insert({ message_id: messageId, user_id: me, emoji })
           .select('*')
           .single();
@@ -125,7 +142,7 @@ export function useReactions(me: string, messageIds: string[]) {
         }
       }
     },
-    [reactions, me]
+    [reactions, me, table]
   );
 
   return { byMessage, toggle };

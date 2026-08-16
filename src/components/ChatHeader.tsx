@@ -1,9 +1,10 @@
 import { Profile } from '../lib/types';
 import type { VerificationState } from '../lib/verification';
-import type { PresenceStatus } from '../hooks/usePresence';
+import type { PresenceStatus } from '../lib/presence-model';
 import { Avatar } from './Avatar';
 import { StatusDot, presenceLabels } from './StatusDot';
 import { formatLastSeen } from '../lib/time';
+import { useConnection, useDegraded } from '../lib/connection';
 import {
   ArrowLeft,
   CalendarClock,
@@ -60,6 +61,12 @@ interface ChatHeaderProps {
   canCall: boolean;
 }
 
+/** How long realtime has to stay down before this header mentions it. The app
+ *  reconnects itself in silence, and keeps sending and receiving over the
+ *  polling fallback meanwhile, so a shorter delay would only put a line on
+ *  screen for outages that fix themselves before anybody reads it. */
+const CONNECTION_NOTICE_MS = 10_000;
+
 /** A daisyUI dropdown is held open by focus, so a menu item that only runs its
  *  handler leaves the menu standing over the answer. */
 function closeMenu() {
@@ -88,6 +95,17 @@ export function ChatHeader({
   onCall,
   canCall,
 }: ChatHeaderProps) {
+  // The only place in the app that mentions its own connection, and it borrows
+  // a line that already exists rather than covering the top of the screen. Both
+  // wordings wait out the same delay: "no connection" flashed on every tunnel
+  // and lift the phone passes through, and it is the larger claim of the two.
+  const { online } = useConnection();
+  const connectionNote = useDegraded(CONNECTION_NOTICE_MS)
+    ? online
+      ? 'Connecting…'
+      : 'No connection'
+    : null;
+
   // The phone's top edge: this bar is the first thing under the status bar, so
   // it carries the inset itself and puts its own background behind the clock.
   // `lg:` takes it back off — on desktop App's top bar sits above this one and
@@ -144,7 +162,11 @@ export function ChatHeader({
           )}
         </p>
         <p className="text-xs text-base-content/60 flex items-center gap-2 truncate">
-          {isSelf ? (
+          {connectionNote ? (
+            // No dot beside it: with our own stream down, the peer's last-known
+            // status is a guess, and a green dot is not the way to say so.
+            <span className="text-base-content/50">{connectionNote}</span>
+          ) : isSelf ? (
             // Presence and last-seen would be this device reporting on
             // itself; what is worth saying here is that nobody else can read
             // any of it.

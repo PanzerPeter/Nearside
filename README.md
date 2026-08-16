@@ -118,7 +118,8 @@ Losing the twelve words loses the history. There is no reset path.
   wall-clock jump, the only one that fires on a woken desktop), and one
   `generation` counter rebuilds every realtime subscription. When the WebSocket
   is blocked but HTTPS still works, as on some corporate proxies and VPN routes,
-  the app polls and a banner says so instead of showing a frozen conversation.
+  the app polls instead of showing a frozen conversation, and reconnects itself
+  on a doubling backoff without a banner or a retry button.
 - **Durable outbox.** Unsent messages persist to IndexedDB with client-generated
   uuids, so a retry after a lost response collides on the primary key instead of
   writing a second copy.

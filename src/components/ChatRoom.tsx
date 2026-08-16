@@ -115,8 +115,7 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
 
   const media = useMediaSend({
     me,
-    peerId: friend.id,
-    isSelf,
+    target: { kind: 'peer', peerId: friend.id, isSelf },
     identity,
     onStaged: () => composerRef.current?.focus(),
     onSent: clearComposer,

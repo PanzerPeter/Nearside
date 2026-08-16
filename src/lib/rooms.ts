@@ -16,6 +16,7 @@ import {
   sealBytesFor,
   signBytes,
   signedPayload,
+  signedPayloadV2,
   verifyBytes,
   type Sealed,
 } from './crypto/seal';
@@ -37,18 +38,36 @@ export interface RoomParticipant {
   joined_at: string;
 }
 
+export type RoomMediaType = 'image' | 'video' | 'audio' | 'sticker';
+
 /** A row as stored. `text` and `sender` are client-only, set by `openRoomRows`
  *  at the boundary, exactly as `openRows` does for peer messages. */
 export interface RoomMessage {
   id: string;
   room_id: string;
   sender_id: string;
-  ciphertext: string;
-  nonce: string;
+  /** Null on an attachment with no caption, and on a tombstone. */
+  ciphertext: string | null;
+  nonce: string | null;
   signature: string;
+  media_path?: string | null;
+  media_type?: RoomMediaType | null;
+  media_duration_ms?: number | null;
+  /** The per-file key, sealed under the ROOM key rather than to one member. */
+  media_key_ciphertext?: string | null;
+  media_key_nonce?: string | null;
+  reply_to_id?: string | null;
+  edited_at?: string | null;
+  deleted_at?: string | null;
+  /** Which payload the signature covers. Absent means a row written before the
+   *  column existed, which is v1 by definition. */
+  sig_v?: number;
   created_at: string;
   /** Null when this device could not open the row. `sender` says why. */
   text?: string | null;
+  /** The opened per-file key, set by `openRoomRows` alongside the body. The
+   *  attachment components take it as bytes; the row carries it sealed. */
+  mediaKey?: Uint8Array | null;
   /** How much this device can vouch for:
    *    'verified'   signature checks out against the sender's published key
    *    'unverified' signature does not check out. Rendered as a warning rather
@@ -56,6 +75,14 @@ export interface RoomMessage {
    *    'unknown'    the sender has published no signing key to check against */
   sender?: 'verified' | 'unverified' | 'unknown';
 }
+
+/** Every column a room message read has to select. One constant, because a
+ *  select that forgets `sig_v` verifies every new row under the old payload
+ *  and reports the whole room as forged. */
+export const ROOM_MESSAGE_COLUMNS =
+  'id, room_id, sender_id, ciphertext, nonce, signature, media_path, media_type, ' +
+  'media_duration_ms, media_key_ciphertext, media_key_nonce, reply_to_id, edited_at, ' +
+  'deleted_at, sig_v, created_at';
 
 /** Stable per-speaker colours, by index rather than a hash of the user id. A
  *  hash collides silently and two members share a colour mid-conversation. */
@@ -251,23 +278,131 @@ export async function roomKeyFor(roomId: string, identity: Identity): Promise<Ui
   }
 }
 
-/** Seals `text` under the room key and signs the sealed bytes. Exported for
- *  the test suite, which has no database to send to. */
-export async function sealRoomMessage(
-  roomKey: Uint8Array,
-  identity: Identity,
-  text: string
-): Promise<Sealed & { signature: string }> {
+/**
+ * The per-file key, sealed for the room.
+ *
+ * `crypto_secretbox` under the room key rather than `crypto_box` to a
+ * recipient: a room has no single recipient, and sealing the key once per
+ * member would be a column per member on every row carrying a file.
+ *
+ * The note on `removeMember` applies here unchanged — a member who leaves
+ * keeps whatever they already downloaded, and nothing can change that.
+ */
+export async function sealRoomFileKey(roomKey: Uint8Array, fileKey: Uint8Array): Promise<Sealed> {
   await sodium.ready;
   const nonce = sodium.randombytes_buf(sodium.crypto_secretbox_NONCEBYTES);
-  const sealed: Sealed = {
+  return {
     ciphertext: sodium.to_base64(
-      sodium.crypto_secretbox_easy(sodium.from_string(text), nonce, roomKey),
+      sodium.crypto_secretbox_easy(fileKey, nonce, roomKey),
       sodium.base64_variants.ORIGINAL
     ),
     nonce: sodium.to_base64(nonce, sodium.base64_variants.ORIGINAL),
   };
-  return { ...sealed, signature: await signBytes(identity.signPrivate, signedPayload(sealed)) };
+}
+
+/** Throws when the key does not open the row — a caller holding the wrong room
+ *  key has nothing to render, and a null return would be mistaken for "no
+ *  attachment". */
+export async function openRoomFileKey(roomKey: Uint8Array, sealed: Sealed): Promise<Uint8Array> {
+  await sodium.ready;
+  return sodium.crypto_secretbox_open_easy(
+    sodium.from_base64(sealed.ciphertext, sodium.base64_variants.ORIGINAL),
+    sodium.from_base64(sealed.nonce, sodium.base64_variants.ORIGINAL),
+    roomKey
+  );
+}
+
+/**
+ * Where a room's attachments live in `chat-media`.
+ *
+ * One folder per room, not the `{uidA}_{uidB}` folder a conversation uses:
+ * membership of a room is not a pair, so the storage policy asks
+ * `is_room_member()` about the folder name instead of matching it against the
+ * two ids inside. A room id is a uuid and a conversation folder always
+ * contains an underscore, so the two shapes cannot be confused for each other.
+ */
+export function roomMediaPath(roomId: string, filename: string): string {
+  return `${roomId}/${filename}`;
+}
+
+/** An attachment on a room message. `key` is the per-file key already sealed
+ *  under the room key — see `sealRoomFileKey`. */
+export interface RoomMediaDraft {
+  path: string;
+  type: RoomMediaType;
+  durationMs?: number | null;
+  key: Sealed;
+}
+
+export interface RoomDraft {
+  media?: RoomMediaDraft | null;
+  replyToId?: string | null;
+}
+
+/** Everything the sender writes to a row, signature included. Spread straight
+ *  into the insert, so what is signed and what is stored cannot drift. */
+export interface SealedRoomRow {
+  ciphertext: string | null;
+  nonce: string | null;
+  media_path: string | null;
+  media_type: RoomMediaType | null;
+  media_duration_ms: number | null;
+  media_key_ciphertext: string | null;
+  media_key_nonce: string | null;
+  reply_to_id: string | null;
+  signature: string;
+  sig_v: 2;
+}
+
+/**
+ * Seals `text` under the room key and signs every column a client renders.
+ *
+ * `text` may be null: an attachment with no caption has no body, and sealing
+ * an empty string instead would put a known plaintext under every one of them.
+ *
+ * Always signs v2, text-only messages included. A version picked per row from
+ * what the row happens to contain would be a version an attacker gets to pick
+ * — strip the media columns, claim v1, and the shorter payload still checks.
+ *
+ * Exported for the test suite, which has no database to send to.
+ */
+export async function sealRoomMessage(
+  roomKey: Uint8Array,
+  identity: Identity,
+  text: string | null,
+  draft: RoomDraft = {}
+): Promise<SealedRoomRow> {
+  await sodium.ready;
+
+  let sealed: Sealed | null = null;
+  if (text !== null && text !== '') {
+    const nonce = sodium.randombytes_buf(sodium.crypto_secretbox_NONCEBYTES);
+    sealed = {
+      ciphertext: sodium.to_base64(
+        sodium.crypto_secretbox_easy(sodium.from_string(text), nonce, roomKey),
+        sodium.base64_variants.ORIGINAL
+      ),
+      nonce: sodium.to_base64(nonce, sodium.base64_variants.ORIGINAL),
+    };
+  }
+
+  const media = draft.media ?? null;
+  const row = {
+    ciphertext: sealed?.ciphertext ?? null,
+    nonce: sealed?.nonce ?? null,
+    media_path: media?.path ?? null,
+    media_type: media?.type ?? null,
+    media_duration_ms: media?.durationMs ?? null,
+    media_key_ciphertext: media?.key.ciphertext ?? null,
+    media_key_nonce: media?.key.nonce ?? null,
+    reply_to_id: draft.replyToId ?? null,
+  };
+
+  return {
+    ...row,
+    signature: await signBytes(identity.signPrivate, signedPayloadV2(row)),
+    sig_v: 2,
+  };
 }
 
 /**
@@ -285,24 +420,18 @@ export async function sendRoomMessage(
   me: string,
   identity: Identity,
   roomKey: Uint8Array,
-  text: string
+  text: string | null,
+  draft: RoomDraft = {}
 ): Promise<RoomMessage> {
-  const sealed = await sealRoomMessage(roomKey, identity, text);
+  const sealed = await sealRoomMessage(roomKey, identity, text, draft);
   const id = crypto.randomUUID();
   const { data, error } = await supabase
     .from('room_messages')
-    .insert({
-      id,
-      room_id: roomId,
-      sender_id: me,
-      ciphertext: sealed.ciphertext,
-      nonce: sealed.nonce,
-      signature: sealed.signature,
-    })
-    .select('id, room_id, sender_id, ciphertext, nonce, signature, created_at')
+    .insert({ id, room_id: roomId, sender_id: me, ...sealed })
+    .select(ROOM_MESSAGE_COLUMNS)
     .single();
   if (error) throw error;
-  return data as RoomMessage;
+  return data as unknown as RoomMessage;
 }
 
 /**
@@ -324,8 +453,42 @@ export async function openRoomRows(
       const signing = signingKeys.get(row.sender_id);
       if (!signing) return { ...row, text: null, sender: 'unknown' };
 
-      const ok = await verifyBytes(await fromBase64(signing), row.signature, signedPayload(row));
+      // The row states which payload it was signed under. Absent means it
+      // predates the column, which is v1 by definition. A version this build
+      // has no builder for is refused rather than guessed at: guessing would
+      // mean trying the shorter payload, which is the downgrade the version
+      // exists to prevent.
+      const version = row.sig_v ?? 1;
+      if (version !== 1 && version !== 2) return { ...row, text: null, sender: 'unverified' };
+      const payload =
+        version === 1
+          ? signedPayload({ nonce: row.nonce ?? '', ciphertext: row.ciphertext ?? '' })
+          : signedPayloadV2(row);
+
+      const ok = await verifyBytes(await fromBase64(signing), row.signature, payload);
       if (!ok) return { ...row, text: null, sender: 'unverified' };
+
+      // Opened here, beside the body, because this is the one layer holding
+      // the room key. A failure is null rather than a throw: the attachment
+      // component already draws "no longer available" for a file it cannot
+      // open, and one unreadable file must not take the caption with it.
+      let mediaKey: Uint8Array | null = null;
+      if (row.media_key_ciphertext && row.media_key_nonce) {
+        try {
+          mediaKey = await openRoomFileKey(roomKey, {
+            ciphertext: row.media_key_ciphertext,
+            nonce: row.media_key_nonce,
+          });
+        } catch {
+          mediaKey = null;
+        }
+      }
+
+      // A tombstone and a caption-less attachment both arrive with no body.
+      // Neither is a failure to open, so neither is flagged as one.
+      if (row.ciphertext === null || row.nonce === null) {
+        return { ...row, text: null, mediaKey, sender: 'verified' };
+      }
 
       try {
         const text = sodium.to_string(
@@ -335,11 +498,11 @@ export async function openRoomRows(
             roomKey
           )
         );
-        return { ...row, text, sender: 'verified' };
+        return { ...row, text, mediaKey, sender: 'verified' };
       } catch {
         // Signed by the right person but sealed under a key this device does
         // not hold, which is what a member who joined after a rotation sees.
-        return { ...row, text: null, sender: 'verified' };
+        return { ...row, text: null, mediaKey, sender: 'verified' };
       }
     })
   );

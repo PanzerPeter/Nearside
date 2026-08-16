@@ -224,8 +224,11 @@ counter. Every realtime subscriber keys its channel effect on that number, so
 one bump rebuilds all subscriptions and re-runs the fetches beside them.
 
 Channels report health back, and when realtime is believed down the thread polls
-and a banner says so. A frozen conversation that looks fine is worse than a
-degraded one that admits it.
+while the connection heals itself on a doubling backoff (2s → 30s), in silence.
+Only an outage that outlasts ten seconds of that reaches the user at all, as one
+word on the conversation header's status line — never a banner, and never a
+retry button, because a reconnect the user has to ask for is one the app should
+have done itself.
 
 `src/lib/supabase.ts` wraps `fetch` with a timeout and retries **reads only**: a
 retried POST would double-insert a message. The outbox

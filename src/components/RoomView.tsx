@@ -4,7 +4,7 @@ import {
   ArrowLeft,
   Lock,
   LogOut,
-  Send,
+  Reply,
   ShieldAlert,
   ShieldQuestion,
   Trash2,
@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import {
+  ROOM_MESSAGE_COLUMNS,
   deleteRoom,
   leaveRoom,
   openRoomRows,
@@ -30,11 +31,22 @@ import { formatDisplayName, nicknameFor } from '../lib/nicknames';
 import { formatTime } from '../lib/time';
 import { prefersReducedMotion } from '../lib/motion';
 import { tapSend } from '../lib/haptics';
+import { notifyRoom } from '../lib/push';
 import { forgetChannel, reportChannelStatus, useConnection } from '../lib/connection';
-import { MAX_MESSAGE_LENGTH } from '../lib/conversation';
 import { useToast } from '../hooks/useToast';
-import type { Profile } from '../lib/types';
+import { useMediaSend } from '../hooks/useMediaSend';
+import { useStickers } from '../hooks/useStickers';
+import { useReactions } from '../hooks/useReactions';
+import { useSwipeToReply } from '../hooks/useSwipeToReply';
+import type { Profile, Reaction } from '../lib/types';
+import { Composer, type ComposerHandle } from './Composer';
+import { MediaAttachment } from './MediaAttachment';
 import { MessageText } from './MessageText';
+import { ReactionBar } from './ReactionBar';
+import { ReactionChips } from './ReactionChips';
+import { StickerAttachment } from './StickerAttachment';
+import { StickerPicker } from './StickerPicker';
+import { VoiceNote } from './VoiceNote';
 
 interface RoomViewProps {
   session: Session;
@@ -64,15 +76,64 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
   const [roomKey, setRoomKey] = useState<Uint8Array | null>(null);
   const [keyMissing, setKeyMissing] = useState(false);
   const [draft, setDraft] = useState('');
+  const [replyingTo, setReplyingTo] = useState<RoomMessage | null>(null);
   const [sending, setSending] = useState(false);
   const [showMembers, setShowMembers] = useState(false);
   /** Who is mid-removal, so their row can show it and not be tapped twice. */
   const [removing, setRemoving] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const composerRef = useRef<ComposerHandle>(null);
   const toast = useToast();
   const { generation, live } = useConnection();
 
   const isOwner = room.created_by === me;
+
+  // The drawer is per account, not per room — the same hook the 1:1 composer
+  // uses, and the same cache behind it.
+  const stickers = useStickers(me, identity);
+
+  const media = useMediaSend({
+    me,
+    target: { kind: 'room', roomId: room.id, roomKey },
+    identity,
+    onStaged: () => composerRef.current?.focus(),
+    onSent: () => {
+      setDraft('');
+      composerRef.current?.focus();
+    },
+    onError: toast.error,
+  });
+
+  // The same hook the 1:1 thread uses, pointed at the room table. Not a copy:
+  // the optimistic toggle and the realtime de-duplication are what make a
+  // reaction feel instant, and two copies of them drift.
+  const reactions = useReactions(
+    me,
+    useMemo(() => messages.map((m) => m.id), [messages]),
+    'room_message_reactions'
+  );
+
+  /** Every display name in the room, so `@name` is only highlighted for
+   *  somebody who is actually here. */
+  const handles = useMemo(
+    () =>
+      members
+        .map((p) => profiles.get(p.user_id)?.display_name)
+        .filter((n): n is string => !!n),
+    [members, profiles]
+  );
+  const myHandle = profiles.get(me)?.display_name ?? '';
+
+  /** Loaded messages by id, for resolving a quote without a second query. A
+   *  reply whose target is outside the window renders as unavailable. */
+  const byId = useMemo(() => new Map(messages.map((m) => [m.id, m])), [messages]);
+
+  const jumpTo = useCallback((id: string) => {
+    document.getElementById(`room-msg-${id}`)?.scrollIntoView({
+      behavior: prefersReducedMotion() ? 'auto' : 'smooth',
+      block: 'center',
+    });
+  }, []);
 
   const colourFor = useMemo(() => {
     const map = new Map(members.map((m) => [m.user_id, roomColour(m.colour_index)]));
@@ -117,13 +178,13 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
     if (!roomKey) return;
     const { data, error } = await supabase
       .from('room_messages')
-      .select('id, room_id, sender_id, ciphertext, nonce, signature, created_at')
+      .select(ROOM_MESSAGE_COLUMNS)
       .eq('room_id', room.id)
       .order('created_at', { ascending: false })
       .limit(PAGE_SIZE);
     if (error) return;
 
-    const rows = ((data as RoomMessage[] | null) ?? []).slice().reverse();
+    const rows = ((data as unknown as RoomMessage[] | null) ?? []).slice().reverse();
     const signing = await roomSigningKeys([...new Set(rows.map((r) => r.sender_id))]);
     setMessages(await openRoomRows(rows, roomKey, signing));
   }, [room.id, roomKey]);
@@ -211,13 +272,29 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
   }, [messages.length]);
 
   async function send() {
+    // Anything staged makes this a media send, and the typed line becomes its
+    // caption — the same rule the 1:1 composer follows, so Send does one thing
+    // in both places.
+    if (media.staged.length) {
+      await media.send(draft.trim(), replyingTo?.id ?? null);
+      setReplyingTo(null);
+      return;
+    }
+
     const text = draft.trim();
     if (!text || !roomKey || sending) return;
     void tapSend();
     setSending(true);
     try {
-      const row = await sendRoomMessage(room.id, me, identity, roomKey, text);
+      const row = await sendRoomMessage(room.id, me, identity, roomKey, text, {
+        replyToId: replyingTo?.id ?? null,
+      });
       setDraft('');
+      setReplyingTo(null);
+      // The database trigger covers this too, but only on a project with a
+      // `push_config` row — this one has none, so without the invoke a room
+      // message wakes nobody.
+      notifyRoom(row.id);
       // The insert returned the row, so the bubble is built from it rather than
       // by re-reading the page it belongs to. The echo of our own insert
       // arrives over the socket a moment later and `appendMessage`
@@ -354,108 +431,288 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
         )}
 
         <ul className="space-y-2.5">
-          {messages.map((m) => {
-            const mine = m.sender_id === me;
-            return (
-              <li
-                key={m.id}
-                // Same side marker as MessageBubble — see index.css.
-                data-own={mine}
-                className={`flex ${mine ? 'justify-end' : 'justify-start'} animate-message-in`}
-              >
-                <div
-                  className={`max-w-[85%] sm:max-w-[70%] rounded-2xl px-3 py-2 ${
-                    m.sender === 'unverified'
-                      ? 'bg-error/10 border border-error/40'
-                      : m.sender === 'unknown'
-                        ? 'bg-warning/10 border border-warning/40'
-                        : mine
-                          ? 'bg-primary text-primary-content'
-                          : 'bg-base-100 border border-base-content/5'
-                  }`}
-                >
-                  {!mine && (
-                    <p className={`text-[11px] font-semibold mb-0.5 ${colourFor(m.sender_id)}`}>
-                      {nameFor(m.sender_id)}
-                    </p>
-                  )}
-
-                  {m.sender === 'unverified' ? (
-                    <p className="flex items-start gap-1.5 text-sm text-error">
-                      <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" />
-                      <span>
-                        Unverified sender. This message claims to be from{' '}
-                        {nameFor(m.sender_id)}, but its signature does not match their key. It has
-                        not been opened.
-                      </span>
-                    </p>
-                  ) : m.sender === 'unknown' ? (
-                    <p className="flex items-start gap-1.5 text-sm text-warning">
-                      <ShieldQuestion className="w-4 h-4 shrink-0 mt-0.5" />
-                      <span>
-                        This sender has published no signing key, so there is nothing to check this
-                        message against.
-                      </span>
-                    </p>
-                  ) : m.text === null ? (
-                    <p className="flex items-start gap-1.5 text-sm italic text-base-content/60">
-                      <Lock className="w-4 h-4 shrink-0 mt-0.5" />
-                      <span>Sent before you joined, sealed with a key you do not have.</span>
-                    </p>
-                  ) : (
-                    <div className="text-sm whitespace-pre-wrap break-words">
-                      <MessageText text={m.text ?? ''} />
-                    </div>
-                  )}
-
-                  <p
-                    className={`text-[10px] mt-1 text-right ${
-                      mine && m.sender === 'verified'
-                        ? 'text-primary-content/60'
-                        : 'text-base-content/60'
-                    }`}
-                  >
-                    {formatTime(m.created_at)}
-                  </p>
-                </div>
-              </li>
-            );
-          })}
+          {messages.map((m) => (
+            <RoomBubble
+              key={m.id}
+              m={m}
+              me={me}
+              senderName={nameFor(m.sender_id)}
+              senderColour={colourFor(m.sender_id)}
+              reactions={reactions.byMessage.get(m.id) ?? []}
+              handles={handles}
+              myHandle={myHandle}
+              repliedTo={m.reply_to_id ? (byId.get(m.reply_to_id) ?? null) : null}
+              repliedToName={
+                m.reply_to_id ? nameFor(byId.get(m.reply_to_id)?.sender_id ?? '') : ''
+              }
+              onToggleReaction={(emoji) => void reactions.toggle(m.id, emoji)}
+              onReply={() => setReplyingTo(m)}
+              onJumpTo={jumpTo}
+            />
+          ))}
         </ul>
         <div ref={bottomRef} />
       </div>
 
-      <div className="bg-base-100 border-t border-base-content/5 p-2.5 pb-[calc(0.625rem+var(--safe-bottom))] shrink-0">
-        <div className="flex items-end gap-2">
-          <textarea
-            className="textarea flex-1 bg-base-200/50 border border-base-content/10 focus:border-primary resize-none min-h-[2.75rem] max-h-40 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-            rows={1}
-            value={draft}
-            maxLength={MAX_MESSAGE_LENGTH}
-            placeholder={keyMissing ? 'You cannot post to this room' : 'Message'}
-            disabled={keyMissing}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                void send();
+      {/* The same composer the 1:1 thread uses, not a second one: attaching,
+          recording and the sticker drawer are behaviour a room must not have
+          its own slightly different copy of. */}
+      <Composer
+        ref={composerRef}
+        value={draft}
+        onChange={setDraft}
+        onSend={() => void send()}
+        onStageFile={media.stage}
+        staged={media.staged}
+        onUnstage={media.unstage}
+        onClearStaged={media.clearStaged}
+        sentCount={media.sentCount}
+        sending={sending}
+        uploading={media.uploading || keyMissing}
+        replyingTo={
+          replyingTo
+            ? {
+                display_name: nameFor(replyingTo.sender_id),
+                snippet: roomSnippet(replyingTo),
               }
+            : null
+        }
+        onCancelReply={() => setReplyingTo(null)}
+        editing={null}
+        onError={toast.error}
+        stickers={
+          <StickerPicker
+            drawer={stickers}
+            onSelect={(sticker) => {
+              void media.sendSticker(sticker, replyingTo?.id ?? null);
+              setReplyingTo(null);
             }}
+            onError={toast.error}
           />
-          <button
-            className="btn btn-primary btn-square"
-            onClick={() => void send()}
-            disabled={sending || keyMissing || !draft.trim()}
-            title="Send"
+        }
+      />
+    </div>
+  );
+}
+
+/** What a quoted room message reads as in the composer and in the quote block.
+ *  A caption-less attachment has no text to show, so it is named by kind. */
+function roomSnippet(m: RoomMessage): string {
+  if (m.text) return m.text;
+  if (m.media_type === 'audio') return '🎤 Voice message';
+  if (m.media_type === 'sticker') return 'Sticker';
+  if (m.media_type === 'video') return '🎬 Video';
+  if (m.media_type) return '📷 Photo';
+  return 'Message';
+}
+
+interface RoomBubbleProps {
+  m: RoomMessage;
+  me: string;
+  senderName: string;
+  senderColour: string;
+  reactions: Reaction[];
+  /** Display names in this room, for highlighting `@name`. Only a name
+   *  somebody here holds counts — see lib/mentions.ts. */
+  handles: string[];
+  myHandle: string;
+  /** The quoted message, when it is inside the loaded window. Null renders as
+   *  "Message unavailable" rather than as a blank quote — a quote pointing at
+   *  nothing must say so. */
+  repliedTo: RoomMessage | null;
+  repliedToName: string;
+  onToggleReaction: (emoji: string) => void;
+  onReply: () => void;
+  onJumpTo: (id: string) => void;
+}
+
+/**
+ * One room message.
+ *
+ * Its own component because each row owns state a `.map()` cannot hold: the
+ * swipe in progress and whether this bubble's reaction bar is open.
+ */
+function RoomBubble({
+  m,
+  me,
+  senderName,
+  senderColour,
+  reactions,
+  handles,
+  myHandle,
+  repliedTo,
+  repliedToName,
+  onToggleReaction,
+  onReply,
+  onJumpTo,
+}: RoomBubbleProps) {
+  const mine = m.sender_id === me;
+  const [menuOpen, setMenuOpen] = useState(false);
+  const readable = m.sender !== 'unverified' && m.sender !== 'unknown';
+
+  const swipe = useSwipeToReply({
+    enabled: readable,
+    onReply,
+    direction: mine ? -1 : 1,
+  });
+
+  return (
+    <li
+      id={`room-msg-${m.id}`}
+      // Same side marker as MessageBubble — see index.css.
+      data-own={mine}
+      className={`flex ${mine ? 'justify-end' : 'justify-start'} animate-message-in`}
+    >
+      <div className="max-w-[85%] sm:max-w-[70%] flex flex-col gap-1">
+        {menuOpen && readable && (
+          <div
+            // Both class names written out: Tailwind scans source text, so a
+            // class built by interpolation is a class that never gets
+            // generated.
+            className={`flex items-center gap-1 rounded-full bg-base-100 border border-base-content/10 shadow-lg ${
+              mine ? 'self-end' : 'self-start'
+            }`}
           >
-            {sending ? (
-              <span className="loading loading-spinner loading-xs" />
-            ) : (
-              <Send className="w-4 h-4" />
-            )}
-          </button>
+            <ReactionBar
+              onReact={(emoji) => {
+                onToggleReaction(emoji);
+                setMenuOpen(false);
+              }}
+            />
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm btn-circle mr-1"
+              title="Reply"
+              aria-label="Reply"
+              onClick={() => {
+                onReply();
+                setMenuOpen(false);
+              }}
+            >
+              <Reply className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => setMenuOpen((v) => !v)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              setMenuOpen((v) => !v);
+            }
+          }}
+          style={{
+            transform: swipe.offset ? `translateX(${(mine ? -1 : 1) * swipe.offset}px)` : undefined,
+          }}
+          {...swipe.handlers}
+          className={`text-left rounded-2xl px-3 py-2 ${
+            m.sender === 'unverified'
+              ? 'bg-error/10 border border-error/40'
+              : m.sender === 'unknown'
+                ? 'bg-warning/10 border border-warning/40'
+                : mine
+                  ? 'bg-primary text-primary-content'
+                  : 'bg-base-100 border border-base-content/5'
+          }`}
+        >
+          {!mine && (
+            <p className={`text-[11px] font-semibold mb-0.5 ${senderColour}`}>{senderName}</p>
+          )}
+
+          {m.reply_to_id && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (repliedTo) onJumpTo(repliedTo.id);
+              }}
+              className={`block w-full text-left mb-1 rounded-lg border-l-2 pl-2 py-0.5 text-xs ${
+                mine
+                  ? 'border-primary-content/50 text-primary-content/80'
+                  : 'border-primary/60 text-base-content/70'
+              }`}
+            >
+              {repliedTo ? (
+                <>
+                  <span className="font-semibold">{repliedToName}</span>
+                  <span className="block truncate">{roomSnippet(repliedTo)}</span>
+                </>
+              ) : (
+                <span className="italic">Message unavailable</span>
+              )}
+            </button>
+          )}
+
+          {m.sender === 'unverified' ? (
+            <p className="flex items-start gap-1.5 text-sm text-error">
+              <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>
+                Unverified sender. This message claims to be from {senderName}, but its signature
+                does not match their key. It has not been opened.
+              </span>
+            </p>
+          ) : m.sender === 'unknown' ? (
+            <p className="flex items-start gap-1.5 text-sm text-warning">
+              <ShieldQuestion className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>
+                This sender has published no signing key, so there is nothing to check this message
+                against.
+              </span>
+            </p>
+          ) : (
+            <>
+              {m.media_path && m.media_type === 'sticker' ? (
+                <StickerAttachment messageId={m.id} path={m.media_path} mediaKey={m.mediaKey} />
+              ) : m.media_path && m.media_type === 'audio' ? (
+                <VoiceNote
+                  messageId={m.id}
+                  path={m.media_path}
+                  mediaKey={m.mediaKey}
+                  durationMs={m.media_duration_ms ?? null}
+                />
+              ) : m.media_path && m.media_type ? (
+                // Pulled out to the bubble's edges, the way the 1:1 bubble
+                // frames a picture.
+                <div className="-mx-3 -mt-2 mb-1.5 overflow-hidden rounded-t-xl">
+                  <MediaAttachment
+                    messageId={m.id}
+                    path={m.media_path}
+                    type={m.media_type === 'video' ? 'video' : 'image'}
+                    mediaKey={m.mediaKey}
+                    fill
+                  />
+                </div>
+              ) : null}
+
+              {m.text === null && !m.media_path ? (
+                <p className="flex items-start gap-1.5 text-sm italic text-base-content/60">
+                  <Lock className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span>Sent before you joined, sealed with a key you do not have.</span>
+                </p>
+              ) : m.text ? (
+                <div className="text-sm whitespace-pre-wrap break-words">
+                  <MessageText text={m.text} handles={handles} myHandle={myHandle} />
+                </div>
+              ) : null}
+            </>
+          )}
+
+          <p
+            className={`text-[10px] mt-1 text-right ${
+              mine && m.sender === 'verified' ? 'text-primary-content/60' : 'text-base-content/60'
+            }`}
+          >
+            {formatTime(m.created_at)}
+          </p>
+        </div>
+
+        <div className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
+          <ReactionChips reactions={reactions} me={me} onToggle={onToggleReaction} />
         </div>
       </div>
-    </div>
+    </li>
   );
 }

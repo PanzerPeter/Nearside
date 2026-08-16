@@ -1,4 +1,4 @@
-import { PresenceStatus } from '../hooks/usePresence';
+import { PresenceStatus } from '../lib/presence-model';
 
 const COLORS: Record<PresenceStatus, string> = {
   active: 'oklch(var(--su))', // success green — open & focused

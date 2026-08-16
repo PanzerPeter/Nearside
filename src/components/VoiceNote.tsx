@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Mic, Pause, Play } from 'lucide-react';
 import { formatDuration } from '../lib/audio';
+import { mediaFailureNotice } from '../lib/media';
 import { useSignedMediaUrl } from '../hooks/useSignedMediaUrl';
 
 interface VoiceNoteProps {
@@ -25,7 +26,7 @@ export function VoiceNote({ messageId, path, durationMs, mediaKey }: VoiceNotePr
   const audioRef = useRef<HTMLAudioElement>(null);
   // 'audio' is what tells `mimeForPath` that a .webm here is a recording and
   // not a video — the container is the same and the extension cannot say.
-  const { url, failed, reload } = useSignedMediaUrl(path, mediaKey, 'audio', messageId);
+  const { url, failure, reload } = useSignedMediaUrl(path, mediaKey, 'audio', messageId);
   const [playing, setPlaying] = useState(false);
   const [positionMs, setPositionMs] = useState(0);
   // Filled in from the element only when the row has no stored duration.
@@ -61,11 +62,11 @@ export function VoiceNote({ messageId, path, durationMs, mediaKey }: VoiceNotePr
     if (el && totalMs > 0) el.currentTime = ms / 1000;
   }
 
-  if (failed) {
+  if (failure) {
     return (
       <div className="flex items-center gap-2 py-2 text-xs opacity-70">
-        <Mic className="h-4 w-4" />
-        Voice message no longer available
+        <Mic className="h-4 w-4 shrink-0" />
+        {mediaFailureNotice(failure, 'audio')}
       </div>
     );
   }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Bell, Volume2 } from 'lucide-react';
+import { AtSign, Bell, Volume2 } from 'lucide-react';
 import {
   canRequestPushPermission,
   hasPushPermission,
@@ -11,7 +11,7 @@ import { isSoundMuted, setSoundMuted } from '../../lib/sound';
 import { permissionSettingsLocation } from '../../lib/device';
 import { isMobileNative } from '../../lib/platform';
 import { useToast } from '../../hooks/useToast';
-import { Card, ToggleRow } from './SettingsUi';
+import { Card, InfoRow, ToggleRow } from './SettingsUi';
 
 /**
  * Everything about being told something arrived, calls excepted — those have
@@ -115,6 +115,15 @@ export function NotificationsPage() {
           setMuted(next);
           setSoundMuted(next);
         }}
+      />
+      {/* Stated rather than left to be inferred as a broken feature. The
+          mention is inside the sealed body, so the server cannot know one
+          happened — giving it a louder notification would mean telling the
+          server what the message says. */}
+      <InfoRow
+        icon={AtSign}
+        label="Mentions in rooms"
+        hint="Highlighted in the room, but they get the same notification as any other message: your name is inside the encrypted message, so the server cannot see it."
       />
     </Card>
   );

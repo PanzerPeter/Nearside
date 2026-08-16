@@ -3,6 +3,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   ReactNode,
 } from 'react';
@@ -10,51 +11,35 @@ import { Session, RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { conversationKey } from '../lib/conversation';
 import { useConnection } from '../lib/connection';
-
-/**
- * Presence status for a user:
- *   - 'active'     → app is open AND the tab/window is focused (green)
- *   - 'background' → app is open but hidden/blurred, e.g. another tab or the
- *                    installed PWA minimised (yellow)
- *   - 'offline'    → not connected at all (grey)
- */
-export type PresenceStatus = 'active' | 'background' | 'offline';
-
-interface PresenceState {
-  status: PresenceStatus;
-  updated_at: number;
-}
+import { isAppActive, subscribeAppActive } from '../lib/app-active';
+import {
+  PeerMeta,
+  PeerTrack,
+  PresenceStatus,
+  resolveStatus,
+  trackPeers,
+} from '../lib/presence-model';
 
 // Re-broadcast our own status this often so peers' `updated_at` stays fresh
-// even when no visibility/focus event fires.
+// even when no state change fires.
 const HEARTBEAT_MS = 25_000;
-// If we haven't heard from a peer in this long, treat them as offline. A hard
-// tab close or a frozen/throttled background tab may never emit a `leave` diff,
-// so this TTL is what actually flips a silent peer to grey.
-//
-// Sized against timer throttling, not against HEARTBEAT_MS: browsers clamp
-// setInterval in hidden tabs to roughly once per minute, so a backgrounded peer
-// heartbeats at ~60s regardless of the constant above. A 70s TTL therefore sat
-// inside one throttled beat plus network jitter, and the amber "Away" dot would
-// flicker to grey and back. This allows two missed throttled beats.
-const STALE_MS = 150_000;
-// How often observers re-evaluate freshness so a peer expires without an event.
-const TICK_MS = 15_000;
+// How often observers re-evaluate freshness, so a peer expires with no event.
+// Shorter than the graces in `presence-model` — a dot that only settles on the
+// next tick after the grace has run out reads as a slow app, not a careful one.
+const TICK_MS = 8_000;
 
-/** Live status + last-seen for every connected peer, plus a ticking clock. */
+/** Live tracks for every peer we have heard from, plus a ticking clock. */
 interface PresenceView {
-  raw: Map<string, PresenceState>;
+  tracks: Map<string, PeerTrack>;
   now: number;
 }
 
-const PresenceContext = createContext<PresenceView>({ raw: new Map(), now: 0 });
+const PresenceContext = createContext<PresenceView>({ tracks: new Map(), now: 0 });
 
-/** Own status from the page's current visibility + focus. */
-function selfStatus(): Exclude<PresenceStatus, 'offline'> {
-  const visible =
-    typeof document !== 'undefined' && document.visibilityState === 'visible';
-  const focused = typeof document !== 'undefined' && document.hasFocus();
-  return visible && focused ? 'active' : 'background';
+/** Own status: in front of the user, or merely running. `app-active` is what
+ *  knows — on a phone the DOM's answer is wrong. */
+function selfStatus(): PeerMeta['status'] {
+  return isAppActive() ? 'active' : 'background';
 }
 
 /**
@@ -68,6 +53,9 @@ function selfStatus(): Exclude<PresenceStatus, 'offline'> {
  * and the fanout grows with the whole user base rather than with your friends.
  * Each pair channel carries exactly two members, so a peer's presence reaches
  * only people they have actually accepted.
+ *
+ * What the peers' statuses *mean* lives in `lib/presence-model.ts`; this
+ * provider only feeds it what the socket said and when.
  */
 export function PresenceProvider({
   session,
@@ -80,8 +68,11 @@ export function PresenceProvider({
   children: ReactNode;
 }) {
   const me = session.user.id;
-  const [raw, setRaw] = useState<Map<string, PresenceState>>(new Map());
-  const [now, setNow] = useState(() => Date.now());
+  const [view, setView] = useState<PresenceView>(() => ({ tracks: new Map(), now: Date.now() }));
+  // Peer tracks outlive the effect below. A wake rebuilds every channel, and
+  // for the second or two before they re-sync, presence lists nobody — reading
+  // that literally turned the whole friend list grey and back on every wake.
+  const tracks = useRef<Map<string, PeerTrack>>(new Map());
   // Presence is pure socket state: after a wake, every channel below is
   // tracking against a connection that no longer exists, so both our own
   // status and the peers' are frozen at the moment of sleep until rebuilt.
@@ -93,46 +84,34 @@ export function PresenceProvider({
 
   useEffect(() => {
     const peers = peerKey ? peerKey.split(',') : [];
+    // Forget anyone no longer a friend; their last-known status is not ours to
+    // keep rendering.
+    for (const id of tracks.current.keys()) {
+      if (!peers.includes(id)) tracks.current.delete(id);
+    }
     if (peers.length === 0) {
-      setRaw(new Map());
+      tracks.current = new Map();
+      setView({ tracks: tracks.current, now: Date.now() });
       return;
     }
 
-    // Per-peer freshness measured on OUR clock: the last local time that peer's
-    // own reported timestamp actually advanced. Skew-proof, and it stops moving
-    // the moment a peer goes silent (even if Supabase still lists them).
-    const seen = new Map<string, { reported: number; localAt: number }>();
     const channels: RealtimeChannel[] = [];
 
     const rebuild = () => {
-      const t = Date.now();
-      const next = new Map<string, PresenceState>();
-      const present = new Set<string>();
-
+      // Everyone presence currently lists, with every device they hold open.
+      const present = new Map<string, PeerMeta[]>();
       for (const channel of channels) {
-        const state = channel.presenceState<PresenceState>();
+        const state = channel.presenceState<PeerMeta>();
         for (const [userId, metas] of Object.entries(state)) {
           if (userId === me) continue;
-          present.add(userId);
-          // Collapse all of a user's devices into the strongest, freshest signal.
-          let best: PresenceStatus = 'background';
-          let reported = 0;
-          for (const m of metas) {
-            if (m.status === 'active') best = 'active';
-            if (m.updated_at > reported) reported = m.updated_at;
-          }
-          // Refresh our local freshness stamp only when the peer's own timestamp
-          // moved — a stale entry Supabase keeps around won't reset the TTL.
-          const prev = seen.get(userId);
-          const localAt = prev && prev.reported === reported ? prev.localAt : t;
-          seen.set(userId, { reported, localAt });
-          next.set(userId, { status: best, updated_at: localAt });
+          const devices = present.get(userId);
+          if (devices) devices.push(...metas);
+          else present.set(userId, [...metas]);
         }
       }
-
-      // Drop bookkeeping for peers no longer present at all.
-      for (const id of seen.keys()) if (!present.has(id)) seen.delete(id);
-      setRaw(next);
+      const now = Date.now();
+      tracks.current = trackPeers(tracks.current, present, now);
+      setView({ tracks: tracks.current, now });
     };
 
     const pushSelf = () => {
@@ -149,6 +128,8 @@ export function PresenceProvider({
         .on('presence', { event: 'join' }, rebuild)
         .on('presence', { event: 'leave' }, rebuild)
         .subscribe((status) => {
+          // Fires again on every rejoin, which is what re-asserts us after a
+          // channel drops: a rejoined channel carries none of its old state.
           if (status !== 'SUBSCRIBED') return;
           channel
             .track({ status: selfStatus(), updated_at: Date.now() })
@@ -157,9 +138,7 @@ export function PresenceProvider({
       channels.push(channel);
     }
 
-    document.addEventListener('visibilitychange', pushSelf);
-    window.addEventListener('focus', pushSelf);
-    window.addEventListener('blur', pushSelf);
+    const unwatchActive = subscribeAppActive(pushSelf);
 
     // Heartbeat: re-assert our presence so peers keep seeing a fresh
     // `updated_at`; without this a peer would expire us via the staleness TTL.
@@ -167,19 +146,18 @@ export function PresenceProvider({
     // Tick: advance the clock so stale peers flip to offline with no event.
     // Only runs while there are peers to expire — this value is in context, so
     // every tick re-renders the whole subtree.
-    const tick = window.setInterval(() => setNow(Date.now()), TICK_MS);
+    const tick = window.setInterval(
+      () => setView({ tracks: tracks.current, now: Date.now() }),
+      TICK_MS
+    );
 
     return () => {
       window.clearInterval(heartbeat);
       window.clearInterval(tick);
-      document.removeEventListener('visibilitychange', pushSelf);
-      window.removeEventListener('focus', pushSelf);
-      window.removeEventListener('blur', pushSelf);
+      unwatchActive();
       for (const channel of channels) supabase.removeChannel(channel);
     };
   }, [me, peerKey, generation]);
-
-  const view = useMemo<PresenceView>(() => ({ raw, now }), [raw, now]);
 
   return <PresenceContext.Provider value={view}>{children}</PresenceContext.Provider>;
 }
@@ -191,12 +169,9 @@ export function PresenceProvider({
 // it is suppressed rather than split, the same call `useToast.tsx` makes.
 // eslint-disable-next-line react-refresh/only-export-components
 export function usePresenceStatus(userId: string | null | undefined): PresenceStatus {
-  const { raw, now } = useContext(PresenceContext);
+  const { tracks, now } = useContext(PresenceContext);
   if (!userId) return 'offline';
-  const entry = raw.get(userId);
-  if (!entry) return 'offline';
-  // A peer we haven't heard from within the TTL is treated as offline even if
-  // their last diff never arrived (frozen tab, dropped socket, missed leave).
-  if (now - entry.updated_at > STALE_MS) return 'offline';
-  return entry.status;
+  const track = tracks.get(userId);
+  if (!track) return 'offline';
+  return resolveStatus(track, now);
 }

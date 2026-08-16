@@ -12,6 +12,40 @@ Android `versionName`, the iOS `MARKETING_VERSION`, the Electron shell, the
 string in Settings — follows it. `src/lib/version.test.ts` fails the suite when
 one of them drifts.
 
+## [Unreleased]
+
+### Changed
+
+- **The notification request reads like a person wrote it.** The screen that
+  appears once, after the account and the recovery phrase are done, asked to
+  "get told when a message arrives" and explained itself in a sentence built
+  around what would happen without it. It now says plainly that the app can only
+  reach you while it is open, and what a notification carries: who wrote, and
+  nothing more.
+
+## [1.1.1] — 2026-08-17
+
+### Fixed
+
+- **Trimming old photos no longer deletes the other person's.** A conversation
+  keeps its newest twenty pictures and clears the rest to keep the account's
+  storage from growing without end. It was clearing both people's files but
+  could only relabel its own messages, so the friend's photo lost its contents
+  while the message still pointed at them — and every device in that
+  conversation drew it as permanently lost, with nothing to distinguish it from
+  a file the server had misplaced. Each phone now clears only what it sent, so a
+  file and the message naming it always go together.
+
+### Changed
+
+- **An attachment that will not load says why.** "This file is no longer
+  available" was shown for three different things: a file that really had been
+  removed, a file this phone holds no key for, and a file this phone downloaded
+  and decrypted perfectly but has no decoder for — an iPhone HEIC photo, most
+  often, which arrives intact and cannot be painted. Only the first was a lost
+  file, and the other two sent people looking for a picture that was never in
+  danger. Each now reads as what it is.
+
 ## [1.1.0] — 2026-08-15
 
 ### Fixed

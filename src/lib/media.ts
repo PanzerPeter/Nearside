@@ -62,6 +62,59 @@ export function mimeForPath(path: string, kind?: MediaType | null): string {
 }
 
 /**
+ * Why an attachment could not be shown.
+ *
+ * Three unrelated problems used to arrive as one sentence — "no longer
+ * available" — which is only true of the first of them. It told somebody a file
+ * had been deleted while the bytes sat in the bucket intact, and it sent the
+ * only person who could act on it looking in the wrong place.
+ */
+export type MediaFailure =
+  /** Not in the bucket, or this account may not read it. The one case the old
+   *  wording was right about. */
+  | 'gone'
+  /** No key on this row for this device — a pre-0024 attachment, or a room key
+   *  this device never received — or a key that did not open it. Nothing to
+   *  decrypt, and nothing the sender can do about it either. */
+  | 'sealed'
+  /** Downloaded and decrypted, and the platform still refused to render it. An
+   *  HEIC photo in a WebView that has no decoder for one. The file is fine and
+   *  is worth saving; this build just cannot paint it. */
+  | 'undecodable';
+
+/** What each kind of attachment is called in a sentence. */
+const MEDIA_NOUN: Record<MediaType, string> = {
+  image: 'photo',
+  video: 'video',
+  audio: 'voice message',
+  sticker: 'sticker',
+};
+
+/**
+ * The sentence shown in place of an attachment that will not load.
+ *
+ * Lives here rather than in the three components that draw it so the wording is
+ * one thing and can be tested: the same failure must read the same way whether
+ * it happened to a photo in the thread, a sticker, or a voice note.
+ */
+export function mediaFailureNotice(failure: MediaFailure, kind?: MediaType | null): string {
+  const noun = MEDIA_NOUN[kind ?? 'image'] ?? 'file';
+
+  switch (failure) {
+    case 'gone':
+      return `This ${noun} is no longer available`;
+    case 'sealed':
+      return `This device has no key for this ${noun}`;
+    case 'undecodable':
+      // Named as a limit of this build, and phrased so the answer — save it,
+      // open it elsewhere — is implied rather than a dead end.
+      return `This ${noun}'s format can't be ${
+        kind === 'audio' || kind === 'video' ? 'played' : 'shown'
+      } here`;
+  }
+}
+
+/**
  * Whether a `<video>` that has read its metadata got no picture out of it.
  *
  * Phones record in HEVC by default, and an HEVC track fails differently

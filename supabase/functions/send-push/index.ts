@@ -1,4 +1,5 @@
-// send-push — notify a message's receiver, through OneSignal.
+// send-push — notify a message's receiver (or a room's members), through
+// OneSignal.
 //
 // Two callers, either of which is sufficient on its own:
 //
@@ -134,6 +135,157 @@ function bodyFor(name: string, mediaType: string | null): string {
   }
 }
 
+/**
+ * A room message, fanned out to every other member.
+ *
+ * Separate from the 1:1 path below rather than folded into it: the audience is
+ * a participant list instead of one column, the claim and the cooldown live in
+ * different tables (see 0037), and the banner names a room instead of a
+ * person. Sharing a code path between those would be sharing four `if`s.
+ *
+ * The name is `profiles.display_name`, never the receiver's private nickname
+ * for the sender: one notification addresses many people at once, and reading
+ * each receiver's nicknames to personalise it would mean one OneSignal call
+ * per member of every room.
+ */
+async function pushRoomMessage(
+  admin: ReturnType<typeof createClient>,
+  req: Request,
+  roomMessageId: string,
+): Promise<Response> {
+  const { data: msg } = await admin
+    .from("room_messages")
+    .select("id, room_id, sender_id, media_type, deleted_at")
+    .eq("id", roomMessageId)
+    .maybeSingle();
+  if (!msg) return json({ error: "not found" }, 404);
+  if (msg.deleted_at) return json({ skipped: "deleted" }, 200);
+
+  const triggerSecret = req.headers.get("x-push-secret");
+  if (!secretMatches(triggerSecret)) {
+    const authHeader = req.headers.get("Authorization") ?? "";
+    const asUser = createClient(SUPABASE_URL, ANON, {
+      global: { headers: { Authorization: authHeader } },
+      auth: { persistSession: false },
+    });
+    const { data: userData } = await asUser.auth.getUser();
+    if (!userData?.user || userData.user.id !== msg.sender_id) {
+      return json({ error: "forbidden" }, 403);
+    }
+  }
+
+  // Claimed exactly like a 1:1 message, so the sender's invoke and the
+  // database trigger racing each other produce one fan-out and not two.
+  const { data: claim } = await admin
+    .from("room_message_pushes")
+    .upsert({ message_id: msg.id }, { onConflict: "message_id", ignoreDuplicates: true })
+    .select("message_id");
+  if (!claim || claim.length === 0) return json({ skipped: "already-pushed" }, 200);
+
+  const releaseClaim = async () => {
+    await admin.from("room_message_pushes").delete().eq("message_id", msg.id);
+  };
+
+  const { data: participants } = await admin
+    .from("room_participants")
+    .select("user_id")
+    .eq("room_id", msg.room_id);
+
+  const receivers = (participants ?? [])
+    .map((p) => p.user_id as string)
+    .filter((id) => id !== msg.sender_id);
+  if (receivers.length === 0) {
+    await releaseClaim();
+    return json({ sent: 0, reason: "no other members" }, 200);
+  }
+
+  const [{ data: room }, { data: sender }] = await Promise.all([
+    admin.from("rooms").select("title").eq("id", msg.room_id).maybeSingle(),
+    admin.from("profiles").select("display_name").eq("id", msg.sender_id).maybeSingle(),
+  ]);
+
+  const roomTitle = (room?.title as string | undefined)?.trim() || "a room";
+  const name = sender?.display_name ? `@${sender.display_name}` : "someone";
+
+  // The cooldown is per receiver per ROOM, so a group of six talking at once
+  // rings a phone once rather than six times.
+  const { data: anchors } = await admin
+    .from("room_push_alerts")
+    .select("receiver_id, alerted_at")
+    .eq("room_id", msg.room_id)
+    .in("receiver_id", receivers);
+
+  const lastAlertFor = new Map<string, number>();
+  for (const row of anchors ?? []) {
+    lastAlertFor.set(row.receiver_id as string, Date.parse(row.alerted_at as string));
+  }
+
+  const now = Date.now();
+  const due: string[] = [];
+  const quiet: string[] = [];
+  for (const id of receivers) {
+    const last = lastAlertFor.get(id) ?? NaN;
+    // An unreadable, missing, or future stamp rings: a clock that went
+    // backwards must not silence a room for good.
+    const ring = !Number.isFinite(last) || now < last || now - last >= ALERT_COOLDOWN_MS;
+    // Without a quiet channel configured there is nowhere silent to post, so
+    // everything rings — the behaviour this function had before the cooldown.
+    if (ring || !ANDROID_QUIET_CHANNEL_ID) due.push(id);
+    else quiet.push(id);
+  }
+
+  const post = async (aliases: string[], silent: boolean) => {
+    if (aliases.length === 0) return true;
+    const response = await fetch("https://api.onesignal.com/notifications", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Key ${ONESIGNAL_REST_API_KEY}`,
+      },
+      body: JSON.stringify({
+        app_id: ONESIGNAL_APP_ID,
+        target_channel: "push",
+        include_aliases: { external_id: aliases },
+        headings: { en: roomTitle },
+        contents: { en: bodyFor(name, msg.media_type as string | null) },
+        android_channel_id: silent ? ANDROID_QUIET_CHANNEL_ID : ANDROID_CHANNEL_ID,
+        ios_interruption_level: silent ? "passive" : "active",
+        priority: 10,
+        // Stacked per room, so a group reads as one entry in the shade.
+        android_group: `room:${msg.room_id}`,
+        data: { roomId: msg.room_id, senderId: msg.sender_id },
+      }),
+    });
+    const result = (await response.json().catch(() => ({}))) as { id?: string };
+    return response.ok && !!result.id;
+  };
+
+  const [dueOk, quietOk] = await Promise.all([post(due, false), post(quiet, true)]);
+
+  if (!dueOk && !quietOk) {
+    // Nobody has a device registered yet, or OneSignal refused. A stuck claim
+    // would silence the retry forever.
+    await releaseClaim();
+    return json({ sent: 0 }, 200);
+  }
+
+  // Moved only for the people who were actually rung, and only once the
+  // notification is out — stamped before the send, a delivery that failed
+  // would still close the window and the retry would arrive silent.
+  if (dueOk && due.length > 0) {
+    await admin.from("room_push_alerts").upsert(
+      due.map((receiver_id) => ({
+        receiver_id,
+        room_id: msg.room_id,
+        alerted_at: new Date(now).toISOString(),
+      })),
+      { onConflict: "receiver_id,room_id" },
+    );
+  }
+
+  return json({ sent: due.length + quiet.length, quiet: quiet.length }, 200);
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -146,7 +298,11 @@ Deno.serve(async (req) => {
   });
 
   try {
-    const { message_id } = (await req.json()) as { message_id?: string };
+    const { message_id, room_message_id } = (await req.json()) as {
+      message_id?: string;
+      room_message_id?: string;
+    };
+    if (room_message_id) return await pushRoomMessage(admin, req, room_message_id);
     if (!message_id) return json({ error: "message_id required" }, 400);
 
     const { data: msg } = await admin

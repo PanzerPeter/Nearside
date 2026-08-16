@@ -27,7 +27,8 @@ import { peerPublicKey } from '../lib/peer-keys';
 import { MEDIA_SCAN_LIMIT, selectStaleMedia, type MediaRow } from '../lib/media';
 import { pinnedIds } from '../lib/pins';
 import { CHAT_IMAGE_MAX_EDGE, compressImage } from '../lib/compress';
-import { notifyReceiver } from '../lib/push';
+import { notifyReceiver, notifyRoom } from '../lib/push';
+import { roomMediaPath, sealRoomFileKey, sendRoomMessage } from '../lib/rooms';
 import { stickerFile, type Sticker } from '../lib/stickers';
 import type { Identity } from '../lib/crypto/keys';
 import type { MediaType } from '../lib/types';
@@ -52,10 +53,25 @@ export interface MediaSend {
   sendSticker: (sticker: Sticker, replyToId: string | null) => Promise<void>;
 }
 
+/**
+ * Where the attachment is going.
+ *
+ * A union rather than an optional `roomId` beside `peerId`: the two differ in
+ * how the file key is sealed (to one recipient, or under the room key), in
+ * which table the row lands in, and in whether trimming old media is this
+ * device's business at all. Every one of those is a mistake waiting to happen
+ * if both fields can be set at once.
+ */
+export type MediaTarget =
+  | { kind: 'peer'; peerId: string; isSelf: boolean }
+  /** `roomKey` is null while it is still being opened, and stays null for a
+   *  device that has none — the composer is disabled in both cases, and the
+   *  upload refuses rather than trusting the caller to have checked. */
+  | { kind: 'room'; roomId: string; roomKey: Uint8Array | null };
+
 interface MediaSendOptions {
   me: string;
-  peerId: string;
-  isSelf: boolean;
+  target: MediaTarget;
   identity: Identity;
   onStaged: () => void;
   /** Run once the row is in: clear the composer, drop the reply target, take
@@ -66,8 +82,7 @@ interface MediaSendOptions {
 
 export function useMediaSend({
   me,
-  peerId,
-  isSelf,
+  target,
   identity,
   onStaged,
   onSent,
@@ -77,11 +92,13 @@ export function useMediaSend({
   const [uploading, setUploading] = useState(false);
   const [sentCount, setSentCount] = useState(0);
 
+  const targetId = target.kind === 'peer' ? target.peerId : target.roomId;
+
   useEffect(() => {
     setStaged([]);
     void cleanupOldMedia();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [peerId]);
+  }, [targetId]);
 
   function stage(files: File | File[], durationMs?: number) {
     const incoming = Array.isArray(files) ? files : [files];
@@ -163,7 +180,10 @@ export function useMediaSend({
     // they would go again with the retry, posting the same sentence twice and
     // quoting the same message twice.
     onSent();
-    if (lastInsertedId) notifyReceiver(lastInsertedId, isSelf);
+    if (lastInsertedId) {
+      if (target.kind === 'peer') notifyReceiver(lastInsertedId, target.isSelf);
+      else notifyRoom(lastInsertedId);
+    }
     void cleanupOldMedia();
   }
 
@@ -179,6 +199,13 @@ export function useMediaSend({
     caption: string,
     replyToId: string | null
   ): Promise<string | null> {
+    // Before the upload, not after: an object in the bucket that no row can
+    // ever point at is worse than a refusal.
+    if (target.kind === 'room' && !target.roomKey) {
+      onError('This device has no key for this room.');
+      return null;
+    }
+
     // Images are re-encoded before they leave the device — a phone photo is
     // typically megabytes of resolution this UI never paints. Videos and voice
     // notes go up as recorded (voice is already ~180 KB a minute).
@@ -187,9 +214,9 @@ export function useMediaSend({
 
     // Sealed after compression, never before: compressImage decodes an image,
     // and ciphertext does not decode. The key is minted here, travels no
-    // further than this function in the clear, and is sealed to the recipient
-    // below.
-    const peerKey = await peerPublicKey(peerId);
+    // further than this function in the clear, and is sealed below — to the
+    // recipient in a conversation, under the room key in a room.
+    const peerKey = target.kind === 'peer' ? await peerPublicKey(target.peerId) : null;
     const { blob: sealedUpload, key: fileKey } = await sealFile(
       new Uint8Array(await body.arrayBuffer())
     );
@@ -199,7 +226,11 @@ export function useMediaSend({
     // last thing in Storage that still hints at the file's kind. That is a
     // deliberate, disclosed limit rather than an oversight: the path is already
     // visible to anyone who can list the bucket.
-    const path = mediaPath(me, peerId, `${crypto.randomUUID()}.${fileExtension(body)}`);
+    const filename = `${crypto.randomUUID()}.${fileExtension(body)}`;
+    const path =
+      target.kind === 'peer'
+        ? mediaPath(me, target.peerId, filename)
+        : roomMediaPath(target.roomId, filename);
     const { error: uploadError } = await supabase.storage
       .from('chat-media')
       .upload(path, sealedUpload, { contentType: sealedUpload.type });
@@ -209,16 +240,63 @@ export function useMediaSend({
       return null;
     }
 
+    /** Undo the upload when the row it belongs to never landed. Without it the
+     *  bucket keeps bytes no row points at, and nothing ever collects them. */
+    const abandonUpload = async () => {
+      await supabase.storage.from('chat-media').remove([path]);
+    };
+
+    if (target.kind === 'room') {
+      const roomKey = target.roomKey;
+      // Already refused above, before anything was uploaded; repeated here
+      // because a null check at the top of the function does not narrow a
+      // union read again down here.
+      if (!roomKey) {
+        await abandonUpload();
+        return null;
+      }
+      try {
+        // The same insert an ordinary room message makes, with the media
+        // columns filled in — so the signature covers them (v2) without this
+        // path knowing how signing works.
+        const row = await sendRoomMessage(
+          target.roomId,
+          me,
+          identity,
+          roomKey,
+          caption || null,
+          {
+            media: {
+              path,
+              type: kind,
+              durationMs: kind === 'audio' ? durationMs : null,
+              key: await sealRoomFileKey(roomKey, fileKey),
+            },
+            replyToId,
+          }
+        );
+        return row.id;
+      } catch (error) {
+        await abandonUpload();
+        onError(
+          /rate_limited_messages/.test(String((error as Error)?.message ?? error))
+            ? "You're sending messages too quickly. Give it a moment."
+            : 'Could not send media.'
+        );
+        return null;
+      }
+    }
+
     const { data: inserted, error: insertError } = await supabase
       .from('messages')
       .insert({
         user_id: me,
-        receiver_id: peerId,
+        receiver_id: target.peerId,
         // A caption is body text like any other and is sealed like any other.
         ...(caption
-          ? await sealBody(identity, peerKey, me, peerId, caption)
+          ? await sealBody(identity, peerKey, me, target.peerId, caption)
           : { ciphertext: null, nonce: null }),
-        ...(await sealMediaKey(identity, peerKey, me, peerId, fileKey)),
+        ...(await sealMediaKey(identity, peerKey, me, target.peerId, fileKey)),
         media_path: path,
         media_type: kind,
         media_duration_ms: kind === 'audio' ? durationMs : null,
@@ -228,7 +306,7 @@ export function useMediaSend({
       .single();
 
     if (insertError) {
-      await supabase.storage.from('chat-media').remove([path]);
+      await abandonUpload();
       onError(
         /rate_limited_messages/.test(insertError.message)
           ? "You're sending messages too quickly. Give it a moment."
@@ -264,7 +342,8 @@ export function useMediaSend({
       const id = await uploadStaged({ id: sticker.id, file, durationMs: null }, 'sticker', '', replyToId);
       if (!id) return;
       onSent();
-      notifyReceiver(id, isSelf);
+      if (target.kind === 'peer') notifyReceiver(id, target.isSelf);
+      else notifyRoom(id);
     } catch {
       onError('Could not send that sticker.');
     } finally {
@@ -272,8 +351,18 @@ export function useMediaSend({
     }
   }
 
-  /** Trim this conversation's media back to the per-kind keep limits. */
+  /**
+   * Trim this conversation's media back to the per-kind keep limits.
+   *
+   * Conversations only. A room's attachments are shared by everyone in it, and
+   * one member's device deciding the room has kept enough photos would delete
+   * them out of everybody else's history — a call no single device gets to
+   * make. Room media is bounded by the room's disappearing timer instead, which
+   * everyone agreed to.
+   */
   async function cleanupOldMedia() {
+    if (target.kind !== 'peer') return;
+    const peerId = target.peerId;
     const { data } = await supabase
       .from('messages')
       .select('id, media_path, user_id, media_type')
@@ -288,17 +377,28 @@ export function useMediaSend({
     // Pins are read fresh on every pass rather than held in state: the set
     // changes from the viewer, which is a different component, and a stale
     // copy here would prune the very file someone just chose to keep.
+    // Both sides' rows are counted — the keep limit is the conversation's, not
+    // one person's — but only our own are acted on.
     const stale = selectStaleMedia(data as MediaRow[], await pinnedIds());
     if (!stale.length) return;
 
-    const paths = stale.map((m) => m.media_path).filter((p): p is string => !!p);
-    if (paths.length) await supabase.storage.from('chat-media').remove(paths);
-
-    // RLS lets us edit only our own rows; the friend's rows degrade gracefully
-    // (the attachment and voice-note components both show a "no longer
-    // available" fallback).
+    // Deleting the friend's objects too is what this used to do, and the
+    // storage policy allows it: either participant may delete anything in the
+    // pair's folder. RLS on `messages` does *not* extend that far, so the row
+    // pointing at the file we had just destroyed stayed exactly as it was, with
+    // its path and its key intact and nothing behind them. The friend's photo
+    // read as deleted forever, on their device and ours, with no way to tell it
+    // from a file the server had lost.
+    //
+    // Each device now trims what it sent and relabels the rows it is allowed to
+    // write, so an object and the row naming it always go together. The cost is
+    // that a friend who does not open the app leaves their files in the bucket
+    // until they do, which is storage — cheap, and recoverable.
     const myStale = stale.filter((m) => m.user_id === me);
     if (!myStale.length) return;
+
+    const paths = myStale.map((m) => m.media_path).filter((p): p is string => !!p);
+    if (paths.length) await supabase.storage.from('chat-media').remove(paths);
 
     // The placeholder names what was trimmed, so a cleared voice note doesn't
     // read as a lost photo.

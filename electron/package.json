@@ -1,7 +1,7 @@
 {
   "name": "nearside",
   "private": true,
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Electron platform project for Nearside.",
   "main": "build/main.js",
   "scripts": {

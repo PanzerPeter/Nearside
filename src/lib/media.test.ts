@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   keyToken,
+  mediaFailureNotice,
   mimeForPath,
   videoTrackIsUnsupported,
   MEDIA_SCAN_LIMIT,
@@ -168,5 +169,43 @@ describe('videoTrackIsUnsupported', () => {
     // HAVE_NOTHING: videoWidth is 0 for every video at this point, including
     // the ones about to play perfectly.
     expect(videoTrackIsUnsupported({ videoWidth: 0, readyState: 0 })).toBe(false);
+  });
+});
+
+describe('mediaFailureNotice', () => {
+  // The whole point of the type. These three used to be one sentence, and the
+  // sentence was only true of the first.
+  it('says a file is gone only when it is actually gone', () => {
+    expect(mediaFailureNotice('gone', 'image')).toBe('This photo is no longer available');
+    expect(mediaFailureNotice('sealed', 'image')).not.toMatch(/no longer available/);
+    expect(mediaFailureNotice('undecodable', 'image')).not.toMatch(/no longer available/);
+  });
+
+  it('blames this device, not the file, when there is no key', () => {
+    expect(mediaFailureNotice('sealed', 'image')).toBe(
+      'This device has no key for this photo'
+    );
+  });
+
+  it('names an undecodable file as a limit of this build', () => {
+    expect(mediaFailureNotice('undecodable', 'image')).toBe(
+      "This photo's format can't be shown here"
+    );
+    // Played, not shown: the two time-based kinds read wrong the other way.
+    expect(mediaFailureNotice('undecodable', 'video')).toBe(
+      "This video's format can't be played here"
+    );
+    expect(mediaFailureNotice('undecodable', 'audio')).toBe(
+      "This voice message's format can't be played here"
+    );
+  });
+
+  it('calls each kind what the user calls it', () => {
+    expect(mediaFailureNotice('gone', 'audio')).toBe('This voice message is no longer available');
+    expect(mediaFailureNotice('gone', 'sticker')).toBe('This sticker is no longer available');
+  });
+
+  it('still reads as a sentence for a row whose kind was never recorded', () => {
+    expect(mediaFailureNotice('gone', null)).toBe('This photo is no longer available');
   });
 });

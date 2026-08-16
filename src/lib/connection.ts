@@ -21,6 +21,12 @@
 // `generation`. Every subscriber keys its channel effect on that number, so
 // one bump rebuilds every subscription and re-runs the fetches beside it.
 // There is no per-hook wake logic anywhere else.
+//
+// None of the three fires for the fourth case: a socket that dies while the app
+// is in front and awake. That one used to sit degraded behind a banner offering
+// a Reconnect button — an app asking to be told to do the thing it could do
+// itself. It now heals on a doubling backoff (see "Silent healing" below), and
+// the only thing the UI is told is `useDegraded`.
 
 import { useEffect, useState } from 'react';
 import { supabase } from './supabase';
@@ -38,6 +44,13 @@ const MIN_REVIVE_INTERVAL_MS = 3_000;
 /** Refresh the access token on wake if it expires within this window — a
  *  token that dies mid-reconnect makes the socket rejoin and then get kicked. */
 const TOKEN_REFRESH_MARGIN_MS = 120_000;
+/** First wait before healing a connection that dropped while the app is in
+ *  front. Realtime rejoins on its own for the ordinary cases; this covers the
+ *  ones it does not come back from, which used to need a tap. */
+export const RETRY_BASE_MS = 2_000;
+/** Ceiling on the doubling. Beyond this the app is waiting long enough to feel
+ *  broken to somebody staring at it, and the reconnect costs little. */
+export const RETRY_MAX_MS = 30_000;
 
 export interface ConnectionState {
   /** Bumped on every wake. Use as an effect dep to rebuild subscriptions. */
@@ -63,6 +76,11 @@ function publish(next: ConnectionState) {
   }
   state = next;
   for (const listener of listeners) listener(state);
+  // Healing is driven from the state itself rather than from each call site,
+  // so every path that degrades the connection arms the retry and every path
+  // that fixes it disarms one.
+  if (state.live) cancelRetry();
+  else armRetry();
 }
 
 export function getConnectionState(): ConnectionState {
@@ -165,10 +183,48 @@ function triggerResume(): void {
   }, RESUME_DEBOUNCE_MS);
 }
 
-/** Manual retry, for the "Reconnect" affordance on the connection banner. */
-export function pokeConnection(): void {
-  lastReviveAt = 0;
-  triggerResume();
+// ---- Silent healing --------------------------------------------------------
+//
+// A socket that drops while the app is in front produces no wake signal at all,
+// so nothing above ever runs: the app sat degraded until the user backgrounded
+// it and came back, or tapped a retry button put on screen for exactly this.
+// Instead it reconnects itself on a doubling backoff, and says nothing.
+
+let retryTimer: ReturnType<typeof setTimeout> | null = null;
+let retryAttempt = 0;
+
+/** Whether anyone is looking. A backgrounded app has no stale conversation on
+ *  screen, and on a phone the OS is about to freeze the WebView anyway; the
+ *  visibility listener resumes it. Absent `document` (tests, workers) counts as
+ *  in front, so healing is never silently disabled. */
+function appForeground(): boolean {
+  return typeof document === 'undefined' || document.visibilityState === 'visible';
+}
+
+function cancelRetry(): void {
+  if (retryTimer) {
+    clearTimeout(retryTimer);
+    retryTimer = null;
+  }
+  retryAttempt = 0;
+}
+
+function armRetry(): void {
+  if (retryTimer || state.live) return;
+  const delay = Math.min(RETRY_BASE_MS * 2 ** retryAttempt, RETRY_MAX_MS);
+  retryTimer = setTimeout(() => {
+    retryTimer = null;
+    if (state.live) return;
+    // Re-arm without spending an attempt, so a long stretch in the background
+    // doesn't exhaust the backoff and leave the first foreground retry a
+    // full cap window away.
+    if (!appForeground()) {
+      armRetry();
+      return;
+    }
+    retryAttempt += 1;
+    void revive().finally(armRetry);
+  }, delay);
 }
 
 let started = false;
@@ -215,4 +271,30 @@ export function useConnection(): ConnectionState {
   const [snapshot, setSnapshot] = useState<ConnectionState>(getConnectionState);
   useEffect(() => subscribeConnection(setSnapshot), []);
   return snapshot;
+}
+
+/**
+ * Whether realtime has been down for `delayMs` straight — the only thing the
+ * UI is ever told about connection health.
+ *
+ * The delay is what keeps it quiet. Every rejoin, every wake and every retry
+ * above passes through "not subscribed" for a moment, and nothing is broken
+ * meanwhile: messages keep sending and arriving over the polling fallback. So
+ * the app heals in silence, and only an outage that outlasts a person's
+ * patience is worth a word anywhere on screen.
+ */
+export function useDegraded(delayMs: number): boolean {
+  const { live } = useConnection();
+  const [degraded, setDegraded] = useState(false);
+
+  useEffect(() => {
+    if (live) {
+      setDegraded(false);
+      return;
+    }
+    const timer = setTimeout(() => setDegraded(true), delayMs);
+    return () => clearTimeout(timer);
+  }, [live, delayMs]);
+
+  return degraded;
 }

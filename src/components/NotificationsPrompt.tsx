@@ -83,7 +83,7 @@ export function NotificationsPrompt({ userId }: NotificationsPromptProps) {
 
   return (
     <Modal
-      title="Get told when a message arrives"
+      title="Know when someone writes"
       onClose={dismiss}
       className="max-w-sm"
       actions={
@@ -102,11 +102,11 @@ export function NotificationsPrompt({ userId }: NotificationsPromptProps) {
           <Bell className="w-6 h-6" />
         </span>
         <p className="text-sm text-base-content/75 leading-relaxed">
-          Without this, Nearside can only reach you while it is open on screen.
+          Right now Nearside can only reach you while it is open on screen.
         </p>
         <p className="text-sm text-base-content/75 leading-relaxed">
-          A notification says who wrote to you and nothing else &mdash; the server has no readable
-          copy of a message to quote. You can turn it off again in Settings.
+          A notification tells you who wrote, and nothing more. The server has no readable copy of a
+          message to quote from. You can turn this off later in Settings.
         </p>
       </div>
     </Modal>

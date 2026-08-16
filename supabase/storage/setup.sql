@@ -6,6 +6,10 @@
     avatars     — public read; each user writes only to their own folder ({uid}/...)
     chat-media  — private; only the two conversation participants can read/write.
                   Path convention: {sortedUidA}_{sortedUidB}/{uuid.ext}
+                  Room attachments share the bucket under a different shape:
+                  {roomId}/{uuid.ext}, gated on `is_room_member()`. A room id
+                  is a bare uuid and a conversation folder always contains an
+                  underscore, so the two cannot be mistaken for each other.
     stickers    — private; owner-only, every verb. Sealed under the owner's
                   vault key. Path convention: {uid}/{uuid}
 
@@ -139,6 +143,65 @@ CREATE POLICY "chat_media_delete_participant" ON storage.objects
       split_part((storage.foldername(name))[1], '_', 2)
     )
   );
+
+-- ============================================================
+-- chat-media policies for rooms  (folder = {roomId})
+--
+-- Membership, not a pair, so the check is `is_room_member()` — which does not
+-- exist yet when this file runs in its documented position (immediately after
+-- 0001), and a policy body is analysed at CREATE time. Hence the guard: on a
+-- fresh project built from schema.sql this file runs last and installs them,
+-- and on a project built by replaying migrations they are installed by
+-- 0036_room_parity.sql instead.
+--
+-- The two copies are word-for-word the same, and `npm run db:verify` is what
+-- proves it: it builds a database each way and diffs the storage policies, so
+-- editing one without the other fails the same way an edit to 0025 without an
+-- edit here fails.
+--
+-- The CASE is what keeps this policy from raising on somebody else's upload:
+-- `::uuid` on a conversation folder would error, and an error inside any
+-- permissive policy fails the whole statement rather than just declining this
+-- one. CASE is the only construct with a guaranteed evaluation order, so the
+-- shape is checked before the cast happens.
+--
+-- There is no DELETE policy for a room folder on purpose. Attachments are
+-- removed by `expire_messages()`, which runs as the owner — a member who could
+-- delete objects directly could clear the room's history for everyone.
+-- ============================================================
+DO $room_media$
+BEGIN
+  IF to_regprocedure('public.is_room_member(uuid)') IS NULL THEN
+    RETURN;
+  END IF;
+
+  DROP POLICY IF EXISTS "chat_media_read_room_member" ON storage.objects;
+  CREATE POLICY "chat_media_read_room_member" ON storage.objects
+    FOR SELECT TO authenticated
+    USING (
+      bucket_id = 'chat-media'
+      AND CASE
+            WHEN (storage.foldername(name))[1] ~
+                 '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+            THEN public.is_room_member(((storage.foldername(name))[1])::uuid)
+            ELSE false
+          END
+    );
+
+  DROP POLICY IF EXISTS "chat_media_insert_room_member" ON storage.objects;
+  CREATE POLICY "chat_media_insert_room_member" ON storage.objects
+    FOR INSERT TO authenticated
+    WITH CHECK (
+      bucket_id = 'chat-media'
+      AND CASE
+            WHEN (storage.foldername(name))[1] ~
+                 '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+            THEN public.is_room_member(((storage.foldername(name))[1])::uuid)
+            ELSE false
+          END
+    );
+END;
+$room_media$;
 
 -- ============================================================
 -- stickers policies  (folder = {uid})

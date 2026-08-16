@@ -119,8 +119,57 @@ export async function verifyBytes(
 
 /** Sealed room content as one byte string, so a signature covers the nonce as
  *  well as the ciphertext. Signing the ciphertext alone would let anyone swap
- *  in a different nonce and leave the signature still valid. */
+ *  in a different nonce and leave the signature still valid.
+ *
+ *  Version 1: every room message written before migration 0036, when a room
+ *  message was text and the ciphertext WAS the message. Kept forever — rows
+ *  signed under it still have to open, or the upgrade reads as data loss to
+ *  everyone who already had a group. */
 export function signedPayload(sealed: Sealed): Uint8Array {
   const parts = new TextEncoder().encode(`${sealed.nonce}.${sealed.ciphertext}`);
   return parts;
+}
+
+/** Every column of a room message a client renders. Absent and null are the
+ *  same thing here — a row from the database carries nulls, a draft omits. */
+export interface RoomSignedFields {
+  nonce?: string | null;
+  ciphertext?: string | null;
+  media_path?: string | null;
+  media_type?: string | null;
+  media_duration_ms?: number | null;
+  media_key_nonce?: string | null;
+  media_key_ciphertext?: string | null;
+  reply_to_id?: string | null;
+}
+
+/**
+ * What a room message's signature covers, version 2.
+ *
+ * A row now points at a file and at the message it answers, and the signature
+ * is the only thing establishing authorship to a client: RLS says only the
+ * sender may UPDATE a row, but RLS is the server's promise, and this app does
+ * not trust the server with content. A field outside this payload is a field
+ * that can be repointed on somebody else's message and still verify — swap
+ * `media_path` and the photo under their name is one an attacker chose.
+ *
+ * Fixed order, absent fields as empty strings, `.` as the separator because it
+ * cannot occur in base64 (ORIGINAL variant), in a uuid, or in an integer. The
+ * order IS the format: appending is a version 3, and re-ordering is a silent
+ * break in what every past signature meant.
+ */
+export function signedPayloadV2(f: RoomSignedFields): Uint8Array {
+  const part = (v: string | number | null | undefined) => (v === null || v === undefined ? '' : String(v));
+  return new TextEncoder().encode(
+    [
+      part(f.nonce),
+      part(f.ciphertext),
+      part(f.media_path),
+      part(f.media_type),
+      part(f.media_duration_ms),
+      part(f.media_key_nonce),
+      part(f.media_key_ciphertext),
+      part(f.reply_to_id),
+    ].join('.')
+  );
 }
