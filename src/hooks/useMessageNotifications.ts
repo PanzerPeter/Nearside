@@ -3,7 +3,7 @@ import { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { Message } from '../lib/types';
 import { playNotificationSound } from '../lib/sound';
-import { noteAlert } from '../lib/alert-throttle';
+import { AlertAnchor, clearAlert, noteAlert } from '../lib/alert-throttle';
 import { isMobileNative } from '../lib/platform';
 import { notificationPermission } from '../lib/notifications';
 import { advanceDelivered } from '../lib/receipts';
@@ -27,10 +27,13 @@ const USERNAME_TTL_MS = 5 * 60 * 1000;
  *   - no chime on a phone. OneSignal owns the tray entry and its channel owns
  *     the sound there, so this path playing one as well is the same message
  *     making two different noises.
- *   - a chime at most once per sender per `ALERT_COOLDOWN_MS`. The banner still
- *     appears for every message; it is the sound that is not worth repeating
- *     while somebody finishes a thought. `send-push` applies the same rule to
- *     the notification a closed app receives.
+ *   - a chime on the ladder in `alert-throttle.ts`: the first message rings at
+ *     once, the next two while the burst is still happening, and after that one
+ *     every forty seconds. The banner still appears for every message; it is
+ *     the sound that is not worth repeating while somebody finishes a thought.
+ *     Opening a chat clears its streak, so the reply that follows you putting
+ *     the phone down rings like a first message. `send-push` applies the same
+ *     ladder to the notification a closed app receives.
  *
  * Background push (app closed) is handled separately by the service worker.
  */
@@ -46,10 +49,19 @@ export function useMessageNotifications(
 
   const usernameCache = useRef<Map<string, { name: string; at: number }>>(new Map());
 
-  // When each sender last made a sound. Outlives the channel rebuild a wake
-  // causes — a fresh map there would let one reconnect re-open every
-  // conversation's budget, which is exactly when a backlog arrives at once.
-  const alertAnchors = useRef<Map<string, number>>(new Map());
+  // When each sender last made a sound, and how many times in a row. Outlives
+  // the channel rebuild a wake causes — a fresh map there would let one
+  // reconnect re-open every conversation's budget, which is exactly when a
+  // backlog arrives at once.
+  const alertAnchors = useRef<Map<string, AlertAnchor>>(new Map());
+
+  // Opening a conversation is this path's read watermark: you have seen what we
+  // rang about, so the ladder starts over and the next message that arrives
+  // while you are elsewhere is heard at once. The server does the same thing
+  // from `message_receipts.read_at`, which is the only copy it can check.
+  useEffect(() => {
+    if (activeFriendId) clearAlert(alertAnchors.current, activeFriendId);
+  }, [activeFriendId]);
 
   useEffect(() => {
     if (!session) return;

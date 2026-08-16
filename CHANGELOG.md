@@ -14,8 +14,28 @@ one of them drifts.
 
 ## [Unreleased]
 
+## [1.2.0] — 2026-08-17
+
 ### Changed
 
+- **A conversation you are not watching gets heard.** Notifications used to
+  make a sound once per conversation and then stay silent for thirty seconds,
+  which stopped the phone buzzing through a burst of short messages but traded
+  it for a worse problem: six messages arriving while the phone was in a pocket
+  announced themselves once, and the next sound the app was allowed to make came
+  half a minute later, after the conversation had moved on. Messages were being
+  missed by people who installed the app so they would not be. The sound now
+  steps back gradually instead — the first message rings, the next about five
+  seconds later, the one after that fifteen, and from then on one every forty
+  seconds for as long as the conversation goes unread. Everything in between
+  still arrives in the shade and still counts; it just does not interrupt.
+- **Reading a chat starts the sound over.** The old timer could not tell "still
+  mid-sentence" from "caught up and put the phone down", so a reply arriving
+  shortly after you had read a conversation landed in silence. Opening a chat
+  now clears its quiet period, on the phone and on the server alike, and the
+  next thing that arrives while you are elsewhere is heard at full volume. So is
+  a message that follows five minutes of quiet, which is the end of a burst
+  whether or not anybody read anything.
 - **The notification request reads like a person wrote it.** The screen that
   appears once, after the account and the recovery phrase are done, asked to
   "get told when a message arrives" and explained itself in a sentence built

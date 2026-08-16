@@ -2146,17 +2146,27 @@ CREATE TABLE IF NOT EXISTS public.message_pushes (
 ALTER TABLE public.message_pushes ENABLE ROW LEVEL SECURITY;
 
 /*
-  When a conversation last made a receiver's phone make a noise.
+  When a conversation last made a receiver's phone make a noise, and how many
+  times in a row it has done so without being read.
 
-  `send-push` alerts on the first message and delivers the rest of a burst
-  silently, so a back-and-forth is one sound rather than one per line. The
-  anchor is the last *alert*, which is why it is stored rather than derived
-  from `messages`: derived, a steady stream just inside the window always has a
-  predecessor inside it, and that conversation would go quiet permanently.
+  `send-push` climbs a ladder rather than holding one flat window: the first
+  message rings, the next two ring while the burst is still happening, and
+  after that it is one sound every forty seconds. A single sound for a whole
+  burst was the previous rule and it lost messages — a phone in a pocket
+  reported six of them once and then stayed quiet. The anchor is the last
+  *alert*, which is why it is stored rather than derived from `messages`:
+  derived, a steady stream just inside the window always has a predecessor
+  inside it, and that conversation would go quiet permanently.
+
+  `streak` resets to 1 when the receiver catches up — their `message_receipts`
+  read watermark passing the message we rang about — or after five minutes of
+  silence. That read reset is the part a timer alone cannot do: reading a chat
+  and putting the phone down should not buy the reply half a minute of silence.
 
   It is a coarser shadow of what `messages` already records — one row per pair,
   overwritten in place — which is what makes it preferable to the alternative
-  of the client telling the server which chat is open. See `0035_push_alerts`.
+  of the client telling the server which chat is open. See `0035_push_alerts`
+  and `0038_alert_ladder`.
 */
 CREATE TABLE IF NOT EXISTS public.push_alerts (
   receiver_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
@@ -2164,6 +2174,10 @@ CREATE TABLE IF NOT EXISTS public.push_alerts (
   -- Silent deliveries deliberately do not touch this: they are the ones inside
   -- the window, and moving the anchor for them is what would slide it forever.
   alerted_at  timestamptz NOT NULL DEFAULT now(),
+  -- How far up the ladder this conversation has climbed, clamped by the client
+  -- to its last rung. An old row starts at the bottom, which is the safe
+  -- direction: a conversation that has been quiet gets heard.
+  streak      integer NOT NULL DEFAULT 1,
   PRIMARY KEY (receiver_id, sender_id)
 );
 ALTER TABLE public.push_alerts ENABLE ROW LEVEL SECURITY;
@@ -2255,6 +2269,8 @@ CREATE TABLE IF NOT EXISTS public.room_push_alerts (
   receiver_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   room_id     uuid NOT NULL REFERENCES public.rooms(id) ON DELETE CASCADE,
   alerted_at  timestamptz NOT NULL DEFAULT now(),
+  -- The same ladder as `push_alerts`, reset by `room_receipts.read_at`.
+  streak      integer NOT NULL DEFAULT 1,
   PRIMARY KEY (receiver_id, room_id)
 );
 ALTER TABLE public.room_push_alerts ENABLE ROW LEVEL SECURITY;

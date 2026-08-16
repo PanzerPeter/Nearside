@@ -47,3 +47,4 @@
 0035_push_alerts.sql
 0036_room_parity.sql
 0037_room_push.sql
+0038_alert_ladder.sql

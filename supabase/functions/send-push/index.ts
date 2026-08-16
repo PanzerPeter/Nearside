@@ -26,11 +26,11 @@
 //   ONESIGNAL_REST_API_KEY — the REST key; server-side only, never in the app
 //   PUSH_TRIGGER_SECRET   — only for caller (2); must equal
 //                           public.push_config.trigger_secret
-//   ONESIGNAL_QUIET_CHANNEL_ID — optional. The Android channel a message
-//                           inside the alert cooldown is posted on: same group
-//                           as the loud one, importance Low, no sound. Unset,
-//                           every notification alerts, which is what this
-//                           function did before the cooldown existed.
+//   ONESIGNAL_QUIET_CHANNEL_ID — optional. The Android channel a message the
+//                           alert ladder is holding quiet is posted on: same
+//                           group as the loud one, importance Low, no sound.
+//                           Unset, every notification alerts, which is what
+//                           this function did before the ladder existed.
 // SUPABASE_URL / SUPABASE_ANON_KEY / SUPABASE_SERVICE_ROLE_KEY are injected
 // automatically by the Edge runtime.
 //
@@ -89,13 +89,66 @@ const ANDROID_CHANNEL_ID = "93c11c0a-4c75-4c56-9c38-dd235fbed183";
 const ANDROID_QUIET_CHANNEL_ID = Deno.env.get("ONESIGNAL_QUIET_CHANNEL_ID")?.trim();
 
 /**
- * How long a conversation stays quiet after it has alerted.
+ * How long a conversation stays quiet after it has alerted, by how many times
+ * it has already rung without being caught up.
  *
- * Stated a second time here: the client's copy is `ALERT_COOLDOWN_MS` in
+ * Stated a second time here: the client's copy is `ALERT_LADDER_MS` in
  * `src/lib/alert-throttle.ts`, which governs the in-app chime on desktop, and
- * this runtime is Deno with no path to `src/`. If one moves, move both.
+ * this runtime is Deno with no path to `src/`. If one moves, move both. That
+ * file also carries the reasoning; the short version is that one sound per
+ * thirty seconds turned a six-message burst into a single chime and then spent
+ * its next one after the burst was over, so the ladder rings two or three times
+ * while the conversation is actually happening and then settles down.
  */
-const ALERT_COOLDOWN_MS = 30_000;
+const ALERT_LADDER_MS = [0, 5_000, 15_000, 40_000];
+
+/** Silence long enough that the next message starts the ladder over. */
+const ALERT_IDLE_RESET_MS = 5 * 60_000;
+
+interface AlertAnchor {
+  alertedAt: number;
+  streak: number;
+}
+
+/**
+ * Whether a message arriving now should make a noise, and the streak to store
+ * if it does.
+ *
+ * `readAt` is the receiver's read watermark for this conversation — millis, or
+ * NaN when they have never read it. Once it passes the message we last rang
+ * about, the next thing that arrives is a new turn rather than the tail of a
+ * burst and rings like a first message; without it, reading a chat and putting
+ * the phone down bought silence for a reply that had every right to be heard.
+ *
+ * An unreadable, missing or future anchor rings and starts over: a clock that
+ * went backwards must not silence a conversation for good.
+ */
+function decideAlert(
+  anchor: AlertAnchor | null,
+  now: number,
+  readAt: number,
+): { alerting: boolean; streak: number } {
+  if (!anchor || !Number.isFinite(anchor.alertedAt)) return { alerting: true, streak: 1 };
+
+  const caughtUp = Number.isFinite(readAt) && readAt >= anchor.alertedAt;
+  const idle = now - anchor.alertedAt >= ALERT_IDLE_RESET_MS;
+  if (caughtUp || idle || now < anchor.alertedAt) return { alerting: true, streak: 1 };
+
+  const gap = ALERT_LADDER_MS[Math.min(anchor.streak, ALERT_LADDER_MS.length - 1)];
+  if (now - anchor.alertedAt < gap) return { alerting: false, streak: anchor.streak };
+  return { alerting: true, streak: Math.min(anchor.streak + 1, ALERT_LADDER_MS.length) };
+}
+
+/** A stored anchor row, tolerant of a missing or unparseable stamp. */
+function anchorFrom(
+  alertedAt: string | null | undefined,
+  streak: number | null | undefined,
+): AlertAnchor | null {
+  if (!alertedAt) return null;
+  const at = Date.parse(alertedAt);
+  if (!Number.isFinite(at)) return null;
+  return { alertedAt: at, streak: Number.isFinite(streak) ? Number(streak) : 1 };
+}
 
 /** Length-independent comparison, so a wrong secret can't be narrowed down by
  *  timing the reply. */
@@ -207,30 +260,47 @@ async function pushRoomMessage(
   const roomTitle = (room?.title as string | undefined)?.trim() || "a room";
   const name = sender?.display_name ? `@${sender.display_name}` : "someone";
 
-  // The cooldown is per receiver per ROOM, so a group of six talking at once
-  // rings a phone once rather than six times.
-  const { data: anchors } = await admin
-    .from("room_push_alerts")
-    .select("receiver_id, alerted_at")
-    .eq("room_id", msg.room_id)
-    .in("receiver_id", receivers);
+  // The ladder is per receiver per ROOM, so a group of six talking at once
+  // rings a phone on the first few messages rather than on all six, and a
+  // member who has read the room hears its next message at full volume.
+  const [{ data: anchors }, { data: reads }] = await Promise.all([
+    admin
+      .from("room_push_alerts")
+      .select("receiver_id, alerted_at, streak")
+      .eq("room_id", msg.room_id)
+      .in("receiver_id", receivers),
+    admin
+      .from("room_receipts")
+      .select("user_id, read_at")
+      .eq("room_id", msg.room_id)
+      .in("user_id", receivers),
+  ]);
 
-  const lastAlertFor = new Map<string, number>();
+  const anchorFor = new Map<string, AlertAnchor | null>();
   for (const row of anchors ?? []) {
-    lastAlertFor.set(row.receiver_id as string, Date.parse(row.alerted_at as string));
+    anchorFor.set(
+      row.receiver_id as string,
+      anchorFrom(row.alerted_at as string, row.streak as number),
+    );
+  }
+  const readFor = new Map<string, number>();
+  for (const row of reads ?? []) {
+    readFor.set(row.user_id as string, Date.parse(row.read_at as string));
   }
 
   const now = Date.now();
   const due: string[] = [];
   const quiet: string[] = [];
+  // Whose anchor moves, and to what. Only the people the ladder actually rang:
+  // a receiver who is only in `due` because there is no quiet channel to fall
+  // back to has not spent a rung, and stamping them would slide their window.
+  const rung = new Map<string, number>();
   for (const id of receivers) {
-    const last = lastAlertFor.get(id) ?? NaN;
-    // An unreadable, missing, or future stamp rings: a clock that went
-    // backwards must not silence a room for good.
-    const ring = !Number.isFinite(last) || now < last || now - last >= ALERT_COOLDOWN_MS;
+    const decision = decideAlert(anchorFor.get(id) ?? null, now, readFor.get(id) ?? NaN);
+    if (decision.alerting) rung.set(id, decision.streak);
     // Without a quiet channel configured there is nowhere silent to post, so
     // everything rings — the behaviour this function had before the cooldown.
-    if (ring || !ANDROID_QUIET_CHANNEL_ID) due.push(id);
+    if (decision.alerting || !ANDROID_QUIET_CHANNEL_ID) due.push(id);
     else quiet.push(id);
   }
 
@@ -272,12 +342,13 @@ async function pushRoomMessage(
   // Moved only for the people who were actually rung, and only once the
   // notification is out — stamped before the send, a delivery that failed
   // would still close the window and the retry would arrive silent.
-  if (dueOk && due.length > 0) {
+  if (dueOk && rung.size > 0) {
     await admin.from("room_push_alerts").upsert(
-      due.map((receiver_id) => ({
+      [...rung].map(([receiver_id, streak]) => ({
         receiver_id,
         room_id: msg.room_id,
         alerted_at: new Date(now).toISOString(),
+        streak,
       })),
       { onConflict: "receiver_id,room_id" },
     );
@@ -369,28 +440,41 @@ Deno.serve(async (req) => {
 
     // Alert, or arrive quietly. A conversation is a burst of short messages,
     // and a sound for each of them is a phone buzzing six times while somebody
-    // finishes a sentence. The first one rings; the rest of the burst still
-    // appears in the shade, still raises the count, and makes no noise.
+    // finishes a sentence — but a single sound for the whole burst is a phone
+    // in a pocket reporting six messages once and then going quiet for the rest
+    // of the conversation. The ladder rings the first message, two more while
+    // the burst is still happening, and then one every forty seconds; the ones
+    // in between still appear in the shade and still raise the count.
     //
     // The anchor is the last notification that *rang*, not the last one sent —
-    // see `0035_push_alerts` for why the difference matters.
-    const { data: anchor } = await admin
-      .from("push_alerts")
-      .select("alerted_at")
-      .eq("receiver_id", msg.receiver_id)
-      .eq("sender_id", msg.user_id)
-      .maybeSingle();
+    // see `0035_push_alerts` for why the difference matters — and it is read
+    // alongside the receiver's own read watermark, which is what tells a new
+    // turn in the conversation apart from the tail of a burst.
+    const [{ data: anchorRow }, { data: receipt }] = await Promise.all([
+      admin
+        .from("push_alerts")
+        .select("alerted_at, streak")
+        .eq("receiver_id", msg.receiver_id)
+        .eq("sender_id", msg.user_id)
+        .maybeSingle(),
+      admin
+        .from("message_receipts")
+        .select("read_at")
+        .eq("user_id", msg.receiver_id)
+        .eq("peer_id", msg.user_id)
+        .maybeSingle(),
+    ]);
 
     const now = Date.now();
-    const lastAlert = anchor?.alerted_at ? Date.parse(anchor.alerted_at) : NaN;
-    // An unreadable or missing stamp rings, and so does one in the future: a
-    // clock that went backwards must not silence a conversation for good.
-    const due = !Number.isFinite(lastAlert) ||
-      now < lastAlert ||
-      now - lastAlert >= ALERT_COOLDOWN_MS;
+    const readAt = receipt?.read_at ? Date.parse(receipt.read_at) : NaN;
+    const decision = decideAlert(
+      anchorFrom(anchorRow?.alerted_at, anchorRow?.streak),
+      now,
+      readAt,
+    );
     // Without a quiet channel configured there is nowhere silent to post, and
     // a notification nobody hears about is worse than one heard twice.
-    const quiet = !due && !!ANDROID_QUIET_CHANNEL_ID;
+    const quiet = !decision.alerting && !!ANDROID_QUIET_CHANNEL_ID;
 
     // Targeted by external id: the Supabase user id, set by the client's
     // `initNotifications`. Addressing the account rather than a device is what
@@ -440,10 +524,12 @@ Deno.serve(async (req) => {
       return json({ sent: 0, reason: result.errors ?? response.status }, 200);
     }
 
-    // Moved only once the notification is actually out, and only when it made a
-    // sound. Stamped before the send, a delivery that failed would still close
-    // the window and the retry would arrive silent.
-    if (!quiet) {
+    // Moved only once the notification is actually out, and only when the
+    // ladder said to ring — a notification that is loud only because no quiet
+    // channel is configured has not spent a rung. Stamped before the send, a
+    // delivery that failed would still close the window and the retry would
+    // arrive silent.
+    if (decision.alerting) {
       await admin
         .from("push_alerts")
         .upsert(
@@ -451,6 +537,7 @@ Deno.serve(async (req) => {
             receiver_id: msg.receiver_id,
             sender_id: msg.user_id,
             alerted_at: new Date(now).toISOString(),
+            streak: decision.streak,
           },
           { onConflict: "receiver_id,sender_id" },
         );
