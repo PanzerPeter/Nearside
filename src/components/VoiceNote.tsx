@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { Mic, Pause, Play } from 'lucide-react';
-import { formatDuration } from '../lib/audio';
+import {
+  formatDuration,
+  formatPlaybackRate,
+  nextPlaybackRate,
+  playbackRate,
+  setPlaybackRate,
+} from '../lib/audio';
 import { mediaFailureNotice } from '../lib/media';
 import { useSignedMediaUrl } from '../hooks/useSignedMediaUrl';
 
@@ -31,6 +37,9 @@ export function VoiceNote({ messageId, path, durationMs, mediaKey }: VoiceNotePr
   const [positionMs, setPositionMs] = useState(0);
   // Filled in from the element only when the row has no stored duration.
   const [probedMs, setProbedMs] = useState<number | null>(null);
+  // Seeded from the session's choice: somebody listening at 1.5× is telling us
+  // how they listen, not deciding about one recording.
+  const [rate, setRate] = useState(playbackRate);
 
   // The URL is the hook's business; the playback state on top of it is this
   // component's, and a different recording must not inherit the last one's
@@ -53,6 +62,18 @@ export function VoiceNote({ messageId, path, durationMs, mediaKey }: VoiceNotePr
     // re-sign as an `error` event rather than straight to "unavailable".
     if (el.paused) void el.play().catch(reload);
     else el.pause();
+  }
+
+  function cycleRate(e: React.MouseEvent) {
+    // Same reason as `toggle`: the bubble behind this reads a tap as "show the
+    // reaction toolbar".
+    e.stopPropagation();
+    const next = nextPlaybackRate(rate);
+    setRate(next);
+    setPlaybackRate(next);
+    // Applied here as well as on mount, because an element that is already
+    // playing must change speed under the finger rather than at the next play.
+    if (audioRef.current) audioRef.current.playbackRate = next;
   }
 
   function seek(e: React.ChangeEvent<HTMLInputElement>) {
@@ -122,6 +143,21 @@ export function VoiceNote({ messageId, path, durationMs, mediaKey }: VoiceNotePr
         </div>
       </div>
 
+      {/* Only while there is something to play. A speed control on a recording
+          that has not loaded is a button that answers nothing. */}
+      {url && (
+        <button
+          type="button"
+          onClick={cycleRate}
+          style={{ backgroundColor: 'color-mix(in srgb, currentColor 12%, transparent)' }}
+          className="shrink-0 rounded-full px-2 py-0.5 text-[0.65rem] font-medium tabular-nums bg-[rgba(127,127,127,0.2)]"
+          title="Playback speed"
+          aria-label={`Playback speed ${formatPlaybackRate(rate)}, tap to change`}
+        >
+          {formatPlaybackRate(rate)}
+        </button>
+      )}
+
       {url && (
         <audio
           ref={audioRef}
@@ -129,7 +165,13 @@ export function VoiceNote({ messageId, path, durationMs, mediaKey }: VoiceNotePr
           // The row already carries the duration, so nothing needs fetching
           // until the message is actually played.
           preload="none"
-          onPlay={() => setPlaying(true)}
+          onPlay={(e) => {
+            // Belt and braces with `onLoadedMetadata`: a WebView that reuses a
+            // buffered element fires only this one, and a note that ignored the
+            // chosen speed on the second play would look like the button broke.
+            e.currentTarget.playbackRate = rate;
+            setPlaying(true);
+          }}
           onPause={() => setPlaying(false)}
           onEnded={() => {
             setPlaying(false);
@@ -137,6 +179,9 @@ export function VoiceNote({ messageId, path, durationMs, mediaKey }: VoiceNotePr
           }}
           onTimeUpdate={(e) => setPositionMs(e.currentTarget.currentTime * 1000)}
           onLoadedMetadata={(e) => {
+            // The element is new whenever the source is, and a fresh one plays
+            // at 1× however the last one was set.
+            e.currentTarget.playbackRate = rate;
             const seconds = e.currentTarget.duration;
             // WebM from MediaRecorder reports Infinity here — the stored
             // duration is what covers that case.

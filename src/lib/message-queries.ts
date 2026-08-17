@@ -36,6 +36,26 @@ export async function fetchLatestPage(me: string, peerId: string): Promise<Messa
   return (data ?? []) as Message[];
 }
 
+/**
+ * The newest live row in a conversation, and nothing else.
+ *
+ * For the sidebar preview, which needs one line: `fetchLatestPage` would pull
+ * thirty rows per conversation to render it. Tombstones are excluded because a
+ * deleted message has no preview to show.
+ */
+export async function fetchNewestMessage(me: string, peerId: string): Promise<Message | null> {
+  const { data } = await supabase
+    .from('messages')
+    .select('*')
+    .or(conversationFilter(me, peerId))
+    .is('deleted_at', null)
+    .order('created_at', { ascending: false })
+    .order('id', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return (data as Message | null) ?? null;
+}
+
 /** The page immediately older than `cursor`, newest first. */
 export async function fetchOlderPage(
   me: string,

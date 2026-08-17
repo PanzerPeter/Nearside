@@ -4,9 +4,12 @@ import {
   baseMime,
   capturedSilence,
   formatDuration,
+  formatPlaybackRate,
   meterLevel,
+  nextPlaybackRate,
   peakAmplitude,
   pickAudioMime,
+  recordedMs,
   SILENT_PEAK,
 } from './audio';
 
@@ -128,5 +131,48 @@ describe('formatDuration', () => {
     expect(formatDuration(-500)).toBe('0:00');
     expect(formatDuration(Number.NaN)).toBe('0:00');
     expect(formatDuration(Number.POSITIVE_INFINITY)).toBe('0:00');
+  });
+});
+
+describe('nextPlaybackRate', () => {
+  it('cycles normal → 1.5 → 2 → normal', () => {
+    expect(nextPlaybackRate(1)).toBe(1.5);
+    expect(nextPlaybackRate(1.5)).toBe(2);
+    expect(nextPlaybackRate(2)).toBe(1);
+  });
+
+  // A rate held over from a build that offered a different set must not leave
+  // the button cycling through nothing.
+  it('returns to normal from a rate that is not on the list', () => {
+    expect(nextPlaybackRate(3)).toBe(1);
+  });
+});
+
+describe('formatPlaybackRate', () => {
+  it('labels the button without a trailing zero', () => {
+    expect(formatPlaybackRate(1)).toBe('1×');
+    expect(formatPlaybackRate(1.5)).toBe('1.5×');
+  });
+});
+
+describe('recordedMs', () => {
+  it('counts the run in progress on top of the runs before it', () => {
+    expect(recordedMs(5_000, 1_000, 3_000)).toBe(7_000);
+  });
+
+  // The gap is not in the file. A paused recording's clock has to stand still,
+  // or the stored duration runs past the audio and every scrubber ends early.
+  it('stands still while paused', () => {
+    expect(recordedMs(5_000, null, 9_999_999)).toBe(5_000);
+  });
+
+  it('starts at zero', () => {
+    expect(recordedMs(0, 1_000, 1_000)).toBe(0);
+  });
+
+  // A device whose clock steps backwards mid-recording (an NTP correction)
+  // must not produce a negative length.
+  it('never goes negative when the clock steps back', () => {
+    expect(recordedMs(0, 5_000, 1_000)).toBe(0);
   });
 });

@@ -8,6 +8,7 @@ import {
   MIN_VOICE_MS,
   peakAmplitude,
   pickAudioMime,
+  recordedMs,
   VOICE_BITRATE,
 } from '../lib/audio';
 
@@ -25,12 +26,20 @@ export type VoiceRecorderError = 'denied' | 'unsupported' | 'failed';
 
 export interface VoiceRecorder {
   recording: boolean;
+  /** True while recording is held: the mic stays open, the file stops growing.
+   *  Only reachable once the recording has been locked — a finger on the
+   *  button has nothing to press pause with. */
+  paused: boolean;
   /** Time since `start`, updated a few times a second for the live timer. */
   elapsedMs: number;
   /** Current input loudness, 0..1, for the live meter. Zero whenever the
    *  browser gives us no way to measure it. */
   level: number;
   start: () => Promise<VoiceRecorderError | null>;
+  /** Hold and release the capture. No-ops when the engine cannot pause a
+   *  MediaRecorder, which leaves a recording that simply keeps running. */
+  pause: () => void;
+  resume: () => void;
   /** Finish and deliver through `onComplete`. */
   stop: () => void;
   /** Discard: no `onComplete` call, mic released. */
@@ -53,6 +62,10 @@ type WebkitWindow = Window & { webkitAudioContext?: typeof AudioContext };
  * leaves the browser's recording indicator on and, on mobile, holds audio
  * focus away from everything else.
  *
+ * `pause` holds the capture without closing the microphone, so a long message
+ * can be assembled in takes. The elapsed clock and the duration written to the
+ * message row both count only what is in the file — see `recordedMs`.
+ *
  * The input is metered while recording. That drives the live level bar, and it
  * is the only way to tell a working microphone from one that is muted, missing
  * or unwired: all three produce a valid stream and a valid file, and only the
@@ -62,13 +75,17 @@ export function useVoiceRecorder(
   onComplete: (recording: VoiceRecording | null) => void
 ): VoiceRecorder {
   const [recording, setRecording] = useState(false);
+  const [paused, setPaused] = useState(false);
   const [elapsedMs, setElapsedMs] = useState(0);
   const [level, setLevel] = useState(0);
 
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
-  const startedAtRef = useRef(0);
+  /** When the current run of recording began, or null while paused. */
+  const segmentStartRef = useRef<number | null>(null);
+  /** Everything recorded before the current run. */
+  const accumulatedRef = useRef(0);
   const cancelledRef = useRef(false);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -173,7 +190,8 @@ export function useVoiceRecorder(
     recorderRef.current = recorder;
     chunksRef.current = [];
     cancelledRef.current = false;
-    startedAtRef.current = Date.now();
+    segmentStartRef.current = Date.now();
+    accumulatedRef.current = 0;
 
     recorder.ondataavailable = (event) => {
       if (event.data.size > 0) chunksRef.current.push(event.data);
@@ -182,8 +200,9 @@ export function useVoiceRecorder(
     recorder.onstop = () => {
       // Wall-clock, not the container's own timing: a WebM from MediaRecorder
       // reports an Infinite duration until it has been fully seeked, which is
-      // exactly the number the UI needs up front.
-      const durationMs = Date.now() - startedAtRef.current;
+      // exactly the number the UI needs up front. Time spent paused is not in
+      // the file, so it is not in this number either.
+      const durationMs = recordedMs(accumulatedRef.current, segmentStartRef.current, Date.now());
       const chunks = chunksRef.current;
       const cancelled = cancelledRef.current;
       const loudest = loudestRef.current;
@@ -193,9 +212,12 @@ export function useVoiceRecorder(
 
       chunksRef.current = [];
       recorderRef.current = null;
+      segmentStartRef.current = null;
+      accumulatedRef.current = 0;
       releaseStream();
       clearTick();
       setRecording(false);
+      setPaused(false);
       setElapsedMs(0);
       setLevel(0);
 
@@ -224,9 +246,12 @@ export function useVoiceRecorder(
     setElapsedMs(0);
 
     tickRef.current = setInterval(() => {
-      const elapsed = Date.now() - startedAtRef.current;
+      const elapsed = recordedMs(accumulatedRef.current, segmentStartRef.current, Date.now());
       setElapsedMs(elapsed);
-      sampleMeter();
+      // A paused recorder is metering a microphone whose input is going
+      // nowhere; a bar that still moved would say the opposite.
+      if (segmentStartRef.current === null) setLevel(0);
+      else sampleMeter();
       if (elapsed >= MAX_VOICE_MS && recorderRef.current?.state === 'recording') {
         recorderRef.current.stop();
       }
@@ -236,18 +261,47 @@ export function useVoiceRecorder(
   }, [clearTick, releaseStream, sampleMeter, startMeter]);
 
   const stop = useCallback(() => {
-    if (recorderRef.current?.state === 'recording') recorderRef.current.stop();
+    // 'paused' as well as 'recording': stopping from a hold is the ordinary way
+    // a locked recording ends, and MediaRecorder flushes what it has either
+    // way.
+    const state = recorderRef.current?.state;
+    if (state === 'recording' || state === 'paused') recorderRef.current?.stop();
+  }, []);
+
+  const pause = useCallback(() => {
+    const recorder = recorderRef.current;
+    // `pause` is optional in the MediaRecorder spec and absent on some older
+    // WebViews. Without it the recording keeps running, which is the honest
+    // failure — the caller hides the button when this reports back unchanged.
+    if (recorder?.state !== 'recording' || typeof recorder.pause !== 'function') return;
+    recorder.pause();
+    accumulatedRef.current = recordedMs(accumulatedRef.current, segmentStartRef.current, Date.now());
+    segmentStartRef.current = null;
+    setPaused(true);
+    setLevel(0);
+  }, []);
+
+  const resume = useCallback(() => {
+    const recorder = recorderRef.current;
+    if (recorder?.state !== 'paused' || typeof recorder.resume !== 'function') return;
+    recorder.resume();
+    segmentStartRef.current = Date.now();
+    setPaused(false);
   }, []);
 
   const cancel = useCallback(() => {
     cancelledRef.current = true;
-    if (recorderRef.current?.state === 'recording') {
-      recorderRef.current.stop();
+    const state = recorderRef.current?.state;
+    if (state === 'recording' || state === 'paused') {
+      recorderRef.current?.stop();
     } else {
       // Nothing in flight to unwind through `onstop`.
+      segmentStartRef.current = null;
+      accumulatedRef.current = 0;
       releaseStream();
       clearTick();
       setRecording(false);
+      setPaused(false);
       setElapsedMs(0);
       setLevel(0);
     }
@@ -256,12 +310,13 @@ export function useVoiceRecorder(
   useEffect(() => {
     return () => {
       cancelledRef.current = true;
-      if (recorderRef.current?.state === 'recording') recorderRef.current.stop();
+      const state = recorderRef.current?.state;
+      if (state === 'recording' || state === 'paused') recorderRef.current?.stop();
       recorderRef.current = null;
       releaseStream();
       clearTick();
     };
   }, [clearTick, releaseStream]);
 
-  return { recording, elapsedMs, level, start, stop, cancel };
+  return { recording, paused, elapsedMs, level, start, pause, resume, stop, cancel };
 }

@@ -57,6 +57,8 @@ import { forgetAllPublishedKeys, forgetAllRoomKeys } from './lib/rooms';
 import { forgetStickers } from './lib/stickers';
 import { forgetAllMedia } from './lib/media-cache';
 import { forgetAllBackgroundUrls } from './lib/background';
+import { forgetAllDrafts } from './lib/drafts';
+import { forgetMutedIds } from './lib/mute';
 import { useMobileBackClose } from './hooks/useMobileBackClose';
 import { useAppLock } from './hooks/useAppLock';
 import { AppLockScreen } from './components/AppLockScreen';
@@ -283,6 +285,13 @@ function App() {
     // Signed URLs held for chat backgrounds. Each is a bearer token for one
     // object this account could read; the next one on the device may not.
     forgetAllBackgroundUrls();
+    // Unsent composer text, per conversation. Nothing here belongs to the next
+    // account, and a draft is plaintext this account chose not to send yet.
+    forgetAllDrafts();
+    // The muted set is per account and lives in this account's mirror. Left
+    // behind, the next account's first list refresh would be compared against
+    // it and skip the write that corrects it.
+    forgetMutedIds();
     // TURN credentials are minted against the signed-in user's JWT. Left
     // behind, the next account on this phone would relay its calls under the
     // previous owner's credentials.

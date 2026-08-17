@@ -45,6 +45,25 @@ export interface CachedContact {
   verified_at: string | null;
 }
 
+/**
+ * This device's opinion about one conversation: where it sits in the list,
+ * whether it makes a sound, and whether a request from that person is shown.
+ *
+ * Local by design. A server-held pin list would tell the server which
+ * conversations matter most to you, and a server-held mute list would tell it
+ * which people you are avoiding — both of them facts the product otherwise
+ * never learns. The cost is that none of it follows you to a second device.
+ */
+export interface ChatFlagsRow {
+  id: string;
+  /** 'peer' or 'room'. Ids come from two different tables; nothing else keeps
+   *  them from colliding. */
+  kind: string;
+  pinned_at: string | null;
+  muted_at: string | null;
+  dismissed_at: string | null;
+}
+
 /** The database file is named for the account, so the isolation is the
  *  filesystem's rather than a WHERE clause somebody can forget to write. */
 const dbName = (userId: string) => `nearside-local-${userId}`;
@@ -79,6 +98,14 @@ CREATE TABLE IF NOT EXISTS pins (
   file_path  TEXT NOT NULL,
   pinned_at  TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS chat_flags (
+  id           TEXT PRIMARY KEY,
+  kind         TEXT NOT NULL,
+  pinned_at    TEXT,
+  muted_at     TEXT,
+  dismissed_at TEXT
+);
 `;
 
 let db: SQLiteDBConnection | null = null;
@@ -90,6 +117,7 @@ let owner: string | null = null;
 const memory = new Map<string, Map<string, CachedMessage>>();
 const contactMemory = new Map<string, Map<string, CachedContact>>();
 const pinMemory = new Map<string, Map<string, PinnedMedia>>();
+const flagMemory = new Map<string, Map<string, ChatFlagsRow>>();
 
 function native(): boolean {
   return isMobileNative();
@@ -115,6 +143,10 @@ function contactStore(): Map<string, CachedContact> | null {
 
 function pinStore(): Map<string, PinnedMedia> | null {
   return scoped(pinMemory);
+}
+
+function flagStore(): Map<string, ChatFlagsRow> | null {
+  return scoped(flagMemory);
 }
 
 /** Opens the store belonging to `userId`, closing whichever one was open. */
@@ -290,6 +322,81 @@ export async function cachedPin(messageId: string): Promise<PinnedMedia | null> 
   return (res?.values?.[0] as PinnedMedia) ?? null;
 }
 
+/**
+ * Every conversation this device has an opinion about.
+ *
+ * The whole table, not a per-row query: there is one row per pinned, muted or
+ * dismissed conversation and the list needs all of them to sort itself. A
+ * conversation with no row is the ordinary case and costs nothing.
+ */
+export async function allChatFlags(): Promise<Map<string, ChatFlagsRow>> {
+  if (!native()) return new Map(flagStore() ?? []);
+  const res = await db?.query('SELECT * FROM chat_flags');
+  return new Map(((res?.values as ChatFlagsRow[]) ?? []).map((row) => [row.id, row]));
+}
+
+/**
+ * Set one flag on one conversation, creating the row if this is the first.
+ *
+ * A row whose three flags are all null is deleted rather than kept: the table
+ * is meant to hold the exceptions, and a store that accumulated a row per
+ * conversation ever pinned would make `allChatFlags` grow without bound.
+ */
+export async function setChatFlag(
+  id: string,
+  kind: 'peer' | 'room',
+  flag: 'pinned_at' | 'muted_at' | 'dismissed_at',
+  at: string | null
+): Promise<void> {
+  if (!native()) {
+    const store = flagStore();
+    if (!store) return;
+    const row: ChatFlagsRow = store.get(id) ?? {
+      id,
+      kind,
+      pinned_at: null,
+      muted_at: null,
+      dismissed_at: null,
+    };
+    const next = { ...row, kind, [flag]: at } as ChatFlagsRow;
+    if (!next.pinned_at && !next.muted_at && !next.dismissed_at) store.delete(id);
+    else store.set(id, next);
+    return;
+  }
+  await db?.run(
+    `INSERT INTO chat_flags (id, kind, ${flag}) VALUES (?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET kind = excluded.kind, ${flag} = excluded.${flag}`,
+    [id, kind, at]
+  );
+  await db?.run(
+    'DELETE FROM chat_flags WHERE id = ? AND pinned_at IS NULL AND muted_at IS NULL AND dismissed_at IS NULL',
+    [id]
+  );
+}
+
+/** Forget everything this device thought about one conversation. Part of
+ *  removing a contact: the pin, the silence and the dismissal all described a
+ *  relationship that no longer exists. */
+export async function forgetChatFlags(id: string): Promise<void> {
+  if (!native()) {
+    flagStore()?.delete(id);
+    return;
+  }
+  await db?.run('DELETE FROM chat_flags WHERE id = ?', [id]);
+}
+
+/** Drop one conversation's mirrored plaintext. Used by remove-contact, which
+ *  must not leave the messages of somebody you just removed in search. */
+export async function clearConversation(peerId: string): Promise<void> {
+  if (!native()) {
+    const store = memoryStore();
+    if (!store) return;
+    for (const [id, row] of store) if (row.peer_id === peerId) store.delete(id);
+    return;
+  }
+  await db?.run('DELETE FROM messages_cache WHERE peer_id = ?', [peerId]);
+}
+
 /** Every pinned message id. The prune pass needs the whole set, and there are
  *  never enough pins for a per-row query to be worth the round trips. */
 export async function pinnedIds(): Promise<Set<string>> {
@@ -378,11 +485,13 @@ export async function clearLocalDb(): Promise<void> {
     memoryStore()?.clear();
     contactStore()?.clear();
     pinStore()?.clear();
+    flagStore()?.clear();
     return;
   }
   await db?.execute('DELETE FROM messages_cache');
   await db?.execute('DELETE FROM contacts');
   await db?.execute('DELETE FROM pins');
+  await db?.execute('DELETE FROM chat_flags');
 }
 
 /**

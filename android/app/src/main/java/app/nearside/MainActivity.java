@@ -16,6 +16,7 @@ public class MainActivity extends BridgeActivity {
         // call, not a build error.
         registerPlugin(ScreenGuard.class);
         registerPlugin(CallNative.class);
+        registerPlugin(MuteStore.class);
         super.onCreate(savedInstanceState);
         handleCallIntent(getIntent());
     }

@@ -9,6 +9,7 @@ import { notificationPermission } from '../lib/notifications';
 import { advanceDelivered } from '../lib/receipts';
 import { useConnection } from '../lib/connection';
 import { nicknameFor } from '../lib/nicknames';
+import { isMutedNow } from '../lib/mute';
 
 // Short-lived so a rename shows up promptly, but still long enough to spare a
 // lookup on each message of a burst. An unbounded cache pinned the old handle
@@ -119,6 +120,11 @@ export function useMessageNotifications(
         document.hasFocus() &&
         activeRef.current === msg.user_id;
       if (focusedOnThisChat) return;
+
+      // Muted: no sound and no banner, while the row still counts its unread.
+      // Muted is quiet, not invisible — a message you never find out about is
+      // a message lost, which is not what anybody asks for by muting a chat.
+      if (isMutedNow(msg.user_id)) return;
 
       if (!isMobileNative() && noteAlert(alertAnchors.current, msg.user_id, Date.now())) {
         playNotificationSound();

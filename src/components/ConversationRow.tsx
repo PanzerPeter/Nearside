@@ -5,7 +5,7 @@ import { formatUnread } from '../lib/receipts';
 import { isSelfChat } from '../lib/conversation';
 import { formatDisplayName, useNickname } from '../lib/nicknames';
 import type { ConversationSummary, MediaType } from '../lib/types';
-import { NotebookPen } from 'lucide-react';
+import { BellOff, NotebookPen, Pin } from 'lucide-react';
 
 interface ConversationRowProps {
   conversation: ConversationSummary;
@@ -17,6 +17,11 @@ interface ConversationRowProps {
    *  never opened that message — the server no longer has a body to offer, so
    *  there is nothing to fall back to and the row says so. */
   lastText: string | null;
+  /** This device's flags for the conversation. Both get a mark, because
+   *  otherwise "why is this at the top" and "why is this silent" have no
+   *  answer on the screen showing them. */
+  pinned?: boolean;
+  muted?: boolean;
 }
 
 /** One line of the sidebar: who, what they last said, when, and how many unread. */
@@ -27,6 +32,8 @@ export function ConversationRow({
   selected,
   onSelect,
   lastText,
+  pinned = false,
+  muted = false,
 }: ConversationRowProps) {
   const { display_name, avatar_url, last_media_type, last_sender_id, last_at } = conversation;
   const isSelf = isSelfChat(me, conversation.peer_id);
@@ -96,6 +103,15 @@ export function ConversationRow({
               <span className="min-w-0 truncate text-[0.7rem] text-base-content/60">{handle}</span>
             )}
           </span>
+          {muted && (
+            <BellOff
+              className="shrink-0 w-3 h-3 text-base-content/45"
+              aria-label="Muted"
+            />
+          )}
+          {pinned && (
+            <Pin className="shrink-0 w-3 h-3 text-base-content/45" aria-label="Pinned" />
+          )}
           {last_at && (
             <span className="shrink-0 text-[0.7rem] text-base-content/55">
               {formatListTime(last_at)}

@@ -31,9 +31,22 @@ public class CallNotificationExtension implements INotificationServiceExtension 
     @Override
     public void onNotificationReceived(INotificationReceivedEvent event) {
         JSONObject data = event.getNotification().getAdditionalData();
+        if (data == null) return;
+
+        // A push for a conversation this device muted is discarded here, before
+        // OneSignal displays it — including a call, because muting somebody and
+        // then being rung by them at three in the morning is not what the
+        // toggle promised. There is no server-side mute list on purpose, so the
+        // phone pays for the delivery and then throws it away.
+        String from = data.optString("senderId", data.optString("roomId", ""));
+        if (MuteStore.isMuted(event.getContext(), from)) {
+            event.preventDefault(true);
+            return;
+        }
+
         // Every other push this app sends is a message, and those must go on
         // being displayed exactly as OneSignal built them.
-        if (data == null || !"call".equals(data.optString("type"))) return;
+        if (!"call".equals(data.optString("type"))) return;
 
         String callId = data.optString("callId", null);
         if (callId == null || callId.isEmpty()) return;

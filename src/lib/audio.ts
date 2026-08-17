@@ -114,6 +114,60 @@ export function voiceRecordingSupported(): boolean {
   return pickAudioMime() !== null;
 }
 
+/**
+ * How much audio a recording holds, given it can be paused.
+ *
+ * Wall-clock from the moment Record was pressed is what the file used to be
+ * timed by, which is right up until somebody pauses: the gap is not in the
+ * file, so the stored duration would run ahead of the recording and every
+ * player would show a scrubber that ends before the number beside it.
+ *
+ * `segmentStartedAt` is when the current run of recording began, or null while
+ * paused; `accumulated` is every run before it.
+ */
+export function recordedMs(
+  accumulated: number,
+  segmentStartedAt: number | null,
+  now: number
+): number {
+  if (segmentStartedAt === null) return Math.max(0, accumulated);
+  return Math.max(0, accumulated + (now - segmentStartedAt));
+}
+
+/**
+ * Playback speeds, in the order the button cycles them.
+ *
+ * Three, not a slider: the question a listener is answering is "can I get
+ * through this faster", and past 2× speech stops being speech. 1.5× is the one
+ * people actually settle on, so it comes first after normal.
+ */
+export const PLAYBACK_RATES = [1, 1.5, 2] as const;
+
+/** The next speed in the cycle, wrapping. An unknown rate returns to normal. */
+export function nextPlaybackRate(rate: number): number {
+  const index = PLAYBACK_RATES.indexOf(rate as (typeof PLAYBACK_RATES)[number]);
+  return index === -1 ? PLAYBACK_RATES[0] : PLAYBACK_RATES[(index + 1) % PLAYBACK_RATES.length];
+}
+
+/** `1×`, `1.5×` — what the button says. */
+export function formatPlaybackRate(rate: number): string {
+  return `${rate}×`;
+}
+
+// The chosen speed, for the session. Somebody who speeds one voice note up is
+// telling us how they listen, not making a decision about that one recording —
+// but it is a listening preference, not a setting, so it is not written to
+// disk and does not survive a restart.
+let preferredRate: number = PLAYBACK_RATES[0];
+
+export function playbackRate(): number {
+  return preferredRate;
+}
+
+export function setPlaybackRate(rate: number): void {
+  preferredRate = rate;
+}
+
 /** `m:ss`, for both the live recording timer and playback position. */
 export function formatDuration(ms: number): string {
   const totalSeconds = Math.max(0, Math.floor((Number.isFinite(ms) ? ms : 0) / 1000));

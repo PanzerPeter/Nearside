@@ -236,7 +236,7 @@ export function VerifyContact({
             </p>
           ) : scanMismatched ? (
             <p className="text-sm text-error">
-              These codes are not the same. Do not verify {peerLabel} until they are — scan
+              These codes are not the same. Do not verify {peerLabel} until they are. Scan
               again once you are both on the right contact.
             </p>
           ) : (

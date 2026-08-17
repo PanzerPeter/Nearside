@@ -1,10 +1,20 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Plus, Users } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Bell, BellOff, Pin, PinOff, Plus, Users } from 'lucide-react';
 import { listRooms, type RoomSummary } from '../lib/rooms';
 import { formatListTime } from '../lib/time';
 import { useConnection } from '../lib/connection';
 import type { Identity } from '../lib/crypto/keys';
 import { CreateRoomModal } from './CreateRoomModal';
+import { SwipeRow } from './SwipeRow';
+import {
+  isMuted,
+  loadChatFlags,
+  setMuted,
+  setPinned,
+  sortByFlags,
+  type ChatFlags,
+} from '../lib/chat-flags';
+import { syncMutedIds } from '../lib/mute';
 
 interface RoomListProps {
   me: string;
@@ -55,6 +65,27 @@ export function RoomList({
    *  *failed* attempt still counts — the create button is more use than a
    *  section that never appears because one RPC is down. */
   const [settled, setSettled] = useState(false);
+  /** This device's pins and mutes; see `lib/chat-flags.ts`. */
+  const [flags, setFlags] = useState<Map<string, ChatFlags>>(new Map());
+  const [openRail, setOpenRail] = useState<string | null>(null);
+
+  const refreshFlags = useCallback(async () => {
+    const next = await loadChatFlags();
+    setFlags(next);
+    // Rooms and peers share one muted set — a push carries a `roomId` where a
+    // direct message carries a `senderId`, and the extension checks whichever
+    // it finds against the same list.
+    void syncMutedIds(me, next);
+  }, [me]);
+
+  useEffect(() => {
+    void refreshFlags();
+  }, [refreshFlags]);
+
+  const ordered = useMemo(
+    () => sortByFlags(rooms.map((r) => ({ ...r, lastAt: r.last_at })), flags),
+    [rooms, flags]
+  );
   const { generation, live } = useConnection();
 
   // Live ref rather than a dep: the callback is re-created on every render of
@@ -119,15 +150,46 @@ export function RoomList({
             </p>
           ) : (
             <ul className="space-y-1 pb-1">
-              {rooms.map((room) => (
-                <li key={room.id}>
+              {ordered.map((room) => {
+                const pinned = flags.get(room.id)?.pinnedAt != null;
+                const muted = isMuted(room.id, flags);
+                return (
+                <li key={room.id} className="group/row">
+                  {/* Rooms get pin and mute and no delete: leaving a room is
+                      not a list action — it tells the other members — and it
+                      lives inside the room where the membership does. */}
+                  <SwipeRow
+                    open={openRail === room.id}
+                    onOpenChange={(open) => setOpenRail(open ? room.id : null)}
+                    actions={[
+                      {
+                        key: 'pin',
+                        label: pinned ? 'Unpin' : 'Pin',
+                        icon: pinned ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4" />,
+                        onClick: () => {
+                          void setPinned(room.id, 'room', !pinned).then(refreshFlags);
+                        },
+                      },
+                      {
+                        key: 'mute',
+                        label: muted ? 'Unmute' : 'Mute',
+                        icon: muted ? <Bell className="w-4 h-4" /> : <BellOff className="w-4 h-4" />,
+                        onClick: () => {
+                          void setMuted(room.id, 'room', !muted).then(refreshFlags);
+                        },
+                      },
+                    ]}
+                  >
                   <button
                     className={`w-full flex items-center gap-2.5 px-2 py-2 rounded-xl text-left transition-colors ${
                       selectedRoomId === room.id
                         ? 'bg-primary/10 ring-1 ring-primary/25'
                         : 'hover:bg-base-content/5'
                     }`}
-                    onClick={() => onSelectRoom(room)}
+                    onClick={() => {
+                      setOpenRail(null);
+                      onSelectRoom(room);
+                    }}
                   >
                     <span className="w-9 h-9 rounded-xl bg-primary/15 text-primary flex items-center justify-center shrink-0">
                       <Users className="w-4 h-4" />
@@ -138,14 +200,22 @@ export function RoomList({
                         {room.member_count} {room.member_count === 1 ? 'member' : 'members'}
                       </span>
                     </span>
+                    {muted && (
+                      <BellOff className="w-3 h-3 shrink-0 text-base-content/45" aria-label="Muted" />
+                    )}
+                    {pinned && (
+                      <Pin className="w-3 h-3 shrink-0 text-base-content/45" aria-label="Pinned" />
+                    )}
                     {room.last_at && (
                       <span className="text-[11px] text-base-content/60 shrink-0">
                         {formatListTime(room.last_at)}
                       </span>
                     )}
                   </button>
+                  </SwipeRow>
                 </li>
-              ))}
+                );
+              })}
             </ul>
           )}
         </div>

@@ -43,7 +43,7 @@ export function AccountSwitcher({
               <span className="font-medium text-base-content/80">
                 {account.display_name || 'this account'}
               </span>{' '}
-              from this device — its recovery phrase, offline search index and app lock. The account
+              from this device: its recovery phrase, offline search index and app lock. The account
               itself is untouched; you can sign back in with your twelve words.
             </p>
             <div className="flex items-center gap-2">

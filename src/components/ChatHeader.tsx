@@ -296,7 +296,7 @@ export function ChatHeader({
                 {trust === 'changed'
                   ? 'Their key changed'
                   : trust === 'verified'
-                    ? 'Verified — check again'
+                    ? 'Verified. Check again'
                     : 'Verify safety number'}
               </button>
             </li>

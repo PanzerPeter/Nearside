@@ -275,7 +275,7 @@ export function useMediaSend({
       // can't be shown here", at the one moment nobody could still act on it.
       if (compressed.undecodable) {
         return fail(
-          'This image could not be read on this device. Some phones save photos in a format Nearside cannot open — save or export it as a JPEG and send that.'
+          'This image could not be read on this device. Some phones save photos in a format Nearside cannot open. Save or export it as a JPEG and send that.'
         );
       }
       body = compressed.file;

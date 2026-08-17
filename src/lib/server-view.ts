@@ -202,7 +202,7 @@ export const TABLE_REPORTS: TableSpec[] = [
     label: 'Disappearing-message timers',
     readable: ['user_a', 'user_b', 'ttl_seconds', 'set_by', 'updated_at'],
     opaque: [],
-    note: 'How long messages in a conversation last before the server deletes them. Two user ids, a number of seconds, and who set it last. No message content \u2014 the server has none to hold.',
+    note: 'How long messages in a conversation last before the server deletes them. Two user ids, a number of seconds, and who set it last. No message content, because the server has none to hold.',
   },
   {
     table: 'theme_grants',
@@ -210,7 +210,7 @@ export const TABLE_REPORTS: TableSpec[] = [
     label: 'Theme packs given to you',
     readable: ['user_id', 'pack_id', 'note', 'granted_at'],
     opaque: [],
-    note: 'Cosmetic packs handed to an account without a purchase — demo phones, review builds, the occasional apology. Almost certainly empty for you. Nothing here is written by the app; only the database owner can add a row.',
+    note: 'Cosmetic packs handed to an account without a purchase: demo phones, review builds, the occasional apology. Almost certainly empty for you. Nothing here is written by the app; only the database owner can add a row.',
   },
   {
     table: 'connect_tokens',
@@ -235,7 +235,7 @@ export const TABLE_REPORTS: TableSpec[] = [
     label: 'Notification sound cooldown',
     readable: ['receiver_id', 'sender_id', 'alerted_at'],
     opaque: [],
-    note: 'When a conversation last made your phone make a sound, so a burst of messages arrives as one alert instead of six. One row per pair of people, overwritten each time — a coarser copy of what the message rows above already record, and the reason your phone never has to tell the server which chat you have open.',
+    note: 'When a conversation last made your phone make a sound, so a burst of messages arrives as one alert instead of six. One row per pair of people, overwritten each time. It is a coarser copy of what the message rows above already record, and the reason your phone never has to tell the server which chat you have open.',
     infrastructure: true,
   },
   {

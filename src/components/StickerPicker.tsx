@@ -83,7 +83,7 @@ export function StickerPicker({ drawer, onSelect, onError }: StickerPickerProps)
           <div className="flex flex-col items-center gap-2 py-10 px-4 text-center">
             <p className="text-sm text-base-content/60">No stickers yet.</p>
             <p className="text-xs text-base-content/40">
-              Add a picture and it stays sealed to your account — nobody else can see your
+              Add a picture and it stays sealed to your account. Nobody else can see your
               collection, including us.
             </p>
           </div>

@@ -14,10 +14,58 @@ one of them drifts.
 
 ## [Unreleased]
 
+## [1.3.0] — 2026-08-17
+
+### Added
+
+- **Chats can be pinned, muted or deleted from the list itself.** Swipe a row on
+  a phone, or use the `⋯` menu on a desktop, for the same three actions. Pinned
+  chats sit at the top of the list; muted ones stop making noise; deleting one
+  ends the contact as well, because a "deleted" chat whose owner can still write
+  to you is not deleted. Pins and mutes never leave the phone: a pin list is a
+  ranking of who matters to you and a mute list is a list of people you are
+  avoiding, and neither is something the server is told. On Android a muted
+  chat's notification is discarded on the phone before it is displayed. The cost
+  of not having a server-side mute list is that the message is delivered and then
+  thrown away. The desktop app has no such hook and still rings.
+- **Deleting a chat, or declining a request, hides that person's future
+  requests.** Ending a contact stops them messaging you, but nothing stops them
+  asking to be a contact again, twenty times an hour if they like. Their
+  requests are now hidden on this device, and Settings → Privacy → Hidden
+  requests lists everyone in that state with a way to undo it. It is not a
+  block: there is no block list on the server, so nothing about who you are
+  avoiding is recorded anywhere but this phone.
+- **A voice message can be heard before it is sent.** The staged recording was a
+  microphone icon and a duration, so the only thing you could check was that
+  something had been recorded, not that it captured a pocket, the wrong room, or
+  half a sentence. It is now a player: press play, listen, then send or throw
+  it away.
+- **Recording without holding the button.** Slide up from the microphone to lock
+  the recording hands-free, then pause and resume as you go, so a two-minute
+  message no longer means holding a thumb still for two minutes. Sliding away
+  still discards it. A paused recording's timer stops with it, so the length on
+  the message is the length of the audio.
+- **Voice messages play at 1.5× and 2×.** The speed sits beside the scrubber and
+  is remembered for the rest of the session, because someone speeding one
+  message up is telling you how they listen.
+
 ### Fixed
 
+- **The chat list stops saying "Encrypted message" about messages it can
+  read.** A message is only decrypted when its conversation is open, so anything
+  that arrived while you were elsewhere (on the list, in another chat, or with
+  the app closed) reached the list sealed and the row said so. The list now
+  opens the newest message of any conversation it cannot preview, one message
+  rather than a page. Rows that genuinely cannot be opened on this device still
+  say so, which is the honest case that wording was written for.
+- **A half-typed message stays in the chat it was typed in.** On a tablet or
+  desktop, where the list and the conversation are on screen together, switching
+  to another person carried the draft across with you, one keystroke away from
+  being sent to the wrong person. Drafts are now kept per conversation, and
+  switching away and back brings yours with you. They are held in memory only:
+  a message nobody has agreed to send should not outlive the app on disk.
 - **A photo the phone cannot read is refused before it is sent, not after.**
-  Some phones save a picture in a format they then describe as something else —
+  Some phones save a picture in a format they then describe as something else,
   a `.png` that is not one. Nothing on any device Nearside runs on can draw it,
   so it arrived in the conversation as "this photo's format can't be shown
   here" for everybody, including the person who sent it, at the one moment
@@ -25,14 +73,14 @@ one of them drifts.
   the original is still in your hands, and says to export it as a JPEG.
 - **A picture that is perfectly fine stops being called unshowable.** Whether an
   attachment could be displayed was decided by counting how many times the
-  image failed to appear — but the app drops decrypted attachments from memory
+  image failed to appear, but the app drops decrypted attachments from memory
   when it needs the room, and doing that under a picture on screen looks exactly
   like a failure. Two of those and a photo was labelled unreadable for as long
   as the conversation stayed open. The app now asks the only question that
   settles it: it decodes the picture itself, once, when it arrives.
 - **An attachment that will not send now says why.** Every way a photo, video
-  or voice message could fail arrived as the same four words — "Could not send
-  media" — whether the file could not be read off the phone, the person you are
+  or voice message could fail arrived as the same four words, "Could not send
+  media", whether the file could not be read off the phone, the person you are
   writing to has never published an encryption key, the connection dropped
   halfway, or the server refused the row. Four problems with four different
   remedies, and nothing on screen to tell them apart. Each now comes back as a
@@ -41,8 +89,8 @@ one of them drifts.
   that failed with nothing to say for itself.
 - **A refused send no longer leaves the file behind.** The key that seals an
   attachment to its recipient was sealed *after* the bytes had already gone up,
-  so anything that went wrong at that step — the commonest being a contact whose
-  device has never published a key — left an encrypted file in storage that no
+  so anything that went wrong at that step, the commonest being a contact whose
+  device has never published a key, left an encrypted file in storage that no
   message would ever point at, and nothing collects those. Everything that can
   refuse a send now happens before the upload, which also means the refusal is
   instant instead of arriving after a photo has been uploaded for nothing.
@@ -52,7 +100,7 @@ one of them drifts.
   the whole upload had been spent. The composer now accounts for the difference.
 - **A photo whose name has a bracket or a space in the wrong place sends.** The
   file's extension is reused when the attachment is saved, and a second copy of
-  a download — `shot.jpg (1)` — carried the whole tail into the storage path,
+  a download (`shot.jpg (1)`) carried the whole tail into the storage path,
   where it was refused outright. Nothing about that was explainable to the person
   trying to send the picture.
 

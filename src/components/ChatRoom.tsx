@@ -30,6 +30,8 @@ import { useMediaSend } from '../hooks/useMediaSend';
 import { useStickers } from '../hooks/useStickers';
 import { StickerPicker } from './StickerPicker';
 import { useMessageEditing } from '../hooks/useMessageEditing';
+import { useDraft } from '../hooks/useDraft';
+import { draftKey } from '../lib/drafts';
 import { useSealedExchange } from '../hooks/useSealedExchange';
 import { useCall } from '../hooks/useCall';
 import { isEngaged } from '../lib/call/state';
@@ -64,7 +66,10 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
   const background = useChatBackground(me, friend.id);
   const { peerKey, trust, refresh: refreshTrust } = usePeerTrust(friend.id, isSelf);
 
-  const [newMessage, setNewMessage] = useState('');
+  // Per conversation, and outside this component: the pane is not remounted
+  // when the selected friend changes, so component state would carry a
+  // half-typed message into the next person's composer.
+  const draft = useDraft(draftKey('peer', friend.id));
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   // Docked in the same slot as the search panel, so only one of them is open:
@@ -98,7 +103,7 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
   /** Composer housekeeping shared by both send paths: the message is on its
    *  way, so the box empties and takes focus back. */
   function clearComposer() {
-    setNewMessage('');
+    draft.clear();
     setReplyingTo(null);
     composerRef.current?.focus();
   }
@@ -169,9 +174,9 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
     void tapSend();
     const replyToId = replyingTo?.id ?? null;
     if (media.staged.length) {
-      await media.send(newMessage.trim(), replyToId);
+      await media.send(draft.value.trim(), replyToId);
     } else {
-      await thread.outbox.send(newMessage.trim(), replyToId);
+      await thread.outbox.send(draft.value.trim(), replyToId);
     }
   }
 
@@ -339,9 +344,9 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
       ) : (
         <Composer
           ref={composerRef}
-          value={newMessage}
+          value={draft.value}
           onChange={(v) => {
-            setNewMessage(v);
+            draft.setValue(v);
             thread.notifyTyping();
           }}
           onSend={handleSend}

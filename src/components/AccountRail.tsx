@@ -31,7 +31,7 @@ export function AccountRail({ profile, profileFailed, onOpenSettings }: AccountR
       <button
         type="button"
         onClick={onOpenSettings}
-        title={profileFailed ? 'Profile unavailable — open settings' : 'Profile settings'}
+        title={profileFailed ? 'Profile unavailable. Open settings' : 'Profile settings'}
         className="group flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-base-content/5 focus-visible:bg-base-content/5"
       >
         {profile ? (

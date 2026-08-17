@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AtSign, Bell, Volume2 } from 'lucide-react';
+import { AtSign, Bell, BellOff, Volume2 } from 'lucide-react';
 import {
   canRequestPushPermission,
   hasPushPermission,
@@ -120,6 +120,14 @@ export function NotificationsPage() {
           mention is inside the sealed body, so the server cannot know one
           happened — giving it a louder notification would mean telling the
           server what the message says. */}
+      {/* Where muting a chat stops working, said plainly. The app does not
+          claim protections it does not have — the same rule that gave
+          `isSecureStorageAvailable()` its honest answer. */}
+      <InfoRow
+        icon={BellOff}
+        label="Muted chats"
+        hint="Swipe a chat to mute it. On Android the notification is discarded on this phone, before it is shown, so the server is never told which chats you keep quiet. The desktop app has no such hook and will still ring."
+      />
       <InfoRow
         icon={AtSign}
         label="Mentions in rooms"

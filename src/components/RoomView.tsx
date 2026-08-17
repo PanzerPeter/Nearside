@@ -38,6 +38,8 @@ import { useMediaSend } from '../hooks/useMediaSend';
 import { useStickers } from '../hooks/useStickers';
 import { useReactions } from '../hooks/useReactions';
 import { useSwipeToReply } from '../hooks/useSwipeToReply';
+import { useDraft } from '../hooks/useDraft';
+import { draftKey } from '../lib/drafts';
 import type { Profile, Reaction } from '../lib/types';
 import { Composer, type ComposerHandle } from './Composer';
 import { MediaAttachment } from './MediaAttachment';
@@ -75,7 +77,9 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
   const [profiles, setProfiles] = useState<Map<string, Profile>>(new Map());
   const [roomKey, setRoomKey] = useState<Uint8Array | null>(null);
   const [keyMissing, setKeyMissing] = useState(false);
-  const [draft, setDraft] = useState('');
+  // Per room, and outside this component, for the reason `ChatRoom` keeps its
+  // own there: the pane survives a switch between conversations.
+  const draft = useDraft(draftKey('room', room.id));
   const [replyingTo, setReplyingTo] = useState<RoomMessage | null>(null);
   const [sending, setSending] = useState(false);
   const [showMembers, setShowMembers] = useState(false);
@@ -98,7 +102,7 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
     identity,
     onStaged: () => composerRef.current?.focus(),
     onSent: () => {
-      setDraft('');
+      draft.clear();
       composerRef.current?.focus();
     },
     onError: toast.error,
@@ -276,12 +280,12 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
     // caption — the same rule the 1:1 composer follows, so Send does one thing
     // in both places.
     if (media.staged.length) {
-      await media.send(draft.trim(), replyingTo?.id ?? null);
+      await media.send(draft.value.trim(), replyingTo?.id ?? null);
       setReplyingTo(null);
       return;
     }
 
-    const text = draft.trim();
+    const text = draft.value.trim();
     if (!text || !roomKey || sending) return;
     void tapSend();
     setSending(true);
@@ -289,7 +293,7 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
       const row = await sendRoomMessage(room.id, me, identity, roomKey, text, {
         replyToId: replyingTo?.id ?? null,
       });
-      setDraft('');
+      draft.clear();
       setReplyingTo(null);
       // The database trigger covers this too, but only on a project with a
       // `push_config` row — this one has none, so without the invoke a room
@@ -459,8 +463,8 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
           its own slightly different copy of. */}
       <Composer
         ref={composerRef}
-        value={draft}
-        onChange={setDraft}
+        value={draft.value}
+        onChange={draft.setValue}
         onSend={() => void send()}
         onStageFile={media.stage}
         staged={media.staged}

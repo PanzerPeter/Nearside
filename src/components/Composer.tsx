@@ -8,13 +8,15 @@ import {
   useRef,
   useState,
 } from 'react';
-import { Check, Mic, Send, Paperclip, Pencil, Smile, Trash2, X } from 'lucide-react';
+import { Check, Lock, Mic, Pause, Play, Send, Paperclip, Pencil, Smile, Trash2, X } from 'lucide-react';
 import { EmojiPopover } from './EmojiPopover';
+import { VoicePreview } from './VoicePreview';
 import { AttachMenu } from './AttachMenu';
 import { MAX_MESSAGE_LENGTH } from '../lib/conversation';
 import { stagedIsRecording, type StagedMedia } from '../lib/staging';
 import { formatDuration, MAX_VOICE_MS, voiceRecordingSupported } from '../lib/audio';
 import { isCoarsePointer, permissionSettingsLocation, supportsCameraCapture } from '../lib/device';
+import { holdOutcome } from '../lib/hold-record';
 import { useVoiceRecorder, type VoiceRecording } from '../hooks/useVoiceRecorder';
 
 export interface ComposerHandle {
@@ -66,11 +68,6 @@ interface ComposerProps {
 // grow-to-fit algorithm rather than inventing a second one.
 export const MAX_TEXTAREA_PX = 160; // ~6 lines
 
-/** How far the finger must travel from the mic button, while holding, to arm
- *  the cancel. Roughly a thumb's width — far enough not to trigger on the
- *  drift of holding still. */
-const CANCEL_SLIDE_PX = 60;
-
 /** How long the "hold to record" nudge stays up after a too-short tap. */
 const HINT_MS = 1800;
 
@@ -121,15 +118,15 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   const isAudio = stagedIsRecording(staged);
   const stagedDurationMs = staged[0]?.durationMs ?? null;
 
-  // A local object URL per staged image/video; revoked when the queue changes.
-  // Voice notes get their duration rendered instead, so they need no URL.
+  // A local object URL per staged file; revoked when the queue changes. Voice
+  // notes get one too — it is what the preview player plays back, and one
+  // revoke path is safer than a second one that can outlive it.
   useEffect(() => {
     // The warning belongs to one recording. Anything else taking the composer,
     // including a photo, clears it.
     if (!stagedIsRecording(staged)) setSilentTake(false);
     const urls: Record<string, string> = {};
     for (const item of staged) {
-      if (item.file.type.startsWith('audio/')) continue;
       urls[item.id] = URL.createObjectURL(item.file);
     }
     setPreviewUrls(urls);
@@ -169,6 +166,10 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   const holdOriginRef = useRef<{ x: number; y: number } | null>(null);
   const cancelArmedRef = useRef(false);
   const [cancelArmed, setCancelArmed] = useState(false);
+  // Whether the recording has been handed over to the UI by a slide up, so the
+  // finger can leave. Tap-to-record devices are locked from the first tap:
+  // there is no finger holding anything there.
+  const [locked, setLocked] = useState(false);
   // A release that lands before `start` has resolved. Without this, a quick
   // tap would leave the recorder running with nothing left to stop it.
   const pendingReleaseRef = useRef<'none' | 'stop' | 'cancel'>('none');
@@ -191,6 +192,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
     pendingReleaseRef.current = 'none';
     cancelArmedRef.current = false;
     setCancelArmed(false);
+    setLocked(!holdToRecord);
     void beginRecording();
   }
 
@@ -221,10 +223,14 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
     holdOriginRef.current = null;
     cancelArmedRef.current = false;
     setCancelArmed(false);
+    setLocked(false);
   }
 
   function handleMicPointerDown(e: React.PointerEvent<HTMLButtonElement>) {
-    if (!holdToRecord || busy) return;
+    // A press on the button of a locked recording is the tap that finishes it,
+    // handled in `handleMicClick`. Arming a second recording here would reset
+    // the gesture bookkeeping under the one already running.
+    if (!holdToRecord || busy || recorder.recording) return;
     // Capture so the slide-to-cancel still reports moves once the finger has
     // left the button, and so the release always comes back here.
     e.currentTarget.setPointerCapture(e.pointerId);
@@ -235,7 +241,23 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   function handleMicPointerMove(e: React.PointerEvent<HTMLButtonElement>) {
     const origin = holdOriginRef.current;
     if (!origin) return;
-    const armed = origin.x - e.clientX > CANCEL_SLIDE_PX || origin.y - e.clientY > CANCEL_SLIDE_PX;
+    const outcome = holdOutcome(e.clientX - origin.x, e.clientY - origin.y);
+
+    if (outcome === 'locked') {
+      // The gesture is over even though the finger is still down: forget the
+      // origin so the release that follows is not read as "send", and hand the
+      // capture back so the release lands wherever the finger actually is.
+      holdOriginRef.current = null;
+      cancelArmedRef.current = false;
+      setCancelArmed(false);
+      setLocked(true);
+      if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      }
+      return;
+    }
+
+    const armed = outcome === 'cancel-armed';
     if (armed !== cancelArmedRef.current) {
       cancelArmedRef.current = armed;
       setCancelArmed(armed);
@@ -255,9 +277,9 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   }
 
   function handleMicClick() {
-    // On touch the press/release pair already drove the recording; this click
-    // is the tail of that same gesture.
-    if (holdToRecord) return;
+    // A locked recording is ended by tapping the same button, on touch as well:
+    // the finger that started it has already left.
+    if (holdToRecord && !locked) return;
     if (recorder.recording) finishRecording(false);
     else armRecording();
   }
@@ -335,11 +357,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   // The one staged item, when there is exactly one. A batch renders as a strip
   // instead: names and sizes stop being readable past the first thumbnail.
   const only = staged.length === 1 ? staged[0] : null;
-  const stagedKind = isAudio
-    ? 'Voice message'
-    : only?.file.type.startsWith('video/')
-      ? 'Video'
-      : 'Image';
+  const stagedKind = only?.file.type.startsWith('video/') ? 'Video' : 'Image';
 
   return (
     <form
@@ -365,14 +383,35 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
         </div>
       )}
 
-      {only && (isAudio || previewUrls[only.id]) && (
+      {/* A recording gets the whole width and a player: the one thing worth
+          checking before it goes is what it sounds like. */}
+      {only && isAudio && (
+        <div className="flex items-center gap-2 mb-2 p-2 pl-3 rounded-lg bg-base-200/70 border border-base-content/10">
+          <div className="min-w-0 flex-1">
+            <VoicePreview url={previewUrls[only.id]} durationMs={stagedDurationMs} />
+            {silentTake && (
+              <p className="mt-1 text-xs text-warning">
+                No sound came through. Play it back before you send this.
+              </p>
+            )}
+          </div>
+          <button
+            type="button"
+            className="btn btn-ghost btn-xs btn-circle shrink-0"
+            onClick={onClearStaged}
+            disabled={busy}
+            title="Discard recording"
+            aria-label="Discard recording"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {only && !isAudio && previewUrls[only.id] && (
         <div className="flex items-center gap-3 mb-2 p-2 rounded-lg bg-base-200/70 border border-base-content/10">
           <div className="relative shrink-0">
-            {isAudio ? (
-              <div className="w-16 h-16 rounded-md bg-primary/15 text-primary flex items-center justify-center">
-                <Mic className="w-6 h-6" />
-              </div>
-            ) : only.file.type.startsWith('video/') ? (
+            {only.file.type.startsWith('video/') ? (
               <video
                 src={previewUrls[only.id]}
                 className="w-16 h-16 rounded-md object-cover bg-black"
@@ -387,25 +426,10 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
             )}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-xs font-medium truncate">
-              {isAudio ? 'Voice message' : only.file.name}
-            </p>
-            {/* The name above already says which kind this is for a voice note,
-                so repeating it here left the preview reading "Voice message /
-                Voice message · 0:03". */}
+            <p className="text-xs font-medium truncate">{only.file.name}</p>
             <p className="text-xs text-base-content/60">
-              {isAudio
-                ? stagedDurationMs !== null
-                  ? formatDuration(stagedDurationMs)
-                  : 'Recorded'
-                : `${stagedKind} · ${(only.file.size / (1024 * 1024)).toFixed(1)} MB`}{' '}
-              · press Send
+              {`${stagedKind} · ${(only.file.size / (1024 * 1024)).toFixed(1)} MB`} · press Send
             </p>
-            {silentTake && (
-              <p className="mt-0.5 text-xs text-warning">
-                No sound came through. Check the microphone before you send this.
-              </p>
-            )}
           </div>
           <button
             type="button"
@@ -536,10 +560,34 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
               <Trash2 className="w-5 h-5" />
             </button>
 
+            {/* Pause is only reachable once the recording has been locked: a
+                finger holding the mic button has nothing to press it with. */}
+            {locked && (
+              <button
+                type="button"
+                className="btn btn-ghost btn-square"
+                onClick={() => (recorder.paused ? recorder.resume() : recorder.pause())}
+                title={recorder.paused ? 'Resume recording' : 'Pause recording'}
+                aria-label={recorder.paused ? 'Resume recording' : 'Pause recording'}
+              >
+                {recorder.paused ? (
+                  <Play className="w-5 h-5 fill-current" />
+                ) : (
+                  <Pause className="w-5 h-5 fill-current" />
+                )}
+              </button>
+            )}
+
             <div className="flex-1 flex items-center gap-2 min-w-0 h-12" aria-live="polite">
               {/* motion-recording swaps the flat opacity pulse for emitted
-                  rings under the expressive set — see index.css. */}
-              <span className="motion-recording w-2.5 h-2.5 rounded-full bg-error animate-pulse shrink-0" />
+                  rings under the expressive set — see index.css. A paused
+                  recording holds a steady dot: a light that goes on blinking
+                  says the microphone is still taking something in. */}
+              <span
+                className={`motion-recording w-2.5 h-2.5 rounded-full shrink-0 ${
+                  recorder.paused ? 'bg-base-content/40' : 'bg-error animate-pulse'
+                }`}
+              />
               <span className="font-mono text-sm tabular-nums">
                 {formatDuration(recorder.elapsedMs)}
               </span>
@@ -559,12 +607,21 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
                   style={{ width: `${Math.max(2, recorder.level * 100)}%` }}
                 />
               </span>
+              {/* The one affordance a hold cannot advertise on its own: nothing
+                  on screen otherwise says the finger may leave. */}
+              {holdToRecord && !locked && !cancelArmed && (
+                <Lock className="w-3.5 h-3.5 shrink-0 text-base-content/60" aria-hidden />
+              )}
               <span className="text-xs text-base-content/60 truncate">
                 {cancelArmed
                   ? 'Release to cancel'
-                  : holdToRecord
-                    ? 'Slide away to cancel'
-                    : `Recording · ${formatDuration(MAX_VOICE_MS)} max`}
+                  : recorder.paused
+                    ? 'Paused · tap send when you are ready'
+                    : locked
+                      ? `Hands free · ${formatDuration(MAX_VOICE_MS)} max`
+                      : holdToRecord
+                        ? 'Slide up to lock, away to cancel'
+                        : `Recording · ${formatDuration(MAX_VOICE_MS)} max`}
               </span>
             </div>
           </>

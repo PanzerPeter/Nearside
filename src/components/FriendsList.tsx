@@ -3,15 +3,30 @@ import { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { Profile, Friendship, Message, ConversationSummary } from '../lib/types';
 import { isSelfChat, sortConversations } from '../lib/conversation';
-import { cachedPreview } from '../lib/localdb';
+import { formatDisplayName, nicknameFor } from '../lib/nicknames';
 import { Avatar } from './Avatar';
 import { ConversationRow } from './ConversationRow';
 import { ConnectModal } from './ConnectModal';
 import { FirstRunInvite } from './FirstRunInvite';
 import { RoomList } from './RoomList';
 import { advanceRead, fetchUnreadCounts } from '../lib/receipts';
+import { useConversationPreviews } from '../hooks/useConversationPreviews';
 import { useConnection, reportChannelStatus, forgetChannel } from '../lib/connection';
-import { UserPlus, Check, X, Users } from 'lucide-react';
+import { BellOff, Bell, Pin, PinOff, Trash2, UserPlus, Check, X, Users } from 'lucide-react';
+import {
+  isMuted,
+  loadChatFlags,
+  setDismissed,
+  setMuted,
+  setPinned,
+  sortByFlags,
+  visibleRequests,
+  type ChatFlags,
+} from '../lib/chat-flags';
+import { removeContact } from '../lib/remove-contact';
+import { syncMutedIds } from '../lib/mute';
+import { SwipeRow } from './SwipeRow';
+import { Modal } from './Modal';
 import type { Identity } from '../lib/crypto/keys';
 import type { RoomSummary } from '../lib/rooms';
 
@@ -59,8 +74,6 @@ export function FriendsList({
 }: FriendsListProps) {
   const me = session.user.id;
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
-  /** peer_id → last message text from the local mirror, or null if unseen here. */
-  const [previews, setPreviews] = useState<Map<string, string | null>>(new Map());
   const [pendingRequests, setPendingRequests] = useState<Friendship[]>([]);
   const [unread, setUnread] = useState<Map<string, number>>(new Map());
   const [connectTab, setConnectTab] = useState<'show' | 'scan' | null>(null);
@@ -70,6 +83,14 @@ export function FriendsList({
    *  accounts that have plenty of contacts. */
   const [roomCount, setRoomCount] = useState<number | null>(null);
   const [loaded, setLoaded] = useState(false);
+  /** This device's pins, mutes and dismissals — see `lib/chat-flags.ts`. */
+  const [flags, setFlags] = useState<Map<string, ChatFlags>>(new Map());
+  /** Which row's action rail is open. One at a time: two rails open at once is
+   *  a list with two rows in a state the user did not put them both in. */
+  const [openRail, setOpenRail] = useState<string | null>(null);
+  /** The contact a delete is being confirmed for. */
+  const [confirmRemove, setConfirmRemove] = useState<ConversationSummary | null>(null);
+  const [removing, setRemoving] = useState(false);
   /** Owned here rather than in RoomList, which is not on screen at all in the
    *  state where the first-run card offers to create the first room. */
   const [creatingRoom, setCreatingRoom] = useState(false);
@@ -99,15 +120,24 @@ export function FriendsList({
     const rows = sortConversations((data ?? []) as ConversationSummary[], me);
     setConversations(rows);
     setLoaded(true);
-
-    // Previews come from the local mirror, since 0023 took the body away from
-    // the server. Resolved after the rows are on screen: a row briefly showing
-    // "Encrypted message" beats a sidebar that paints a frame late.
-    const resolved = await Promise.all(
-      rows.map(async (row) => [row.peer_id, (await cachedPreview(row.peer_id))?.text ?? null] as const)
-    );
-    setPreviews(new Map(resolved));
   }, [me]);
+
+  const refreshFlags = useCallback(async () => {
+    const next = await loadChatFlags();
+    setFlags(next);
+    // The notification extension reads its own copy, because a push arrives
+    // when no JavaScript of ours is running. See `lib/mute.ts`.
+    void syncMutedIds(me, next);
+  }, [me]);
+
+  useEffect(() => {
+    void refreshFlags();
+  }, [refreshFlags]);
+
+  // Previews come from the local mirror, since 0023 took the body away from the
+  // server — and from a one-row fetch for whatever the mirror has never opened.
+  // See `useConversationPreviews`.
+  const previews = useConversationPreviews(me, identity, conversations);
 
   /**
    * Coalesce a burst of realtime events into one list refresh.
@@ -198,9 +228,14 @@ export function FriendsList({
 
   useEffect(() => {
     let total = 0;
-    for (const count of unread.values()) total += count;
+    // Muted conversations are left out of the icon badge: a number on the app
+    // icon is the loudest surface there is, and a chat you silenced should not
+    // be the reason it is lit. The row keeps its own count.
+    for (const [peerId, count] of unread) {
+      if (!isMuted(peerId, flags)) total += count;
+    }
     onUnreadTotalChange?.(total);
-  }, [unread, onUnreadTotalChange]);
+  }, [unread, flags, onUnreadTotalChange]);
 
   // The Profile handed upward on click is a snapshot of that render's row, and
   // nothing re-syncs it while the chat stays open. `last_seen_at` changes
@@ -424,6 +459,23 @@ export function FriendsList({
     };
   }, [clearUnreadFor]);
 
+  /** Pinned first, then whatever order `sortConversations` decided. */
+  const ordered = useMemo(
+    () =>
+      sortByFlags(
+        conversations.map((c) => ({ ...c, id: c.peer_id, lastAt: c.last_at })),
+        flags
+      ),
+    [conversations, flags]
+  );
+
+  /** Requests from people this device removed are not shown: removal stops
+   *  them messaging, but nothing stops them asking again. */
+  const shownRequests = useMemo(
+    () => visibleRequests(pendingRequests, flags),
+    [pendingRequests, flags]
+  );
+
   /** Whether any conversation is with someone other than yourself. */
   const hasFriendRows = conversations.some((c) => !isSelfChat(me, c.peer_id));
   /** Nothing on this pane but the self-chat — where a new sign-up lands, and
@@ -433,14 +485,74 @@ export function FriendsList({
    *  louder than the content they label. */
   const showSections = hasFriendRows || (roomCount ?? 0) > 0;
 
+  /** The three actions behind a row. Your own notes are not a contact, so they
+   *  get the two that mean something and not the one that does not. */
+  function rowActions(
+    conversation: ConversationSummary,
+    self: boolean,
+    pinned: boolean,
+    muted: boolean
+  ) {
+    const id = conversation.peer_id;
+    const actions = [
+      {
+        key: 'pin',
+        label: pinned ? 'Unpin' : 'Pin',
+        icon: pinned ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4" />,
+        onClick: () => {
+          void setPinned(id, 'peer', !pinned).then(refreshFlags);
+        },
+      },
+    ];
+    if (self) return actions;
+    return [
+      ...actions,
+      {
+        key: 'mute',
+        label: muted ? 'Unmute' : 'Mute',
+        icon: muted ? <Bell className="w-4 h-4" /> : <BellOff className="w-4 h-4" />,
+        onClick: () => {
+          void setMuted(id, 'peer', !muted).then(refreshFlags);
+        },
+      },
+      {
+        key: 'delete',
+        label: 'Delete',
+        icon: <Trash2 className="w-4 h-4" />,
+        destructive: true,
+        onClick: () => setConfirmRemove(conversation),
+      },
+    ];
+  }
+
+  async function confirmRemoveContact() {
+    const target = confirmRemove;
+    if (!target || removing) return;
+    setRemoving(true);
+    const error = await removeContact(me, target.peer_id);
+    setRemoving(false);
+    if (error) return;
+    setConfirmRemove(null);
+    // The row goes when the list is re-read; the flags carry the dismissal that
+    // keeps them out of the requests strip.
+    await refreshFlags();
+    void fetchConversations();
+    void fetchPendingRequests();
+  }
+
   async function acceptRequest(friendshipId: string) {
     await supabase.from('friendships').update({ status: 'accepted' }).eq('id', friendshipId);
     void fetchConversations();
     void fetchPendingRequests();
   }
 
-  async function declineRequest(friendshipId: string) {
+  async function declineRequest(friendshipId: string, requesterId: string | undefined) {
     await supabase.from('friendships').delete().eq('id', friendshipId);
+    // Declining hides them too. `friendships_insert_own` only checks that the
+    // requester is themself, so without this a declined request can be sent
+    // again immediately, and again after that.
+    if (requesterId) await setDismissed(requesterId, true).catch(() => {});
+    await refreshFlags();
     void fetchPendingRequests();
   }
 
@@ -467,13 +579,13 @@ export function FriendsList({
       </div>
 
       {/* Pending Requests */}
-      {pendingRequests.length > 0 && (
+      {shownRequests.length > 0 && (
         <div className="p-3 sm:p-4 border-b border-base-content/5 bg-warning/5">
           <p className="text-xs font-semibold text-warning mb-2.5 uppercase tracking-wider">
-            Pending Requests ({pendingRequests.length})
+            Pending Requests ({shownRequests.length})
           </p>
           <div className="space-y-2">
-            {pendingRequests.map((req) => (
+            {shownRequests.map((req) => (
               <div
                 key={req.id}
                 className="flex items-center justify-between p-2 rounded-lg bg-base-100 border border-base-content/5"
@@ -494,7 +606,7 @@ export function FriendsList({
                   </button>
                   <button
                     className="btn btn-ghost btn-xs btn-circle text-error hover:bg-error/10"
-                    onClick={() => declineRequest(req.id)}
+                    onClick={() => declineRequest(req.id, req.requester_id)}
                     title="Decline"
                   >
                     <X className="w-3 h-3" />
@@ -540,25 +652,42 @@ export function FriendsList({
             lands, and a spinner-shaped hole in a list that paints in a moment is
             worse than the space it fills. */}
         <ul className="motion-stagger p-2 sm:p-3 space-y-1">
-          {conversations.map((conversation) => (
-            <li key={conversation.peer_id}>
-              <ConversationRow
-                conversation={conversation}
-                me={me}
-                unread={unread.get(conversation.peer_id) ?? 0}
-                lastText={previews.get(conversation.peer_id) ?? null}
-                selected={selectedFriendId === conversation.peer_id}
-                onSelect={() =>
-                  onSelectFriend({
-                    id: conversation.peer_id,
-                    display_name: conversation.display_name,
-                    avatar_url: conversation.avatar_url,
-                    last_seen_at: conversation.last_seen_at,
-                  })
-                }
-              />
-            </li>
-          ))}
+          {ordered.map((conversation) => {
+            const peerId = conversation.peer_id;
+            const self = isSelfChat(me, peerId);
+            const pinned = flags.get(peerId)?.pinnedAt != null;
+            const muted = isMuted(peerId, flags);
+            return (
+              <li key={peerId} className="group/row">
+                <SwipeRow
+                  open={openRail === peerId}
+                  onOpenChange={(open) => setOpenRail(open ? peerId : null)}
+                  actions={rowActions(conversation, self, pinned, muted)}
+                >
+                  <ConversationRow
+                    conversation={conversation}
+                    me={me}
+                    unread={unread.get(peerId) ?? 0}
+                    lastText={previews.get(peerId) ?? null}
+                    selected={selectedFriendId === peerId}
+                    pinned={pinned}
+                    muted={muted}
+                    onSelect={() => {
+                      // A rail left open behind a chat is a state the user
+                      // cannot see and will not expect on the way back.
+                      setOpenRail(null);
+                      onSelectFriend({
+                        id: peerId,
+                        display_name: conversation.display_name,
+                        avatar_url: conversation.avatar_url,
+                        last_seen_at: conversation.last_seen_at,
+                      });
+                    }}
+                  />
+                </SwipeRow>
+              </li>
+            );
+          })}
         </ul>
 
         {/* Someone who has rooms but no contacts gets no first-run card, and
@@ -584,6 +713,39 @@ export function FriendsList({
           initialTab={connectTab}
           onClose={() => setConnectTab(null)}
         />
+      )}
+
+      {confirmRemove && (
+        <Modal
+          title={`Delete chat with ${formatDisplayName(
+            nicknameFor(confirmRemove.peer_id),
+            confirmRemove.display_name
+          )}?`}
+          onClose={() => (removing ? undefined : setConfirmRemove(null))}
+          actions={
+            <>
+              <button
+                className="btn btn-ghost btn-sm"
+                onClick={() => setConfirmRemove(null)}
+                disabled={removing}
+              >
+                Keep
+              </button>
+              <button className="btn btn-error btn-sm" onClick={confirmRemoveContact} disabled={removing}>
+                {removing ? <span className="loading loading-spinner loading-xs" /> : 'Delete'}
+              </button>
+            </>
+          }
+        >
+          {/* Says both halves, including the one the app cannot do. A dialog
+              that implied their copy went too would be a promise made on
+              somebody else's device. */}
+          <p className="text-sm text-base-content/80">
+            You will no longer be contacts, and this device's copy of the
+            conversation is removed. Their copy stays on their device, and
+            nothing here can reach it.
+          </p>
+        </Modal>
       )}
     </div>
   );

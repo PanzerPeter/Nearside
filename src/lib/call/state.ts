@@ -288,7 +288,7 @@ export function endLabel(state: CallState): string {
     case 'no-key':
       return 'They have no encryption key yet';
     case 'key-changed':
-      return 'Their key changed — verify before calling';
+      return 'Their key changed. Verify before calling';
     default:
       return 'Call ended';
   }

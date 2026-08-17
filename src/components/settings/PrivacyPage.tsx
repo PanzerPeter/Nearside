@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { Database, Lock, ShieldAlert } from 'lucide-react';
+import { Database, EyeOff, Lock, ShieldAlert } from 'lucide-react';
 import { MIN_PASSPHRASE_LENGTH, type RelockAfter } from '../../lib/app-lock';
 import type { AppLock } from '../../hooks/useAppLock';
 import { ServerView } from '../ServerView';
 import { SecurityLimits } from '../SecurityLimits';
 import { Card, NavRow, Note, ToggleRow } from './SettingsUi';
+import { HiddenRequests } from './HiddenRequests';
 
 interface PrivacyPageProps {
   /** The one instance owned by `App`. Calling `useAppLock` again here would
@@ -20,6 +21,7 @@ export function PrivacyPage({ appLock }: PrivacyPageProps) {
 
   const [showServerView, setShowServerView] = useState(false);
   const [showLimits, setShowLimits] = useState(false);
+  const [showHidden, setShowHidden] = useState(false);
 
   const lockOn = appLock.state !== 'off' && appLock.state !== 'loading';
 
@@ -38,6 +40,10 @@ export function PrivacyPage({ appLock }: PrivacyPageProps) {
       setLockError(e instanceof Error ? e.message : 'Could not set the lock.');
     }
   }
+
+  // A subpage rather than a modal, so the back gesture walks out of it the way
+  // it walks out of every other settings page. See `SettingsPage`.
+  if (showHidden) return <HiddenRequests onBack={() => setShowHidden(false)} />;
 
   return (
     <>
@@ -121,6 +127,12 @@ export function PrivacyPage({ appLock }: PrivacyPageProps) {
             </select>
           </label>
         )}
+        <NavRow
+          icon={EyeOff}
+          label="Hidden requests"
+          hint="People whose requests this device does not show"
+          onClick={() => setShowHidden(true)}
+        />
       </Card>
       {/* Load-bearing, not decoration: the lock must never read as a second
           layer of encryption over the seed. */}
