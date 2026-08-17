@@ -567,7 +567,7 @@ export function FriendsList({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <Users className="w-5 h-5 text-primary hidden lg:block" />
-            <h2 className="font-semibold text-base-content">Chats</h2>
+            <h2 className="font-semibold text-base-content">{t('tabs.chats')}</h2>
           </div>
           <button
             className="btn btn-primary btn-sm btn-circle shadow-md shadow-primary/20 hover:shadow-primary/30 transition-shadow"

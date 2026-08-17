@@ -14,6 +14,15 @@ one of them drifts.
 
 ## [Unreleased]
 
+## [1.4.2] — 2026-08-17
+
+### Fixed
+
+- **The "Chats" and "Settings" titles now follow the app's language.** Both were
+  written into the screen rather than looked up, so on a Spanish, German or
+  Russian phone the two headings you see most often stayed in English while
+  everything under them translated.
+
 ## [1.4.1] — 2026-08-17
 
 ### Security
