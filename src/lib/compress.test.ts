@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  compressImageResult,
+  imageDecodes,
   isCompressible,
   MIN_SAVING_RATIO,
   replaceExtension,
@@ -99,5 +101,38 @@ describe('replaceExtension', () => {
 
   it('falls back to a usable name when there is none', () => {
     expect(replaceExtension('   ', 'webp')).toBe('image.webp');
+  });
+});
+
+// Both of these run where there is no decoder at all, which is the branch that
+// matters most: a platform that cannot be asked must never answer "broken".
+// The decoding itself belongs to a browser and is not mocked here — a stub
+// createImageBitmap would only be testing the stub.
+describe('imageDecodes without a decoder', () => {
+  it('says yes, so the element is still given its chance', async () => {
+    expect(typeof createImageBitmap).not.toBe('function');
+    await expect(imageDecodes(new Blob([new Uint8Array([1, 2, 3])]))).resolves.toBe(true);
+  });
+});
+
+describe('compressImageResult without a decoder', () => {
+  const file = (type: string) => new File([new Uint8Array(16)], `pic.${type.split('/')[1]}`, { type });
+
+  it('hands the original back and claims nothing about it', async () => {
+    const original = file('image/png');
+    await expect(compressImageResult(original, { maxEdge: 1920 })).resolves.toEqual({
+      file: original,
+      undecodable: false,
+    });
+  });
+
+  it('leaves a format it never re-encodes alone', async () => {
+    // GIF is excluded on purpose — a canvas keeps only the first frame — so it
+    // must not be run through the decode check either.
+    const gif = file('image/gif');
+    await expect(compressImageResult(gif, { maxEdge: 1920 })).resolves.toEqual({
+      file: gif,
+      undecodable: false,
+    });
   });
 });

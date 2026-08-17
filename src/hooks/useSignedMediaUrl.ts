@@ -26,6 +26,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { openFile } from '../lib/media-crypto';
+import { imageDecodes } from '../lib/compress';
 import { keyToken, mimeForPath, type MediaFailure } from '../lib/media';
 import { cachedMedia, forgetMedia, putMedia } from '../lib/media-cache';
 import { pinnedObjectUrl } from '../lib/pins';
@@ -38,6 +39,12 @@ const SIGNED_URL_TTL_SECONDS = 3600;
  *  enough that an ordinary scroll never meets a placeholder, narrow enough that
  *  opening a conversation does not fetch the whole page. */
 const PRELOAD_MARGIN = '800px';
+
+/** How many fresh signatures one attachment may spend before the element's
+ *  refusals are taken as final. Two, because the failure being covered — a
+ *  cache eviction revoking a live URL — can legitimately happen more than
+ *  once, and each round costs one download. */
+const MAX_RELOADS = 2;
 
 export interface SignedMedia {
   /** The URL to render, or null while the first signature is in flight. */
@@ -104,10 +111,14 @@ export function useSignedMediaUrl(
       ownedUrlRef.current = null;
     }
   }, []);
-  // Whether the one retry has been spent for the *current* path. A ref rather
-  // than state: `reload` runs from an element's error handler and has to read
-  // the answer synchronously, before any re-render.
-  const retriedRef = useRef(false);
+  // How many re-signs the current path has spent. A ref rather than state:
+  // `reload` runs from an element's error handler and has to read the answer
+  // synchronously, before any re-render.
+  const retriesRef = useRef(0);
+  // Whether these bytes were proved to decode here. It is what separates an
+  // element that keeps losing its URL from a file with no decoder — the two
+  // used to be the same event counted twice.
+  const decodedRef = useRef(false);
   // Retires a signature still in flight when the path changes or the component
   // unmounts, so a slow response for the previous attachment cannot paint over
   // the current one.
@@ -171,24 +182,41 @@ export function useSignedMediaUrl(
       return;
     }
 
+    let blob: Blob;
     try {
       const opened = await openFile(sealed, key);
       if (requestRef.current !== ticket) return;
 
-      releaseOwnedUrl();
       // Typed from the object name, because Storage cannot say: every sealed
       // object uploads as application/octet-stream. A typeless blob leaves
       // videos showing a blank poster and renders an image as garbage text.
       //
       // Copied into a fresh buffer, since `opened` may be a view libsodium
       // hands back over a larger allocation that Blob would carry whole.
-      setUrl(
-        putMedia(path, new Blob([opened.slice()], { type: mimeForPath(path, kind) }))
-      );
+      blob = new Blob([opened.slice()], { type: mimeForPath(path, kind) });
     } catch {
       if (requestRef.current !== ticket) return;
       await giveUp('sealed');
+      return;
     }
+
+    // Asked of the bytes themselves, once, rather than inferred from an
+    // element that refused to load twice: the media cache revokes a URL under
+    // whatever is pointing at it on every eviction, and counting that as
+    // evidence about the *format* condemned photos that were never broken.
+    // Only the still kinds are asked — there is no cheap way to put the same
+    // question to a video, which is what `videoTrackIsUnsupported` is for.
+    if ((kind === 'image' || kind === 'sticker') && !(await imageDecodes(blob))) {
+      if (requestRef.current !== ticket) return;
+      console.warn('media has no decoder here', { path, type: blob.type, bytes: blob.size });
+      setFailure('undecodable');
+      return;
+    }
+    if (requestRef.current !== ticket) return;
+
+    decodedRef.current = true;
+    releaseOwnedUrl();
+    setUrl(putMedia(path, blob));
     // `token` is listed on purpose. The rule is right that the body never
     // reads it: it stands in for `keyRef.current`, which the body does read
     // and the rule cannot see through. Dropping it pins this callback to the
@@ -201,7 +229,8 @@ export function useSignedMediaUrl(
   // different object.
   useEffect(() => {
     setFailure(null);
-    retriedRef.current = false;
+    retriesRef.current = 0;
+    decodedRef.current = false;
     setWanted(!defer || typeof IntersectionObserver === 'undefined');
   }, [path, defer]);
 
@@ -259,14 +288,16 @@ export function useSignedMediaUrl(
   useEffect(() => () => observerRef.current?.disconnect(), []);
 
   const reload = useCallback(() => {
-    if (retriedRef.current) {
-      // Second refusal, of bytes fetched and decrypted for this attempt. The
-      // object is there and the key opened it, so what is left is a format this
-      // platform has no decoder for.
-      setFailure('undecodable');
+    if (retriesRef.current >= MAX_RELOADS) {
+      // Out of retries. What that means depends on something already known:
+      // bytes that decoded here are a URL problem and not a format one, and
+      // saying "this format can't be shown" about a picture this device drew a
+      // moment ago is the wrong sentence and an unrecoverable one — `failure`
+      // sticks until the path changes.
+      setFailure(decodedRef.current ? 'gone' : 'undecodable');
       return;
     }
-    retriedRef.current = true;
+    retriesRef.current += 1;
     // The cached blob is what just failed to render — an eviction revoked it,
     // or the object behind it is gone. Left in place, the re-sign below would
     // be answered by the same dead URL on the next mount.

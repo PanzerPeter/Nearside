@@ -29,7 +29,7 @@ import { sealFile } from '../lib/media-crypto';
 import { peerPublicKey } from '../lib/peer-keys';
 import { MEDIA_SCAN_LIMIT, selectStaleMedia, type MediaRow } from '../lib/media';
 import { pinnedIds } from '../lib/pins';
-import { CHAT_IMAGE_MAX_EDGE, compressImage } from '../lib/compress';
+import { CHAT_IMAGE_MAX_EDGE, compressImageResult } from '../lib/compress';
 import { notifyReceiver, notifyRoom } from '../lib/push';
 import { roomMediaPath, sealRoomFileKey, sendRoomMessage } from '../lib/rooms';
 import { stickerFile, type Sticker } from '../lib/stickers';
@@ -265,11 +265,21 @@ export function useMediaSend({
 
     // Images are re-encoded before they leave the device — a phone photo is
     // typically megabytes of resolution this UI never paints. Videos and voice
-    // notes go up as recorded (voice is already ~180 KB a minute). Every
-    // failure inside `compressImage` returns the original file, so this cannot
-    // be what stops a send.
-    const body =
-      kind === 'image' ? await compressImage(file, { maxEdge: CHAT_IMAGE_MAX_EDGE }) : file;
+    // notes go up as recorded (voice is already ~180 KB a minute).
+    let body = file;
+    if (kind === 'image') {
+      const compressed = await compressImageResult(file, { maxEdge: CHAT_IMAGE_MAX_EDGE });
+      // Refused here rather than uploaded. A picture this device cannot decode
+      // is one no recipient can draw either — the send used to go through and
+      // arrive, for everyone including the sender, as "this photo's format
+      // can't be shown here", at the one moment nobody could still act on it.
+      if (compressed.undecodable) {
+        return fail(
+          'This image could not be read on this device. Some phones save photos in a format Nearside cannot open — save or export it as a JPEG and send that.'
+        );
+      }
+      body = compressed.file;
+    }
 
     // The one step in a send with no text-message equivalent, and the one most
     // likely to fail on a phone: pulling the bytes off the device. A gallery

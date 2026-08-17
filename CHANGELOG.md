@@ -16,6 +16,20 @@ one of them drifts.
 
 ### Fixed
 
+- **A photo the phone cannot read is refused before it is sent, not after.**
+  Some phones save a picture in a format they then describe as something else —
+  a `.png` that is not one. Nothing on any device Nearside runs on can draw it,
+  so it arrived in the conversation as "this photo's format can't be shown
+  here" for everybody, including the person who sent it, at the one moment
+  nobody could still do anything about it. The composer now refuses it while
+  the original is still in your hands, and says to export it as a JPEG.
+- **A picture that is perfectly fine stops being called unshowable.** Whether an
+  attachment could be displayed was decided by counting how many times the
+  image failed to appear — but the app drops decrypted attachments from memory
+  when it needs the room, and doing that under a picture on screen looks exactly
+  like a failure. Two of those and a photo was labelled unreadable for as long
+  as the conversation stayed open. The app now asks the only question that
+  settles it: it decodes the picture itself, once, when it arrives.
 - **An attachment that will not send now says why.** Every way a photo, video
   or voice message could fail arrived as the same four words — "Could not send
   media" — whether the file could not be read off the phone, the person you are
