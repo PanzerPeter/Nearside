@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  fileExtension,
   keyToken,
   mediaFailureNotice,
   mimeForPath,
@@ -10,6 +11,85 @@ import {
 } from './media';
 import { AUDIO_KEEP_LIMIT, MEDIA_KEEP_LIMIT } from './conversation';
 import type { MediaType } from './types';
+
+function file(name: string, type: string): File {
+  return new File(['x'], name, { type });
+}
+
+describe('fileExtension', () => {
+  it('prefers the extension from the filename, lowercased', () => {
+    expect(fileExtension(file('Holiday.JPEG', 'image/jpeg'))).toBe('jpeg');
+  });
+
+  it('falls back to the MIME type when the name has no extension', () => {
+    expect(fileExtension(file('clipboard', 'image/png'))).toBe('png');
+  });
+
+  // The extension is pasted into a Storage object key, and Storage rejects a
+  // key holding a character outside its own set — so a second copy of a
+  // download, or a recorder that names its codec, must not be able to make a
+  // file unsendable.
+  it('takes only the leading word, so an odd name still uploads', () => {
+    expect(fileExtension(file('shot.jpg (1)', 'image/jpeg'))).toBe('jpg');
+    expect(fileExtension(file('note', 'audio/webm;codecs=opus'))).toBe('webm');
+    expect(fileExtension(file('drawing', 'image/svg+xml'))).toBe('svg');
+  });
+
+  it('falls back to bin when nothing usable is left', () => {
+    expect(fileExtension(file('archive.', ''))).toBe('bin');
+  });
+
+  // The subtype is not the extension. Scraping it wrote `.quicktime` and
+  // `.mpeg`, which nothing mapped back to a type — a video that would never
+  // play again, decided at upload and unfixable after it.
+  it('writes the canonical extension rather than the MIME subtype', () => {
+    expect(fileExtension(file('clip', 'video/quicktime'))).toBe('mov');
+    expect(fileExtension(file('track', 'audio/mpeg'))).toBe('mp3');
+    expect(fileExtension(file('voice', 'audio/mp4'))).toBe('m4a');
+  });
+
+  it('replaces a name extension this app could not read back', () => {
+    expect(fileExtension(file('clip.mpg', 'video/mp4'))).toBe('mp4');
+    expect(fileExtension(file('voice.opus', 'audio/ogg'))).toBe('ogg');
+  });
+
+  it('keeps a legacy name that still reads, rather than churning it', () => {
+    // `.quicktim` is what the old scraping produced — the subtype truncated to
+    // eight characters — and it is readable now, so there is nothing to fix.
+    expect(fileExtension(file('clip.quicktim', 'video/quicktime'))).toBe('quicktim');
+  });
+});
+
+describe('the object name round-trips', () => {
+  // The single rule holding `fileExtension` and `mimeForPath` together: a
+  // sealed object announces nothing, so what the sender wrote into the name is
+  // the only thing the reader has. Every type the picker accepts has to survive
+  // the trip.
+  const cases: [string, MediaType][] = [
+    ['image/png', 'image'],
+    ['image/jpeg', 'image'],
+    ['image/webp', 'image'],
+    ['image/gif', 'image'],
+    ['video/mp4', 'video'],
+    ['video/webm', 'video'],
+    ['video/quicktime', 'video'],
+    ['audio/webm', 'audio'],
+    ['audio/ogg', 'audio'],
+    ['audio/mp4', 'audio'],
+    ['audio/aac', 'audio'],
+    ['audio/mpeg', 'audio'],
+  ];
+
+  it.each(cases)('%s survives being written into an object name', (type, kind) => {
+    const named = `pair/uuid.${fileExtension(file('capture', type))}`;
+    expect(mimeForPath(named, kind)).toBe(type);
+  });
+
+  it('reads the extensions the old scraping wrote', () => {
+    expect(mimeForPath('pair/uuid.quicktim', 'video')).toBe('video/quicktime');
+    expect(mimeForPath('pair/uuid.mpeg', 'audio')).toBe('audio/mpeg');
+  });
+});
 
 function rows(kind: MediaType, count: number, from = 0): MediaRow[] {
   return Array.from({ length: count }, (_, i) => ({

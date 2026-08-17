@@ -44,10 +44,16 @@ export const STICKER_LABEL_MAX = 32;
  *  entry is a row plus an object that sign-out has to clean up. */
 export const STICKER_LIMIT = 100;
 
-/** What can be turned into a sticker. GIF is accepted and flattened to a still
- *  by the compressor — an animated sticker would need a decode path the message
- *  bubble does not have, and silently sending frame one is better explained
- *  than silently failing. */
+/**
+ * What can be turned into a sticker.
+ *
+ * An animated source keeps its animation. `compressImage` re-encodes nothing it
+ * cannot re-encode without losing frames — GIF by type, animated WebP and APNG
+ * by reading the container — and an `<img>` plays all three, so the bubble needs
+ * no decode path of its own. The catch is that an animation is not shrunk
+ * either, so a large one is refused by `STICKER_MAX_BYTES` rather than squeezed
+ * under it.
+ */
 export const STICKER_SOURCE_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
 
 /** A row as stored: the label and the file key are both sealed. */

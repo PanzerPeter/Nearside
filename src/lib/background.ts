@@ -11,10 +11,18 @@ import { classifyMedia, mediaPath } from './conversation';
  * trims by walking `messages` rows rather than listing the folder, so a
  * background is never mistaken for an old attachment.
  *
- * The storage folder is per conversation rather than per user. The peer cannot
- * discover your background, since the row naming it is unreadable to them, but
- * the bucket policy would let them read the object if they listed the folder.
- * Closing that needs new `chat-media` policies; see the README.
+ * Sharing that folder is also why the image is sealed (migration 0039). The
+ * storage policy was written for attachments the two participants share, so it
+ * lets either of them list and read anything in there — and a background is
+ * usually a photo of something personal. It now goes up like every other
+ * attachment: a random per-file key from `lib/media-crypto.ts`, sealed under
+ * the owner's *vault* key, since the picture is chosen by one person and shown
+ * to nobody else. What the peer can still read is ciphertext, and the key is on
+ * a row their RLS policy has never let them see.
+ *
+ * Backgrounds set before 0039 are plaintext objects with no key on the row.
+ * They keep rendering exactly as they did; deleting somebody's wallpaper to
+ * tidy a schema is not a fix. Each is replaced the next time its owner sets one.
  */
 
 /** Max background upload size. Well under the bucket's 50 MB video ceiling: a
@@ -43,50 +51,47 @@ export function validateBackgroundFile(file: File): string | null {
 }
 
 /**
- * Signed URLs already minted for a background object, by path.
+ * Backgrounds already fetched, by object path.
  *
- * A signature carries a fresh JWT in its query string, so re-signing the same
- * object produces a URL no cache has ever seen. The background is re-signed on
- * every conversation open, which meant switching back and forth between two
- * chats re-downloaded both images every time — a megabyte a tap for a picture
- * that had not changed.
+ * Re-reading one on every conversation open is what this exists to stop:
+ * switching back and forth between two chats used to re-download both images
+ * every time — a megabyte a tap for a picture that had not changed. A signed
+ * URL cannot be leaned on for that, because a signature carries a fresh JWT in
+ * its query string, so no two signatures of the same object are the same string
+ * and the HTTP cache never hits.
  *
- * Handing back the same string instead lets the HTTP cache do its job. Nothing
- * is stored but a URL the account was entitled to a moment ago, and the entry
- * is dropped well before the signature it holds expires.
+ * A sealed background has to be decrypted before it can be painted anyway, so
+ * what is held is the object URL for the decrypted bytes — the same shape as
+ * `lib/media-cache.ts`, and in memory for the same reason: these are decrypted
+ * images, and a copy on disk would outlive the account that chose it.
  */
-const signedBackgrounds = new Map<string, { url: string; mintedAt: number }>();
+const backgroundUrls = new Map<string, string>();
 
-/** How long a minted URL is handed out again. Comfortably inside the hour the
- *  signature is good for, so a URL taken from here always outlives the paint it
- *  was taken for. */
-export const BACKGROUND_URL_REUSE_MS = 45 * 60 * 1000;
-
-/** A still-fresh signature for `path`, or null. */
-export function reusableBackgroundUrl(path: string, now: number = Date.now()): string | null {
-  const hit = signedBackgrounds.get(path);
-  if (!hit) return null;
-  if (now - hit.mintedAt >= BACKGROUND_URL_REUSE_MS) {
-    signedBackgrounds.delete(path);
-    return null;
-  }
-  return hit.url;
+/** The held URL for `path`, or null. */
+export function reusableBackgroundUrl(path: string): string | null {
+  return backgroundUrls.get(path) ?? null;
 }
 
-/** Remember a freshly minted signature. */
-export function rememberBackgroundUrl(path: string, url: string, now: number = Date.now()): void {
-  signedBackgrounds.set(path, { url, mintedAt: now });
+/** Hold the URL for a background just fetched. Replacing an entry revokes the
+ *  one it supersedes; leaving it would leak the blob for the session. */
+export function rememberBackgroundUrl(path: string, url: string): void {
+  const previous = backgroundUrls.get(path);
+  if (previous && previous !== url) URL.revokeObjectURL(previous);
+  backgroundUrls.set(path, url);
 }
 
 /** Drop one — after the object behind it is replaced or removed, when the URL
  *  points at bytes that are gone. */
 export function forgetBackgroundUrl(path: string): void {
-  signedBackgrounds.delete(path);
+  const held = backgroundUrls.get(path);
+  if (held) URL.revokeObjectURL(held);
+  backgroundUrls.delete(path);
 }
 
 /** Drop everything. Belongs in the account teardown with the other caches. */
 export function forgetAllBackgroundUrls(): void {
-  signedBackgrounds.clear();
+  for (const url of backgroundUrls.values()) URL.revokeObjectURL(url);
+  backgroundUrls.clear();
 }
 
 /** The shape of a PostgREST error, narrowed to what the message depends on. */

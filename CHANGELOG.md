@@ -14,6 +14,51 @@ one of them drifts.
 
 ## [Unreleased]
 
+## [1.4.1] — 2026-08-17
+
+### Security
+
+- **Nearside is no longer included in Android backups.** Two things in the app's
+  private storage are deliberately readable: attachments you pinned, and the
+  local copy of messages this phone has decrypted, which is what makes search
+  work offline. Both were being copied to Google Drive by the system backup —
+  plaintext, to somebody else's servers, from an app whose whole claim is that
+  the server holds nothing. They stay on the phone now. The cost is that a new
+  phone starts at your recovery phrase rather than restoring itself, which is
+  the honest position for an app that has no reset path.
+- **Chat backgrounds are encrypted.** They were the one picture that went up in
+  the clear, and they share a storage folder with the conversation's
+  attachments — so the person you were talking to could have read the photo
+  behind your thread, and so could the server. A background now gets its own key
+  like every attachment does. Backgrounds set before this update keep working
+  and are replaced the next time you choose one.
+- **Photos no longer carry where they were taken.** A picture that gets resized
+  on the way out has always lost its camera data as a side effect. One that did
+  not — an animation, or a photo already small enough to send as-is — kept its
+  GPS coordinates, and encryption does not hide those from the person receiving
+  them. Now everything is cleaned before it is sent, except a photo whose
+  rotation tag is the only thing keeping it the right way up. Videos still carry
+  their metadata; that one is not fixed.
+
+### Fixed
+
+- **Animated pictures stay animated.** An animated WebP or PNG — which is what
+  most saved "GIFs" and exported sticker packs actually are — was being
+  flattened to its first frame on the way out, silently. GIFs were already
+  exempt; the check now looks at the file instead of trusting its type.
+- **A photo pasted into the message box while an upload was running no longer
+  disappears.** It was being dropped when the upload finished.
+- **A trimmed attachment can no longer become a photo that is gone with no
+  explanation.** Conversations keep a fixed number of photos and voice notes and
+  clear the rest, replacing each with a note saying so. If writing that note
+  failed — most often because the other person's account was gone — the file had
+  already been deleted, and the message was left pointing at nothing forever.
+  The note is now written first.
+- **Videos and voice notes recorded in some formats can be played again.** A
+  file whose name arrived without an extension was given one that nothing could
+  read back, and since an encrypted file says nothing about itself, that was the
+  only record of what it was. Files already sent this way now open too.
+
 ## [1.4.0] — 2026-08-17
 
 ### Added

@@ -30,6 +30,22 @@ describe('media encryption', () => {
     expect(blob.type).toBe('application/octet-stream');
   });
 
+  it('reads the nonce and the body as views, without copying the file', async () => {
+    // Both halves are handed to libsodium as `subarray` views rather than
+    // copies, which is only safe if their offsets are honoured. A fixture that
+    // is itself a view over a larger buffer is what catches an offset being
+    // dropped: an implementation that ignored one would seal fine here and
+    // fail on every real attachment.
+    const original = new Uint8Array([9, 8, 7, 6, 5, 4, 3, 2, 1]);
+    const { blob, key } = await sealFile(original);
+
+    const padded = new Uint8Array(blob.size + 40);
+    padded.set(new Uint8Array(await blob.arrayBuffer()), 24);
+    const view = padded.subarray(24, 24 + blob.size);
+
+    expect(Array.from(await openFile(view, key))).toEqual(Array.from(original));
+  });
+
   it('seals a file large enough to cross a chunk boundary', async () => {
     // Every other fixture here is a handful of bytes; a length bug would sail
     // through all of them. Same trap the eight-byte body fixtures set.

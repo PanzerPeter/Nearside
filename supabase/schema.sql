@@ -1198,9 +1198,31 @@ CREATE TABLE IF NOT EXISTS public.chat_backgrounds (
   owner_id   uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   peer_id    uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   media_path text NOT NULL,
+
+  -- The image's file key, sealed under the owner's *vault* key rather than to a
+  -- peer: a background is chosen by one person, stored on their own row, and
+  -- shown to nobody else, so there is no second party to seal to.
+  --
+  -- It matters because the object shares the conversation's `chat-media` folder,
+  -- which the storage policy opens to both participants — that policy was
+  -- written for attachments the two of them share. Until 0039 the background
+  -- went up as a plain image with a real content type, so the server and the
+  -- peer could both read it. Now the peer's access buys them ciphertext, and
+  -- the key sits on a row their RLS policy has never let them see.
+  --
+  -- Null on rows written before 0039. Those point at a plaintext object and
+  -- keep rendering as one until that person next sets a background.
+  key_ciphertext text,
+  key_nonce      text,
+
   updated_at timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (owner_id, peer_id),
-  CONSTRAINT media_path_length CHECK (char_length(media_path) BETWEEN 1 AND 512)
+  CONSTRAINT media_path_length CHECK (char_length(media_path) BETWEEN 1 AND 512),
+
+  -- Both or neither. A path whose key is missing is an image nothing can ever
+  -- open, drawn as a broken picture forever.
+  CONSTRAINT chat_backgrounds_key_complete
+    CHECK (num_nonnulls(key_ciphertext, key_nonce) IN (0, 2))
 );
 
 -- The PK indexes (owner_id, peer_id); peer_id needs its own for the FK.

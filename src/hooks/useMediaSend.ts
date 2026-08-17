@@ -16,7 +16,6 @@ import { supabase } from '../lib/supabase';
 import {
   classifyMedia,
   conversationFilter,
-  fileExtension,
   isSelfChat,
   mediaPath,
   MAX_MESSAGE_LENGTH,
@@ -28,7 +27,8 @@ import { describeMediaError } from '../lib/media-errors';
 import { t } from '../lib/i18n';
 import { sealFile } from '../lib/media-crypto';
 import { peerPublicKey } from '../lib/peer-keys';
-import { MEDIA_SCAN_LIMIT, selectStaleMedia, type MediaRow } from '../lib/media';
+import { fileExtension, MEDIA_SCAN_LIMIT, selectStaleMedia, type MediaRow } from '../lib/media';
+import { forgetMedia } from '../lib/media-cache';
 import { pinnedIds } from '../lib/pins';
 import { CHAT_IMAGE_MAX_EDGE, compressImageResult } from '../lib/compress';
 import { notifyReceiver, notifyRoom } from '../lib/push';
@@ -146,6 +146,12 @@ export function useMediaSend({
     // buzzing in someone's pocket ten times.
     let lastInsertedId: string | null = null;
     let sent = 0;
+    // Which entries actually went. Collected by id rather than counted off the
+    // front, because the queue can grow while the upload runs — the composer's
+    // text field stays live, and a picture pasted into it stages a file. Slicing
+    // by count then wrote back a list computed before that file existed, and
+    // dropped it without a word.
+    const delivered = new Set<string>();
 
     try {
       for (const [index, item] of staged.entries()) {
@@ -165,6 +171,7 @@ export function useMediaSend({
         );
         if (!insertedId) break;
         lastInsertedId = insertedId;
+        delivered.add(item.id);
         sent += 1;
         setSentCount(sent);
       }
@@ -185,9 +192,8 @@ export function useMediaSend({
 
     // What went in is dropped from the queue; whatever stopped the run stays
     // staged, so Send again retries the rest instead of re-sending the photos
-    // the friend already has.
-    const remaining = staged.slice(sent);
-    setStaged(remaining);
+    // the friend already has. Anything added while the upload ran stays too.
+    setStaged((current) => current.filter((item) => !delivered.has(item.id)));
     if (!sent) return;
     // Cleared as soon as anything went in, even if the rest of the batch did
     // not: the caption and the reply rode on the first row. Left in the box
@@ -264,12 +270,28 @@ export function useMediaSend({
       }
     }
 
-    // Images are re-encoded before they leave the device — a phone photo is
-    // typically megabytes of resolution this UI never paints. Videos and voice
-    // notes go up as recorded (voice is already ~180 KB a minute).
+    // Pulling the bytes off the device is the one step in a send with no
+    // text-message equivalent, and the one most likely to fail on a phone: a
+    // gallery item can be a cloud placeholder that was never downloaded, and a
+    // content URI's read permission does not always survive the app going to
+    // the background behind the picker. Both arrive as a DOMException carrying
+    // nothing but a name.
+    //
+    // Images are re-encoded on the way past — a phone photo is typically
+    // megabytes of resolution this UI never paints — and whatever is sent, the
+    // camera's metadata comes off it first. Videos and voice notes go up as
+    // recorded (voice is already ~180 KB a minute), metadata included: there is
+    // no cheap way to rewrite an MP4's atoms here, and it is the one gap left
+    // in this path.
     let body = file;
+    let bytes: Uint8Array;
     if (kind === 'image') {
-      const compressed = await compressImageResult(file, { maxEdge: CHAT_IMAGE_MAX_EDGE });
+      let compressed;
+      try {
+        compressed = await compressImageResult(file, { maxEdge: CHAT_IMAGE_MAX_EDGE });
+      } catch (error) {
+        return fail(describeMediaError(error), error);
+      }
       // Refused here rather than uploaded. A picture this device cannot decode
       // is one no recipient can draw either — the send used to go through and
       // arrive, for everyone including the sender, as "this photo's format
@@ -279,20 +301,16 @@ export function useMediaSend({
           'This image could not be read on this device. Some phones save photos in a format Nearside cannot open. Save or export it as a JPEG and send that.'
         );
       }
+      // Already in memory: the compressor had to read the file to decide any of
+      // this, and reading a photo twice is a second full pull off the device.
       body = compressed.file;
-    }
-
-    // The one step in a send with no text-message equivalent, and the one most
-    // likely to fail on a phone: pulling the bytes off the device. A gallery
-    // item can be a cloud placeholder that was never downloaded, and a content
-    // URI's read permission does not always survive the app going to the
-    // background behind the picker. Both arrive as a DOMException carrying
-    // nothing but a name.
-    let bytes: Uint8Array;
-    try {
-      bytes = new Uint8Array(await body.arrayBuffer());
-    } catch (error) {
-      return fail(describeMediaError(error), error);
+      bytes = compressed.bytes;
+    } else {
+      try {
+        bytes = new Uint8Array(await body.arrayBuffer());
+      } catch (error) {
+        return fail(describeMediaError(error), error);
+      }
     }
 
     // Sealed after compression, never before: compressImage decodes an image,
@@ -481,6 +499,18 @@ export function useMediaSend({
    * everyone agreed to.
    */
   async function cleanupOldMedia() {
+    // Housekeeping nobody asked for, running beside a conversation that opened
+    // fine. It reports to the console and never to the user, and — since both
+    // callers fire it and walk away — it must not reject either: an unhandled
+    // rejection here is a failure nothing is left to catch.
+    try {
+      await trimOldMedia();
+    } catch (error) {
+      console.error('media trim failed', error);
+    }
+  }
+
+  async function trimOldMedia() {
     if (target.kind !== 'peer') return;
     const peerId = target.peerId;
     const { data } = await supabase
@@ -517,9 +547,6 @@ export function useMediaSend({
     const myStale = stale.filter((m) => m.user_id === me);
     if (!myStale.length) return;
 
-    const paths = myStale.map((m) => m.media_path).filter((p): p is string => !!p);
-    if (paths.length) await supabase.storage.from('chat-media').remove(paths);
-
     // The placeholder names what was trimmed, so a cleared voice note doesn't
     // read as a lost photo.
     const byKind = new Map<string, string[]>();
@@ -527,9 +554,39 @@ export function useMediaSend({
       const label = row.media_type === 'audio' ? '🎤 voice message removed' : '📎 media removed';
       byKind.set(label, [...(byKind.get(label) ?? []), row.id]);
     }
+
+    /*
+      What follows is ordered around one rule: nothing is destroyed until
+      everything that can refuse has already run.
+
+      Sealing the placeholder is fallible in a way that is easy to miss. It
+      needs the peer's published key, and `sealBody` throws rather than degrade
+      when there is none — which is what an unfriended peer, a deleted account
+      or a failed profile read all look like. That seal used to happen *after*
+      the objects were deleted, so a peer whose key could not be fetched left
+      the bucket empty and every row still pointing into it: the exact
+      dead-photo-forever state the paragraph above describes fixing, arriving
+      through the other door. The throw also escaped into a `void` call, so
+      nothing was logged either.
+    */
+    const sealed: { ids: string[]; body: BodyColumns }[] = [];
     const peerKey = await peerPublicKey(peerId);
     for (const [label, ids] of byKind) {
-      await supabase
+      // The placeholder is a body, so it is sealed like one. Written as
+      // plaintext it would simply never appear: nothing reads `content` any
+      // more, and the bubble would show a decrypt failure where a "media
+      // removed" note belongs.
+      sealed.push({ ids, body: await sealBody(identity, peerKey, me, peerId, label) });
+    }
+
+    // Rows first, then the objects they named — the order `deleteSticker` uses,
+    // and for the same reason. A row relabelled ahead of its file leaves bytes
+    // nothing points at, which the account-deletion sweep collects; a file
+    // deleted ahead of its row leaves a photo that can never be shown or
+    // explained.
+    const relabelled = new Set<string>();
+    for (const { ids, body } of sealed) {
+      const { error } = await supabase
         .from('messages')
         .update({
           media_path: null,
@@ -538,14 +595,25 @@ export function useMediaSend({
           // The file is gone, so the key that opened it describes nothing.
           media_key_ciphertext: null,
           media_key_nonce: null,
-          // The placeholder is a body, so it is sealed like one. Written as
-          // plaintext it would simply never appear: nothing reads `content`
-          // any more, and the bubble would show a decrypt failure where a
-          // "media removed" note belongs.
-          ...(await sealBody(identity, peerKey, me, peerId, label)),
+          ...body,
         })
         .in('id', ids);
+      if (error) console.error('media trim could not relabel rows', error);
+      else for (const id of ids) relabelled.add(id);
     }
+
+    const paths = myStale
+      .filter((row) => relabelled.has(row.id))
+      .map((row) => row.media_path)
+      .filter((path): path is string => !!path);
+    if (!paths.length) return;
+
+    await supabase.storage.from('chat-media').remove(paths);
+    // The decrypted copy this session was holding describes a file that no
+    // longer exists, and the cache is keyed on the path, so a re-forward or a
+    // second thread would be served bytes from a message that now reads
+    // "media removed".
+    for (const path of paths) forgetMedia(path);
   }
 
   return { staged, uploading, sentCount, stage, unstage, clearStaged, send, sendSticker };

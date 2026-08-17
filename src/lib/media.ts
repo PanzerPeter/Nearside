@@ -12,16 +12,105 @@ const MEDIA_TRIM_BATCH = 20;
  */
 export const MEDIA_SCAN_LIMIT = MEDIA_KEEP_LIMIT + AUDIO_KEEP_LIMIT + MEDIA_TRIM_BATCH;
 
+/*
+  What a sealed object's name says about it.
+
+  Every object in `chat-media` uploads as `application/octet-stream`, which is
+  the point of sealing it, so nothing downstream can ask Storage what a file is.
+  The extension the upload path keeps on the object name is the only surviving
+  answer, and a decrypted blob built without it is a `<video>` with no first
+  frame and an `<img>` that opens as a page of garbage text.
+
+  So the two directions below — the extension a send writes, and the type a
+  reader recovers from it — are one mapping, and `media.test.ts` proves they
+  agree for every type the picker accepts. They did not always: `fileExtension`
+  used to take the MIME's subtype whole, which turns `video/quicktime` into
+  `.quicktime` and `audio/mpeg` into `.mpeg`, neither of which anything mapped
+  back. The result was a file that would never play again, decided at upload
+  time, unfixable afterwards, and invisible until somebody tapped it.
+*/
+
+/** The type a reader recovers from an extension. `mp4` and `webm` are absent
+ *  because a container alone cannot separate a voice note from a video; they
+ *  are resolved from `kind` in `mimeForPath`. */
+const MIME_FOR_EXTENSION: Record<string, string> = {
+  webp: 'image/webp',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  gif: 'image/gif',
+  mov: 'video/quicktime',
+  m4a: 'audio/mp4',
+  ogg: 'audio/ogg',
+  aac: 'audio/aac',
+  mp3: 'audio/mpeg',
+  // Written by the old subtype-scraping `fileExtension`. Objects named this way
+  // are already in the bucket and cannot be renamed, so reading them is the
+  // only repair available. `quicktim` is not a typo: the scrape truncated to
+  // eight characters, so `video/quicktime` came out a letter short.
+  quicktim: 'video/quicktime',
+  mpeg: 'audio/mpeg',
+};
+
+/** The extension a send writes, per accepted MIME type. */
+const EXTENSION_FOR_MIME: Record<string, string> = {
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'image/webp': 'webp',
+  'image/gif': 'gif',
+  'video/mp4': 'mp4',
+  'video/webm': 'webm',
+  'video/quicktime': 'mov',
+  'audio/webm': 'webm',
+  'audio/ogg': 'ogg',
+  'audio/mp4': 'm4a',
+  'audio/aac': 'aac',
+  'audio/mpeg': 'mp3',
+};
+
+/** Whether `mimeForPath` can make anything of this extension. */
+function readableExtension(ext: string): boolean {
+  return ext === 'mp4' || ext === 'webm' || ext in MIME_FOR_EXTENSION;
+}
+
+/**
+ * The leading run of letters and digits, lowercased, and short.
+ *
+ * The result is pasted straight into a Storage object key, and Storage refuses
+ * a key holding a character outside its own set. A photo saved as
+ * `shot.jpg (1)` — which is what a second download of the same name looks like
+ * on Android — would take `jpg (1)` as its extension and fail to upload, for a
+ * reason the sender can do nothing about. A recording's `audio/webm;codecs=opus`
+ * is the same problem arriving from the MIME side.
+ */
+function leadingWord(raw: string | undefined): string {
+  return (raw ?? '').toLowerCase().match(/^[a-z0-9]+/)?.[0]?.slice(0, 8) ?? '';
+}
+
+/**
+ * The extension to give a file being uploaded.
+ *
+ * The name's own extension wins when this app can read it back, so a file
+ * arrives at the other end called what the sender called it. When it cannot —
+ * an extension that means nothing here, or no extension at all — the file's
+ * type decides, because the name is about to become the only record of it.
+ */
+export function fileExtension(file: File): string {
+  const fromName = leadingWord(file.name.includes('.') ? file.name.split('.').pop() : '');
+  if (fromName && readableExtension(fromName)) return fromName;
+
+  const canonical = EXTENSION_FOR_MIME[file.type.split(';')[0].trim().toLowerCase()];
+  if (canonical) return canonical;
+
+  // Neither says anything this app understands. The subtype is still a better
+  // label than nothing for a format nobody here has to open.
+  return fromName || leadingWord(file.type.split('/')[1]) || 'bin';
+}
+
 /**
  * The content type of a sealed attachment, recovered from its object name.
  *
- * Every object in `chat-media` uploads as `application/octet-stream`, which is
- * the point of sealing it, so nothing downstream can ask Storage what a file
- * is. The extension `0024`'s upload path kept on the object name is the only
- * surviving answer, and a decrypted blob built without it is a `<video>` with
- * no first frame and an `<img>` that opens as a page of garbage text.
- *
- * `kind` disambiguates WebM, which is a container both a voice note and a
+ * `kind` disambiguates WebM and MP4, both containers that a voice note and a
  * video arrive in and which the extension alone cannot separate.
  */
 export function mimeForPath(path: string, kind?: MediaType | null): string {
@@ -29,36 +118,12 @@ export function mimeForPath(path: string, kind?: MediaType | null): string {
   if (!name.includes('.')) return 'application/octet-stream';
   const ext = (name.split('.').pop() ?? '').toLowerCase();
 
-  switch (ext) {
-    case 'webp':
-      return 'image/webp';
-    case 'jpg':
-    case 'jpeg':
-      return 'image/jpeg';
-    case 'png':
-      return 'image/png';
-    case 'gif':
-      return 'image/gif';
-    case 'mp4':
-      return kind === 'audio' ? 'audio/mp4' : 'video/mp4';
-    case 'mov':
-      return 'video/quicktime';
-    case 'm4a':
-      return 'audio/mp4';
-    case 'ogg':
-      return 'audio/ogg';
-    case 'aac':
-      return 'audio/aac';
-    case 'mp3':
-      return 'audio/mpeg';
-    case 'webm':
-      return kind === 'audio' ? 'audio/webm' : 'video/webm';
-    default:
-      // Deliberately not a guess. A wrong type is worse than none: the element
-      // commits to a decoder and fails, where an unknown type at least lets it
-      // sniff.
-      return 'application/octet-stream';
-  }
+  if (ext === 'mp4') return kind === 'audio' ? 'audio/mp4' : 'video/mp4';
+  if (ext === 'webm') return kind === 'audio' ? 'audio/webm' : 'video/webm';
+  // Deliberately not a guess. A wrong type is worse than none: the element
+  // commits to a decoder and fails, where an unknown type at least lets it
+  // sniff.
+  return MIME_FOR_EXTENSION[ext] ?? 'application/octet-stream';
 }
 
 /**

@@ -113,7 +113,10 @@ Losing the twelve words loses the history. There is no reset path.
 - **`FLAG_SECURE` where it matters.** A small Android plugin covers the recovery
   phrase and the lock screen, which also keeps them out of the recents thumbnail.
 - **Chat backgrounds.** Per person and per conversation; your choice and your
-  peer's are separate rows and separate objects.
+  peer's are separate rows and separate objects. Sealed under your vault key
+  like everything else in the bucket — the folder is shared with the
+  conversation's attachments, so an unsealed one would have been readable by the
+  person you were talking to.
 - **Survives bad networks.** Wake is detected from three signals (including a
   wall-clock jump, the only one that fires on a woken desktop), and one
   `generation` counter rebuilds every realtime subscription. When the WebSocket

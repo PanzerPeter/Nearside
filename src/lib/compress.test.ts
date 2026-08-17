@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  compressImage,
   compressImageResult,
   imageDecodes,
   isCompressible,
@@ -122,6 +123,7 @@ describe('compressImageResult without a decoder', () => {
     const original = file('image/png');
     await expect(compressImageResult(original, { maxEdge: 1920 })).resolves.toEqual({
       file: original,
+      bytes: new Uint8Array(16),
       undecodable: false,
     });
   });
@@ -132,7 +134,36 @@ describe('compressImageResult without a decoder', () => {
     const gif = file('image/gif');
     await expect(compressImageResult(gif, { maxEdge: 1920 })).resolves.toEqual({
       file: gif,
+      bytes: new Uint8Array(16),
       undecodable: false,
     });
+  });
+
+  it('still takes the camera metadata off a file it is passing through', async () => {
+    // The pass-through paths are exactly the ones the canvas cannot clean up
+    // for free, so this is where a photo's GPS coordinates would otherwise
+    // reach the recipient intact.
+    const exif = [...'Exif'].map((c) => c.charCodeAt(0));
+    const app1 = [0xff, 0xe1, 0x00, 0x20, ...exif, 0x00, 0x00, ...new Array(24).fill(0)];
+    const withExif = new Uint8Array([
+      0xff, 0xd8, ...app1,
+      0xff, 0xda, 0x00, 0x08, 0x01, 0x01, 0x00, 0x00, 0x12, 0x34, 0xff, 0xd9,
+    ]);
+    const original = new File([withExif], 'photo.jpg', { type: 'image/jpeg' });
+
+    const result = await compressImageResult(original, { maxEdge: 1920 });
+    expect(result.bytes.length).toBe(withExif.length - app1.length);
+    expect(result.file).not.toBe(original);
+    expect(result.file.type).toBe('image/jpeg');
+  });
+
+  it('reports a file whose bytes cannot be read rather than sending nothing', async () => {
+    const unreadable = new File([new Uint8Array(4)], 'gone.jpg', { type: 'image/jpeg' });
+    Object.defineProperty(unreadable, 'arrayBuffer', {
+      value: () => Promise.reject(new DOMException('permission', 'NotReadableError')),
+    });
+    await expect(compressImageResult(unreadable, { maxEdge: 1920 })).rejects.toThrow();
+    // The avatar/background wrapper keeps its "never a gate" promise instead.
+    await expect(compressImage(unreadable, { maxEdge: 512 })).resolves.toBe(unreadable);
   });
 });

@@ -119,28 +119,6 @@ export function classifyMedia(file: File): 'image' | 'video' | 'audio' | null {
   return null;
 }
 
-export function fileExtension(file: File): string {
-  const fromName = file.name.includes('.') ? file.name.split('.').pop() : '';
-  return leadingWord(fromName) || leadingWord(file.type.split('/')[1]) || 'bin';
-}
-
-/**
- * The leading run of letters and digits, lowercased, and short.
- *
- * The result is pasted straight into a Storage object key, and Storage refuses
- * a key holding a character outside its own set. A photo saved as
- * `shot.jpg (1)` — which is what a second download of the same name looks like
- * on Android — would take `jpg (1)` as its extension and fail to upload, for a
- * reason the sender can do nothing about. A recording's `audio/webm;codecs=opus`
- * is the same problem arriving from the MIME side.
- *
- * Truncating is safe because the extension is cosmetic: it names the file a
- * recipient saves, and nothing reads it back.
- */
-function leadingWord(raw: string | undefined): string {
-  return (raw ?? '').toLowerCase().match(/^[a-z0-9]+/)?.[0]?.slice(0, 8) ?? '';
-}
-
 /**
  * The columns a soft delete writes.
  *

@@ -22,16 +22,31 @@ export async function sealFile(bytes: Uint8Array): Promise<{ blob: Blob; key: Ui
   const nonce = sodium.randombytes_buf(sodium.crypto_secretbox_NONCEBYTES);
   const sealed = sodium.crypto_secretbox_easy(bytes, nonce, key);
 
-  const out = new Uint8Array(nonce.length + sealed.length);
-  out.set(nonce, 0);
-  out.set(sealed, nonce.length);
+  // Two parts rather than one concatenated array. A Blob keeps a reference to
+  // each part instead of flattening them, so the alternative — allocating
+  // `nonce.length + sealed.length` and copying the ciphertext into it — is one
+  // more copy of the whole file, on a path that is already holding the plain
+  // bytes, libsodium's heap copy and the ciphertext at once. On a 50 MB video
+  // in a WebView that copy is the difference between sending and being killed.
+  //
   // application/octet-stream, always: a sealed JPEG announced as image/jpeg
   // tells anyone reading the bucket what it is.
-  return { blob: new Blob([out], { type: 'application/octet-stream' }), key };
+  //
+  // The cast is libsodium's type, not a claim about the data: it declares its
+  // output over `ArrayBufferLike`, which TypeScript will not accept as a
+  // `BlobPart` because that union admits a SharedArrayBuffer. It is never one
+  // here, and satisfying the checker honestly would mean copying the whole
+  // ciphertext to change nothing but its type — the copy this is avoiding.
+  const parts = [nonce, sealed] as unknown as BlobPart[];
+  return { blob: new Blob(parts, { type: 'application/octet-stream' }), key };
 }
 
 export async function openFile(bytes: Uint8Array, key: Uint8Array): Promise<Uint8Array> {
   await sodium.ready;
   const n = sodium.crypto_secretbox_NONCEBYTES;
-  return sodium.crypto_secretbox_open_easy(bytes.slice(n), bytes.slice(0, n), key);
+  // `subarray`, not `slice`: both hand libsodium a view of the right bytes, and
+  // only one of them duplicates the entire ciphertext first. libsodium copies
+  // what it is given into its own heap either way, so the intermediate is pure
+  // overhead.
+  return sodium.crypto_secretbox_open_easy(bytes.subarray(n), bytes.subarray(0, n), key);
 }

@@ -50,6 +50,15 @@ describe('server view', () => {
     expect(messages?.opaque).not.toContain('content');
   });
 
+  it('marks the chat background image as sealed', () => {
+    // The last image this app uploaded in the clear (0039). The path stays
+    // readable because the server does hold it; the picture behind it does not.
+    const backgrounds = TABLE_REPORTS.find((t) => t.table === 'chat_backgrounds');
+    expect(backgrounds?.opaque).toContain('key_ciphertext');
+    expect(backgrounds?.opaque).toContain('key_nonce');
+    expect(backgrounds?.readable).toContain('media_path');
+  });
+
   it('admits that room titles and nicknames are readable text', () => {
     expect(TABLE_REPORTS.find((t) => t.table === 'rooms')?.readable).toContain('title');
     expect(TABLE_REPORTS.find((t) => t.table === 'friend_nicknames')?.readable).toContain(

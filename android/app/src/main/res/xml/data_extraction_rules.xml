@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Nothing this app stores leaves the device through a backup.
+
+    `android:allowBackup="false"` in the manifest already turns off cloud
+    backup. It does not, on Android 12 and up, turn off device-to-device
+    transfer — that is what this file is for, and why both sections are here
+    rather than only the one that is still doing work.
+
+    The reason is not caution about backups in general. Two things in the app's
+    sandbox are decrypted plaintext, deliberately:
+
+      files/pins/…  — attachments the user pinned, written as plaintext so a
+                      pin outlives the server-side prune (see lib/pins.ts).
+      databases/…   — the local mirror, which is every message body this device
+                      has ever decrypted (lib/localdb.ts, opened
+                      'no-encryption'). It is what makes search work offline.
+
+    Both are safe where they are: app-private storage, which no other app and no
+    media scanner can read. Neither is safe in a Google Drive backup, which is a
+    copy held by a third party under a different set of keys — and one nobody
+    consented to when they were told the server holds no message bodies.
+
+    The identity seed is unaffected either way: it lives in the Android Keystore
+    and is not exportable, so it was never in a backup to begin with. What this
+    costs is a restore: a new phone starts at the recovery phrase, which is the
+    honest state for an app that has no reset path.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root" path="." />
+        <exclude domain="file" path="." />
+        <exclude domain="database" path="." />
+        <exclude domain="sharedpref" path="." />
+        <exclude domain="external" path="." />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" path="." />
+        <exclude domain="file" path="." />
+        <exclude domain="database" path="." />
+        <exclude domain="sharedpref" path="." />
+        <exclude domain="external" path="." />
+    </device-transfer>
+</data-extraction-rules>

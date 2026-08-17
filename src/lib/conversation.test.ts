@@ -3,7 +3,6 @@ import {
   classifyMedia,
   conversationFilter,
   conversationKey,
-  fileExtension,
   isConversationFolder,
   isSelfChat,
   mediaPath,
@@ -167,30 +166,6 @@ describe('classifyMedia', () => {
   it('rejects types outside the allow-list', () => {
     expect(classifyMedia(file('a.pdf', 'application/pdf'))).toBeNull();
     expect(classifyMedia(file('a.svg', 'image/svg+xml'))).toBeNull();
-  });
-});
-
-describe('fileExtension', () => {
-  it('prefers the extension from the filename, lowercased', () => {
-    expect(fileExtension(file('Holiday.JPEG', 'image/jpeg'))).toBe('jpeg');
-  });
-
-  it('falls back to the MIME subtype when the name has no extension', () => {
-    expect(fileExtension(file('clipboard', 'image/png'))).toBe('png');
-  });
-
-  // The extension is pasted into a Storage object key, and Storage rejects a
-  // key holding a character outside its own set — so a second copy of a
-  // download, or a recorder that names its codec, must not be able to make a
-  // file unsendable.
-  it('keeps only what a Storage key may hold', () => {
-    expect(fileExtension(file('shot.jpg (1)', 'image/jpeg'))).toBe('jpg');
-    expect(fileExtension(file('note', 'audio/webm;codecs=opus'))).toBe('webm');
-    expect(fileExtension(file('drawing', 'image/svg+xml'))).toBe('svg');
-  });
-
-  it('falls back to bin when nothing usable is left', () => {
-    expect(fileExtension(file('archive.', ''))).toBe('bin');
   });
 });
 

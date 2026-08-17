@@ -63,7 +63,7 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
   const peerLabel = formatDisplayName(nickname, friend.display_name, isSelf);
   const friendStatus = usePresenceStatus(friend.id);
   const toast = useToast();
-  const background = useChatBackground(me, friend.id);
+  const background = useChatBackground(me, friend.id, identity);
   const { peerKey, trust, refresh: refreshTrust } = usePeerTrust(friend.id, isSelf);
 
   // Per conversation, and outside this component: the pane is not remounted

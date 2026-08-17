@@ -1,8 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import {
   MAX_BACKGROUND_BYTES,
   backgroundPath,
   describeWriteError,
+  forgetAllBackgroundUrls,
+  forgetBackgroundUrl,
+  rememberBackgroundUrl,
+  reusableBackgroundUrl,
   validateBackgroundFile,
 } from './background';
 
@@ -82,5 +86,45 @@ describe('describeWriteError', () => {
   it('has a fallback when the server sent no usable text', () => {
     expect(describeWriteError({ code: 'XX000', message: '   ' })).toMatch(/could not save/i);
     expect(describeWriteError(null)).toMatch(/could not save/i);
+  });
+});
+
+describe('the background cache owns its object URLs', () => {
+  // It holds decrypted images now, not signed URLs, so a superseded or dropped
+  // entry has to be revoked. Leaving one leaks the blob for the session — and
+  // these are exactly the bytes the account teardown exists to drop.
+  const url = (bytes: number) => URL.createObjectURL(new Blob([new Uint8Array(bytes)]));
+
+  afterEach(() => forgetAllBackgroundUrls());
+
+  it('hands back what it was given', () => {
+    const held = url(4);
+    rememberBackgroundUrl('pair/bg-1.webp', held);
+    expect(reusableBackgroundUrl('pair/bg-1.webp')).toBe(held);
+    expect(reusableBackgroundUrl('pair/bg-2.webp')).toBeNull();
+  });
+
+  it('revokes the entry it replaces', async () => {
+    const first = url(4);
+    rememberBackgroundUrl('pair/bg.webp', first);
+    rememberBackgroundUrl('pair/bg.webp', url(8));
+
+    // A revoked object URL can no longer be fetched, which is the only
+    // observable difference between revoking and forgetting to.
+    await expect(fetch(first)).rejects.toThrow();
+  });
+
+  it('revokes on forget, and on the teardown', async () => {
+    const one = url(4);
+    rememberBackgroundUrl('pair/one.webp', one);
+    forgetBackgroundUrl('pair/one.webp');
+    expect(reusableBackgroundUrl('pair/one.webp')).toBeNull();
+    await expect(fetch(one)).rejects.toThrow();
+
+    const two = url(4);
+    rememberBackgroundUrl('pair/two.webp', two);
+    forgetAllBackgroundUrls();
+    expect(reusableBackgroundUrl('pair/two.webp')).toBeNull();
+    await expect(fetch(two)).rejects.toThrow();
   });
 });

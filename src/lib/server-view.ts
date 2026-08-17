@@ -146,7 +146,10 @@ export const TABLE_REPORTS: TableSpec[] = [
     group: 'about-you',
     label: 'server.chat_backgrounds.label',
     readable: ['owner_id', 'peer_id', 'media_path', 'updated_at'],
-    opaque: [],
+    // The path is readable and the picture is not. Backgrounds were the last
+    // image this app uploaded in the clear; 0039 seals them under the vault
+    // key, like a sticker.
+    opaque: ['key_ciphertext', 'key_nonce'],
     note: 'server.friend_nicknames.note',
   },
   {
