@@ -11,6 +11,7 @@ import {
 } from '../lib/notifications';
 import { Modal } from './Modal';
 import { isMobileNative } from '../lib/platform';
+import { useT } from '../hooks/useT';
 
 interface NotificationsPromptProps {
   /** The signed-in account. The offer is remembered per account, so two people
@@ -36,6 +37,7 @@ interface NotificationsPromptProps {
  * for that.
  */
 export function NotificationsPrompt({ userId }: NotificationsPromptProps) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -83,16 +85,16 @@ export function NotificationsPrompt({ userId }: NotificationsPromptProps) {
 
   return (
     <Modal
-      title="Know when someone writes"
+      title={t('notifyPrompt.title')}
       onClose={dismiss}
       className="max-w-sm"
       actions={
         <>
           <button className="btn btn-ghost" onClick={dismiss} disabled={busy}>
-            Not now
+            {t('common.notNow')}
           </button>
           <button className="btn btn-primary" onClick={() => void allow()} disabled={busy}>
-            {busy ? <span className="loading loading-spinner loading-sm" /> : 'Turn on'}
+            {busy ? <span className="loading loading-spinner loading-sm" /> : t('common.turnOn')}
           </button>
         </>
       }
@@ -102,11 +104,10 @@ export function NotificationsPrompt({ userId }: NotificationsPromptProps) {
           <Bell className="w-6 h-6" />
         </span>
         <p className="text-sm text-base-content/75 leading-relaxed">
-          Right now Nearside can only reach you while it is open on screen.
+          {t('notifyPrompt.body1')}
         </p>
         <p className="text-sm text-base-content/75 leading-relaxed">
-          A notification tells you who wrote, and nothing more. The server has no readable copy of a
-          message to quote from. You can turn this off later in Settings.
+          {t('notifyPrompt.body2')}
         </p>
       </div>
     </Modal>

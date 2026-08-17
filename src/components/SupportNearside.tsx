@@ -4,6 +4,7 @@ import { DONATION_TIERS, donate, donationOffers, type DonationOffer } from '../l
 import { useToast } from '../hooks/useToast';
 import { Modal } from './Modal';
 import { isMobileNative } from '../lib/platform';
+import { useT } from '../hooks/useT';
 
 interface SupportNearsideProps {
   onClose: () => void;
@@ -22,6 +23,7 @@ interface SupportNearsideProps {
  * rather than putting anything new behind a price.
  */
 export function SupportNearside({ onClose }: SupportNearsideProps) {
+  const t = useT();
   const [offers, setOffers] = useState<Map<string, DonationOffer>>(new Map());
   const [busy, setBusy] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -45,13 +47,13 @@ export function SupportNearside({ onClose }: SupportNearsideProps) {
       if (await donate(offer)) {
         const unlocks = DONATION_TIERS.find((t) => t.id === tierId)?.unlocksPacks;
         toast.success(
-          unlocks ? 'Thank you. Every theme pack is yours in Appearance.' : 'Thank you, genuinely.'
+          unlocks ? t('support.thanksUnlocked') : t('support.thanks')
         );
       }
       // A cancelled payment is silent. `donate` reports it as false rather
       // than throwing, precisely so it does not land here as an error.
     } catch {
-      toast.error('The payment did not go through.');
+      toast.error(t('support.failed'));
     } finally {
       setBusy(null);
     }
@@ -59,43 +61,38 @@ export function SupportNearside({ onClose }: SupportNearsideProps) {
 
   return (
     <Modal
-      title="Support Nearside"
+      title={t('about.support')}
       onClose={onClose}
       actions={
         <button className="btn btn-ghost" onClick={onClose}>
-          Close
+          {t('common.close')}
         </button>
       }
     >
-      <p className="text-sm text-base-content/70 leading-relaxed">
-        Nearside is free, open source, and carries no advertising. There is nothing to sell here,
-        because there is nothing readable to sell: the server only ever holds ciphertext. What is
-        left is the running costs, and this screen is where they get paid.
-      </p>
+      <p className="text-sm text-base-content/70 leading-relaxed">{t('support.intro')}</p>
 
       <h3 className="text-xs font-medium uppercase tracking-wide text-base-content/50 mt-5 mb-2">
-        What it pays for
+        {t('support.paysFor')}
       </h3>
       <ul className="space-y-2 text-sm text-base-content/70">
         <li className="flex items-start gap-2.5">
           <Database className="w-4 h-4 mt-0.5 shrink-0 text-base-content/50" />
           <span>
-            <span className="font-medium text-base-content/85">Supabase Pro.</span> The database,
-            file storage, and the realtime connection that delivers a message the moment it is
-            sent. This is the largest line by some distance.
+            <span className="font-medium text-base-content/85">Supabase Pro.</span>{' '}
+            {t('support.supabase')}
           </span>
         </li>
         <li className="flex items-start gap-2.5">
           <Bell className="w-4 h-4 mt-0.5 shrink-0 text-base-content/50" />
           <span>
-            <span className="font-medium text-base-content/85">OneSignal.</span> Push
-            notifications, including the one that wakes a locked phone for an incoming call.
+            <span className="font-medium text-base-content/85">OneSignal.</span>{' '}
+            {t('support.onesignal')}
           </span>
         </li>
       </ul>
 
       <h3 className="text-xs font-medium uppercase tracking-wide text-base-content/50 mt-6 mb-2">
-        Tiers
+        {t('support.tiers')}
       </h3>
       <div className="space-y-3">
         {DONATION_TIERS.map((tier) => {
@@ -123,19 +120,19 @@ export function SupportNearside({ onClose }: SupportNearsideProps) {
 
               <span className="flex-1 min-w-0">
                 <span className="block text-sm font-medium">{tier.name}</span>
-                <span className="block text-xs text-base-content/60">{tier.blurb}</span>
+                <span className="block text-xs text-base-content/60">{t(tier.blurb)}</span>
               </span>
 
               <span className="shrink-0 text-xs">
                 {busy === tier.id ? (
                   <span className="loading loading-spinner loading-xs" />
                 ) : unavailable ? (
-                  <span className="text-base-content/60">Unavailable</span>
+                  <span className="text-base-content/60">{t('common.unavailable')}</span>
                 ) : (
                   <span
                     className={`badge badge-sm ${tier.unlocksPacks ? 'badge-primary' : 'badge-ghost'}`}
                   >
-                    {offer?.priceString ?? 'Loading'}
+                    {offer?.priceString ?? t('common.loading')}
                   </span>
                 )}
               </span>
@@ -144,16 +141,9 @@ export function SupportNearside({ onClose }: SupportNearsideProps) {
         })}
       </div>
 
-      <p className="text-xs text-base-content/55 mt-4 leading-relaxed">
-        Giving nothing costs you nothing: every feature stays exactly as it is, and no part of the
-        app is or will be behind a payment. You can give the two smaller amounts as often as you
-        like, and they grant nothing at all. The app store takes the payment and handles any
-        refund, not us.
-      </p>
+      <p className="text-xs text-base-content/55 mt-4 leading-relaxed">{t('support.note')}</p>
       {!native && (
-        <p className="text-xs text-base-content/55 mt-2 text-center">
-          Contributing needs the app. A browser has no billing to talk to.
-        </p>
+        <p className="text-xs text-base-content/55 mt-2 text-center">{t('support.browserOnly')}</p>
       )}
     </Modal>
   );

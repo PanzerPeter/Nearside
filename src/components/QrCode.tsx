@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { qrMatrix } from '../lib/qr';
+import { useT } from '../hooks/useT';
 
 interface QrCodeProps {
   text: string;
@@ -17,6 +18,7 @@ interface QrCodeProps {
  * at the rendered code shows that — see `lib/qr.ts`.
  */
 export function QrCode({ text, size = 232 }: QrCodeProps) {
+  const t = useT();
   const { d, size: side } = useMemo(() => qrMatrix(text), [text]);
 
   return (
@@ -26,7 +28,7 @@ export function QrCode({ text, size = 232 }: QrCodeProps) {
       viewBox={`0 0 ${side} ${side}`}
       shapeRendering="crispEdges"
       role="img"
-      aria-label="Connect QR code"
+      aria-label={t('connect.qrLabel')}
     >
       {/* Explicit white under explicit black: the QR must not follow the app
           theme, because a dark-mode inversion is a code no scanner reads. */}

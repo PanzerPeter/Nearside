@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Plus, UserRoundX } from 'lucide-react';
 import { Avatar } from './Avatar';
 import { MAX_ACCOUNTS, switchTargets, type StoredAccount } from '../lib/accounts';
+import { useT } from '../hooks/useT';
 
 interface AccountSwitcherProps {
   accounts: StoredAccount[];
@@ -26,6 +27,7 @@ export function AccountSwitcher({
   onForget,
   onAddAccount,
 }: AccountSwitcherProps) {
+  const t = useT();
   // Which row is asking to be removed. One id rather than a boolean, so opening
   // the confirmation on a second row closes the first instead of arming two.
   const [confirmingForget, setConfirmingForget] = useState<string | null>(null);
@@ -48,7 +50,7 @@ export function AccountSwitcher({
             </p>
             <div className="flex items-center gap-2">
               <button className="btn btn-ghost btn-xs" onClick={() => setConfirmingForget(null)}>
-                Cancel
+                {t('common.cancel')}
               </button>
               <button
                 className="btn btn-warning btn-xs"
@@ -57,7 +59,7 @@ export function AccountSwitcher({
                   onForget(account);
                 }}
               >
-                Remove
+                {t('common.remove')}
               </button>
             </div>
           </div>
@@ -73,14 +75,16 @@ export function AccountSwitcher({
                 size={22}
               />
               <span className="flex-1 text-left truncate">
-                {account.display_name ? `@${account.display_name}` : 'Signed-in account'}
+                {account.display_name ? `@${account.display_name}` : t('accounts.unnamed')}
               </span>
             </button>
             <button
               className="btn btn-ghost btn-sm btn-square shrink-0"
               onClick={() => setConfirmingForget(account.userId)}
-              aria-label={`Remove ${account.display_name || 'this account'} from this device`}
-              title="Remove from this device"
+              aria-label={t('accounts.removeLabel', {
+                name: account.display_name || t('accounts.thisAccount'),
+              })}
+              title={t('accounts.removeTitle')}
             >
               <UserRoundX className="w-4 h-4 text-base-content/40" />
             </button>

@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { formatBytes, plural, totalPinBytes } from './storage-usage';
+import { formatBytes, totalPinBytes } from './storage-usage';
 
 describe('formatBytes', () => {
   it('shows whole bytes without a decimal point', () => {
     expect(formatBytes(0)).toBe('0 B');
     expect(formatBytes(1)).toBe('1 B');
-    expect(formatBytes(1023)).toBe('1023 B');
+    // Grouped by `Intl`, in the app's language: German writes this "1.023 B"
+    // and Russian "1 023 B", beside a sentence in the same language.
+    expect(formatBytes(1023)).toBe('1,023 B');
   });
 
   it('climbs a unit at 1024, not at 1000', () => {
@@ -44,14 +46,3 @@ describe('totalPinBytes', () => {
   });
 });
 
-describe('plural', () => {
-  it('keeps one message singular', () => {
-    expect(plural(1, 'message')).toBe('1 message');
-    expect(plural(2, 'message')).toBe('2 messages');
-    expect(plural(0, 'message')).toBe('0 messages');
-  });
-
-  it('takes an irregular plural', () => {
-    expect(plural(2, 'entry', 'entries')).toBe('2 entries');
-  });
-});

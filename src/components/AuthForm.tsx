@@ -5,6 +5,7 @@ import { subscribeToAuthLinkError } from '../lib/nativeAuthLinks';
 import { LegalDocModal, LegalFooter, type LegalDoc } from './LegalFooter';
 import { BrandMark } from './BrandMark';
 import { ArrowLeft, LogIn, UserPlus } from 'lucide-react';
+import { useT } from '../hooks/useT';
 
 /** Display names are not addresses: they may collide, contain spaces and keep
  *  their capitals. All that is enforced is that there is something there and
@@ -32,6 +33,7 @@ interface AuthFormProps {
 }
 
 export function AuthForm({ onCancel }: AuthFormProps = {}) {
+  const t = useT();
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -61,13 +63,13 @@ export function AuthForm({ onCancel }: AuthFormProps = {}) {
       // Re-checked here and not only on the button's `disabled`: an account may
       // not be created without this, and a disabled attribute is a hint.
       if (!agreedToLegal) {
-        setError('Please agree to the Terms of Service and Privacy Policy first.');
+        setError(t('auth.mustAgree'));
         return;
       }
       // Trimmed but not lowercased: the name is shown as the person wrote it.
       const normalized = display_name.trim();
       if (!normalized || normalized.length > DISPLAY_NAME_MAX) {
-        setError(`Enter a display name, up to ${DISPLAY_NAME_MAX} characters.`);
+        setError(t('profile.nameTooLong', { count: DISPLAY_NAME_MAX }));
         return;
       }
       setLoading(true);
@@ -90,14 +92,14 @@ export function AuthForm({ onCancel }: AuthFormProps = {}) {
         const raw = signUpError.message;
         setError(
           /duplicate|already|unique|database error/i.test(raw)
-            ? "Couldn't create the account. That email may already be registered."
+            ? t('auth.emailTaken')
             : raw
         );
         return;
       }
       // Email confirmation on: a user exists but no active session yet.
       if (data.user && !data.session) {
-        setNotice('Check your email to confirm your account, then sign in.');
+        setNotice(t('auth.confirmEmail'));
         setIsSignUp(false);
       }
       return;
@@ -117,7 +119,7 @@ export function AuthForm({ onCancel }: AuthFormProps = {}) {
     setNotice('');
     const target = email.trim();
     if (!target) {
-      setError('Enter your email above first, then tap “Forgot password?”.');
+      setError(t('auth.enterEmailFirst'));
       return;
     }
     setLoading(true);
@@ -126,7 +128,7 @@ export function AuthForm({ onCancel }: AuthFormProps = {}) {
     });
     setLoading(false);
     if (resetError) setError(resetError.message);
-    else setNotice('Password reset link sent. Check your email.');
+    else setNotice(t('auth.resetSent'));
   }
 
   return (
@@ -160,18 +162,18 @@ export function AuthForm({ onCancel }: AuthFormProps = {}) {
               onClick={onCancel}
             >
               <ArrowLeft className="w-3.5 h-3.5" />
-              Back to the account you&apos;re using
+              {t('auth.backToAccount')}
             </button>
           )}
           <p className="text-center text-base-content/60 text-sm mb-6">
-            {isSignUp ? 'Create your account' : 'Welcome back'}
+            {isSignUp ? t('auth.createYourAccount') : t('auth.welcomeBack')}
           </p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {isSignUp && (
               <div className="form-control">
                 <label className="label pb-1">
-                  <span className={LABEL_CLASS}>Display name</span>
+                  <span className={LABEL_CLASS}>{t('profile.displayName')}</span>
                 </label>
                 {/* No pattern and no minimum: a display name is not a handle.
                     Spaces, capitals and accents are all fine, and two people
@@ -179,7 +181,7 @@ export function AuthForm({ onCancel }: AuthFormProps = {}) {
                     address. The only rule left is the length cap. */}
                 <input
                   type="text"
-                  placeholder="Jane Doe"
+                  placeholder={t('auth.namePlaceholder')}
                   className={INPUT_CLASS}
                   value={display_name}
                   onChange={(e) => setUsername(e.target.value)}
@@ -192,7 +194,7 @@ export function AuthForm({ onCancel }: AuthFormProps = {}) {
 
             <div className="form-control">
               <label className="label pb-1">
-                <span className={LABEL_CLASS}>Email</span>
+                <span className={LABEL_CLASS}>{t('auth.email')}</span>
               </label>
               <input
                 type="email"
@@ -207,7 +209,7 @@ export function AuthForm({ onCancel }: AuthFormProps = {}) {
 
             <div className="form-control">
               <label className="label pb-1">
-                <span className={LABEL_CLASS}>Password</span>
+                <span className={LABEL_CLASS}>{t('auth.password')}</span>
               </label>
               <input
                 type="password"
@@ -227,7 +229,7 @@ export function AuthForm({ onCancel }: AuthFormProps = {}) {
                 onClick={handleForgotPassword}
                 className="link link-hover text-xs text-base-content/60 hover:text-primary self-start"
               >
-                Forgot password?
+                {t('auth.forgotPassword')}
               </button>
             )}
 
@@ -240,7 +242,7 @@ export function AuthForm({ onCancel }: AuthFormProps = {}) {
                   onChange={(e) => setAgreedToLegal(e.target.checked)}
                 />
                 <span className="text-xs leading-relaxed text-base-content/70">
-                  I agree to the{' '}
+                  {t('auth.agreePrefix')}{' '}
                   {/* type="button": a bare button inside a form submits it, so
                       reading the terms would have attempted the sign-up. */}
                   <button
@@ -248,17 +250,17 @@ export function AuthForm({ onCancel }: AuthFormProps = {}) {
                     className="link link-hover text-primary"
                     onClick={() => setLegalDoc('terms')}
                   >
-                    Terms of Service
+                    {t('about.terms')}
                   </button>{' '}
-                  and the{' '}
+                  {t('auth.agreeJoin')}{' '}
                   <button
                     type="button"
                     className="link link-hover text-primary"
                     onClick={() => setLegalDoc('privacy')}
                   >
-                    Privacy Policy
+                    {t('about.privacyPolicy')}
                   </button>
-                  .
+                  {t('auth.agreeSuffix')}
                 </span>
               </label>
             )}
@@ -284,19 +286,19 @@ export function AuthForm({ onCancel }: AuthFormProps = {}) {
               ) : isSignUp ? (
                 <>
                   <UserPlus className="w-4 h-4" />
-                  Create Account
+                  {t('auth.createAccount')}
                 </>
               ) : (
                 <>
                   <LogIn className="w-4 h-4" />
-                  Sign In
+                  {t('auth.signIn')}
                 </>
               )}
             </button>
           </form>
 
           <div className="mt-5 pt-4 border-t border-base-content/5 text-center text-sm text-base-content/55">
-            {isSignUp ? 'Already have an account?' : "Don't have an account?"}{' '}
+            {isSignUp ? t('auth.haveAccount') : t('auth.noAccount')}{' '}
             <button
               type="button"
               className="link link-hover font-medium text-primary hover:text-primary/80 transition-colors"
@@ -307,7 +309,7 @@ export function AuthForm({ onCancel }: AuthFormProps = {}) {
                 setAgreedToLegal(false);
               }}
             >
-              {isSignUp ? 'Sign in' : 'Sign up'}
+              {isSignUp ? t('auth.signInShort') : t('auth.signUpShort')}
             </button>
           </div>
         </div>

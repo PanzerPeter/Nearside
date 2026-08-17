@@ -1,4 +1,6 @@
 import { PresenceStatus } from '../lib/presence-model';
+import type { MessageKey } from '../lib/i18n';
+import { useT } from '../hooks/useT';
 
 const COLORS: Record<PresenceStatus, string> = {
   active: 'oklch(var(--su))', // success green — open & focused
@@ -6,10 +8,12 @@ const COLORS: Record<PresenceStatus, string> = {
   offline: 'var(--presence-offline)', // muted grey — not connected
 };
 
-const LABELS: Record<PresenceStatus, string> = {
-  active: 'Active now',
-  background: 'Away',
-  offline: 'Offline',
+/** Keys, not words: the label is looked up where it is drawn, so a language
+ *  change relabels the dot and the header line together. */
+const LABELS: Record<PresenceStatus, MessageKey> = {
+  active: 'presence.active',
+  background: 'presence.away',
+  offline: 'presence.offline',
 };
 
 interface StatusDotProps {
@@ -24,6 +28,8 @@ interface StatusDotProps {
 
 /** Small presence indicator: green / amber / grey with a surface-coloured ring. */
 export function StatusDot({ status, size = 12, className = '', pulse = false }: StatusDotProps) {
+  const t = useT();
+  const label = t(LABELS[status]);
   return (
     <span
       // `relative` only when pulsing: the halo is an absolutely positioned
@@ -37,16 +43,17 @@ export function StatusDot({ status, size = 12, className = '', pulse = false }: 
         boxShadow: '0 0 0 2px var(--surface-ring)',
       }}
       role="img"
-      aria-label={LABELS[status]}
-      title={LABELS[status]}
+      aria-label={label}
+      title={label}
     />
   );
 }
 
 // The same three-status vocabulary the dot already renders as its aria-label,
 // shared with ChatHeader so the written status and the coloured dot can never
-// disagree. react-refresh/only-export-components fires on it; splitting a
-// three-entry lookup into a module of its own to satisfy a dev-only HMR rule
-// costs more than it buys.
+// disagree. Exported as keys rather than words, so both sides look the string
+// up in the language on screen. react-refresh/only-export-components fires on
+// it; splitting a three-entry lookup into a module of its own to satisfy a
+// dev-only HMR rule costs more than it buys.
 // eslint-disable-next-line react-refresh/only-export-components
 export { LABELS as presenceLabels };

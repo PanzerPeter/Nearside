@@ -15,6 +15,7 @@ import {
   type ChatFlags,
 } from '../lib/chat-flags';
 import { syncMutedIds } from '../lib/mute';
+import { useT } from '../hooks/useT';
 
 interface RoomListProps {
   me: string;
@@ -58,6 +59,7 @@ export function RoomList({
   creating,
   onCreatingChange,
 }: RoomListProps) {
+  const t = useT();
   const [rooms, setRooms] = useState<RoomSummary[]>([]);
   /** First load attempt has finished, successfully or not. Nothing is drawn
    *  before it: every mount starts with an empty array, so painting the empty
@@ -132,22 +134,20 @@ export function RoomList({
         <div className="px-2 sm:px-3 pt-3">
           <div className="flex items-center justify-between px-2 mb-1.5">
             <p className="text-xs font-semibold uppercase tracking-wider text-base-content/55">
-              Rooms
+              {t('rooms.title')}
             </p>
             <button
               className="btn btn-ghost btn-xs btn-circle"
               onClick={() => onCreatingChange(true)}
-              title="New room"
-              aria-label="New room"
+              title={t('rooms.new')}
+              aria-label={t('rooms.new')}
             >
               <Plus className="w-3.5 h-3.5" />
             </button>
           </div>
 
           {empty ? (
-            <p className="px-2 text-xs text-base-content/60 pb-2">
-              No rooms yet. A room is a group conversation with one shared key.
-            </p>
+            <p className="px-2 text-xs text-base-content/60 pb-2">{t('rooms.empty')}</p>
           ) : (
             <ul className="space-y-1 pb-1">
               {ordered.map((room) => {
@@ -164,7 +164,7 @@ export function RoomList({
                     actions={[
                       {
                         key: 'pin',
-                        label: pinned ? 'Unpin' : 'Pin',
+                        label: pinned ? t('chatList.unpin') : t('chatList.pin'),
                         icon: pinned ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4" />,
                         onClick: () => {
                           void setPinned(room.id, 'room', !pinned).then(refreshFlags);
@@ -172,7 +172,7 @@ export function RoomList({
                       },
                       {
                         key: 'mute',
-                        label: muted ? 'Unmute' : 'Mute',
+                        label: muted ? t('chatList.unmute') : t('chatList.mute'),
                         icon: muted ? <Bell className="w-4 h-4" /> : <BellOff className="w-4 h-4" />,
                         onClick: () => {
                           void setMuted(room.id, 'room', !muted).then(refreshFlags);

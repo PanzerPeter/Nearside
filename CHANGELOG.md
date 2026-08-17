@@ -14,6 +14,28 @@ one of them drifts.
 
 ## [Unreleased]
 
+## [1.4.0] — 2026-08-17
+
+### Added
+
+- **Nearside speaks Spanish, German and Russian.** Settings → Language, with
+  "Match my device" as the default, so an install on a Spanish phone opens in
+  Spanish rather than waiting to be told. The choice belongs to the phone rather
+  than to an account: the sign-in screen belongs to nobody, and a roster of
+  accounts each holding its own language would leave it with none. Changing it
+  takes effect on the spot — nothing to reload, and the screen you were reading
+  stays where it was.
+- Dates, times, counts and file sizes follow the language too. A German app no
+  longer prints an English month abbreviation beside a German sentence, and
+  Russian counts read "1 сообщение / 3 сообщения / 5 сообщений" rather than
+  taking English's one-or-many guess.
+
+### Note
+
+- The Terms of Service, the Privacy Policy and the open source licenses stay in
+  English, and the language screen says so. They are legal documents, and a
+  translation of one is not the one you agreed to.
+
 ## [1.3.0] — 2026-08-17
 
 ### Added

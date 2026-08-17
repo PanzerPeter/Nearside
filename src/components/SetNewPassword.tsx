@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { KeyRound } from 'lucide-react';
+import { useT } from '../hooks/useT';
 
 interface SetNewPasswordProps {
   onDone: () => void;
 }
 
 export function SetNewPassword({ onDone }: SetNewPasswordProps) {
+  const t = useT();
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [error, setError] = useState('');
@@ -16,11 +18,11 @@ export function SetNewPassword({ onDone }: SetNewPasswordProps) {
     e.preventDefault();
     setError('');
     if (password.length < 6) {
-      setError('Password must be at least 6 characters.');
+      setError(t('auth.passwordTooShort', { count: 6 }));
       return;
     }
     if (password !== confirm) {
-      setError('Passwords do not match.');
+      setError(t('auth.passwordsDiffer'));
       return;
     }
     setLoading(true);
@@ -36,16 +38,16 @@ export function SetNewPassword({ onDone }: SetNewPasswordProps) {
         <div className="card-body p-6 sm:p-8">
           <div className="flex items-center justify-center gap-2.5 mb-1">
             <KeyRound className="w-6 h-6 text-primary" />
-            <h1 className="text-xl font-bold tracking-tight">Set a new password</h1>
+            <h1 className="text-xl font-bold tracking-tight">{t('auth.setNewPassword')}</h1>
           </div>
           <p className="text-center text-base-content/60 text-sm mb-6">
-            Choose a new password for your account.
+            {t('auth.chooseNewPassword')}
           </p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <input
               type="password"
-              placeholder="New password"
+              placeholder={t('auth.newPassword')}
               className="input w-full bg-base-200/50 border border-base-content/10 focus:border-primary"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -55,7 +57,7 @@ export function SetNewPassword({ onDone }: SetNewPasswordProps) {
             />
             <input
               type="password"
-              placeholder="Confirm new password"
+              placeholder={t('auth.confirmNewPassword')}
               className="input w-full bg-base-200/50 border border-base-content/10 focus:border-primary"
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
@@ -71,7 +73,11 @@ export function SetNewPassword({ onDone }: SetNewPasswordProps) {
             )}
 
             <button type="submit" className="btn btn-primary w-full" disabled={loading}>
-              {loading ? <span className="loading loading-spinner loading-sm" /> : 'Update password'}
+              {loading ? (
+                <span className="loading loading-spinner loading-sm" />
+              ) : (
+                t('auth.updatePassword')
+              )}
             </button>
           </form>
         </div>

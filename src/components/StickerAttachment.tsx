@@ -1,6 +1,7 @@
 import { useSignedMediaUrl } from '../hooks/useSignedMediaUrl';
 import { mediaFailureNotice } from '../lib/media';
 import { ImageOff } from 'lucide-react';
+import { useT } from '../hooks/useT';
 
 interface StickerAttachmentProps {
   messageId: string;
@@ -26,6 +27,7 @@ const SIZE = 128;
  * through exactly the same path as a photo.
  */
 export function StickerAttachment({ messageId, path, mediaKey }: StickerAttachmentProps) {
+  const t = useT();
   // Deferred like a photo. A sticker is small, but sending one re-uploads the
   // file every time by design (`lib/stickers.ts`), so a thread of them is a
   // thread of distinct objects and a scroll through it fetched every one.
@@ -59,7 +61,7 @@ export function StickerAttachment({ messageId, path, mediaKey }: StickerAttachme
   return (
     <img
       src={url}
-      alt="sticker"
+      alt={t('stickers.one')}
       loading="lazy"
       width={SIZE}
       height={SIZE}

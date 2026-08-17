@@ -12,6 +12,7 @@ import {
   type Offset,
 } from '../lib/avatar-crop';
 import { AVATAR_MAX_EDGE, replaceExtension } from '../lib/compress';
+import { useT } from '../hooks/useT';
 
 /** Working resolution the picked photo is decoded down to before framing. An
  *  8 MP camera frame kept at full size makes the drag stutter on a mid-range
@@ -85,6 +86,7 @@ interface AvatarCropperProps {
  * plumbing and the canvas that turns the framing into a file.
  */
 export function AvatarCropper({ file, onCropped, onCancel }: AvatarCropperProps) {
+  const t = useT();
   const [image, setImage] = useState<Normalized | null>(null);
   const [natural, setNatural] = useState({ width: 0, height: 0 });
   const [viewport, setViewport] = useState(0);
@@ -270,7 +272,7 @@ export function AvatarCropper({ file, onCropped, onCancel }: AvatarCropperProps)
 
   return (
     <Modal
-      title="Position your photo"
+      title={t('cropper.title')}
       onClose={onCancel}
       actions={
         <>
@@ -336,9 +338,7 @@ export function AvatarCropper({ file, onCropped, onCancel }: AvatarCropperProps)
             onChange={(e) => applyZoom(Number(e.target.value), { x: 0, y: 0 })}
           />
         </label>
-        <p className="text-xs text-base-content/60 text-center">
-          Drag to move, pinch or use the slider to zoom.
-        </p>
+        <p className="text-xs text-base-content/60 text-center">{t('cropper.hint')}</p>
       </div>
     </Modal>
   );

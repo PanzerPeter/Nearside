@@ -5,6 +5,7 @@
 // gone, which is worse than not having the feature. The server stamps and the
 // server deletes; everything here is presentation and the local sweep.
 import { supabase } from './supabase';
+import { t } from './i18n';
 
 /**
  * The single key for a conversation, whichever side is asking.
@@ -17,18 +18,25 @@ export function normalizePair(a: string, b: string): [string, string] {
   return a <= b ? [a, b] : [b, a];
 }
 
-export const TTL_OPTIONS: ReadonlyArray<{ seconds: number | null; label: string }> = [
-  { seconds: null, label: 'Off' },
-  { seconds: 300, label: '5 minutes' },
-  { seconds: 3600, label: '1 hour' },
-  { seconds: 86_400, label: '1 day' },
-  { seconds: 604_800, label: '1 week' },
-];
+/** The durations offered, as seconds. The words come from `formatTtl`, so a
+ *  language change relabels the menu without rebuilding this list. */
+export const TTL_OPTIONS: readonly (number | null)[] = [null, 300, 3600, 86_400, 604_800];
 
 export function formatTtl(seconds: number | null): string {
-  const known = TTL_OPTIONS.find((option) => option.seconds === seconds);
-  if (known) return known.label;
-  return `${seconds} seconds`;
+  switch (seconds) {
+    case null:
+      return t('common.off');
+    case 300:
+      return t('time.minutes', { count: 5 });
+    case 3600:
+      return t('time.hours', { count: 1 });
+    case 86_400:
+      return t('time.days', { count: 1 });
+    case 604_800:
+      return t('time.weeks', { count: 1 });
+    default:
+      return t('time.seconds', { count: seconds });
+  }
 }
 
 /** Whether a row's server-stamped expiry has passed. An unparseable value is
@@ -66,11 +74,15 @@ export function describeTimerChange(
   peerLabel: string
 ): TimerChange | null {
   if (!timer) return null;
-  const who = timer.setBy === me ? 'You' : peerLabel;
+  const who = timer.setBy === me ? t('common.you') : peerLabel;
+  // Whole sentences rather than a name glued to a fragment: German puts the
+  // verb last and Russian declines the duration, and neither survives being
+  // assembled from pieces here. The duration is not lowercased on the way in —
+  // German capitalises its nouns.
   const label =
     timer.ttlSeconds === null
-      ? `${who} turned off disappearing messages`
-      : `${who} set messages to disappear after ${formatTtl(timer.ttlSeconds).toLowerCase()}`;
+      ? t('timer.turnedOff', { who })
+      : t('timer.set', { who, duration: formatTtl(timer.ttlSeconds) });
   return { label, at: timer.updatedAt };
 }
 

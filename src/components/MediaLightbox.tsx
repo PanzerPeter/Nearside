@@ -5,6 +5,7 @@ import { videoTrackIsUnsupported } from '../lib/media';
 import { downloadName, saveToGallery } from '../lib/download';
 import { isPinned, pinMedia, unpinMedia } from '../lib/pins';
 import { useToast } from '../hooks/useToast';
+import { useT } from '../hooks/useT';
 
 interface MediaLightboxProps {
   /** The owning message. Pins are recorded against it, not against the object
@@ -40,6 +41,7 @@ export function MediaLightbox({
   noPicture: noPictureHint,
   onClose,
 }: MediaLightboxProps) {
+  const t = useT();
   // Seeded from the thumbnail and confirmed here, because the viewer can also
   // be reached without one having rendered.
   const [noPicture, setNoPicture] = useState(!!noPictureHint);
@@ -92,7 +94,7 @@ export function MediaLightbox({
       setSaved(true);
       toast.success(type === 'image' ? 'Photo saved to your gallery.' : 'Video saved to your gallery.');
     } catch {
-      toast.error('Could not save that file.');
+      toast.error(t('lightbox.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -107,15 +109,15 @@ export function MediaLightbox({
       if (pinned) {
         await unpinMedia(messageId);
         setPinned(false);
-        toast.success('Unpinned. The server copy will prune on the usual schedule.');
+        toast.success(t('lightbox.unpinned'));
       } else {
         const bytes = new Uint8Array(await (await fetch(url)).arrayBuffer());
         await pinMedia(messageId, path, bytes);
         setPinned(true);
-        toast.success('Pinned to this phone. It stays even after the server copy goes.');
+        toast.success(t('lightbox.pinned'));
       }
     } catch {
-      toast.error('Could not change the pin.');
+      toast.error(t('lightbox.pinFailed'));
     } finally {
       setPinning(false);
     }
@@ -134,8 +136,8 @@ export function MediaLightbox({
             void togglePin();
           }}
           disabled={pinning}
-          title={pinned ? 'Pinned to this phone. Tap to unpin' : 'Keep on this phone forever'}
-          aria-label={pinned ? 'Unpin from this phone' : 'Pin to this phone'}
+          title={pinned ? t('lightbox.pinnedTitle') : t('lightbox.pinTitle')}
+          aria-label={pinned ? t('lightbox.unpinLabel') : t('lightbox.pinLabel')}
           aria-pressed={pinned}
         >
           {pinning ? (
@@ -153,8 +155,8 @@ export function MediaLightbox({
             void save();
           }}
           disabled={saving || saved}
-          title={saved ? 'Saved' : 'Save'}
-          aria-label={saved ? 'Saved to gallery' : 'Save to gallery'}
+          title={saved ? t('lightbox.saved') : t('common.save')}
+          aria-label={saved ? t('lightbox.savedToGallery') : t('lightbox.saveToGallery')}
         >
           {saving ? (
             <span className="loading loading-spinner loading-xs" />
@@ -167,8 +169,8 @@ export function MediaLightbox({
         <button
           className="btn btn-sm btn-circle bg-base-100/20 hover:bg-base-100/40 border-none text-white"
           onClick={onClose}
-          title="Close"
-          aria-label="Close"
+          title={t('common.close')}
+          aria-label={t('common.close')}
         >
           <X className="w-4 h-4" />
         </button>

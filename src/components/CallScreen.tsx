@@ -14,6 +14,7 @@ import {
 import { useCall } from '../hooks/useCall';
 import { Avatar } from './Avatar';
 import { callDuration, endLabel, formatDuration } from '../lib/call/state';
+import { useT } from '../hooks/useT';
 
 /**
  * Attach a stream to a `<video>`, on every element that asks for it.
@@ -78,6 +79,7 @@ function CallButton({
  * this being here.
  */
 export function CallScreen() {
+  const t = useT();
   const {
     state,
     localStream,
@@ -125,14 +127,16 @@ export function CallScreen() {
   const status = ended
     ? endLabel(state)
     : state.phase === 'dialing'
-      ? 'Calling…'
+      ? t('call.calling')
       : ringing
-        ? `Incoming ${video ? 'video' : 'voice'} call`
+        ? video
+          ? t('call.incomingVideo')
+          : t('call.incomingVoice')
         : state.phase === 'connecting'
-          ? 'Connecting…'
+          ? t('chat.connecting')
           : seconds !== null
             ? formatDuration(seconds)
-            : 'Connected';
+            : t('call.connected');
 
   return (
     <div
@@ -143,7 +147,11 @@ export function CallScreen() {
       }}
       role="dialog"
       aria-modal="true"
-      aria-label={`${video ? 'Video' : 'Voice'} call with ${state.peerName}`}
+      aria-label={
+        video
+          ? t('call.withVideo', { name: state.peerName })
+          : t('call.withVoice', { name: state.peerName })
+      }
     >
       {/* One element, shown or hidden — never unmounted. It carries the remote
           audio as well as the picture, so swapping it out the moment a video
@@ -174,7 +182,7 @@ export function CallScreen() {
             {!ended && (
               <p className="inline-flex items-center gap-1.5 text-xs text-base-content/50">
                 <ShieldCheck className="w-3.5 h-3.5" />
-                End-to-end encrypted
+                {t('call.e2ee')}
               </p>
             )}
           </>
@@ -217,24 +225,28 @@ export function CallScreen() {
       <div className="relative flex flex-wrap items-center justify-center gap-3 px-4 pb-8 pt-4">
         {ringing ? (
           <>
-            <CallButton label="Decline" onClick={decline} danger>
+            <CallButton label={t('requests.decline')} onClick={decline} danger>
               <PhoneOff className="w-6 h-6" />
             </CallButton>
-            <CallButton label="Answer" onClick={accept} active>
+            <CallButton label={t('call.answer')} onClick={accept} active>
               <Phone className="w-6 h-6" />
             </CallButton>
           </>
         ) : ended ? (
           <button type="button" className="btn btn-ghost" onClick={dismiss}>
-            Close
+            {t('common.close')}
           </button>
         ) : (
           <>
-            <CallButton label={state.muted ? 'Unmute' : 'Mute'} onClick={toggleMute} active={state.muted}>
+            <CallButton
+              label={state.muted ? t('call.unmute') : t('call.mute')}
+              onClick={toggleMute}
+              active={state.muted}
+            >
               {state.muted ? <MicOff className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
             </CallButton>
             <CallButton
-              label={state.speaker ? 'Speaker off' : 'Speaker on'}
+              label={state.speaker ? t('call.speakerOff') : t('call.speakerOn')}
               onClick={toggleSpeaker}
               active={state.speaker}
             >
@@ -242,7 +254,7 @@ export function CallScreen() {
             </CallButton>
             {video && (
               <CallButton
-                label={state.cameraOff ? 'Camera on' : 'Camera off'}
+                label={state.cameraOff ? t('call.cameraOn') : t('call.cameraOff')}
                 onClick={toggleCamera}
                 active={state.cameraOff}
               >
@@ -254,13 +266,13 @@ export function CallScreen() {
                 nothing is worse than one that is not there. */}
             {video && !state.cameraOff && (
               <CallButton
-                label={state.facing === 'user' ? 'Use back camera' : 'Use front camera'}
+                label={state.facing === 'user' ? t('call.backCamera') : t('call.frontCamera')}
                 onClick={flipCamera}
               >
                 <SwitchCamera className="w-6 h-6" />
               </CallButton>
             )}
-            <CallButton label="End call" onClick={hangup} danger>
+            <CallButton label={t('call.end')} onClick={hangup} danger>
               <PhoneOff className="w-6 h-6" />
             </CallButton>
           </>

@@ -5,6 +5,7 @@ import { loadChatFlags, setDismissed } from '../../lib/chat-flags';
 import type { Profile } from '../../lib/types';
 import { Card, Note, SettingsPage } from './SettingsUi';
 import { Avatar } from '../Avatar';
+import { useT } from '../../hooks/useT';
 
 interface HiddenRequestsProps {
   onBack: () => void;
@@ -21,6 +22,7 @@ interface HiddenRequestsProps {
 export function HiddenRequests({ onBack }: HiddenRequestsProps) {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
+  const t = useT();
 
   const load = useCallback(async () => {
     const flags = await loadChatFlags();
@@ -52,20 +54,18 @@ export function HiddenRequests({ onBack }: HiddenRequestsProps) {
   }, [load]);
 
   return (
-    <SettingsPage title="Hidden requests" onBack={onBack}>
+    <SettingsPage title={t('hidden.title')} onBack={onBack}>
       <Card>
         {loading ? (
-          <p className="px-3 py-3 text-sm text-base-content/60">Loading…</p>
+          <p className="px-3 py-3 text-sm text-base-content/60">{t('common.loading')}</p>
         ) : profiles.length === 0 ? (
-          <p className="px-3 py-3 text-sm text-base-content/60">
-            Nobody is hidden on this device.
-          </p>
+          <p className="px-3 py-3 text-sm text-base-content/60">{t('hidden.empty')}</p>
         ) : (
           profiles.map((profile) => (
             <div key={profile.id} className="flex items-center gap-3 px-3 py-2.5">
               <Avatar display_name={profile.display_name} url={profile.avatar_url} size={32} />
               <span className="flex-1 min-w-0 truncate text-sm">
-                {profile.display_name ? `@${profile.display_name}` : 'Account no longer exists'}
+                {profile.display_name ? `@${profile.display_name}` : t('hidden.deletedAccount')}
               </span>
               <button
                 className="btn btn-ghost btn-xs"
@@ -74,7 +74,7 @@ export function HiddenRequests({ onBack }: HiddenRequestsProps) {
                   await load();
                 }}
               >
-                Unhide
+                {t('hidden.unhide')}
               </button>
             </div>
           ))
@@ -83,15 +83,11 @@ export function HiddenRequests({ onBack }: HiddenRequestsProps) {
 
       {/* Says exactly what this is and is not. A page that let "hidden" read as
           "blocked" would be claiming a protection the server does not enforce. */}
-      <Note>
-        Hidden on this device. They cannot message or call you: that needs a contact you
-        accepted. They can still send a request; you just will not see it. There is no block
-        list on the server, so nothing here tells us who you are avoiding.
-      </Note>
+      <Note>{t('hidden.note')}</Note>
 
       <div className="flex items-center gap-2 px-1 pt-1 text-xs text-base-content/50">
         <EyeOff className="w-3.5 h-3.5 shrink-0" />
-        <span>Declining a request or deleting a chat hides that person here.</span>
+        <span>{t('hidden.footnote')}</span>
       </div>
     </SettingsPage>
   );

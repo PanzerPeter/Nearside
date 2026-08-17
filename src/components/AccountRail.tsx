@@ -1,6 +1,7 @@
 import { AlertTriangle, Settings } from 'lucide-react';
 import { Avatar } from './Avatar';
 import { Profile } from '../lib/types';
+import { useT } from '../hooks/useT';
 
 interface AccountRailProps {
   /** Null while the row is still being fetched, and when it will not load. */
@@ -24,6 +25,7 @@ interface AccountRailProps {
  * second permanent row above it would cost a conversation.
  */
 export function AccountRail({ profile, profileFailed, onOpenSettings }: AccountRailProps) {
+  const t = useT();
   return (
     // The tab bar is `lg:hidden`, so on a tablet wide enough for this layout
     // the rail is what sits on the bottom edge and has to inset itself.
@@ -31,7 +33,7 @@ export function AccountRail({ profile, profileFailed, onOpenSettings }: AccountR
       <button
         type="button"
         onClick={onOpenSettings}
-        title={profileFailed ? 'Profile unavailable. Open settings' : 'Profile settings'}
+        title={profileFailed ? t('rail.profileFailedTitle') : t('rail.profileSettings')}
         className="group flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-base-content/5 focus-visible:bg-base-content/5"
       >
         {profile ? (
@@ -51,7 +53,7 @@ export function AccountRail({ profile, profileFailed, onOpenSettings }: AccountR
             </span>
           ) : profileFailed ? (
             <span className="block truncate text-sm font-medium text-warning">
-              Profile unavailable
+              {t('rail.profileUnavailable')}
             </span>
           ) : (
             <span className="block h-3.5 w-24 animate-pulse rounded bg-base-content/10" />

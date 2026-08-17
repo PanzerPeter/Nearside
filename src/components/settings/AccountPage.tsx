@@ -12,6 +12,7 @@ import { clearSeed } from '../../lib/keystore';
 import { useToast } from '../../hooks/useToast';
 import { AccountSwitcher } from '../AccountSwitcher';
 import { Card } from './SettingsUi';
+import { useT } from '../../hooks/useT';
 
 // functions.invoke surfaces a non-2xx as a generic "Edge Function returned a
 // non-2xx status code", which tells the user nothing. The real reason is in
@@ -52,6 +53,7 @@ export function AccountPage({
   const [deleteText, setDeleteText] = useState('');
   const [deleting, setDeleting] = useState(false);
   const toast = useToast();
+  const t = useT();
 
   async function handleDeleteAccount() {
     // Re-checked here and not only on the button's `disabled`: the gate is the
@@ -62,7 +64,7 @@ export function AccountPage({
     const { error: invokeError } = await supabase.functions.invoke('delete-account');
     if (invokeError) {
       setDeleting(false);
-      toast.error(await invokeErrorMessage(invokeError, 'Could not delete your account.'));
+      toast.error(await invokeErrorMessage(invokeError, t('account.deleteFailed')));
       return;
     }
 
@@ -99,7 +101,7 @@ export function AccountPage({
           old single-page settings and is not true of a page reached from a
           list. So the page says it. */}
       <p className="text-xs text-base-content/60 px-1 mb-2">
-        Signed in as{' '}
+        {t('account.signedInAs')}{' '}
         <span className="font-medium text-base-content/80">{profile.display_name}</span>
       </p>
 
@@ -122,16 +124,13 @@ export function AccountPage({
                 bar: signing out drops queued-but-unsent messages and this
                 account's decrypted mirror, so search and previews are rebuilt
                 from scratch afterwards. Nothing sent is lost. */}
-            <p className="text-xs text-base-content/70">
-              Unsent messages and this device&apos;s offline search index are cleared. Your
-              conversations stay on the server, sealed.
-            </p>
+            <p className="text-xs text-base-content/70">{t('account.signOutBody')}</p>
             <div className="flex items-center gap-2">
               <button className="btn btn-ghost btn-sm" onClick={() => setConfirmingSignOut(false)}>
-                Cancel
+                {t('common.cancel')}
               </button>
               <button className="btn btn-warning btn-sm" onClick={onSignOut}>
-                Sign out
+                {t('common.signOut')}
               </button>
             </div>
           </div>
@@ -142,19 +141,22 @@ export function AccountPage({
           >
             <span className="flex items-center gap-2.5 px-3 py-2.5">
               <LogOut className="w-4 h-4 text-base-content/60 shrink-0" />
-              <span className="text-sm font-medium">Sign out</span>
+              <span className="text-sm font-medium">{t('common.signOut')}</span>
             </span>
           </button>
         )}
       </Card>
 
       <div className="space-y-2">
-        <p className="text-xs font-medium uppercase tracking-wider text-error px-1">Danger zone</p>
+        <p className="text-xs font-medium uppercase tracking-wider text-error px-1">
+          {t('account.dangerZone')}
+        </p>
         {confirmingDelete ? (
           <>
             <p className="text-xs text-base-content/60 px-1">
-              Type <span className="font-medium text-base-content/80">{profile.display_name}</span>{' '}
-              to confirm. This cannot be undone.
+              {t('account.deleteConfirmPrefix')}{' '}
+              <span className="font-medium text-base-content/80">{profile.display_name}</span>{' '}
+              {t('account.deleteConfirmSuffix')}
             </p>
             <input
               type="text"
@@ -166,7 +168,7 @@ export function AccountPage({
               autoCapitalize="none"
               autoCorrect="off"
               spellCheck={false}
-              aria-label="Type your display name to confirm deletion"
+              aria-label={t('account.deleteConfirmLabel')}
             />
             <div className="flex items-center gap-2">
               <button
@@ -177,7 +179,7 @@ export function AccountPage({
                 }}
                 disabled={deleting}
               >
-                Cancel
+                {t('common.cancel')}
               </button>
               <button
                 className="btn btn-error btn-sm"
@@ -187,21 +189,19 @@ export function AccountPage({
                 {deleting ? (
                   <span className="loading loading-spinner loading-sm" />
                 ) : (
-                  'Permanently delete'
+                  t('account.deletePermanently')
                 )}
               </button>
             </div>
           </>
         ) : (
           <>
-            <p className="text-xs text-base-content/60 px-1">
-              Permanently deletes your account, messages and media. This cannot be undone.
-            </p>
+            <p className="text-xs text-base-content/60 px-1">{t('account.deleteIntro')}</p>
             <button
               className="btn btn-error btn-outline btn-sm"
               onClick={() => setConfirmingDelete(true)}
             >
-              Delete account
+              {t('account.delete')}
             </button>
           </>
         )}

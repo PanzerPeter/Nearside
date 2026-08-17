@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { Lock } from 'lucide-react';
 import { Modal } from './Modal';
 import { MAX_MESSAGE_LENGTH } from '../lib/conversation';
+import { useT } from '../hooks/useT';
 
 interface AskSealedModalProps {
   /** How to name the other participant, already formatted by the caller. */
@@ -21,6 +22,7 @@ interface AskSealedModalProps {
  * to read first.
  */
 export function AskSealedModal({ peerLabel, busy, onAsk, onClose }: AskSealedModalProps) {
+  const t = useT();
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState('');
   const questionRef = useRef<HTMLTextAreaElement>(null);
@@ -29,12 +31,12 @@ export function AskSealedModal({ peerLabel, busy, onAsk, onClose }: AskSealedMod
 
   return (
     <Modal
-      title="Ask a sealed question"
+      title={t('chat.askSealed')}
       onClose={onClose}
       actions={
         <>
           <button type="button" className="btn btn-ghost" onClick={onClose} disabled={busy}>
-            Cancel
+            {t('common.cancel')}
           </button>
           <button
             type="button"
@@ -43,20 +45,19 @@ export function AskSealedModal({ peerLabel, busy, onAsk, onClose }: AskSealedMod
             onClick={() => onAsk(question.trim(), answer.trim())}
           >
             {busy ? <span className="loading loading-spinner loading-sm" /> : <Lock className="h-4 w-4" />}
-            Seal and send
+            {t('sealed.sealAndSend')}
           </button>
         </>
       }
     >
       <div className="space-y-4">
         <p className="text-sm text-base-content/70">
-          {peerLabel} sees the question straight away. Neither of you can read the other&apos;s
-          answer until you have both answered.
+          {t('sealed.intro', { name: peerLabel })}
         </p>
 
         <label className="block">
           <span className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-base-content/60">
-            The question
+            {t('sealed.theQuestion')}
           </span>
           <textarea
             ref={questionRef}
@@ -64,7 +65,7 @@ export function AskSealedModal({ peerLabel, busy, onAsk, onClose }: AskSealedMod
             rows={2}
             maxLength={MAX_MESSAGE_LENGTH}
             className="textarea w-full resize-none rounded-2xl border border-base-content/10 bg-base-300 leading-6 focus:border-primary/60 focus:outline-none"
-            placeholder="What are we both answering?"
+            placeholder={t('sealed.questionPlaceholder')}
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
           />
@@ -73,13 +74,13 @@ export function AskSealedModal({ peerLabel, busy, onAsk, onClose }: AskSealedMod
         <label className="block">
           <span className="mb-1.5 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-base-content/60">
             <Lock className="h-3 w-3" />
-            Your answer
+            {t('sealed.yourAnswer')}
           </span>
           <textarea
             rows={3}
             maxLength={MAX_MESSAGE_LENGTH}
             className="textarea w-full resize-none rounded-2xl border border-base-content/10 bg-base-300 leading-6 focus:border-primary/60 focus:outline-none"
-            placeholder="Sealed until they answer too"
+            placeholder={t('sealed.answerPlaceholder')}
             value={answer}
             onChange={(e) => setAnswer(e.target.value)}
           />
@@ -87,10 +88,7 @@ export function AskSealedModal({ peerLabel, busy, onAsk, onClose }: AskSealedMod
 
         {/* The one thing about this feature a user cannot undo, said before
             they do it rather than in a toast afterwards. */}
-        <p className="text-xs text-base-content/50">
-          Answers cannot be edited once sent. You can withdraw the question while it is still
-          unanswered.
-        </p>
+        <p className="text-xs text-base-content/50">{t('sealed.warning')}</p>
       </div>
     </Modal>
   );

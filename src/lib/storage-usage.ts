@@ -8,6 +8,8 @@
 // The arithmetic lives apart from the measuring because the measuring is
 // `Filesystem.stat` and a SQLite count, neither of which a node test can reach.
 
+import { localeTag, t } from './i18n';
+
 /** Bytes for one pinned file, or null when the file could not be measured —
  *  the row is in the mirror but the sandbox has no file at that path. */
 export type PinSize = number | null;
@@ -37,7 +39,10 @@ export function totalPinBytes(sizes: readonly PinSize[]): PinTotals {
   return { files, bytes, unmeasured };
 }
 
-const UNITS = ['B', 'KB', 'MB', 'GB'] as const;
+/** Message keys rather than literals: Russian writes these in Cyrillic, and a
+ *  storage screen the user checks against the phone's own file manager has to
+ *  match the units that one shows. */
+const UNITS = ['units.b', 'units.kb', 'units.mb', 'units.gb'] as const;
 
 /**
  * A size to read at a glance, not to audit.
@@ -57,11 +62,11 @@ export function formatBytes(bytes: number): string {
   // Whole bytes never gain a decimal point; anything larger keeps one digit
   // until it is big enough that the digit is noise.
   const digits = unit === 0 ? 0 : value >= 100 ? 0 : 1;
-  return `${value.toFixed(digits)} ${UNITS[unit]}`;
-}
-
-/** "3 messages" / "1 message" — the readout is full of counted nouns and a
- *  stray "1 messages" undercuts a screen whose whole job is being precise. */
-export function plural(count: number, noun: string, plural = `${noun}s`): string {
-  return `${count.toLocaleString()} ${count === 1 ? noun : plural}`;
+  // Through `Intl` rather than `toFixed`, so the decimal point is the one the
+  // reader's language uses — "1,5 MB" in German, beside a German sentence.
+  const number = new Intl.NumberFormat(localeTag(), {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  }).format(value);
+  return `${number} ${t(UNITS[unit])}`;
 }

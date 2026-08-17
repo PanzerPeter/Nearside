@@ -1,4 +1,5 @@
 import { MessageSquare, Settings } from 'lucide-react';
+import { useT } from '../hooks/useT';
 
 export type Tab = 'chats' | 'settings';
 
@@ -19,18 +20,19 @@ interface TabBarProps {
  * bottom edge there, and "chats" would be a no-op button anyway.
  */
 export function TabBar({ tab, onSelect, unread }: TabBarProps) {
+  const t = useT();
   return (
     <nav className="lg:hidden shrink-0 bg-base-100 border-t border-base-content/5 pb-[var(--safe-bottom)] z-20">
       <div className="flex">
         <TabButton
-          label="Chats"
+          label={t('tabs.chats')}
           active={tab === 'chats'}
           onClick={() => onSelect('chats')}
           badge={unread}
         >
           <MessageSquare className="w-5 h-5" />
         </TabButton>
-        <TabButton label="Settings" active={tab === 'settings'} onClick={() => onSelect('settings')}>
+        <TabButton label={t('settings.title')} active={tab === 'settings'} onClick={() => onSelect('settings')}>
           <Settings className="w-5 h-5" />
         </TabButton>
       </div>

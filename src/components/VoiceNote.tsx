@@ -9,6 +9,7 @@ import {
 } from '../lib/audio';
 import { mediaFailureNotice } from '../lib/media';
 import { useSignedMediaUrl } from '../hooks/useSignedMediaUrl';
+import { useT } from '../hooks/useT';
 
 interface VoiceNoteProps {
   /** The owning message, so a pruned recording can fall back to a pinned
@@ -29,6 +30,7 @@ interface VoiceNoteProps {
  * friend's) without being told which one it is in.
  */
 export function VoiceNote({ messageId, path, durationMs, mediaKey }: VoiceNoteProps) {
+  const t = useT();
   const audioRef = useRef<HTMLAudioElement>(null);
   // 'audio' is what tells `mimeForPath` that a .webm here is a recording and
   // not a video — the container is the same and the extension cannot say.
@@ -103,8 +105,8 @@ export function VoiceNote({ messageId, path, durationMs, mediaKey }: VoiceNotePr
         className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[rgba(127,127,127,0.28)] transition-opacity disabled:opacity-50"
         onClick={toggle}
         disabled={!url}
-        title={playing ? 'Pause' : 'Play'}
-        aria-label={playing ? 'Pause voice message' : 'Play voice message'}
+        title={playing ? t('voice.pause') : t('voice.play')}
+        aria-label={playing ? t('voice.pauseNote') : t('voice.playNote')}
       >
         {!url ? (
           <span className="loading loading-spinner loading-xs" />
@@ -129,7 +131,7 @@ export function VoiceNote({ messageId, path, durationMs, mediaKey }: VoiceNotePr
           // reimplement each of those to look slightly thinner.
           style={{ accentColor: 'currentColor' }}
           className="h-1 w-full cursor-pointer"
-          aria-label="Seek voice message"
+          aria-label={t('voice.seekNote')}
           // Dragging the slider is a horizontal gesture inside a bubble that
           // treats horizontal gestures as swipe-to-reply. Without this, seeking
           // through a voice note would arm a reply to it.
@@ -151,7 +153,7 @@ export function VoiceNote({ messageId, path, durationMs, mediaKey }: VoiceNotePr
           onClick={cycleRate}
           style={{ backgroundColor: 'color-mix(in srgb, currentColor 12%, transparent)' }}
           className="shrink-0 rounded-full px-2 py-0.5 text-[0.65rem] font-medium tabular-nums bg-[rgba(127,127,127,0.2)]"
-          title="Playback speed"
+          title={t('voice.speed')}
           aria-label={`Playback speed ${formatPlaybackRate(rate)}, tap to change`}
         >
           {formatPlaybackRate(rate)}

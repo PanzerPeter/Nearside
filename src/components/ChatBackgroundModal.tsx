@@ -3,6 +3,7 @@ import { Modal } from './Modal';
 import { useToast } from '../hooks/useToast';
 import { MAX_BACKGROUND_BYTES } from '../lib/background';
 import { ImagePlus, Trash2 } from 'lucide-react';
+import { useT } from '../hooks/useT';
 
 interface ChatBackgroundModalProps {
   /** Signed URL of the conversation's current background, if any. */
@@ -21,6 +22,7 @@ export function ChatBackgroundModal({
   onRemove,
   onClose,
 }: ChatBackgroundModalProps) {
+  const t = useT();
   const inputRef = useRef<HTMLInputElement>(null);
   const toast = useToast();
 
@@ -33,7 +35,7 @@ export function ChatBackgroundModal({
       toast.error(error);
       return;
     }
-    toast.success('Background updated.');
+    toast.success(t('background.updated'));
     onClose();
   }
 
@@ -43,19 +45,19 @@ export function ChatBackgroundModal({
       toast.error(error);
       return;
     }
-    toast.success('Background removed.');
+    toast.success(t('background.removed'));
     onClose();
   }
 
   const maxMb = Math.round(MAX_BACKGROUND_BYTES / (1024 * 1024));
 
   return (
-    <Modal title="Chat background" onClose={onClose}>
+    <Modal title={t('chat.background')} onClose={onClose}>
       <div className="rounded-xl overflow-hidden border border-base-content/10 bg-base-200 h-40 flex items-center justify-center mb-4">
         {url ? (
-          <img src={url} alt="Current chat background" className="w-full h-full object-cover" />
+          <img src={url} alt={t('background.current')} className="w-full h-full object-cover" />
         ) : (
-          <span className="text-sm text-base-content/60">No background set</span>
+          <span className="text-sm text-base-content/60">{t('background.none')}</span>
         )}
       </div>
 
@@ -79,7 +81,7 @@ export function ChatBackgroundModal({
           ) : (
             <ImagePlus className="w-4 h-4" />
           )}
-          {url ? 'Replace image' : 'Choose image'}
+          {url ? t('background.replace') : t('background.choose')}
         </button>
         {url && (
           <button
@@ -89,14 +91,12 @@ export function ChatBackgroundModal({
             onClick={handleRemove}
           >
             <Trash2 className="w-4 h-4" />
-            Remove
+            {t('common.remove')}
           </button>
         )}
       </div>
 
-      <p className="text-xs text-base-content/60 mt-3">
-        PNG, JPEG, WebP or GIF, up to {maxMb} MB.
-      </p>
+      <p className="text-xs text-base-content/60 mt-3">{t('background.formats', { mb: maxMb })}</p>
     </Modal>
   );
 }

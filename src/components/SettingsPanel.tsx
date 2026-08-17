@@ -4,7 +4,18 @@ import { Profile, initial } from '../lib/types';
 import type { StoredAccount } from '../lib/accounts';
 import type { AppLock } from '../hooks/useAppLock';
 import { APP_VERSION } from '../lib/version';
-import { Bell, ChevronRight, HardDrive, Info, Lock, Palette, PhoneCall, Users } from 'lucide-react';
+import type { MessageKey } from '../lib/i18n';
+import {
+  Bell,
+  ChevronRight,
+  HardDrive,
+  Info,
+  Languages,
+  Lock,
+  Palette,
+  PhoneCall,
+  Users,
+} from 'lucide-react';
 import { Card, NavRow, SettingsPage } from './settings/SettingsUi';
 import { ProfilePage } from './settings/ProfilePage';
 import { NotificationsPage } from './settings/NotificationsPage';
@@ -14,6 +25,9 @@ import { AppearancePage } from './settings/AppearancePage';
 import { StoragePage } from './settings/StoragePage';
 import { AboutPage } from './settings/AboutPage';
 import { AccountPage } from './settings/AccountPage';
+import { LanguagePage } from './settings/LanguagePage';
+import { LOCALE_NAMES } from '../lib/i18n';
+import { useLocale, useT } from '../hooks/useT';
 
 /** The subpages, in the order they appear. */
 type Section =
@@ -22,19 +36,23 @@ type Section =
   | 'calls'
   | 'privacy'
   | 'appearance'
+  | 'language'
   | 'storage'
   | 'about'
   | 'account';
 
-const TITLES: Record<Section, string> = {
-  profile: 'Profile',
-  notifications: 'Notifications',
-  calls: 'Calls',
-  privacy: 'Privacy & security',
-  appearance: 'Appearance',
-  storage: 'Storage & data',
-  about: 'About',
-  account: 'Accounts',
+/** The page titles, as message keys — the strings themselves are looked up at
+ *  render, so the header follows a language change without a remount. */
+const TITLES: Record<Section, MessageKey> = {
+  profile: 'settings.profile',
+  notifications: 'settings.notifications',
+  calls: 'settings.calls',
+  privacy: 'settings.privacy',
+  appearance: 'settings.appearance',
+  language: 'settings.language',
+  storage: 'settings.storage',
+  about: 'settings.about',
+  account: 'settings.accounts',
 };
 
 interface SettingsPanelProps {
@@ -81,10 +99,12 @@ export function SettingsPanel({
   onAddAccount,
 }: SettingsPanelProps) {
   const [section, setSection] = useState<Section | null>(null);
+  const t = useT();
+  const locale = useLocale();
 
   if (section) {
     return (
-      <SettingsPage title={TITLES[section]} onBack={() => setSection(null)}>
+      <SettingsPage title={t(TITLES[section])} onBack={() => setSection(null)}>
         {section === 'profile' && (
           <ProfilePage session={session} profile={profile} onUpdated={onUpdated} />
         )}
@@ -92,6 +112,7 @@ export function SettingsPanel({
         {section === 'calls' && <CallsPage />}
         {section === 'privacy' && <PrivacyPage appLock={appLock} />}
         {section === 'appearance' && <AppearancePage />}
+        {section === 'language' && <LanguagePage />}
         {section === 'storage' && <StoragePage />}
         {section === 'about' && <AboutPage />}
         {section === 'account' && (
@@ -132,7 +153,7 @@ export function SettingsPanel({
         </div>
         <div className="min-w-0 flex-1">
           <p className="font-medium truncate">{profile.display_name}</p>
-          <p className="text-xs text-base-content/60">Photo and display name</p>
+          <p className="text-xs text-base-content/60">{t('settings.profileHint')}</p>
         </div>
         <ChevronRight className="w-4 h-4 text-base-content/40 shrink-0" />
       </button>
@@ -140,33 +161,42 @@ export function SettingsPanel({
       <Card>
         <NavRow
           icon={Bell}
-          label="Notifications"
-          hint="Messages, sound"
+          label={t('settings.notifications')}
+          hint={t('settings.notificationsHint')}
           onClick={() => setSection('notifications')}
         />
         <NavRow
           icon={PhoneCall}
-          label="Calls"
-          hint="Ringing, permissions"
+          label={t('settings.calls')}
+          hint={t('settings.callsHint')}
           onClick={() => setSection('calls')}
         />
         <NavRow
           icon={Lock}
-          label="Privacy & security"
-          hint="App lock, what the server knows"
-          value={lockOn ? 'Locked' : undefined}
+          label={t('settings.privacy')}
+          hint={t('settings.privacyHint')}
+          value={lockOn ? t('settings.privacyLocked') : undefined}
           onClick={() => setSection('privacy')}
         />
         <NavRow
           icon={Palette}
-          label="Appearance"
-          hint="Themes, motion"
+          label={t('settings.appearance')}
+          hint={t('settings.appearanceHint')}
           onClick={() => setSection('appearance')}
         />
         <NavRow
+          icon={Languages}
+          label={t('settings.language')}
+          hint={t('language.hint')}
+          // The language in force, not the stored preference: somebody who
+          // never chose one still wants to see what the app decided.
+          value={LOCALE_NAMES[locale]}
+          onClick={() => setSection('language')}
+        />
+        <NavRow
           icon={HardDrive}
-          label="Storage & data"
-          hint="What this device is holding"
+          label={t('settings.storage')}
+          hint={t('settings.storageHint')}
           onClick={() => setSection('storage')}
         />
       </Card>
@@ -174,15 +204,17 @@ export function SettingsPanel({
       <Card>
         <NavRow
           icon={Users}
-          label="Accounts"
-          hint="Switch, add, sign out"
-          value={accounts.length > 1 ? `${accounts.length} here` : undefined}
+          label={t('settings.accounts')}
+          hint={t('settings.accountsHint')}
+          value={
+            accounts.length > 1 ? t('settings.accountsHere', { count: accounts.length }) : undefined
+          }
           onClick={() => setSection('account')}
         />
         <NavRow
           icon={Info}
-          label="About"
-          hint="Support, licenses, legal"
+          label={t('settings.about')}
+          hint={t('settings.aboutHint')}
           value={APP_VERSION}
           onClick={() => setSection('about')}
         />

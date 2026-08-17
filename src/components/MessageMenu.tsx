@@ -1,4 +1,5 @@
 import { ReactNode, RefObject, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useT } from '../hooks/useT';
 import { createPortal } from 'react-dom';
 import { safeAreaInsets } from '../lib/safe-area';
 import { ReactionBar } from './ReactionBar';
@@ -56,6 +57,7 @@ export function MessageMenu({
   onReact,
   onClose,
 }: MessageMenuProps) {
+  const t = useT();
   const [pos, setPos] = useState<Pos | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   // The emoji picker opens in its own portal, outside this card. While it is
@@ -150,7 +152,7 @@ export function MessageMenu({
     <div
       ref={panelRef}
       role="menu"
-      aria-label="Message actions"
+      aria-label={t('message.actions')}
       className="fixed z-50 w-max max-w-[calc(100vw-1rem)] rounded-2xl bg-base-100 border border-base-content/10 shadow-overlay overflow-hidden animate-message-in"
       style={{
         top: pos?.top ?? 0,

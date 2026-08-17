@@ -1,4 +1,5 @@
 import { Camera, QrCode, Users } from 'lucide-react';
+import { useT } from '../hooks/useT';
 
 interface FirstRunInviteProps {
   /** Opens the connect dialog on the code this device shows. */
@@ -19,6 +20,7 @@ interface FirstRunInviteProps {
  * takes two people and only one of them has to scan.
  */
 export function FirstRunInvite({ onShowCode, onScan, onCreateRoom }: FirstRunInviteProps) {
+  const t = useT();
   return (
     <div className="mx-2 sm:mx-3 mt-3 rounded-2xl border border-primary/15 bg-primary/5 p-4">
       <div className="flex items-start gap-3">
@@ -26,10 +28,9 @@ export function FirstRunInvite({ onShowCode, onScan, onCreateRoom }: FirstRunInv
           <QrCode className="w-5 h-5" />
         </span>
         <div className="min-w-0">
-          <p className="font-semibold text-base-content">Add your first contact</p>
+          <p className="font-semibold text-base-content">{t('firstRun.title')}</p>
           <p className="mt-1 text-xs leading-relaxed text-base-content/60">
-            There is no directory to search here. Show your code to someone beside you, or scan
-            theirs.
+            {t('firstRun.body')}
           </p>
         </div>
       </div>
@@ -40,14 +41,14 @@ export function FirstRunInvite({ onShowCode, onScan, onCreateRoom }: FirstRunInv
           onClick={onShowCode}
         >
           <QrCode className="w-4 h-4" />
-          My code
+          {t('firstRun.myCode')}
         </button>
         <button
           className="btn btn-outline btn-sm flex-1 gap-1.5 border-primary/30 text-primary hover:border-primary/40 hover:bg-primary/10"
           onClick={onScan}
         >
           <Camera className="w-4 h-4" />
-          Scan
+          {t('firstRun.scan')}
         </button>
       </div>
 
@@ -56,7 +57,7 @@ export function FirstRunInvite({ onShowCode, onScan, onCreateRoom }: FirstRunInv
         onClick={onCreateRoom}
       >
         <Users className="w-3.5 h-3.5" />
-        or start a room
+        {t('firstRun.startRoom')}
       </button>
     </div>
   );

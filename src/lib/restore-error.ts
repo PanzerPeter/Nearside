@@ -9,8 +9,14 @@
 // the same catch and sent the user off to retype twelve words that were already
 // correct, with the one message that guarantees they never report the real bug.
 import { isValidMnemonic } from './crypto/mnemonic';
+import { t } from './i18n';
 
-export const PHRASE_INVALID = 'That phrase is not valid. Check the spelling and the order.';
+/** A function rather than a constant: a module-level string would be frozen in
+ *  whichever language was loaded first, and this one is read after the user has
+ *  had every chance to change it. */
+export function phraseInvalid(): string {
+  return t('restore.phraseInvalid');
+}
 
 /** Capacitor plugins reject with a bare string rather than an Error — the
  *  secure storage web fallback does exactly that — so `.message` is not
@@ -18,7 +24,7 @@ export const PHRASE_INVALID = 'That phrase is not valid. Check the spelling and 
 function describe(error: unknown): string {
   if (error instanceof Error && error.message) return error.message;
   if (typeof error === 'string' && error) return error;
-  return 'no reason given';
+  return t('restore.noReason');
 }
 
 /**
@@ -28,6 +34,6 @@ function describe(error: unknown): string {
  * thing that produces "your phrase is wrong" is a phrase that is wrong.
  */
 export function restoreErrorMessage(phrase: string, error: unknown): string {
-  if (!isValidMnemonic(phrase)) return PHRASE_INVALID;
-  return `Your phrase is correct, but this device could not store the key: ${describe(error)}`;
+  if (!isValidMnemonic(phrase)) return phraseInvalid();
+  return t('restore.notStored', { reason: describe(error) });
 }

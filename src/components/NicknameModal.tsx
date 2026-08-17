@@ -8,6 +8,7 @@ import {
   useNickname,
 } from '../lib/nicknames';
 import { Check, Trash2 } from 'lucide-react';
+import { useT } from '../hooks/useT';
 
 interface NicknameModalProps {
   me: string;
@@ -27,6 +28,7 @@ export function NicknameModal({
   isSelf = false,
   onClose,
 }: NicknameModalProps) {
+  const t = useT();
   const current = useNickname(peerId);
   const [value, setValue] = useState(current ?? '');
   const [busy, setBusy] = useState(false);
@@ -66,7 +68,7 @@ export function NicknameModal({
 
   return (
     <Modal
-      title={isSelf ? 'Name this chat' : 'Nickname'}
+      title={isSelf ? t('chat.nameThisChat') : t('nickname.title')}
       onClose={onClose}
       actions={
         <>
@@ -78,15 +80,15 @@ export function NicknameModal({
               onClick={remove}
             >
               <Trash2 className="w-4 h-4" />
-              Remove
+              {t('common.remove')}
             </button>
           )}
           <button type="button" className="btn btn-ghost btn-sm" disabled={busy} onClick={onClose}>
-            Cancel
+            {t('common.cancel')}
           </button>
           <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={save}>
             {busy ? <span className="loading loading-spinner loading-xs" /> : <Check className="w-4 h-4" />}
-            Save
+            {t('common.save')}
           </button>
         </>
       }
@@ -103,19 +105,22 @@ export function NicknameModal({
           value={value}
           onChange={(e) => setValue(e.target.value)}
           maxLength={MAX_NICKNAME_LENGTH}
-          placeholder={isSelf ? 'Note to self' : display_name}
-          aria-label={isSelf ? 'Name for this chat' : `Nickname for @${display_name}`}
+          placeholder={isSelf ? t('nickname.selfPlaceholder') : display_name}
+          aria-label={
+            isSelf ? t('nickname.selfLabel') : t('nickname.label', { name: display_name })
+          }
           className="input input-bordered w-full bg-base-200/50 focus:border-primary"
         />
       </form>
 
       <p className="text-xs text-base-content/55 mt-3">
         {isSelf ? (
-          <>Only you ever see this chat, so name it whatever you like.</>
+          t('nickname.selfNote')
         ) : (
           <>
-            Only you see this. @{display_name} is not told, and their display_name stays{' '}
-            <span className="font-medium text-base-content/70">@{display_name}</span> everywhere else.
+            {t('nickname.notePrefix', { name: display_name })}{' '}
+            <span className="font-medium text-base-content/70">@{display_name}</span>{' '}
+            {t('nickname.noteSuffix')}
           </>
         )}
       </p>

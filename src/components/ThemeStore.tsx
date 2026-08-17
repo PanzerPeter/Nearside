@@ -15,6 +15,8 @@ import { grantedPacks, ownedPacks } from '../lib/theme-grants';
 import { useToast } from '../hooks/useToast';
 import { Modal } from './Modal';
 import { isMobileNative } from '../lib/platform';
+import { useT } from '../hooks/useT';
+import type { MessageKey } from '../lib/i18n';
 
 interface ThemeStoreProps {
   onClose: () => void;
@@ -44,6 +46,7 @@ export function ThemeStore({ onClose }: ThemeStoreProps) {
   const [previewing, setPreviewing] = useState<string | null>(null);
   const toast = useToast();
   const native = isMobileNative();
+  const t = useT();
 
   const load = useCallback(async () => {
     const [mine, live, donated] = await Promise.all([
@@ -77,14 +80,14 @@ export function ThemeStore({ onClose }: ThemeStoreProps) {
     try {
       if (await purchasePack(offer)) {
         setOwned((prev) => new Set(prev).add(packId));
-        toast.success('Thank you. Applying it now.');
+        toast.success(t('themes.bought'));
         const pack = PACKS.find((p) => p.id === packId);
         if (pack) choose(pack.theme);
       }
       // A cancelled purchase is silent. Backing out is an ordinary thing to
       // do and does not deserve an error message.
     } catch {
-      toast.error('The purchase did not go through.');
+      toast.error(t('themes.buyFailed'));
     } finally {
       setBusy(null);
     }
@@ -108,10 +111,10 @@ export function ThemeStore({ onClose }: ThemeStoreProps) {
       setBySupport(donated);
       setOwned(new Set([...restored, ...granted]));
       toast.success(
-        restored.size > 0 ? 'Purchases restored.' : 'Nothing to restore on this account.'
+        restored.size > 0 ? t('themes.restored') : t('themes.nothingToRestore')
       );
     } catch {
-      toast.error('Could not reach the store.');
+      toast.error(t('themes.storeUnreachable'));
     } finally {
       setBusy(null);
     }
@@ -119,21 +122,18 @@ export function ThemeStore({ onClose }: ThemeStoreProps) {
 
   return (
     <Modal
-      title="Appearance"
+      title={t('themes.title')}
       onClose={onClose}
       actions={
         <button className="btn btn-ghost" onClick={onClose}>
-          Close
+          {t('common.close')}
         </button>
       }
     >
-      <p className="text-sm text-base-content/70 leading-relaxed">
-        Every feature in Nearside is free: the encryption, the vault, group rooms, and pinning
-        media to your phone. These are looks. Buying one is the only way to pay for any of it.
-      </p>
+      <p className="text-sm text-base-content/70 leading-relaxed">{t('themes.intro')}</p>
 
       <h3 className="text-xs font-medium uppercase tracking-wide text-base-content/50 mt-5 mb-2">
-        Included
+        {t('themes.included')}
       </h3>
       <div className="space-y-3">
         {FREE_THEMES.map((theme) => (
@@ -153,12 +153,10 @@ export function ThemeStore({ onClose }: ThemeStoreProps) {
       </div>
 
       <h3 className="text-xs font-medium uppercase tracking-wide text-base-content/50 mt-6 mb-2">
-        Packs
+        {t('themes.packs')}
       </h3>
       {bySupport && (
-        <p className="text-xs text-base-content/60 mb-2">
-          Included with your support. Thank you.
-        </p>
+        <p className="text-xs text-base-content/60 mb-2">{t('themes.bySupport')}</p>
       )}
       <div className="space-y-3">
         {PACKS.map((pack) => {
@@ -190,12 +188,10 @@ export function ThemeStore({ onClose }: ThemeStoreProps) {
         disabled={busy !== null || !native}
       >
         <RotateCcw className="w-3.5 h-3.5" />
-        Restore purchases
+        {t('themes.restore')}
       </button>
       {!native && (
-        <p className="text-xs text-base-content/55 mt-2 text-center">
-          Purchases need the app. In a browser the packs are previews only.
-        </p>
+        <p className="text-xs text-base-content/55 mt-2 text-center">{t('themes.browserOnly')}</p>
       )}
     </Modal>
   );
@@ -203,7 +199,7 @@ export function ThemeStore({ onClose }: ThemeStoreProps) {
 
 interface ThemeCardProps {
   name: string;
-  description: string;
+  description: MessageKey;
   swatches: readonly string[];
   /** daisyUI theme name, so the preview can render itself in it. */
   theme: string;
@@ -231,6 +227,7 @@ function ThemeCard({
   onTogglePreview,
   onSelect,
 }: ThemeCardProps) {
+  const t = useT();
   return (
     // The card is a container, not a button: it holds two of them. Nesting the
     // preview toggle inside the select button would be invalid markup, and the
@@ -262,7 +259,7 @@ function ThemeCard({
 
           <span className="flex-1 min-w-0">
             <span className="block text-sm font-medium truncate">{name}</span>
-            <span className="block text-xs text-base-content/60">{description}</span>
+            <span className="block text-xs text-base-content/60">{t(description)}</span>
           </span>
 
           <span className="shrink-0 text-xs">
@@ -271,17 +268,17 @@ function ThemeCard({
             ) : selected ? (
               <span className="flex items-center gap-1 text-primary font-medium">
                 <Check className="w-3.5 h-3.5" />
-                In use
+                {t('themes.inUse')}
               </span>
             ) : owned ? (
               <span className="flex items-center gap-1 text-base-content/60">
                 <Palette className="w-3.5 h-3.5" />
-                Use
+                {t('themes.use')}
               </span>
             ) : unavailable ? (
-              <span className="text-base-content/60">Unavailable</span>
+              <span className="text-base-content/60">{t('common.unavailable')}</span>
             ) : (
-              <span className="badge badge-primary badge-sm">{price ?? 'Loading'}</span>
+              <span className="badge badge-primary badge-sm">{price ?? t('common.loading')}</span>
             )}
           </span>
         </button>
@@ -295,8 +292,12 @@ function ThemeCard({
           className={`btn btn-ghost btn-sm btn-square shrink-0 ${previewOpen ? 'btn-active' : ''}`}
           onClick={onTogglePreview}
           aria-expanded={previewOpen}
-          aria-label={previewOpen ? `Hide ${name} preview` : `Preview ${name}`}
-          title="Preview"
+          aria-label={
+            previewOpen
+              ? t('themes.previewHide', { name })
+              : t('themes.previewOpen', { name })
+          }
+          title={t('themes.preview')}
         >
           <Eye className="w-4 h-4" />
         </button>
@@ -317,6 +318,7 @@ function ThemeCard({
  * honest for a theme added after it was written.
  */
 function ThemePreview({ theme }: { theme: string }) {
+  const t = useT();
   return (
     <div
       data-theme={theme}
@@ -329,7 +331,7 @@ function ThemePreview({ theme }: { theme: string }) {
           <span className="block text-xs font-medium">Alex</span>
           <span className="flex items-center gap-1 text-[0.6rem] text-base-content/60">
             <span className="w-1.5 h-1.5 rounded-full bg-success" />
-            online
+            {t('themes.sampleOnline')}
           </span>
         </span>
       </div>
@@ -337,12 +339,12 @@ function ThemePreview({ theme }: { theme: string }) {
       <div className="bg-base-300 px-3 py-3 space-y-2">
         <div className="flex">
           <span className="max-w-[80%] rounded-2xl rounded-bl-md bg-neutral text-neutral-content px-3 py-1.5 text-xs">
-            This is how a message from someone else looks.
+            {t('themes.sampleTheirs')}
           </span>
         </div>
         <div className="flex justify-end">
           <span className="max-w-[80%] rounded-2xl rounded-br-md bg-primary text-primary-content px-3 py-1.5 text-xs">
-            And this is yours.
+            {t('themes.sampleYours')}
             <span className="flex items-center justify-end gap-1 text-[0.6rem] leading-none mt-1">
               <span className="opacity-75">10:42</span>
               {/* The read tick, in the token the real one uses — it is the
@@ -360,7 +362,7 @@ function ThemePreview({ theme }: { theme: string }) {
 
       <div className="flex items-center gap-2 px-3 py-2 bg-base-200">
         <span className="flex-1 rounded-full bg-base-100 px-3 py-1.5 text-[0.65rem] text-base-content/50">
-          Message
+          {t('themes.sampleComposer')}
         </span>
         <span className="flex items-center justify-center w-6 h-6 rounded-full bg-primary text-primary-content shrink-0">
           <Send className="w-3 h-3" />

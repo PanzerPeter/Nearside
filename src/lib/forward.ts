@@ -19,6 +19,7 @@ import { sealBody, sealMediaKey } from './sealed-body';
 import { peerPublicKey } from './peer-keys';
 import type { Identity } from './crypto/keys';
 import type { Message } from './types';
+import { t } from './i18n';
 
 /** Why a forward did not happen, in the shape the UI needs to explain it. */
 export type ForwardFailure = 'media-missing' | 'not-set-up' | 'rate-limited' | 'failed';
@@ -126,13 +127,13 @@ export function classifyForwardError(error: WriteError | null | undefined): Forw
 export function describeForwardFailure(reason: ForwardFailure, label: string): string {
   switch (reason) {
     case 'media-missing':
-      return 'That attachment is no longer available to forward.';
+      return t('forward.mediaMissing');
     case 'not-set-up':
-      return 'Forwarding is not set up on the server yet.';
+      return t('forward.notSetUp');
     case 'rate-limited':
-      return "You're sending messages too quickly. Give it a moment.";
+      return t('media.rateLimited');
     default:
-      return `Could not forward to ${label}.`;
+      return t('forward.failed', { name: label });
   }
 }
 

@@ -3,11 +3,12 @@ import { Images, Pin, RefreshCw, Search } from 'lucide-react';
 import { clearCachedMessages } from '../../lib/localdb';
 import { clearPinnedMedia } from '../../lib/pins';
 import { forgetAllMedia } from '../../lib/media-cache';
-import { formatBytes, plural } from '../../lib/storage-usage';
+import { formatBytes } from '../../lib/storage-usage';
 import { isMobileNative } from '../../lib/platform';
 import { useStorageUsage } from '../../hooks/useStorageUsage';
 import { useToast } from '../../hooks/useToast';
 import { ActionRow, Card, InfoRow, Note } from './SettingsUi';
+import { useT } from '../../hooks/useT';
 
 /** Which clear is waiting for a second tap. Both of them destroy the only copy
  *  of something, so neither is a single tap. */
@@ -28,20 +29,21 @@ export function StoragePage() {
   const [working, setWorking] = useState(false);
   const toast = useToast();
   const native = isMobileNative();
+  const t = useT();
 
   async function run(what: Exclude<Pending, null>) {
     setWorking(true);
     try {
       if (what === 'mirror') {
         await clearCachedMessages();
-        toast.success('Offline copy cleared. It rebuilds as you open conversations.');
+        toast.success(t('storage.mirrorCleared'));
       } else {
         await clearPinnedMedia();
-        toast.success('Pinned files removed from this device.');
+        toast.success(t('storage.pinsCleared'));
       }
       await reload();
     } catch {
-      toast.error('Could not clear that.');
+      toast.error(t('storage.clearFailed'));
     } finally {
       setWorking(false);
       setPending(null);
@@ -51,10 +53,10 @@ export function StoragePage() {
   if (failed) {
     return (
       <div className="alert alert-error text-sm">
-        <span>Could not measure this device&apos;s storage.</span>
+        <span>{t('storage.measureFailed')}</span>
         <button className="btn btn-sm gap-1.5" onClick={() => void reload()}>
           <RefreshCw className="w-3.5 h-3.5" />
-          Retry
+          {t('common.retry')}
         </button>
       </div>
     );
@@ -72,16 +74,18 @@ export function StoragePage() {
 
   return (
     <>
-      <Card title="Offline copy">
+      <Card title={t('storage.offlineCopy')}>
         <InfoRow
           icon={Search}
-          label="Decrypted messages"
+          label={t('storage.decrypted')}
           hint={
             mirror.messages === 0
-              ? 'Nothing yet. It fills as you open conversations.'
-              : `Across ${plural(mirror.conversations, 'conversation')}. Search reads this copy, so a conversation this device never opened cannot be searched.`
+              ? t('storage.decryptedEmpty')
+              : t('storage.decryptedHint', {
+                  conversations: t('storage.conversations', { count: mirror.conversations }),
+                })
           }
-          status={plural(mirror.messages, 'message')}
+          status={t('storage.messages', { count: mirror.messages })}
         />
         {mirror.messages > 0 &&
           (pending === 'mirror' ? (
@@ -89,39 +93,36 @@ export function StoragePage() {
               working={working}
               onCancel={() => setPending(null)}
               onConfirm={() => void run('mirror')}
-              label="Clear the offline copy"
+              label={t('storage.clearMirror')}
             >
-              Search goes quiet until you open each conversation again, and anything the server has
-              already deleted is gone for good. Your contacts stay verified.
+              {t('storage.clearMirrorBody')}
             </Confirm>
           ) : (
             <ActionRow
-              label="Clear the offline copy"
-              action="Clear"
+              label={t('storage.clearMirror')}
+              action={t('common.clear')}
               onAction={() => setPending('mirror')}
             />
           ))}
       </Card>
 
-      <Card title="Pinned files">
+      <Card title={t('storage.pinnedFiles')}>
         <InfoRow
           icon={Pin}
-          label="Kept forever, on this phone"
-          hint={
-            native
-              ? 'The server prunes older photos, videos and voice notes. A pin keeps a copy here, so it survives that.'
-              : 'Pinning needs the app. A browser has no private storage to keep the file in.'
-          }
+          label={t('storage.pinnedLabel')}
+          hint={native ? t('storage.pinnedHint') : t('storage.pinnedBrowser')}
           status={
             pins.files + pins.unmeasured === 0
-              ? 'none'
-              : `${plural(pins.files, 'file')} · ${formatBytes(pins.bytes)}`
+              ? t('common.none')
+              : `${t('storage.files', { count: pins.files })} · ${formatBytes(pins.bytes)}`
           }
         />
         {pins.unmeasured > 0 && (
           <InfoRow
-            label={`${plural(pins.unmeasured, 'file')} could not be measured`}
-            hint="The pin is recorded but the file is gone from this phone."
+            label={t('storage.unmeasured', {
+              files: t('storage.files', { count: pins.unmeasured }),
+            })}
+            hint={t('storage.unmeasuredHint')}
             tone="warning"
           />
         )}
@@ -131,39 +132,35 @@ export function StoragePage() {
               working={working}
               onCancel={() => setPending(null)}
               onConfirm={() => void run('pins')}
-              label="Remove every pinned file"
+              label={t('storage.removePins')}
             >
-              These are the last copies. Anything the server has pruned cannot be downloaded again,
-              and nothing here is in your gallery unless you put it there.
+              {t('storage.removePinsBody')}
             </Confirm>
           ) : (
             <ActionRow
-              label="Remove every pinned file"
-              hint="Deletes the files, not the messages"
-              action="Remove"
+              label={t('storage.removePins')}
+              hint={t('storage.removePinsHint')}
+              action={t('common.remove')}
               onAction={() => setPending('pins')}
             />
           ))}
       </Card>
 
-      <Card title="Media cache">
+      <Card title={t('storage.mediaCache')}>
         <ActionRow
           icon={Images}
-          label="Attachments held in memory"
-          hint="Photos and videos you opened this session, so scrolling back does not decrypt them again. It empties when the app closes."
-          action="Clear"
+          label={t('storage.mediaCacheLabel')}
+          hint={t('storage.mediaCacheHint')}
+          action={t('common.clear')}
           onAction={() => {
             forgetAllMedia();
             void reload();
           }}
         />
-        <InfoRow label="Currently held" status={formatBytes(cacheBytes)} />
+        <InfoRow label={t('storage.currentlyHeld')} status={formatBytes(cacheBytes)} />
       </Card>
 
-      <Note>
-        None of this is on the server. Clearing it frees space here and changes nothing anywhere
-        else.
-      </Note>
+      <Note>{t('storage.note')}</Note>
     </>
   );
 }
@@ -181,16 +178,17 @@ function Confirm({
   onConfirm: () => void;
   working: boolean;
 }) {
+  const t = useT();
   return (
     <div className="p-3 bg-base-200/60 space-y-2.5">
       <p className="text-sm font-medium">{label}?</p>
       <p className="text-xs text-base-content/70 leading-relaxed">{children}</p>
       <div className="flex items-center gap-2">
         <button className="btn btn-ghost btn-sm" onClick={onCancel} disabled={working}>
-          Cancel
+          {t('common.cancel')}
         </button>
         <button className="btn btn-warning btn-sm" onClick={onConfirm} disabled={working}>
-          {working ? <span className="loading loading-spinner loading-sm" /> : 'Clear'}
+          {working ? <span className="loading loading-spinner loading-sm" /> : t('common.clear')}
         </button>
       </div>
     </div>

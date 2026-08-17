@@ -3,6 +3,7 @@ import { searchCached } from '../lib/localdb';
 import { formatListTime } from '../lib/time';
 import { useToast } from '../hooks/useToast';
 import { Search, X } from 'lucide-react';
+import { useT } from '../hooks/useT';
 
 /** Kept from search_messages()'s server-side floor: a one-character query
  *  matches most of a conversation and is never what someone meant. */
@@ -61,6 +62,7 @@ export function ConversationSearch({
   onJump,
   onClose,
 }: ConversationSearchProps) {
+  const t = useT();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchHit[]>([]);
   const [searching, setSearching] = useState(false);
@@ -107,7 +109,7 @@ export function ConversationSearch({
         .catch(() => {
           if (requestId.current !== id) return;
           setSearching(false);
-          toast.error('Search failed.');
+          toast.error(t('search.failed'));
         });
     }, DEBOUNCE_MS);
 
@@ -129,13 +131,15 @@ export function ConversationSearch({
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder={isSelf ? 'Search your notes...' : `Search messages with ${peerLabel}...`}
+          placeholder={
+            isSelf ? t('search.placeholderSelf') : t('search.placeholder', { name: peerLabel })
+          }
           className="input input-sm flex-1 bg-base-200/50 border border-base-content/10 focus:border-primary"
         />
         <button
           className="btn btn-ghost btn-sm btn-square"
           onClick={onClose}
-          title="Close search"
+          title={t('search.close')}
         >
           <X className="w-4 h-4" />
         </button>
@@ -145,7 +149,7 @@ export function ConversationSearch({
         <div className="px-4 sm:px-5 pb-2.5">
           <p className="text-xs text-base-content/55 mb-1.5">
             {searching
-              ? 'Searching…'
+              ? t('search.searching')
               : `${results.length} result${results.length === 1 ? '' : 's'}`}
           </p>
           <div className="max-h-64 overflow-y-auto space-y-1">

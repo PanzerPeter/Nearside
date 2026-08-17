@@ -12,6 +12,7 @@ import { permissionSettingsLocation } from '../../lib/device';
 import { isMobileNative } from '../../lib/platform';
 import { useToast } from '../../hooks/useToast';
 import { Card, InfoRow, ToggleRow } from './SettingsUi';
+import { useT } from '../../hooks/useT';
 
 /**
  * Everything about being told something arrived, calls excepted — those have
@@ -21,6 +22,7 @@ import { Card, InfoRow, ToggleRow } from './SettingsUi';
 export function NotificationsPage() {
   const toast = useToast();
   const native = isMobileNative();
+  const t = useT();
 
   // Whether the OS has granted notifications, as OneSignal reports it.
   // Deliberately NOT the WebView's `Notification.permission`: an Android
@@ -58,7 +60,7 @@ export function NotificationsPage() {
     if (pushOn) {
       await setPushEnabled(false);
       setPushOn(false);
-      toast.success('Notifications turned off on this device.');
+      toast.success(t('notifications.turnedOff'));
     } else {
       // Asked here, at the moment the user turns them on, and never at launch.
       const ok = await requestPushPermission();
@@ -66,7 +68,7 @@ export function NotificationsPage() {
       setPushOn(ok);
       if (ok) {
         await setPushEnabled(true);
-        toast.success('Notifications on. They never carry message content.');
+        toast.success(t('notifications.turnedOn'));
       } else {
         // A refusal and a dialog that never appeared need different advice, so
         // re-read whether Android is still willing to ask.
@@ -74,8 +76,8 @@ export function NotificationsPage() {
         setCanRequest(askable);
         toast.error(
           askable
-            ? 'Notifications stay off until you allow them.'
-            : `Android is no longer asking. Turn them on in ${permissionSettingsLocation()}.`,
+            ? t('notifications.refused')
+            : t('notifications.noLongerAsking', { location: permissionSettingsLocation() }),
         );
       }
     }
@@ -83,22 +85,22 @@ export function NotificationsPage() {
   }
 
   const notifStatus = !native
-    ? 'Only the Android app can notify you in the background'
+    ? t('notifications.androidOnly')
     : granted === null
-      ? 'Checking…'
+      ? t('common.checking')
       : pushOn
-        ? 'On. A notification names the sender and never what they said.'
+        ? t('notifications.statusOn')
         : granted
-          ? 'Hear about messages while the app is closed'
+          ? t('notifications.statusGranted')
           : pushBlockedByOs({ granted: false, canRequest })
-            ? `Blocked by Android. Turn them on in ${permissionSettingsLocation()}.`
-            : 'Tap to turn on. Android will ask you to allow it.';
+            ? t('notifications.statusBlocked', { location: permissionSettingsLocation() })
+            : t('notifications.statusAsk');
 
   return (
     <Card>
       <ToggleRow
         icon={Bell}
-        label="Message notifications"
+        label={t('notifications.messages')}
         hint={notifStatus}
         checked={pushOn}
         onChange={() => void toggleNotifications()}
@@ -107,8 +109,8 @@ export function NotificationsPage() {
       />
       <ToggleRow
         icon={Volume2}
-        label="Notification sound"
-        hint="Play a chime for new messages"
+        label={t('notifications.sound')}
+        hint={t('notifications.soundHint')}
         checked={!muted}
         onChange={() => {
           const next = !muted;
@@ -125,13 +127,13 @@ export function NotificationsPage() {
           `isSecureStorageAvailable()` its honest answer. */}
       <InfoRow
         icon={BellOff}
-        label="Muted chats"
-        hint="Swipe a chat to mute it. On Android the notification is discarded on this phone, before it is shown, so the server is never told which chats you keep quiet. The desktop app has no such hook and will still ring."
+        label={t('notifications.mutedChats')}
+        hint={t('notifications.mutedChatsHint')}
       />
       <InfoRow
         icon={AtSign}
-        label="Mentions in rooms"
-        hint="Highlighted in the room, but they get the same notification as any other message: your name is inside the encrypted message, so the server cannot see it."
+        label={t('notifications.mentions')}
+        hint={t('notifications.mentionsHint')}
       />
     </Card>
   );

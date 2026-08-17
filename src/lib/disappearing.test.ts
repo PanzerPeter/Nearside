@@ -27,9 +27,9 @@ describe('formatTtl', () => {
     expect(formatTtl(null)).toBe('Off');
   });
 
-  it('names every offered duration', () => {
-    for (const option of TTL_OPTIONS) {
-      expect(formatTtl(option.seconds)).toBe(option.label);
+  it('names every offered duration without falling through to seconds', () => {
+    for (const seconds of TTL_OPTIONS) {
+      expect(formatTtl(seconds)).not.toMatch(/seconds$/);
     }
   });
 

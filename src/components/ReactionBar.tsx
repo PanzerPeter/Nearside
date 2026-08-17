@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { SmilePlus } from 'lucide-react';
 import { EmojiPopover } from './EmojiPopover';
+import { useT } from '../hooks/useT';
 
 const QUICK = ['❤️', '😂', '👍', '😮', '😢', '🙏'];
 
@@ -15,6 +16,7 @@ interface ReactionBarProps {
 /** The quick-reaction row at the top of a message's menu: six one-tap emoji
  *  plus a button for the full picker. */
 export function ReactionBar({ onReact, onPickerOpenChange }: ReactionBarProps) {
+  const t = useT();
   const [pickerOpen, setPickerOpen] = useState(false);
   const moreRef = useRef<HTMLButtonElement>(null);
 
@@ -28,7 +30,7 @@ export function ReactionBar({ onReact, onPickerOpenChange }: ReactionBarProps) {
         <button
           key={e}
           onClick={() => onReact(e)}
-          aria-label={`React with ${e}`}
+          aria-label={t('reactions.reactWith', { emoji: e })}
           // 40px square on touch, 34px from lg up. The old size was a 20px
           // box around a `text-sm` glyph — under half the 44px minimum, six
           // of them in a row, so picking the intended emoji was a coin flip
@@ -44,8 +46,8 @@ export function ReactionBar({ onReact, onPickerOpenChange }: ReactionBarProps) {
         ref={moreRef}
         onClick={() => setPickerOpen((o) => !o)}
         className="flex items-center justify-center w-10 h-10 lg:w-[2.125rem] lg:h-[2.125rem] rounded-full hover:bg-base-content/10 transition-colors"
-        title="More"
-        aria-label="More reactions"
+        title={t('reactions.more')}
+        aria-label={t('reactions.moreLabel')}
       >
         <SmilePlus className="w-5 h-5 lg:w-[1.125rem] lg:h-[1.125rem]" />
       </button>

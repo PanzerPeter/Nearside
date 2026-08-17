@@ -9,6 +9,7 @@ import { MessageMenu, type MessageMenuAction } from './MessageMenu';
 import { ReactionChips } from './ReactionChips';
 import { useSwipeToReply } from '../hooks/useSwipeToReply';
 import { useToast } from '../hooks/useToast';
+import { useT } from '../hooks/useT';
 import { MAX_MESSAGE_LENGTH, messageSnippet } from '../lib/conversation';
 import { isForwardable } from '../lib/forward';
 import { isCoarsePointer } from '../lib/device';
@@ -142,14 +143,15 @@ export function MessageBubble({
   // Reached directly rather than threaded through props, as everywhere else in
   // the app: a copy toast is a leaf concern with no bearing on thread state.
   const toast = useToast();
+  const t = useT();
 
   async function copyContent() {
     if (!msg.text) return;
     try {
       await navigator.clipboard.writeText(msg.text);
-      toast.success('Copied.');
+      toast.success(t('message.copied'));
     } catch {
-      toast.error('Could not copy.');
+      toast.error(t('message.copyFailed'));
     }
   }
 
@@ -162,7 +164,7 @@ export function MessageBubble({
   const actions: MessageMenuAction[] = [
     {
       key: 'reply',
-      label: 'Reply',
+      label: t('message.reply'),
       icon: <Reply className="w-4 h-4" />,
       onSelect: () => onReply(msg),
     },
@@ -173,7 +175,7 @@ export function MessageBubble({
       ? [
           {
             key: 'forward',
-            label: 'Forward',
+            label: t('message.forward'),
             icon: <CornerUpRight className="w-4 h-4" />,
             onSelect: () => onForward(msg),
           },
@@ -183,7 +185,7 @@ export function MessageBubble({
       ? [
           {
             key: 'copy',
-            label: 'Copy',
+            label: t('common.copy'),
             icon: <Copy className="w-4 h-4" />,
             onSelect: () => void copyContent(),
           },
@@ -195,7 +197,7 @@ export function MessageBubble({
       ? [
           {
             key: 'edit',
-            label: 'Edit',
+            label: t('message.edit'),
             icon: <Pencil className="w-4 h-4" />,
             onSelect: () => onStartEdit(msg),
           },
@@ -205,7 +207,7 @@ export function MessageBubble({
       ? [
           {
             key: 'delete',
-            label: 'Delete',
+            label: t('common.delete'),
             icon: <Trash2 className="w-4 h-4" />,
             onSelect: () => onDelete(msg),
             danger: true,
@@ -413,7 +415,7 @@ export function MessageBubble({
             } relative overflow-hidden ${sealing ? 'seal-sweep' : ''}`}
           >
             {isDeleted ? (
-              'This message was deleted'
+              t('message.deleted')
             ) : (
               <div className="space-y-1.5">
                 {/* Says how the message got here, not where it came from —
@@ -422,7 +424,7 @@ export function MessageBubble({
                 {msg.forwarded && (
                   <p className="flex items-center gap-1 text-xs italic opacity-70">
                     <CornerUpRight className="w-3 h-3 shrink-0" aria-hidden />
-                    Forwarded
+                    {t('message.forwarded')}
                   </p>
                 )}
                 {msg.reply_to_id && (
@@ -443,14 +445,14 @@ export function MessageBubble({
                     {/* Whose message is being quoted — judged against the
                         viewer, not against the author of the reply. */}
                     <span className="font-medium">
-                      {repliedTo ? (repliedTo.user_id === me ? 'You' : peerLabel) : ''}
+                      {repliedTo ? (repliedTo.user_id === me ? t('common.you') : peerLabel) : ''}
                     </span>
                     <span className="ml-1 line-clamp-2">
                       {repliedTo
                         ? messageSnippet(repliedTo)
                         : repliedToLoading
                           ? '…'
-                          : 'Message unavailable'}
+                          : t('message.unavailable')}
                     </span>
                   </button>
                 )}
@@ -504,7 +506,7 @@ export function MessageBubble({
                     out loud, because an empty bubble would read as a message
                     someone actually sent as empty. */}
                 {msg.decrypt_failed && (
-                  <p className="text-sm italic opacity-70">Can't decrypt this message</p>
+                  <p className="text-sm italic opacity-70">{t('message.undecryptable')}</p>
                 )}
               </div>
             )}
@@ -559,7 +561,7 @@ export function MessageBubble({
               <button
                 type="button"
                 onClick={() => setMenuOpen((o) => !o)}
-                aria-label="Message actions"
+                aria-label={t('message.actions')}
                 aria-haspopup="menu"
                 aria-expanded={menuOpen}
                 className={`btn btn-ghost btn-xs btn-circle absolute top-1 ${

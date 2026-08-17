@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 import { RefreshCw, Sparkles } from 'lucide-react';
+import { useT } from '../hooks/useT';
 
 /** How often to poll the server for a new service worker while the app is open. */
 const UPDATE_POLL_MS = 60_000;
@@ -31,6 +32,7 @@ const RELOAD_FALLBACK_MS = 4_000;
  * session lives, so the user stays signed in across updates.
  */
 export function UpdatePrompt() {
+  const t = useT();
   const registrationRef = useRef<ServiceWorkerRegistration | null>(null);
   const [registered, setRegistered] = useState(false);
   const [snoozed, setSnoozed] = useState(false);
@@ -100,10 +102,8 @@ export function UpdatePrompt() {
             <Sparkles className="w-5 h-5 text-primary" />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold leading-snug">Update available</p>
-            <p className="text-xs opacity-70 leading-snug mt-0.5">
-              Reload to get the latest version. Your chats and login stay as they are.
-            </p>
+            <p className="text-sm font-semibold leading-snug">{t('update.available')}</p>
+            <p className="text-xs opacity-70 leading-snug mt-0.5">{t('update.body')}</p>
           </div>
         </div>
         <div className="mt-3 flex gap-2">
@@ -114,7 +114,7 @@ export function UpdatePrompt() {
             disabled={reloading}
           >
             <RefreshCw className={`w-4 h-4 ${reloading ? 'animate-spin' : ''}`} />
-            {reloading ? 'Updating…' : 'Reload now'}
+            {reloading ? t('update.updating') : t('update.reload')}
           </button>
           <button
             type="button"
@@ -122,7 +122,7 @@ export function UpdatePrompt() {
             onClick={() => setSnoozed(true)}
             disabled={reloading}
           >
-            Later
+            {t('common.later')}
           </button>
         </div>
       </div>

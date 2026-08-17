@@ -1,3 +1,4 @@
+import { useT } from '../hooks/useT';
 interface ProfileUnavailableProps {
   onRetry: () => void;
   onSignOut: () => void;
@@ -18,22 +19,21 @@ interface ProfileUnavailableProps {
  * pinned bytes, the roster and the key caches together.
  */
 export function ProfileUnavailable({ onRetry, onSignOut }: ProfileUnavailableProps) {
+  const t = useT();
   return (
     <div className="flex flex-col items-center gap-3 py-10 text-center">
       {/* Retrying on its own already, but a spinner that has been turning for
           a while needs to say what it is waiting for. */}
-      <p className="text-sm text-base-content/60">Could not load your profile. Retrying…</p>
+      <p className="text-sm text-base-content/60">{t('rail.retrying')}</p>
       <div className="flex items-center gap-2">
         <button className="btn btn-sm btn-outline" onClick={onRetry}>
-          Try now
+          {t('rail.tryNow')}
         </button>
         <button className="btn btn-sm btn-ghost text-error" onClick={onSignOut}>
-          Sign out
+          {t('common.signOut')}
         </button>
       </div>
-      <p className="max-w-xs text-xs text-base-content/50">
-        If this account was deleted, signing out is the way back to the sign-in screen.
-      </p>
+      <p className="max-w-xs text-xs text-base-content/50">{t('rail.deletedHint')}</p>
     </div>
   );
 }

@@ -9,6 +9,7 @@ import {
 import { saveTextFile } from '../lib/download';
 import { useToast } from '../hooks/useToast';
 import { Modal } from './Modal';
+import { useT } from '../hooks/useT';
 
 interface ServerViewProps {
   onClose: () => void;
@@ -28,6 +29,7 @@ interface ServerViewProps {
  * on.
  */
 export function ServerView({ onClose, onOpenLimits }: ServerViewProps) {
+  const t = useT();
   const [report, setReport] = useState<StoredDataReport | null>(null);
   const [failed, setFailed] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -52,9 +54,9 @@ export function ServerView({ onClose, onOpenLimits }: ServerViewProps) {
     try {
       const json = await exportEverything();
       await saveTextFile(json, `nearside-export-${new Date().toISOString().slice(0, 10)}.json`);
-      toast.success('Export saved.');
+      toast.success(t('serverView.exportSaved'));
     } catch {
-      toast.error('Could not write the export.');
+      toast.error(t('serverView.exportFailed'));
     } finally {
       setExporting(false);
     }
@@ -62,35 +64,29 @@ export function ServerView({ onClose, onOpenLimits }: ServerViewProps) {
 
   return (
     <Modal
-      title="What the server knows"
+      title={t('privacy.serverKnows')}
       onClose={onClose}
       className="max-w-2xl"
       actions={
         <button className="btn btn-ghost" onClick={onClose}>
-          Close
+          {t('common.close')}
         </button>
       }
     >
-      <p className="text-sm text-base-content/70 leading-relaxed">
-        Nearside stores who you talk to and when. It cannot read what you say, what you send, or
-        what is in your vault. Your key is on this phone and nowhere else.
-      </p>
-      <p className="text-sm text-base-content/60 leading-relaxed mt-2">
-        Every number below comes from a query run as you, right now, against the live database.
-        None of it is a description of what we think it holds.
-      </p>
+      <p className="text-sm text-base-content/70 leading-relaxed">{t('serverView.intro')}</p>
+      <p className="text-sm text-base-content/60 leading-relaxed mt-2">{t('serverView.live')}</p>
 
       <button className="btn btn-outline btn-sm w-full mt-4 gap-2" onClick={onOpenLimits}>
         <AlertTriangle className="w-4 h-4" />
-        Where this protection stops
+        {t('privacy.limits')}
       </button>
 
       {failed && (
         <div className="alert alert-error mt-4 text-sm">
-          <span>Could not read the database. You may be offline.</span>
+          <span>{t('serverView.readFailed')}</span>
           <button className="btn btn-sm gap-1.5" onClick={() => void load()}>
             <RefreshCw className="w-3.5 h-3.5" />
-            Retry
+            {t('common.retry')}
           </button>
         </div>
       )}
@@ -107,11 +103,11 @@ export function ServerView({ onClose, onOpenLimits }: ServerViewProps) {
             <div className="alert alert-warning mt-4 text-sm items-start">
               <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
               <div>
-                <p className="font-medium">This screen is out of date.</p>
+                <p className="font-medium">{t('serverView.staleTitle')}</p>
                 <p className="text-xs mt-1">
-                  The database holds tables nobody has described here:{' '}
-                  <span className="font-mono">{report.unlisted.join(', ')}</span>. Treat the summary
-                  below as incomplete until it is.
+                  {t('serverView.stalePrefix')}{' '}
+                  <span className="font-mono">{report.unlisted.join(', ')}</span>
+                  {t('serverView.staleSuffix')}
                 </p>
               </div>
             </div>
@@ -121,7 +117,7 @@ export function ServerView({ onClose, onOpenLimits }: ServerViewProps) {
             <div className="alert alert-warning mt-4 text-sm items-start">
               <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
               <div>
-                <p className="font-medium">This screen describes tables that are gone.</p>
+                <p className="font-medium">{t('serverView.missingTitle')}</p>
                 <p className="text-xs mt-1 font-mono">{report.missing.join(', ')}</p>
               </div>
             </div>
@@ -134,63 +130,65 @@ export function ServerView({ onClose, onOpenLimits }: ServerViewProps) {
           {groupTables(report.tables).map((group) => (
             <section key={group.group} className="mt-5">
               <h4 className="text-xs font-medium uppercase tracking-wider text-base-content/60">
-                {group.title}
+                {t(group.title)}
               </h4>
-              <p className="text-xs text-base-content/60 leading-relaxed mt-1">{group.blurb}</p>
+              <p className="text-xs text-base-content/60 leading-relaxed mt-1">{t(group.blurb)}</p>
 
               <div className="space-y-3 mt-3">
-                {group.tables.map((t) => (
+                {group.tables.map((spec) => (
                   <section
-                    key={t.table}
+                    key={spec.table}
                     className="rounded-xl border border-base-content/10 bg-base-200/40 p-3.5"
                   >
                     <header className="flex items-baseline justify-between gap-3">
                       <div className="min-w-0">
-                        <h5 className="font-medium text-sm">{t.label}</h5>
-                        <p className="font-mono text-[11px] text-base-content/60">{t.table}</p>
+                        <h5 className="font-medium text-sm">{t(spec.label)}</h5>
+                        <p className="font-mono text-[11px] text-base-content/60">{spec.table}</p>
                       </div>
                       <span className="text-xs text-base-content/60 shrink-0 tabular-nums">
-                        {t.rows === null
-                          ? t.infrastructure
-                            ? 'not about you'
-                            : 'not readable by you'
-                          : `${t.rows.toLocaleString()} ${t.rows === 1 ? 'row' : 'rows'}`}
+                        {spec.rows === null
+                          ? spec.infrastructure
+                            ? t('serverView.notAboutYou')
+                            : t('serverView.notReadable')
+                          : t('serverView.rows', { count: spec.rows })}
                       </span>
                     </header>
 
-                    <p className="text-xs text-base-content/70 leading-relaxed mt-2">{t.note}</p>
+                    <p className="text-xs text-base-content/70 leading-relaxed mt-2">
+                      {t(spec.note)}
+                    </p>
 
                     <dl className="mt-3 space-y-2">
-                      {t.readable.length > 0 && (
+                      {spec.readable.length > 0 && (
                         <div className="flex gap-2">
                           <dt className="flex items-center gap-1 text-[11px] font-medium uppercase tracking-wider text-warning shrink-0 w-28">
                             <Eye className="w-3 h-3" />
-                            Server reads
+                            {t('serverView.serverReads')}
                           </dt>
                           <dd className="font-mono text-[11px] text-base-content/60 break-all">
-                            {t.readable.join(' · ')}
+                            {spec.readable.join(' · ')}
                           </dd>
                         </div>
                       )}
-                      {t.opaque.length > 0 && (
+                      {spec.opaque.length > 0 && (
                         <div className="flex gap-2">
                           <dt className="flex items-center gap-1 text-[11px] font-medium uppercase tracking-wider text-success shrink-0 w-28">
                             <EyeOff className="w-3 h-3" />
-                            Encrypted
+                            {t('serverView.encrypted')}
                           </dt>
                           <dd className="font-mono text-[11px] text-base-content/60 break-all">
-                            {t.opaque.join(' · ')}
+                            {spec.opaque.join(' · ')}
                           </dd>
                         </div>
                       )}
-                      {t.opaque.length === 0 && (
+                      {spec.opaque.length === 0 && (
                         <div className="flex gap-2">
                           <dt className="flex items-center gap-1 text-[11px] font-medium uppercase tracking-wider text-base-content/40 shrink-0 w-28">
                             <Lock className="w-3 h-3" />
-                            Encrypted
+                            {t('serverView.encrypted')}
                           </dt>
                           <dd className="text-[11px] text-base-content/60">
-                            nothing in this table
+                            {t('serverView.nothingEncrypted')}
                           </dd>
                         </div>
                       )}
@@ -205,17 +203,15 @@ export function ServerView({ onClose, onOpenLimits }: ServerViewProps) {
               cards below describe things with no row anywhere above, and
               trailing them off the last group made them read as more plumbing. */}
           <h4 className="text-xs font-medium uppercase tracking-wider text-base-content/60 mt-5">
-            Held outside the tables
+            {t('serverView.outsideTables')}
           </h4>
 
           <div className="rounded-xl border border-base-content/10 bg-base-200/40 p-3.5 mt-3">
-            <h5 className="font-medium text-sm">Attachments and storage</h5>
+            <h5 className="font-medium text-sm">{t('serverView.attachmentsTitle')}</h5>
             <p className="text-xs text-base-content/70 leading-relaxed mt-2">
-              Photos, videos and voice notes older than the newest 20 (50 for voice notes) are
-              removed from the server to keep storage costs down. Anything you pin is saved to this
-              phone first and stays forever, free. Every file in storage is sealed before it is
-              uploaded and announced as <span className="font-mono">application/octet-stream</span>,
-              so the bucket does not even say what kind of file it is.
+              {t('serverView.attachmentsBodyStart')}{' '}
+              <span className="font-mono">application/octet-stream</span>
+              {t('serverView.attachmentsBodyEnd')}
             </p>
           </div>
 
@@ -225,14 +221,9 @@ export function ServerView({ onClose, onOpenLimits }: ServerViewProps) {
               worth making explicitly, and the only one on it whose evidence is
               that no row exists. */}
           <div className="rounded-xl border border-base-content/10 bg-base-200/40 p-3.5 mt-3">
-            <h5 className="font-medium text-sm">Calls</h5>
+            <h5 className="font-medium text-sm">{t('serverView.callsTitle')}</h5>
             <p className="text-xs text-base-content/70 leading-relaxed mt-2">
-              A call leaves no row anywhere above. Voice and video travel directly between the two
-              phones, encrypted end to end; the offers and answers that set the call up are sealed
-              to your contact&rsquo;s key and sent over a channel the server relays without storing.
-              Nothing records that a call happened, who it was with, or how long it lasted. What each
-              phone does learn is the other&rsquo;s IP address &mdash; see &ldquo;Where this
-              protection stops&rdquo;.
+              {t('serverView.callsBody')}
             </p>
           </div>
 
@@ -246,11 +237,10 @@ export function ServerView({ onClose, onOpenLimits }: ServerViewProps) {
             ) : (
               <Download className="w-4 h-4" />
             )}
-            Export everything
+            {t('serverView.export')}
           </button>
           <p className="text-xs text-base-content/55 mt-2 text-center">
-            Encrypted columns export as the ciphertext the server holds. Your key is not in the
-            file.
+            {t('serverView.exportNote')}
           </p>
         </>
       )}

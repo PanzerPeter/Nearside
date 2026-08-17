@@ -1,4 +1,7 @@
 import { Component, ReactNode } from 'react';
+// A class component, so no hook here: `t` is read at render, which is the only
+// moment this screen exists at all.
+import { t } from '../lib/i18n';
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -32,16 +35,14 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     if (this.state.hasError) {
       return (
         <div className="h-dvh flex flex-col items-center justify-center gap-4 bg-base-300 px-6 text-center py-safe">
-          <p className="text-base-content font-semibold">Something went wrong.</p>
-          <p className="text-base-content/55 text-sm max-w-xs">
-            Nearside hit an unexpected error. Reloading usually fixes it.
-          </p>
+          <p className="text-base-content font-semibold">{t('error.title')}</p>
+          <p className="text-base-content/55 text-sm max-w-xs">{t('error.body')}</p>
           <button
             type="button"
             className="btn btn-primary"
             onClick={() => window.location.reload()}
           >
-            Reload
+            {t('error.reload')}
           </button>
         </div>
       );

@@ -5,6 +5,7 @@ import { SettingsPanel } from './SettingsPanel';
 import { ProfileUnavailable } from './ProfileUnavailable';
 import type { AppLock } from '../hooks/useAppLock';
 import type { StoredAccount } from '../lib/accounts';
+import { useT } from '../hooks/useT';
 
 interface SettingsModalProps {
   session: Session;
@@ -54,9 +55,10 @@ export function SettingsModal({
   onForgetAccount,
   onAddAccount,
 }: SettingsModalProps) {
+  const t = useT();
   return (
     <Modal
-      title="Settings"
+      title={t('settings.title')}
       onClose={onClose}
       className="max-w-md"
       actions={

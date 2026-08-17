@@ -4,6 +4,7 @@ import { useSignedMediaUrl } from '../hooks/useSignedMediaUrl';
 import { MediaLightbox } from './MediaLightbox';
 import { mediaFailureNotice, videoTrackIsUnsupported } from '../lib/media';
 import { ImageOff, Play, VideoOff } from 'lucide-react';
+import { useT } from '../hooks/useT';
 
 interface MediaAttachmentProps {
   /** The owning message, so the viewer can pin it and so a pruned object can
@@ -32,6 +33,7 @@ interface MediaAttachmentProps {
  * enough, and it is the one you reach by tapping the thing you want.
  */
 export function MediaAttachment({ messageId, path, type, mediaKey, fill }: MediaAttachmentProps) {
+  const t = useT();
   // Deferred: the placeholder below reserves the slot at the right size, so
   // nothing jumps when the picture lands, and a page of thirty messages stops
   // downloading the twenty-five attachments that are nowhere near the screen.
@@ -107,7 +109,7 @@ export function MediaAttachment({ messageId, path, type, mediaKey, fill }: Media
         {type === 'image' ? (
           <img
             src={url}
-            alt="attachment"
+            alt={t('media.attachment')}
             loading="lazy"
             // `block`: an inline image leaves a baseline gap under it, which
             // used to hide inside the bubble's padding and now would show as a
@@ -126,7 +128,7 @@ export function MediaAttachment({ messageId, path, type, mediaKey, fill }: Media
           >
             <VideoOff className="w-5 h-5" />
             <span className="px-3 text-center text-[0.7rem] leading-tight">
-              Can't play this format here
+              {t('media.unplayable')}
             </span>
           </div>
         ) : (

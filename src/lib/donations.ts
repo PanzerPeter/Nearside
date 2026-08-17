@@ -13,6 +13,7 @@
 import { Purchases, type PurchasesPackage } from '@revenuecat/purchases-capacitor';
 import { ALL_PACKS_ENTITLEMENT } from './purchases';
 import { isMobileNative } from './platform';
+import type { MessageKey } from './i18n';
 
 /** The RevenueCat offering the tiers live in. Deliberately not `current`,
  *  which is the theme packs: merging the two would put a donation on the
@@ -23,7 +24,8 @@ export interface DonationTier {
   /** The RevenueCat product id. */
   id: string;
   name: string;
-  blurb: string;
+  /** A message key. Same reason as `ThemeOption.description`. */
+  blurb: MessageKey;
   /** Grants `ALL_PACKS_ENTITLEMENT`, so this tier is a non-consumable and its
    *  success is confirmed by the entitlement rather than by the call
    *  returning. Exactly one tier may set it. */
@@ -41,17 +43,17 @@ export const DONATION_TIERS: DonationTier[] = [
   {
     id: 'donate.tip',
     name: 'Tip',
-    blurb: 'A one-off thank you. Nothing changes in the app, which is rather the point.',
+    blurb: 'tier.tip',
   },
   {
     id: 'donate.round',
     name: 'Round of hosting',
-    blurb: 'Roughly what the database and the notification service cost for a month.',
+    blurb: 'tier.hosting',
   },
   {
     id: 'donate.patron',
     name: 'Patron',
-    blurb: 'The largest amount. It also unlocks every theme pack, including any you never bought.',
+    blurb: 'tier.patron',
     unlocksPacks: true,
   },
 ];

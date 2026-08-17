@@ -6,6 +6,7 @@ import { ServerView } from '../ServerView';
 import { SecurityLimits } from '../SecurityLimits';
 import { Card, NavRow, Note, ToggleRow } from './SettingsUi';
 import { HiddenRequests } from './HiddenRequests';
+import { useT } from '../../hooks/useT';
 
 interface PrivacyPageProps {
   /** The one instance owned by `App`. Calling `useAppLock` again here would
@@ -14,6 +15,7 @@ interface PrivacyPageProps {
 }
 
 export function PrivacyPage({ appLock }: PrivacyPageProps) {
+  const t = useT();
   const [lockSetup, setLockSetup] = useState(false);
   const [lockPhrase, setLockPhrase] = useState('');
   const [lockRepeat, setLockRepeat] = useState('');
@@ -27,7 +29,7 @@ export function PrivacyPage({ appLock }: PrivacyPageProps) {
 
   async function saveAppLock() {
     if (lockPhrase !== lockRepeat) {
-      setLockError('Those do not match.');
+      setLockError(t('privacy.passphraseMismatch'));
       return;
     }
     try {
@@ -37,7 +39,7 @@ export function PrivacyPage({ appLock }: PrivacyPageProps) {
       setLockError('');
       setLockSetup(false);
     } catch (e) {
-      setLockError(e instanceof Error ? e.message : 'Could not set the lock.');
+      setLockError(e instanceof Error ? e.message : t('privacy.lockFailed'));
     }
   }
 
@@ -47,11 +49,11 @@ export function PrivacyPage({ appLock }: PrivacyPageProps) {
 
   return (
     <>
-      <Card title="On this device">
+      <Card title={t('privacy.onThisDevice')}>
         <ToggleRow
           icon={Lock}
-          label="App lock"
-          hint="Ask for a passphrase before opening Nearside"
+          label={t('privacy.appLock')}
+          hint={t('privacy.appLockHint')}
           checked={lockOn}
           onChange={() => {
             if (lockOn) void appLock.disable();
@@ -61,14 +63,11 @@ export function PrivacyPage({ appLock }: PrivacyPageProps) {
 
         {lockSetup && appLock.state === 'off' && (
           <div className="p-3 space-y-2.5 bg-base-200/60">
-            <p className="text-xs text-base-content/70">
-              Stops someone picking up an unlocked phone and reading your conversations. Forget it
-              and your recovery phrase opens the app instead.
-            </p>
+            <p className="text-xs text-base-content/70">{t('privacy.appLockIntro')}</p>
             <input
               type="password"
               className="input input-bordered input-sm w-full"
-              placeholder={`Passphrase, at least ${MIN_PASSPHRASE_LENGTH} characters`}
+              placeholder={t('privacy.passphrasePlaceholder', { count: MIN_PASSPHRASE_LENGTH })}
               value={lockPhrase}
               onChange={(e) => {
                 setLockPhrase(e.target.value);
@@ -80,7 +79,7 @@ export function PrivacyPage({ appLock }: PrivacyPageProps) {
             <input
               type="password"
               className="input input-bordered input-sm w-full"
-              placeholder="Again"
+              placeholder={t('privacy.passphraseAgain')}
               value={lockRepeat}
               onChange={(e) => {
                 setLockRepeat(e.target.value);
@@ -96,7 +95,7 @@ export function PrivacyPage({ appLock }: PrivacyPageProps) {
                 disabled={lockPhrase.length < MIN_PASSPHRASE_LENGTH}
                 onClick={() => void saveAppLock()}
               >
-                Turn on
+                {t('common.turnOn')}
               </button>
               <button
                 className="btn btn-ghost btn-sm"
@@ -107,7 +106,7 @@ export function PrivacyPage({ appLock }: PrivacyPageProps) {
                   setLockError('');
                 }}
               >
-                Cancel
+                {t('common.cancel')}
               </button>
             </div>
           </div>
@@ -115,43 +114,40 @@ export function PrivacyPage({ appLock }: PrivacyPageProps) {
 
         {lockOn && (
           <label className="flex items-center justify-between gap-3 px-3 py-2.5">
-            <span className="text-sm">Lock after</span>
+            <span className="text-sm">{t('privacy.lockAfter')}</span>
             <select
               className="select select-bordered select-sm"
               value={appLock.relock}
               onChange={(e) => void appLock.setRelock(e.target.value as RelockAfter)}
             >
-              <option value="immediate">Leaving the app</option>
-              <option value="1m">1 minute</option>
-              <option value="5m">5 minutes</option>
+              <option value="immediate">{t('privacy.lockImmediate')}</option>
+              <option value="1m">{t('privacy.lockOneMinute')}</option>
+              <option value="5m">{t('privacy.lockFiveMinutes')}</option>
             </select>
           </label>
         )}
         <NavRow
           icon={EyeOff}
-          label="Hidden requests"
-          hint="People whose requests this device does not show"
+          label={t('privacy.hiddenRequests')}
+          hint={t('privacy.hiddenRequestsHint')}
           onClick={() => setShowHidden(true)}
         />
       </Card>
       {/* Load-bearing, not decoration: the lock must never read as a second
           layer of encryption over the seed. */}
-      <Note>
-        This guards the app, not your key. The key already sits in the phone&rsquo;s keystore and
-        nothing here re-encrypts it.
-      </Note>
+      <Note>{t('privacy.lockNote')}</Note>
 
-      <Card title="What leaves this device">
+      <Card title={t('privacy.whatLeaves')}>
         <NavRow
           icon={Database}
-          label="What the server knows"
-          hint="Live counts, straight from the database"
+          label={t('privacy.serverKnows')}
+          hint={t('privacy.serverKnowsHint')}
           onClick={() => setShowServerView(true)}
         />
         <NavRow
           icon={ShieldAlert}
-          label="Where this protection stops"
-          hint="The parts encryption cannot fix"
+          label={t('privacy.limits')}
+          hint={t('privacy.limitsHint')}
           onClick={() => setShowLimits(true)}
         />
       </Card>

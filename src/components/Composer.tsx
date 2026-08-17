@@ -18,6 +18,7 @@ import { formatDuration, MAX_VOICE_MS, voiceRecordingSupported } from '../lib/au
 import { isCoarsePointer, permissionSettingsLocation, supportsCameraCapture } from '../lib/device';
 import { holdOutcome } from '../lib/hold-record';
 import { useVoiceRecorder, type VoiceRecording } from '../hooks/useVoiceRecorder';
+import { useT } from '../hooks/useT';
 
 export interface ComposerHandle {
   focus: () => void;
@@ -91,6 +92,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   },
   ref
 ) {
+  const t = useT();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const libraryRef = useRef<HTMLInputElement>(null);
   const cameraPhotoRef = useRef<HTMLInputElement>(null);
@@ -145,7 +147,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
     (recording: VoiceRecording | null) => {
       // Null means the recording was too short to be anything but a mis-tap.
       if (!recording) {
-        setHint('Hold to record');
+        setHint(t('composer.holdToRecord'));
         return;
       }
       // A microphone that is muted, or held by another app, still yields a
@@ -155,7 +157,9 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
       setSilentTake(recording.silent);
       onStageFile(recording.file, recording.durationMs);
     },
-    [onStageFile]
+    // `t` is the module's own translator and never changes identity; it is
+    // listed because the rule cannot know that.
+    [onStageFile, t]
   );
 
   const recorder = useVoiceRecorder(handleRecorded);
@@ -203,10 +207,10 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
       pendingReleaseRef.current = 'none';
       onError(
         failure === 'denied'
-          ? `Microphone access is off. Turn it on in ${permissionSettingsLocation()}.`
+          ? t('composer.micDenied', { location: permissionSettingsLocation() })
           : failure === 'unsupported'
-            ? 'Voice messages are not supported on this device.'
-            : 'Could not start recording.'
+            ? t('composer.voiceUnsupported')
+            : t('composer.recordFailed')
       );
       return;
     }
@@ -357,7 +361,9 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   // The one staged item, when there is exactly one. A batch renders as a strip
   // instead: names and sizes stop being readable past the first thumbnail.
   const only = staged.length === 1 ? staged[0] : null;
-  const stagedKind = only?.file.type.startsWith('video/') ? 'Video' : 'Image';
+  const stagedKind = only?.file.type.startsWith('video/')
+    ? t('composer.video')
+    : t('composer.image');
 
   return (
     <form
@@ -400,8 +406,8 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
             className="btn btn-ghost btn-xs btn-circle shrink-0"
             onClick={onClearStaged}
             disabled={busy}
-            title="Discard recording"
-            aria-label="Discard recording"
+            title={t('composer.discardRecording')}
+            aria-label={t('composer.discardRecording')}
           >
             <X className="w-4 h-4" />
           </button>
@@ -420,7 +426,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
             ) : (
               <img
                 src={previewUrls[only.id]}
-                alt="Attachment preview"
+                alt={t('composer.attachmentPreview')}
                 className="w-16 h-16 rounded-md object-cover"
               />
             )}
@@ -428,7 +434,8 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
           <div className="min-w-0 flex-1">
             <p className="text-xs font-medium truncate">{only.file.name}</p>
             <p className="text-xs text-base-content/60">
-              {`${stagedKind} · ${(only.file.size / (1024 * 1024)).toFixed(1)} MB`} · press Send
+              {`${stagedKind} · ${(only.file.size / (1024 * 1024)).toFixed(1)} MB`} ·{' '}
+              {t('composer.pressSend')}
             </p>
           </div>
           <button
@@ -436,8 +443,8 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
             className="btn btn-ghost btn-xs btn-circle"
             onClick={onClearStaged}
             disabled={busy}
-            title="Remove attachment"
-            aria-label="Remove attachment"
+            title={t('composer.removeAttachment')}
+            aria-label={t('composer.removeAttachment')}
           >
             <X className="w-4 h-4" />
           </button>
@@ -451,8 +458,13 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
           <div className="flex items-center gap-2 mb-2 px-0.5">
             <p className="text-xs text-base-content/60 flex-1 truncate">
               {uploading
-                ? `Sending ${Math.min(sentCount + 1, staged.length)} of ${staged.length}...`
-                : `${staged.length} files · the caption goes on the first`}
+                ? t('composer.sendingProgress', {
+                    index: Math.min(sentCount + 1, staged.length),
+                    total: staged.length,
+                  })
+                : t('composer.batchHint', {
+                    files: t('storage.files', { count: staged.length }),
+                  })}
             </p>
             <button
               type="button"
@@ -460,7 +472,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
               onClick={onClearStaged}
               disabled={busy}
             >
-              Clear
+              {t('common.clear')}
             </button>
           </div>
           <div className="flex gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -475,7 +487,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
                 ) : (
                   <img
                     src={previewUrls[item.id]}
-                    alt={`Attachment ${index + 1}`}
+                    alt={t('composer.attachmentN', { index: index + 1 })}
                     className="w-16 h-16 rounded-md object-cover"
                   />
                 )}
@@ -490,8 +502,8 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
                   className="absolute -top-1 -right-1 btn btn-xs btn-circle btn-neutral"
                   onClick={() => onUnstage(item.id)}
                   disabled={busy}
-                  title="Remove this file"
-                  aria-label={`Remove attachment ${index + 1}`}
+                  title={t('composer.removeThisFile')}
+                  aria-label={t('composer.removeAttachmentN', { index: index + 1 })}
                 >
                   <X className="w-3 h-3" />
                 </button>
@@ -554,8 +566,8 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
               type="button"
               className={`btn btn-ghost btn-square ${cancelArmed ? 'text-error' : ''}`}
               onClick={() => finishRecording(true)}
-              title="Discard recording"
-              aria-label="Discard recording"
+              title={t('composer.discardRecording')}
+              aria-label={t('composer.discardRecording')}
             >
               <Trash2 className="w-5 h-5" />
             </button>
@@ -567,8 +579,8 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
                 type="button"
                 className="btn btn-ghost btn-square"
                 onClick={() => (recorder.paused ? recorder.resume() : recorder.pause())}
-                title={recorder.paused ? 'Resume recording' : 'Pause recording'}
-                aria-label={recorder.paused ? 'Resume recording' : 'Pause recording'}
+                title={recorder.paused ? t('composer.resume') : t('composer.pause')}
+                aria-label={recorder.paused ? t('composer.resume') : t('composer.pause')}
               >
                 {recorder.paused ? (
                   <Play className="w-5 h-5 fill-current" />
@@ -597,7 +609,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
               <span
                 className="h-4 flex-1 min-w-8 max-w-24 overflow-hidden rounded-full bg-base-content/10"
                 role="meter"
-                aria-label="Microphone level"
+                aria-label={t('composer.micLevel')}
                 aria-valuemin={0}
                 aria-valuemax={100}
                 aria-valuenow={Math.round(recorder.level * 100)}
@@ -614,14 +626,14 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
               )}
               <span className="text-xs text-base-content/60 truncate">
                 {cancelArmed
-                  ? 'Release to cancel'
+                  ? t('composer.releaseToCancel')
                   : recorder.paused
-                    ? 'Paused · tap send when you are ready'
+                    ? t('composer.paused')
                     : locked
-                      ? `Hands free · ${formatDuration(MAX_VOICE_MS)} max`
+                      ? t('composer.handsFree', { max: formatDuration(MAX_VOICE_MS) })
                       : holdToRecord
-                        ? 'Slide up to lock, away to cancel'
-                        : `Recording · ${formatDuration(MAX_VOICE_MS)} max`}
+                        ? t('composer.slideToLock')
+                        : t('composer.recording', { max: formatDuration(MAX_VOICE_MS) })}
               </span>
             </div>
           </>
@@ -632,7 +644,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
                 would be two carets asking for the same message. */}
             <div className="flex-1 min-w-0 flex items-center gap-2 h-12 px-4 rounded-2xl bg-base-300 border border-base-content/10">
               <Pencil className="w-4 h-4 shrink-0 text-primary" aria-hidden />
-              <span className="text-sm truncate text-base-content/70">Editing message</span>
+              <span className="text-sm truncate text-base-content/70">{t('composer.editing')}</span>
             </div>
 
             <button
@@ -640,8 +652,8 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
               className="btn btn-ghost btn-circle"
               onClick={editBar.onCancel}
               disabled={editBar.saving}
-              title="Cancel edit"
-              aria-label="Cancel edit"
+              title={t('composer.cancelEdit')}
+              aria-label={t('composer.cancelEdit')}
             >
               <X className="w-5 h-5" />
             </button>
@@ -653,8 +665,8 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
               className="btn btn-ghost btn-square"
               onClick={openAttach}
               disabled={busy}
-              title="Attach a photo or video"
-              aria-label="Attach a photo or video"
+              title={t('composer.attach')}
+              aria-label={t('composer.attach')}
             >
               <Paperclip className="w-5 h-5" />
             </button>
@@ -664,8 +676,8 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
               type="button"
               className="btn btn-ghost btn-square"
               onClick={() => setEmojiOpen((o) => !o)}
-              title="Emoji"
-              aria-label="Insert emoji"
+              title={t('composer.emoji')}
+              aria-label={t('composer.insertEmoji')}
               aria-expanded={emojiOpen}
             >
               <Smile className="w-5 h-5" />
@@ -684,10 +696,10 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
               maxLength={MAX_MESSAGE_LENGTH}
               placeholder={
                 staged.length > 1
-                  ? 'Add a caption to the first...'
+                  ? t('composer.captionFirst')
                   : staged.length
-                    ? 'Add a caption...'
-                    : 'Type a message...'
+                    ? t('composer.caption')
+                    : t('composer.placeholder')
               }
               // The scrollbar is hidden, not the scrolling: auto-grow stops at
               // MAX_TEXTAREA_PX, so a long draft still has to scroll. The bar
@@ -720,13 +732,15 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
             title={
               recorder.recording
                 ? holdToRecord
-                  ? 'Release to send'
-                  : 'Finish recording'
+                  ? t('composer.releaseToSend')
+                  : t('composer.finishRecording')
                 : holdToRecord
-                  ? 'Hold to record a voice message'
-                  : 'Record a voice message'
+                  ? t('composer.holdToRecordVoice')
+                  : t('composer.recordVoice')
             }
-            aria-label={recorder.recording ? 'Finish recording' : 'Record a voice message'}
+            aria-label={
+              recorder.recording ? t('composer.finishRecording') : t('composer.recordVoice')
+            }
           >
             {recorder.recording ? (
               <Send className="w-[18px] h-[18px]" />
@@ -740,8 +754,8 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
             className="btn btn-primary btn-circle"
             disabled={editBar ? !editBar.canSave || editBar.saving : !canSend}
             onClick={editBar ? editBar.onSave : undefined}
-            title={editBar ? 'Save changes' : 'Send'}
-            aria-label={editBar ? 'Save changes' : 'Send message'}
+            title={editBar ? t('composer.saveChanges') : t('common.send')}
+            aria-label={editBar ? t('composer.saveChanges') : t('composer.sendMessage')}
           >
             {busy || editBar?.saving ? (
               <span className="loading loading-spinner loading-sm" />

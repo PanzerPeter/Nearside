@@ -1,5 +1,12 @@
 // Shared date/time formatting. Lifted out of ChatRoom so the conversation list
 // and the message thread agree on what "Yesterday" means.
+//
+// Every `toLocale*String` here is handed `localeTag()` rather than `[]`: the
+// app's language, not the phone's. A German app printing an English month
+// abbreviation beside a German sentence reads as a half-finished translation,
+// because it is one.
+
+import { localeTag, t } from './i18n';
 
 function startOfDay(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -14,15 +21,15 @@ function daysAgo(iso: string): number {
 
 /** Clock time only: "14:32". */
 export function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return new Date(iso).toLocaleTimeString(localeTag(), { hour: '2-digit', minute: '2-digit' });
 }
 
 /** Date divider label for the message thread. */
 export function formatDate(iso: string): string {
   const days = daysAgo(iso);
-  if (days === 0) return 'Today';
-  if (days === 1) return 'Yesterday';
-  return new Date(iso).toLocaleDateString([], { month: 'short', day: 'numeric' });
+  if (days === 0) return t('time.today');
+  if (days === 1) return t('time.yesterday');
+  return new Date(iso).toLocaleDateString(localeTag(), { month: 'short', day: 'numeric' });
 }
 
 /**
@@ -32,8 +39,8 @@ export function formatDate(iso: string): string {
 export function formatListTime(iso: string): string {
   const days = daysAgo(iso);
   if (days === 0) return formatTime(iso);
-  if (days === 1) return 'Yesterday';
-  return new Date(iso).toLocaleDateString([], { month: 'short', day: 'numeric' });
+  if (days === 1) return t('time.yesterday');
+  return new Date(iso).toLocaleDateString(localeTag(), { month: 'short', day: 'numeric' });
 }
 
 /**
@@ -44,7 +51,9 @@ export function formatListTime(iso: string): string {
 export function formatLastSeen(iso: string | null): string {
   if (!iso) return '';
   const days = daysAgo(iso);
-  if (days === 0) return `Last seen ${formatTime(iso)}`;
-  if (days === 1) return `Last seen yesterday at ${formatTime(iso)}`;
-  return `Last seen ${new Date(iso).toLocaleDateString([], { month: 'short', day: 'numeric' })}`;
+  if (days === 0) return t('time.lastSeen', { when: formatTime(iso) });
+  if (days === 1) return t('time.lastSeenYesterday', { time: formatTime(iso) });
+  return t('time.lastSeen', {
+    when: new Date(iso).toLocaleDateString(localeTag(), { month: 'short', day: 'numeric' }),
+  });
 }

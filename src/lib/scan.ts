@@ -11,6 +11,7 @@ import {
   GoogleBarcodeScannerModuleInstallState,
 } from '@capacitor-mlkit/barcode-scanning';
 import { isMobileNative } from './platform';
+import { t, type MessageKey } from './i18n';
 
 /** Why a scan produced nothing. `cancelled` covers the user backing out, which
  *  is not a failure and must not be reported as one. */
@@ -26,13 +27,19 @@ export type ScanResult = { value: string } | { failure: ScanFailure };
 
 /** What to say about each failure. Kept beside the reasons so the two screens
  *  cannot word the same problem differently. */
-export const SCAN_MESSAGES: Record<Exclude<ScanFailure, 'cancelled'>, string> = {
-  'unsupported-platform': 'Scanning needs the app. Type the code instead.',
-  'no-camera': 'This device has no camera to scan with.',
-  'permission-denied': 'Nearside needs the camera to scan a code.',
-  'scanner-unavailable': 'The scanner could not install. Type the code instead.',
-  error: 'Could not open the camera.',
+const SCAN_KEYS: Record<Exclude<ScanFailure, 'cancelled'>, MessageKey> = {
+  'unsupported-platform': 'scan.unsupported',
+  'no-camera': 'scan.noCamera',
+  'permission-denied': 'scan.denied',
+  'scanner-unavailable': 'scan.unavailable',
+  error: 'scan.error',
 };
+
+/** Looked up when the failure is shown rather than at module load: this file is
+ *  imported before the stored language has been read. */
+export function scanMessage(failure: Exclude<ScanFailure, 'cancelled'>): string {
+  return t(SCAN_KEYS[failure]);
+}
 
 /** How long to wait for Play Services to fetch the scanner module before
  *  giving up and pointing at the typed code. Long enough for a slow

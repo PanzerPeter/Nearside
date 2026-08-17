@@ -29,6 +29,7 @@ import { SwipeRow } from './SwipeRow';
 import { Modal } from './Modal';
 import type { Identity } from '../lib/crypto/keys';
 import type { RoomSummary } from '../lib/rooms';
+import { useT } from '../hooks/useT';
 
 /** Conversation-list refresh cadence while realtime is healthy — a backstop for
  *  the one failure realtime cannot report about itself, not a delivery
@@ -72,6 +73,7 @@ export function FriendsList({
   selectedRoomId,
   onSelectRoom,
 }: FriendsListProps) {
+  const t = useT();
   const me = session.user.id;
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [pendingRequests, setPendingRequests] = useState<Friendship[]>([]);
@@ -497,7 +499,7 @@ export function FriendsList({
     const actions = [
       {
         key: 'pin',
-        label: pinned ? 'Unpin' : 'Pin',
+        label: pinned ? t('chatList.unpin') : t('chatList.pin'),
         icon: pinned ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4" />,
         onClick: () => {
           void setPinned(id, 'peer', !pinned).then(refreshFlags);
@@ -509,7 +511,7 @@ export function FriendsList({
       ...actions,
       {
         key: 'mute',
-        label: muted ? 'Unmute' : 'Mute',
+        label: muted ? t('chatList.unmute') : t('chatList.mute'),
         icon: muted ? <Bell className="w-4 h-4" /> : <BellOff className="w-4 h-4" />,
         onClick: () => {
           void setMuted(id, 'peer', !muted).then(refreshFlags);
@@ -517,7 +519,7 @@ export function FriendsList({
       },
       {
         key: 'delete',
-        label: 'Delete',
+        label: t('common.delete'),
         icon: <Trash2 className="w-4 h-4" />,
         destructive: true,
         onClick: () => setConfirmRemove(conversation),
@@ -570,8 +572,8 @@ export function FriendsList({
           <button
             className="btn btn-primary btn-sm btn-circle shadow-md shadow-primary/20 hover:shadow-primary/30 transition-shadow"
             onClick={() => setConnectTab('show')}
-            title="Add a contact"
-            aria-label="Add a contact"
+            title={t('chatList.addContact')}
+            aria-label={t('chatList.addContact')}
           >
             <UserPlus className="w-4 h-4" />
           </button>
@@ -582,7 +584,7 @@ export function FriendsList({
       {shownRequests.length > 0 && (
         <div className="p-3 sm:p-4 border-b border-base-content/5 bg-warning/5">
           <p className="text-xs font-semibold text-warning mb-2.5 uppercase tracking-wider">
-            Pending Requests ({shownRequests.length})
+            {t('requests.pending', { count: shownRequests.length })}
           </p>
           <div className="space-y-2">
             {shownRequests.map((req) => (
@@ -593,21 +595,21 @@ export function FriendsList({
                 <div className="flex items-center gap-2 min-w-0">
                   <Avatar display_name={req.profiles?.display_name} url={req.profiles?.avatar_url} size={28} />
                   <span className="text-sm text-base-content truncate">
-                    @{req.profiles?.display_name ?? 'unknown'}
+                    @{req.profiles?.display_name ?? t('requests.unknown')}
                   </span>
                 </div>
                 <div className="flex gap-1.5 shrink-0">
                   <button
                     className="btn btn-success btn-xs btn-circle"
                     onClick={() => acceptRequest(req.id)}
-                    title="Accept"
+                    title={t('requests.accept')}
                   >
                     <Check className="w-3 h-3" />
                   </button>
                   <button
                     className="btn btn-ghost btn-xs btn-circle text-error hover:bg-error/10"
                     onClick={() => declineRequest(req.id, req.requester_id)}
-                    title="Decline"
+                    title={t('requests.decline')}
                   >
                     <X className="w-3 h-3" />
                   </button>
@@ -642,7 +644,7 @@ export function FriendsList({
         {showSections && (
           <div className="px-4 sm:px-5 pt-2">
             <p className="text-xs font-semibold uppercase tracking-wider text-base-content/55">
-              Direct
+              {t('chatList.direct')}
             </p>
           </div>
         )}
@@ -699,7 +701,7 @@ export function FriendsList({
               className="btn btn-ghost btn-xs font-normal text-base-content/60"
               onClick={() => setConnectTab('show')}
             >
-              Show your code, or scan a friend&apos;s
+              {t('chatList.showOrScan')}
             </button>
           </div>
         )}
@@ -717,10 +719,12 @@ export function FriendsList({
 
       {confirmRemove && (
         <Modal
-          title={`Delete chat with ${formatDisplayName(
-            nicknameFor(confirmRemove.peer_id),
-            confirmRemove.display_name
-          )}?`}
+          title={t('chatList.deleteChatTitle', {
+            name: formatDisplayName(
+              nicknameFor(confirmRemove.peer_id),
+              confirmRemove.display_name
+            ),
+          })}
           onClose={() => (removing ? undefined : setConfirmRemove(null))}
           actions={
             <>
@@ -729,10 +733,14 @@ export function FriendsList({
                 onClick={() => setConfirmRemove(null)}
                 disabled={removing}
               >
-                Keep
+                {t('chatList.keep')}
               </button>
               <button className="btn btn-error btn-sm" onClick={confirmRemoveContact} disabled={removing}>
-                {removing ? <span className="loading loading-spinner loading-xs" /> : 'Delete'}
+                {removing ? (
+                  <span className="loading loading-spinner loading-xs" />
+                ) : (
+                  t('common.delete')
+                )}
               </button>
             </>
           }
@@ -740,11 +748,7 @@ export function FriendsList({
           {/* Says both halves, including the one the app cannot do. A dialog
               that implied their copy went too would be a promise made on
               somebody else's device. */}
-          <p className="text-sm text-base-content/80">
-            You will no longer be contacts, and this device's copy of the
-            conversation is removed. Their copy stays on their device, and
-            nothing here can reach it.
-          </p>
+          <p className="text-sm text-base-content/80">{t('chatList.deleteChatBody')}</p>
         </Modal>
       )}
     </div>

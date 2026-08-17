@@ -25,6 +25,7 @@ import {
 import { stageFiles, type StagedMedia } from '../lib/staging';
 import { sealBody, sealMediaKey, type BodyColumns } from '../lib/sealed-body';
 import { describeMediaError } from '../lib/media-errors';
+import { t } from '../lib/i18n';
 import { sealFile } from '../lib/media-crypto';
 import { peerPublicKey } from '../lib/peer-keys';
 import { MEDIA_SCAN_LIMIT, selectStaleMedia, type MediaRow } from '../lib/media';
@@ -464,7 +465,7 @@ export function useMediaSend({
       else notifyRoom(id);
     } catch (error) {
       console.error('sticker send failed', error);
-      onError(describeMediaError(error, 'Could not send that sticker.'));
+      onError(describeMediaError(error, t('media.stickerFailed')));
     } finally {
       setUploading(false);
     }

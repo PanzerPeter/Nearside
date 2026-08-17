@@ -12,11 +12,16 @@
 import { Capacitor, SystemBars, SystemBarsStyle } from '@capacitor/core';
 import { Purchases, type PurchasesPackage } from '@revenuecat/purchases-capacitor';
 import { isMobileNative } from './platform';
+import type { MessageKey } from './i18n';
 
 /** Anything the appearance screen can list, bought or not. */
 export interface ThemeOption {
+  /** A proper noun, and the same word in every language. */
   name: string;
-  description: string;
+  /** A message key, not a sentence: this list is built when the module loads,
+   *  before the stored language has been read, so the words are looked up
+   *  where the card is drawn. */
+  description: MessageKey;
   /** daisyUI theme applied to `document.documentElement`. Must exist in
    *  `tailwind.config.js`, or the attribute resolves to no variables at all
    *  and the app renders unstyled. */
@@ -46,19 +51,19 @@ export const DEFAULT_THEME = 'nearside';
 export const FREE_THEMES: ThemeOption[] = [
   {
     name: 'Nearside',
-    description: 'The theme the app ships with.',
+    description: 'theme.nearside',
     theme: DEFAULT_THEME,
     swatches: ['#1a1b1e', '#2a2c31', '#3b82f6'],
   },
   {
     name: 'Daylight',
-    description: 'A plain light theme, for a screen you are reading outdoors.',
+    description: 'theme.daylight',
     theme: 'nearside-daylight',
     swatches: ['#ffffff', '#e8ecf3', '#2563eb'],
   },
   {
     name: 'Void',
-    description: 'True black. Unlit pixels on an OLED screen, and less battery.',
+    description: 'theme.void',
     theme: 'nearside-void',
     swatches: ['#000000', '#1c1d21', '#4c8dff'],
   },
@@ -68,42 +73,42 @@ export const PACKS: Pack[] = [
   {
     id: 'pack.midnight',
     name: 'Midnight',
-    description: 'Deep blues and a colder accent, for reading in the dark.',
+    description: 'theme.midnight',
     theme: 'nearside-midnight',
     swatches: ['#0b1020', '#1b2a4a', '#6ea8fe'],
   },
   {
     id: 'pack.paper',
     name: 'Paper',
-    description: 'A light, warm theme that reads like a page rather than a screen.',
+    description: 'theme.paper',
     theme: 'nearside-paper',
     swatches: ['#f6f2e9', '#e0d8c6', '#8a6d3b'],
   },
   {
     id: 'pack.terminal',
     name: 'Terminal',
-    description: 'Green on black, monospaced accents, no apologies.',
+    description: 'theme.terminal',
     theme: 'nearside-terminal',
     swatches: ['#0a0f0a', '#123018', '#4ade80'],
   },
   {
     id: 'pack.sunset',
     name: 'Sunset',
-    description: 'Dusk purple with a warm red accent, for the end of the day.',
+    description: 'theme.sunset',
     theme: 'nearside-sunset',
     swatches: ['#170d21', '#3a2450', '#e0563f'],
   },
   {
     id: 'pack.sakura',
     name: 'Sakura',
-    description: 'A soft light theme in rose and blossom pink, corners rounded.',
+    description: 'theme.sakura',
     theme: 'nearside-sakura',
     swatches: ['#fffafc', '#f7dde8', '#d6336c'],
   },
   {
     id: 'pack.graphite',
     name: 'Graphite',
-    description: 'No colour at all. Greys, square corners, nothing shouting.',
+    description: 'theme.graphite',
     theme: 'nearside-graphite',
     swatches: ['#0f1113', '#2b2f34', '#b3bac4'],
   },

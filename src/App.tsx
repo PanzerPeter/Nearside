@@ -66,6 +66,7 @@ import { clearLock } from './lib/app-lock';
 import { setScreenGuard } from './lib/screen-guard';
 import { useConnection } from './lib/connection';
 import { MessageSquare } from 'lucide-react';
+import { useT } from './hooks/useT';
 
 /** Gap between retries of the profile fetch the settings tab waits on. Long
  *  enough that a phone with no signal isn't spinning on it, short enough that
@@ -73,6 +74,7 @@ import { MessageSquare } from 'lucide-react';
 const PROFILE_RETRY_MS = 4_000;
 
 function App() {
+  const t = useT();
   const { session, loading, recovering, endRecovery } = useAuth();
   const [selectedFriend, setSelectedFriend] = useState<Profile | null>(null);
   // Rooms and one-to-one conversations share the chat pane, so opening one
@@ -645,11 +647,9 @@ function App() {
                   <MessageSquare className="w-10 h-10 text-base-content/55" />
                 </div>
                 <p className="text-base-content/60 text-base sm:text-lg font-medium">
-                  Select a friend to start chatting
+                  {t('app.pickAChat')}
                 </p>
-                <p className="text-base-content/55 text-sm mt-1">
-                  Your conversations will appear here
-                </p>
+                <p className="text-base-content/55 text-sm mt-1">{t('app.chatsAppearHere')}</p>
               </div>
             </div>
           )}

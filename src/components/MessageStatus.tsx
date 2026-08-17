@@ -1,11 +1,13 @@
 import { Check, CheckCheck, Clock } from 'lucide-react';
 import type { MessageStatusKind } from '../lib/receipts';
+import type { MessageKey } from '../lib/i18n';
+import { useT } from '../hooks/useT';
 
-const LABELS: Record<MessageStatusKind, string> = {
-  pending: 'Sending',
-  sent: 'Sent',
-  delivered: 'Delivered',
-  read: 'Read',
+const LABELS: Record<MessageStatusKind, MessageKey> = {
+  pending: 'receipt.sending',
+  sent: 'receipt.sent',
+  delivered: 'receipt.delivered',
+  read: 'receipt.read',
 };
 
 /**
@@ -22,7 +24,8 @@ const LABELS: Record<MessageStatusKind, string> = {
  * footer row as a message walks through its lifecycle.
  */
 export function MessageStatus({ status }: { status: MessageStatusKind }) {
-  const label = LABELS[status];
+  const t = useT();
+  const label = t(LABELS[status]);
   // Pending/sent/delivered inherit the bubble's own text colour
   // (text-primary-content on an own message) and stay dimmed, so they read as
   // part of the footer row alongside the timestamp. `read` breaks out of both:

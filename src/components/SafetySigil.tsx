@@ -1,4 +1,5 @@
 import type { SafetyArt } from '../lib/crypto/safety-art';
+import { useT } from '../hooks/useT';
 
 const GRID = 5;
 
@@ -8,6 +9,7 @@ const GRID = 5;
  * so it is a faster way to read the same check, not a second one.
  */
 export function SafetySigil({ art, size = 120 }: { art: SafetyArt; size?: number }) {
+  const t = useT();
   const cell = size / GRID;
   const fill = `oklch(0.62 0.19 ${art.hue})`;
   const accent = `oklch(0.72 0.16 ${art.accentHue})`;
@@ -18,7 +20,7 @@ export function SafetySigil({ art, size = 120 }: { art: SafetyArt; size?: number
       height={size}
       viewBox={`0 0 ${size} ${size}`}
       role="img"
-      aria-label={`Safety sigil: ${art.words.join(', ')}`}
+      aria-label={t('verify.sigilLabel', { words: art.words.join(', ') })}
       className="rounded-xl bg-base-200/60"
     >
       {art.cells.map((on, i) => {

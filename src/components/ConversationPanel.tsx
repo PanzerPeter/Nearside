@@ -3,6 +3,10 @@ import { CalendarClock, ExternalLink, Link2, MessageSquare, X } from 'lucide-rea
 import { formatListTime } from '../lib/time';
 import { formatWhen, type DateInsight, type LinkInsight } from '../lib/extract';
 import { useConversationInsights } from '../hooks/useConversationInsights';
+import { useT } from '../hooks/useT';
+// `emptyReason` is a helper, not a component, so it reaches the catalog
+// directly. Aliased to keep it distinct from the hook's `t` inside components.
+import { t as translate } from '../lib/i18n';
 
 interface ConversationPanelProps {
   peerId: string;
@@ -37,6 +41,7 @@ export function ConversationPanel({
   onJump,
   onClose,
 }: ConversationPanelProps) {
+  const t = useT();
   const [tab, setTab] = useState<Tab>('dates');
   const insights = useConversationInsights(peerId, true, revision);
 
@@ -67,7 +72,7 @@ export function ConversationPanel({
           onClick={() => setTab('dates')}
         >
           <CalendarClock className="w-4 h-4" />
-          Dates
+          {t('panel.dates')}
           <span className="text-xs text-base-content/50">{dateCount}</span>
         </button>
         <button
@@ -76,27 +81,27 @@ export function ConversationPanel({
           onClick={() => setTab('links')}
         >
           <Link2 className="w-4 h-4" />
-          Links
+          {t('panel.links')}
           <span className="text-xs text-base-content/50">{insights.links.length}</span>
         </button>
       </div>
 
       <div className="max-h-72 overflow-y-auto px-3 sm:px-4 py-2 space-y-1">
         {insights.loading && insights.scanned === 0 ? (
-          <p className="px-2 py-6 text-center text-sm text-base-content/55">Reading…</p>
+          <p className="px-2 py-6 text-center text-sm text-base-content/55">{t('panel.reading')}</p>
         ) : tab === 'dates' ? (
           <DateList
             insights={insights}
             who={who}
             onJump={onJump}
-            empty={emptyReason(insights.scanned, 'No day has been named here yet.')}
+            empty={emptyReason(insights.scanned, t('panel.noDates'))}
           />
         ) : (
           <LinkList
             links={insights.links}
             who={who}
             onJump={onJump}
-            empty={emptyReason(insights.scanned, 'No links have been sent here yet.')}
+            empty={emptyReason(insights.scanned, t('panel.noLinks'))}
           />
         )}
       </div>
@@ -105,8 +110,7 @@ export function ConversationPanel({
           decrypted it. Saying so is the same claim the transparency screen
           makes, in the one place where it would be reasonable to wonder. */}
       <p className="px-4 sm:px-5 pb-2 text-[0.68rem] leading-snug text-base-content/45">
-        Found on this device, in messages it already decrypted. Nothing is sent anywhere to build
-        this.
+        {t('panel.provenance')}
       </p>
     </div>
   );
@@ -115,9 +119,7 @@ export function ConversationPanel({
 /** A conversation this device never loaded looks exactly like an empty one, so
  *  the two say different things. */
 function emptyReason(scanned: number, nothingFound: string): string {
-  return scanned === 0
-    ? 'Nothing from this conversation is on this device yet. Scroll back through it and it will fill in.'
-    : nothingFound;
+  return scanned === 0 ? translate('panel.nothingLocal') : nothingFound;
 }
 
 interface ListProps {
@@ -201,6 +203,7 @@ function DateRow({
 }
 
 function LinkList({ links, who, onJump, empty }: ListProps & { links: LinkInsight[] }) {
+  const t = useT();
   if (links.length === 0) return <Empty text={empty} />;
 
   return (
@@ -229,7 +232,7 @@ function LinkList({ links, who, onJump, empty }: ListProps & { links: LinkInsigh
               </span>
               {link.count > 1 && (
                 <span className="block text-xs text-base-content/50">
-                  sent {link.count} times
+                  {t('panel.sentTimes', { count: link.count })}
                 </span>
               )}
             </span>
@@ -237,7 +240,7 @@ function LinkList({ links, who, onJump, empty }: ListProps & { links: LinkInsigh
           <button
             className="btn btn-ghost btn-xs btn-square mr-1 shrink-0"
             onClick={() => onJump(link.messageId, link.at)}
-            title="Show in conversation"
+            title={t('panel.showInConversation')}
           >
             <MessageSquare className="w-3.5 h-3.5" />
           </button>

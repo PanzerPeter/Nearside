@@ -7,6 +7,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { ToastProvider } from './hooks/useToast';
 import { Toast } from './components/Toast';
 import { startConnectionMonitor } from './lib/connection';
+import { initLocale } from './lib/i18n';
 import { initMotionPreference } from './lib/motion';
 import { registerAuthLinkHandler } from './lib/nativeAuthLinks';
 import '@fontsource/inter/400.css';
@@ -20,6 +21,11 @@ import { isMobileNative } from './lib/platform';
 // per-document concern, not per-mount, and they have to survive StrictMode's
 // double-mount without doubling their timers.
 startConnectionMonitor();
+
+// Also before the first render: a frame painted before the stored language
+// lands would open the app in English and visibly correct itself, and every
+// string on that frame is one somebody has to read twice.
+initLocale();
 
 // Before the first render, not inside a component: `data-motion` decides which
 // of the two animation sets every stylesheet rule resolves to, and a frame

@@ -16,6 +16,7 @@
 // for, and pasted into an issue.
 
 import { NO_PEER_KEY } from './sealed-body';
+import { t } from './i18n';
 
 /** The union of what actually reaches a catch here: PostgREST returns a plain
  *  object with `code`, Storage and sodium throw `Error`s, the file APIs throw
@@ -43,21 +44,21 @@ function fields(error: unknown): Required<MediaError> {
  * a rejected fetch with an empty message, or something that is not an error at
  * all. It is the only path that produces the old generic string.
  */
-export function describeMediaError(error: unknown, fallback = 'Could not send media.'): string {
+export function describeMediaError(error: unknown, fallback = t('media.sendFailed')): string {
   const { code, name, message } = fields(error);
 
   // Server-side rate limit, raised by the trigger on `messages` and on
   // `room_messages` alike. Named first because it is the one failure that is
   // both expected and entirely temporary.
   if (message.includes('rate_limited_messages')) {
-    return "You're sending messages too quickly. Give it a moment.";
+    return t('media.rateLimited');
   }
 
   // No key to seal to. The remedy belongs to the other person — their device
   // publishes the key when they finish setting up an identity — so the message
   // has to say whose problem it is, or it reads as this device being broken.
   if (message.includes(NO_PEER_KEY)) {
-    return 'This contact has not published an encryption key yet. Nothing can be sent to them until they open Nearside again on their device.';
+    return t('media.noPeerKey');
   }
 
   // The file stopped being readable between the pick and the send. On Android a
@@ -70,14 +71,14 @@ export function describeMediaError(error: unknown, fallback = 'Could not send me
     name === 'SecurityError' ||
     /could not be read|file could not be read/i.test(message)
   ) {
-    return 'That file could not be read from this device. If it lives in the cloud, open it in your gallery first so it downloads, then try again.';
+    return t('media.unreadable');
   }
 
   // Sealing happens in one shot over the whole file, which is what the format
   // requires: a secretbox has one nonce and one tag. A phone that cannot spare
   // the buffer fails here rather than at the upload.
   if (name === 'RangeError' || /out of memory|allocation failed|invalid array length/i.test(message)) {
-    return 'That file is too large to encrypt on this device. Send a shorter clip or a smaller photo.';
+    return t('media.tooLarge');
   }
 
   switch (code) {
@@ -88,19 +89,19 @@ export function describeMediaError(error: unknown, fallback = 'Could not send me
     case 'PGRST204':
     case 'PGRST205':
     case '42703':
-      return 'Attachments are not set up on the server yet (a database migration is missing).';
+      return t('media.migrationMissing');
     // Table privileges, as opposed to a policy declining a row.
     case '42501':
-      return 'This account is not allowed to send attachments here.';
+      return t('media.notAllowed');
     // The insert satisfied no policy. In this conversation that means the
     // friendship is gone, or was never accepted.
     case 'PGRST116':
     case '42P01':
-      return 'The server would not accept this message for this conversation.';
+      return t('media.refused');
     // A CHECK constraint. The bounds live in schema.sql and the message names
     // which one, so it is passed through rather than paraphrased.
     case '23514':
-      return message.trim() ? `The server refused this attachment: ${message.trim()}` : fallback;
+      return message.trim() ? t('media.constraint', { reason: message.trim() }) : fallback;
   }
 
   // A fetch that never reached the server. supabase-js does not retry writes —
@@ -111,7 +112,7 @@ export function describeMediaError(error: unknown, fallback = 'Could not send me
     name === 'AbortError' ||
     /failed to fetch|networkerror|load failed|network request failed/i.test(message)
   ) {
-    return 'No connection to the server. Check your network and try again.';
+    return t('media.offline');
   }
 
   return message.trim() || fallback;

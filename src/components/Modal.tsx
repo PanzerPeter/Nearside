@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { useLayoutEffect, useRef } from 'react';
 import { X } from 'lucide-react';
+import { useT } from '../hooks/useT';
 
 interface ModalProps {
   title: string;
@@ -21,6 +22,7 @@ interface ModalProps {
  * cleanup below.
  */
 export function Modal({ title, onClose, children, actions, className = '' }: ModalProps) {
+  const t = useT();
   const ref = useRef<HTMLDialogElement>(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
@@ -68,7 +70,7 @@ export function Modal({ title, onClose, children, actions, className = '' }: Mod
           <button
             className="btn btn-ghost btn-sm btn-square"
             onClick={() => ref.current?.close()}
-            title="Close"
+            title={t('common.close')}
           >
             <X className="w-4 h-4" />
           </button>

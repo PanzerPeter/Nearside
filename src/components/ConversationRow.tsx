@@ -6,6 +6,7 @@ import { isSelfChat } from '../lib/conversation';
 import { formatDisplayName, useNickname } from '../lib/nicknames';
 import type { ConversationSummary, MediaType } from '../lib/types';
 import { BellOff, NotebookPen, Pin } from 'lucide-react';
+import { useT } from '../hooks/useT';
 
 interface ConversationRowProps {
   conversation: ConversationSummary;
@@ -35,6 +36,7 @@ export function ConversationRow({
   pinned = false,
   muted = false,
 }: ConversationRowProps) {
+  const t = useT();
   const { display_name, avatar_url, last_media_type, last_sender_id, last_at } = conversation;
   const isSelf = isSelfChat(me, conversation.peer_id);
   const nickname = useNickname(conversation.peer_id);
@@ -45,26 +47,26 @@ export function ConversationRow({
   const handle = nickname && !isSelf ? `@${display_name}` : null;
 
   const mediaLabels: Record<MediaType, string> = {
-    image: 'Photo',
-    video: 'Video',
-    audio: 'Voice message',
-    sticker: 'Sticker',
+    image: t('preview.photo'),
+    video: t('preview.video'),
+    audio: t('preview.voice'),
+    sticker: t('preview.sticker'),
   };
   const body = lastText?.trim() || (last_media_type ? mediaLabels[last_media_type] : '');
   // "You:" on a note to yourself would be noise — every message there is yours.
   const preview = body
     ? last_sender_id === me && !isSelf
-      ? `You: ${body}`
+      ? t('preview.fromYou', { body })
       : body
     : // There IS a message here (the server gave us its timestamp) but this
       // device has never opened it, so no plaintext exists to preview. Saying
       // so beats a blank row that reads as broken — and it is the product
       // working, not failing.
       last_at
-      ? 'Encrypted message'
+      ? t('preview.encrypted')
       : isSelf
-        ? 'Notes, links, reminders. Only you see this'
-        : 'No messages yet';
+        ? t('preview.selfEmpty')
+        : t('preview.none');
 
   return (
     <button
@@ -106,11 +108,11 @@ export function ConversationRow({
           {muted && (
             <BellOff
               className="shrink-0 w-3 h-3 text-base-content/45"
-              aria-label="Muted"
+              aria-label={t('chatList.muted')}
             />
           )}
           {pinned && (
-            <Pin className="shrink-0 w-3 h-3 text-base-content/45" aria-label="Pinned" />
+            <Pin className="shrink-0 w-3 h-3 text-base-content/45" aria-label={t('chatList.pinned')} />
           )}
           {last_at && (
             <span className="shrink-0 text-[0.7rem] text-base-content/55">
@@ -129,7 +131,7 @@ export function ConversationRow({
       {unread > 0 && (
         <span
           className="shrink-0 min-w-[1.25rem] h-5 px-1.5 inline-flex items-center justify-center rounded-full bg-primary text-primary-content text-[0.7rem] font-bold leading-none"
-          aria-label={`${unread} new message${unread === 1 ? '' : 's'}`}
+          aria-label={t('chatList.unread', { count: unread })}
         >
           {formatUnread(unread)}
         </span>

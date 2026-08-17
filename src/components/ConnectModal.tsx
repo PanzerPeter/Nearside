@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { Camera, QrCode as QrCodeIcon, RefreshCw } from 'lucide-react';
-import { SCAN_MESSAGES, scanQr } from '../lib/scan';
+import { scanMessage, scanQr } from '../lib/scan';
 import { supabase } from '../lib/supabase';
 import type { Identity } from '../lib/crypto/keys';
 import {
@@ -15,6 +15,7 @@ import { markVerified } from '../lib/verification';
 import { useToast } from '../hooks/useToast';
 import { Modal } from './Modal';
 import { QrCode } from './QrCode';
+import { useT } from '../hooks/useT';
 
 interface ConnectModalProps {
   session: Session;
@@ -39,16 +40,17 @@ type Tab = 'show' | 'scan';
  * ordinary unverified contact.
  */
 export function ConnectModal({ session, identity, onClose, initialTab = 'show' }: ConnectModalProps) {
+  const t = useT();
   const [tab, setTab] = useState<Tab>(initialTab);
   const toast = useToast();
 
   return (
     <Modal
-      title="Connect"
+      title={t('connect.title')}
       onClose={onClose}
       actions={
         <button className="btn btn-ghost" onClick={onClose}>
-          Close
+          {t('common.close')}
         </button>
       }
     >
@@ -59,7 +61,7 @@ export function ConnectModal({ session, identity, onClose, initialTab = 'show' }
           onClick={() => setTab('show')}
         >
           <QrCodeIcon className="w-4 h-4" />
-          My code
+          {t('firstRun.myCode')}
         </button>
         <button
           role="tab"
@@ -67,7 +69,7 @@ export function ConnectModal({ session, identity, onClose, initialTab = 'show' }
           onClick={() => setTab('scan')}
         >
           <Camera className="w-4 h-4" />
-          Add someone
+          {t('connect.addSomeone')}
         </button>
       </div>
 
@@ -89,6 +91,7 @@ function remaining(mintedAt: number, now: number): string | null {
 }
 
 function ShowCode({ session, identity }: { session: Session; identity: Identity }) {
+  const t = useT();
   const [code, setCode] = useState<string | null>(null);
   const [payload, setPayload] = useState<string | null>(null);
   const [mintedAt, setMintedAt] = useState(0);
@@ -132,10 +135,10 @@ function ShowCode({ session, identity }: { session: Session; identity: Identity 
   if (failed) {
     return (
       <div className="text-center py-8">
-        <p className="text-sm text-base-content/60 mb-4">Could not get a code. Are you online?</p>
+        <p className="text-sm text-base-content/60 mb-4">{t('connect.noCode')}</p>
         <button className="btn btn-primary btn-sm gap-1.5" onClick={() => void mint()}>
           <RefreshCw className="w-3.5 h-3.5" />
-          Try again
+          {t('connect.tryAgain')}
         </button>
       </div>
     );
@@ -151,9 +154,7 @@ function ShowCode({ session, identity }: { session: Session; identity: Identity 
 
   return (
     <div className="flex flex-col items-center gap-4">
-      <p className="text-sm text-base-content/60 text-center">
-        Have them scan this, or read the code out to them.
-      </p>
+      <p className="text-sm text-base-content/60 text-center">{t('connect.showBody')}</p>
 
       {/* The white here is cosmetic — the quiet zone a scanner needs lives
           inside the SVG, where a container class cannot forget it. */}
@@ -172,10 +173,10 @@ function ShowCode({ session, identity }: { session: Session; identity: Identity 
       {expired ? (
         <button className="btn btn-primary btn-sm gap-1.5" onClick={() => void mint()} disabled={minting}>
           <RefreshCw className="w-3.5 h-3.5" />
-          New code
+          {t('connect.newCode')}
         </button>
       ) : (
-        <p className="text-xs text-base-content/55">Expires in {left}</p>
+        <p className="text-xs text-base-content/55">{t('connect.expiresIn', { time: left ?? '' })}</p>
       )}
     </div>
   );
@@ -188,6 +189,7 @@ interface AddSomeoneProps {
 }
 
 function AddSomeone({ me, onConnected, toastError }: AddSomeoneProps) {
+  const t = useT();
   const [typed, setTyped] = useState('');
   const [busy, setBusy] = useState(false);
   // The modal can unmount while a scan or a redeem is in flight; nothing may
@@ -223,10 +225,10 @@ function AddSomeone({ me, onConnected, toastError }: AddSomeoneProps) {
         if (prior) {
           toastError(
             prior.status === 'accepted'
-              ? 'You are already friends.'
+              ? t('connect.alreadyFriends')
               : prior.requester_id === me
-                ? 'You already sent them a request. Waiting on their reply.'
-                : 'They already sent you a request. Accept it from your pending list.'
+                ? t('connect.alreadySent')
+                : t('connect.alreadyReceived')
           );
           return;
         }
@@ -238,13 +240,13 @@ function AddSomeone({ me, onConnected, toastError }: AddSomeoneProps) {
         if (error) {
           toastError(
             /rate_limited_requests/.test(error.message)
-              ? 'Too many friend requests in the last hour.'
+              ? t('connect.rateLimited')
               : // `friendships_unique_pair` (0034) holds one row per pair in
                 // either direction, so the check above losing a race with the
                 // other person's own redeem lands here rather than creating a
                 // second, independently acceptable row.
                 /duplicate key|unique constraint/i.test(error.message)
-                ? 'They added you at the same moment. Accept their request from your pending list.'
+                ? t('connect.raced')
                 : error.message
           );
           return;
@@ -253,12 +255,12 @@ function AddSomeone({ me, onConnected, toastError }: AddSomeoneProps) {
       } catch {
         // Spent, expired, unknown and self-issued are one message on purpose:
         // telling them apart would confirm which codes exist.
-        toastError('That code does not work. Ask for a fresh one.');
+        toastError(t('connect.badCode'));
       } finally {
         if (alive.current) setBusy(false);
       }
     },
-    [me, onConnected, toastError]
+    [me, onConnected, toastError, t]
   );
 
   async function scan() {
@@ -266,7 +268,7 @@ function AddSomeone({ me, onConnected, toastError }: AddSomeoneProps) {
     try {
       const result = await scanQr();
       if ('failure' in result) {
-        if (result.failure !== 'cancelled') toastError(SCAN_MESSAGES[result.failure]);
+        if (result.failure !== 'cancelled') toastError(scanMessage(result.failure));
         return;
       }
 
@@ -292,18 +294,16 @@ function AddSomeone({ me, onConnected, toastError }: AddSomeoneProps) {
           disabled={busy}
         >
           <Camera className="w-4 h-4" />
-          Scan their QR
+          {t('connect.scanTheirs')}
         </button>
-        <p className="text-xs text-base-content/55 mt-2 text-center">
-          Scanning in person also verifies them.
-        </p>
+        <p className="text-xs text-base-content/55 mt-2 text-center">{t('connect.scanVerifies')}</p>
       </div>
 
-      <div className="divider text-xs text-base-content/55">or</div>
+      <div className="divider text-xs text-base-content/55">{t('connect.or')}</div>
 
       <div>
         <label className="text-sm text-base-content/60" htmlFor="connect-code">
-          Type the code they read out
+          {t('connect.typeCode')}
         </label>
         <div className="join w-full mt-2">
           <input
@@ -325,7 +325,7 @@ function AddSomeone({ me, onConnected, toastError }: AddSomeoneProps) {
             disabled={busy || cleaned.length !== 8}
             onClick={() => void connect(cleaned, null)}
           >
-            {busy ? <span className="loading loading-spinner loading-xs" /> : 'Add'}
+            {busy ? <span className="loading loading-spinner loading-xs" /> : t('connect.add')}
           </button>
         </div>
       </div>

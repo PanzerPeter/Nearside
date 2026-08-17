@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ImagePlus, Search, Trash2 } from 'lucide-react';
 import { matchesLabel, STICKER_SOURCE_TYPES, type Sticker } from '../lib/stickers';
 import type { StickerDrawer } from '../hooks/useStickers';
+import { useT } from '../hooks/useT';
 
 interface StickerPickerProps {
   drawer: StickerDrawer;
@@ -18,6 +19,7 @@ interface StickerPickerProps {
  * leaves both of them too narrow.
  */
 export function StickerPicker({ drawer, onSelect, onError }: StickerPickerProps) {
+  const t = useT();
   const [query, setQuery] = useState('');
   // Long-press / right-click arms the delete for one tile. Held as an id rather
   // than a mode so arming a second tile disarms the first.
@@ -65,7 +67,7 @@ export function StickerPicker({ drawer, onSelect, onError }: StickerPickerProps)
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search stickers"
+            placeholder={t('stickers.search')}
             className="w-full bg-transparent text-sm focus:outline-none"
             autoCapitalize="none"
             autoCorrect="off"
@@ -106,7 +108,7 @@ export function StickerPicker({ drawer, onSelect, onError }: StickerPickerProps)
                     e.preventDefault();
                     setArmed(sticker.id);
                   }}
-                  title={sticker.label || 'Sticker'}
+                  title={sticker.label || t('preview.sticker')}
                 >
                   {drawer.urls[sticker.id] ? (
                     <img
@@ -159,7 +161,7 @@ export function StickerPicker({ drawer, onSelect, onError }: StickerPickerProps)
           disabled={drawer.full}
         >
           <ImagePlus className="w-4 h-4 text-base-content/60" />
-          {drawer.full ? 'Sticker library is full' : 'Add a sticker'}
+          {drawer.full ? t('stickers.full') : t('stickers.add')}
         </button>
       </div>
     </div>

@@ -4,6 +4,7 @@ import { MAX_MESSAGE_LENGTH } from '../lib/conversation';
 import { motionDuration } from '../lib/motion';
 import { exchangeState, splitAnswers, type OpenedAnswer } from '../lib/sealed-exchange';
 import type { Message } from '../lib/types';
+import { useT } from '../hooks/useT';
 
 interface SealedExchangeProps {
   msg: Message;
@@ -41,6 +42,7 @@ export function SealedExchange({
   onCancel,
   formatTime,
 }: SealedExchangeProps) {
+  const t = useT();
   const [draft, setDraft] = useState('');
   const state = exchangeState(me, answers);
   const { mine, theirs } = splitAnswers(me, answers);
@@ -66,13 +68,13 @@ export function SealedExchange({
       <div className="my-3 flex justify-center">
         <span className="inline-flex items-center gap-1.5 rounded-full bg-base-300/80 px-3 py-1 text-[0.7rem] font-medium text-base-content/60 ring-1 ring-base-content/5 backdrop-blur-sm">
           <Lock className="h-3 w-3 shrink-0" />
-          {isOwn ? 'You withdrew a sealed question' : `${peerLabel} withdrew a sealed question`}
+          {t('sealed.withdrawn', { name: isOwn ? t('common.you') : peerLabel })}
         </span>
       </div>
     );
   }
 
-  const asker = isOwn ? 'You' : peerLabel;
+  const asker = isOwn ? t('common.you') : peerLabel;
 
   return (
     <div className="my-3 flex justify-center">
@@ -104,7 +106,7 @@ export function SealedExchange({
         {msg.decrypt_failed ? (
           <p className="flex items-center gap-1.5 text-sm text-warning">
             <AlertTriangle className="h-4 w-4 shrink-0" />
-            This question could not be opened on this device.
+            {t('sealed.questionUnreadable')}
           </p>
         ) : (
           <p className="whitespace-pre-wrap break-words text-[0.95rem] font-medium leading-6">
@@ -118,7 +120,7 @@ export function SealedExchange({
               rows={2}
               maxLength={MAX_MESSAGE_LENGTH}
               className="textarea w-full resize-none rounded-2xl border border-base-content/10 bg-base-300 leading-6 focus:border-primary/60 focus:outline-none"
-              placeholder="Your answer, sealed until both are in"
+              placeholder={t('sealed.replyPlaceholder')}
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               disabled={busy}
@@ -127,9 +129,7 @@ export function SealedExchange({
               {/* No hint about whether they have answered yet. The policy will
                   not tell this client, and inventing a guess here would leak
                   the ordering the whole feature exists to remove. */}
-              <p className="flex-1 text-xs text-base-content/50">
-                Cannot be edited once sent.
-              </p>
+              <p className="flex-1 text-xs text-base-content/50">{t('sealed.noEdits')}</p>
               <button
                 type="button"
                 className="btn btn-primary btn-sm gap-1.5"
@@ -144,7 +144,7 @@ export function SealedExchange({
                 ) : (
                   <Lock className="h-3.5 w-3.5" />
                 )}
-                Seal and answer
+                {t('sealed.sealAndAnswer')}
               </button>
             </div>
           </div>
@@ -152,10 +152,10 @@ export function SealedExchange({
 
         {state === 'awaiting_peer' && (
           <div className="mt-3 space-y-2">
-            <Answer label="Yours" text={mine?.text ?? null} sealed />
+            <Answer label={t('sealed.yours')} text={mine?.text ?? null} sealed />
             <div className="flex items-center gap-2">
               <p className="flex-1 text-xs text-base-content/50">
-                Waiting for {peerLabel}. Both answers open at the same moment.
+                {t('sealed.waiting', { name: peerLabel })}
               </p>
               {isOwn && (
                 <button
@@ -165,7 +165,7 @@ export function SealedExchange({
                   disabled={busy}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
-                  Withdraw
+                  {t('sealed.withdraw')}
                 </button>
               )}
             </div>
@@ -174,7 +174,7 @@ export function SealedExchange({
 
         {state === 'revealed' && (
           <div className="mt-3 space-y-2">
-            <Answer label="Yours" text={mine?.text ?? null} />
+            <Answer label={t('sealed.yours')} text={mine?.text ?? null} />
             <Answer label={peerLabel} text={theirs?.text ?? null} />
           </div>
         )}
@@ -186,6 +186,7 @@ export function SealedExchange({
 /** One side's answer. `sealed` styles the asker's own while it waits — it is
  *  readable to them (they wrote it) but has not been released to anyone. */
 function Answer({ label, text, sealed }: { label: string; text: string | null; sealed?: boolean }) {
+  const t = useT();
   return (
     <div
       className={`rounded-xl px-3 py-2 ${
@@ -198,7 +199,7 @@ function Answer({ label, text, sealed }: { label: string; text: string | null; s
       {text === null ? (
         <p className="flex items-center gap-1.5 text-sm text-warning">
           <AlertTriangle className="h-4 w-4 shrink-0" />
-          Could not be opened on this device.
+          {t('sealed.answerUnreadable')}
         </p>
       ) : (
         <p className="whitespace-pre-wrap break-words text-sm leading-6">{text}</p>

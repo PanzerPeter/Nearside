@@ -9,6 +9,7 @@ import { isMotionReduced, prefersReducedMotion } from '../lib/motion';
 import { privacyLead, privacySections } from './LegalPrivacy';
 import { termsLead, termsSections } from './LegalTerms';
 import { Modal } from './Modal';
+import { useT } from '../hooks/useT';
 
 /** Which document to show. Exported because the two documents are reached from
  *  three places now — this footer, the settings page and the sign-up consent
@@ -18,6 +19,7 @@ export type LegalDoc = 'terms' | 'privacy';
 type Doc = LegalDoc | null;
 
 export function LegalFooter({ className = '' }: { className?: string }) {
+  const t = useT();
   const [open, setOpen] = useState<Doc>(null);
 
   return (
@@ -26,11 +28,11 @@ export function LegalFooter({ className = '' }: { className?: string }) {
         className={`flex items-center justify-center gap-3 text-xs text-base-content/60 ${className}`}
       >
         <button type="button" className="link link-hover" onClick={() => setOpen('terms')}>
-          Terms
+          {t('legal.terms')}
         </button>
         <span aria-hidden="true">·</span>
         <button type="button" className="link link-hover" onClick={() => setOpen('privacy')}>
-          Privacy
+          {t('legal.privacy')}
         </button>
       </footer>
 
@@ -51,6 +53,7 @@ export function LegalFooter({ className = '' }: { className?: string }) {
  * The text itself lives in `LegalTerms.tsx` and `LegalPrivacy.tsx`.
  */
 export function LegalDocModal({ doc, onClose }: { doc: LegalDoc; onClose: () => void }) {
+  const t = useT();
   const scroller = useRef<HTMLDivElement>(null);
   const terms = doc === 'terms';
   const sections = terms ? termsSections : privacySections;
@@ -76,12 +79,12 @@ export function LegalDocModal({ doc, onClose }: { doc: LegalDoc; onClose: () => 
 
   return (
     <Modal
-      title={terms ? 'Terms of Service' : 'Privacy Policy'}
+      title={terms ? t('about.terms') : t('about.privacyPolicy')}
       onClose={onClose}
       className="max-w-lg"
       actions={
         <button className="btn btn-primary" onClick={onClose}>
-          Close
+          {t('common.close')}
         </button>
       }
     >
@@ -89,15 +92,14 @@ export function LegalDocModal({ doc, onClose }: { doc: LegalDoc; onClose: () => 
         ref={scroller}
         className="max-h-[60vh] overflow-y-auto pr-1 text-sm text-base-content/70 leading-relaxed"
       >
-        <p className="text-xs text-base-content/60">Last updated: {LAST_UPDATED}</p>
+        <p className="text-xs text-base-content/60">{t('legal.lastUpdated', { date: LAST_UPDATED })}</p>
 
         {/* Loud on purpose, and it removes itself. A policy that describes
             rights while printing an address nobody reads is worse than one
             that admits the address is not set up yet. */}
         {CONTACT_EMAIL_IS_PLACEHOLDER && (
           <p className="mt-3 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-base-content/80">
-            The contact address in this document has not been set up yet, so it does not receive
-            mail. Until it does, use the project&rsquo;s public repository to get in touch.
+            {t('legal.placeholderContact')}
           </p>
         )}
 
@@ -105,7 +107,7 @@ export function LegalDocModal({ doc, onClose }: { doc: LegalDoc; onClose: () => 
 
         <nav aria-label="Sections" className="mt-4 rounded-lg bg-base-200/50 px-3 py-2.5">
           <p className="text-[0.7rem] font-medium uppercase tracking-wide text-base-content/50 mb-1.5">
-            In this document
+            {t('legal.inThisDocument')}
           </p>
           <ul className="space-y-0.5">
             {sections.map((section) => (
@@ -132,7 +134,7 @@ export function LegalDocModal({ doc, onClose }: { doc: LegalDoc; onClose: () => 
           onClick={toTop}
         >
           <ArrowUp className="w-3 h-3" />
-          Back to top
+          {t('legal.backToTop')}
         </button>
       </div>
     </Modal>

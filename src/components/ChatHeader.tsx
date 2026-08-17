@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import type { CallKind } from '../lib/call/types';
 import { formatTtl, TTL_OPTIONS, type ConversationTimer } from '../lib/disappearing';
+import { useT } from '../hooks/useT';
 
 interface ChatHeaderProps {
   friend: Profile;
@@ -99,11 +100,12 @@ export function ChatHeader({
   // a line that already exists rather than covering the top of the screen. Both
   // wordings wait out the same delay: "no connection" flashed on every tunnel
   // and lift the phone passes through, and it is the larger claim of the two.
+  const t = useT();
   const { online } = useConnection();
   const connectionNote = useDegraded(CONNECTION_NOTICE_MS)
     ? online
-      ? 'Connecting…'
-      : 'No connection'
+      ? t('chat.connecting')
+      : t('chat.noConnection')
     : null;
 
   // The phone's top edge: this bar is the first thing under the status bar, so
@@ -134,7 +136,7 @@ export function ChatHeader({
         className="min-w-0 flex-1 text-left rounded-lg px-1 -mx-1 hover:bg-base-content/5 transition-colors"
         onClick={onOpenNickname}
         title={
-          isSelf ? 'Name this chat' : nickname ? `@${friend.display_name}` : 'Set a nickname'
+          isSelf ? t('chat.nameThisChat') : nickname ? `@${friend.display_name}` : t('chat.setNickname')
         }
       >
         <p className="font-semibold text-sm truncate flex items-center gap-1.5">
@@ -145,19 +147,19 @@ export function ChatHeader({
           {trust === 'verified' && !isSelf && (
             <span
               className="shrink-0 inline-flex items-center gap-0.5 rounded-full bg-success/15 px-1.5 py-0.5 text-[0.65rem] font-medium text-success"
-              title="You compared safety numbers with this contact"
+              title={t('chat.verifiedTitle')}
             >
               <ShieldCheck className="w-3 h-3" />
-              Verified
+              {t('chat.verified')}
             </span>
           )}
           {trust === 'changed' && !isSelf && (
             <span
               className="shrink-0 inline-flex items-center gap-0.5 rounded-full bg-error/15 px-1.5 py-0.5 text-[0.65rem] font-medium text-error"
-              title="Their key is not the one you verified"
+              title={t('chat.keyChangedTitle')}
             >
               <ShieldAlert className="w-3 h-3" />
-              Key changed
+              {t('chat.keyChanged')}
             </span>
           )}
         </p>
@@ -170,18 +172,18 @@ export function ChatHeader({
             // Presence and last-seen would be this device reporting on
             // itself; what is worth saying here is that nobody else can read
             // any of it.
-            <span>Only you can see this</span>
+            <span>{t('chat.onlyYou')}</span>
           ) : friendTyping ? (
             <span className="inline-flex items-center gap-1.5 text-primary">
               <span className="loading loading-dots loading-xs" />
-              typing
+              {t('chat.typing')}
             </span>
           ) : (
             <span className="inline-flex items-center gap-1.5">
               <StatusDot status={friendStatus} size={8} pulse />
               {friendStatus === 'offline' && friend.last_seen_at
                 ? formatLastSeen(friend.last_seen_at)
-                : presenceLabels[friendStatus]}
+                : t(presenceLabels[friendStatus])}
             </span>
           )}
           {/* A running timer belongs on the line that already says what state
@@ -204,7 +206,7 @@ export function ChatHeader({
             className="btn btn-ghost btn-sm btn-square hover:bg-base-content/10 transition-colors"
             onClick={() => onCall('voice')}
             disabled={!canCall}
-            title={canCall ? 'Voice call' : 'Cannot call this contact yet'}
+            title={canCall ? t('chat.voiceCall') : t('chat.cannotCall')}
           >
             <Phone className="w-5 h-5" />
           </button>
@@ -212,7 +214,7 @@ export function ChatHeader({
             className="btn btn-ghost btn-sm btn-square hover:bg-base-content/10 transition-colors"
             onClick={() => onCall('video')}
             disabled={!canCall}
-            title={canCall ? 'Video call' : 'Cannot call this contact yet'}
+            title={canCall ? t('chat.videoCall') : t('chat.cannotCall')}
           >
             <Video className="w-5 h-5" />
           </button>
@@ -221,7 +223,7 @@ export function ChatHeader({
       <button
         className="btn btn-ghost btn-sm btn-square hover:bg-base-content/10 transition-colors"
         onClick={onToggleSearch}
-        title="Search messages"
+        title={t('chat.searchMessages')}
         aria-pressed={searchOpen}
       >
         <Search className="w-5 h-5" />
@@ -230,7 +232,7 @@ export function ChatHeader({
         <button
           tabIndex={0}
           className="btn btn-ghost btn-sm btn-square relative hover:bg-base-content/10 transition-colors"
-          aria-label="Conversation options"
+          aria-label={t('chat.options')}
         >
           <MoreVertical className="w-5 h-5" />
           {/* The one thing in this menu that cannot wait to be found. */}
@@ -256,7 +258,7 @@ export function ChatHeader({
                 disabled={!peerKey}
               >
                 <Lock className="w-4 h-4" />
-                Ask a sealed question
+                {t('chat.askSealed')}
               </button>
             </li>
           )}
@@ -273,7 +275,7 @@ export function ChatHeader({
               }}
             >
               <CalendarClock className="w-4 h-4" />
-              In this conversation
+              {t('chat.inThisConversation')}
             </button>
           </li>
           {!isSelf && (
@@ -294,10 +296,10 @@ export function ChatHeader({
                   <ShieldAlert className="w-4 h-4" />
                 )}
                 {trust === 'changed'
-                  ? 'Their key changed'
+                  ? t('chat.theirKeyChanged')
                   : trust === 'verified'
-                    ? 'Verified. Check again'
-                    : 'Verify safety number'}
+                    ? t('chat.verifyAgain')
+                    : t('chat.verifySafetyNumber')}
               </button>
             </li>
           )}
@@ -305,22 +307,22 @@ export function ChatHeader({
             <details>
               <summary className="whitespace-nowrap">
                 <Timer className={`w-4 h-4 ${timer?.ttlSeconds != null ? 'text-primary' : ''}`} />
-                Disappearing messages
+                {t('chat.disappearing')}
                 <span className="ml-auto text-xs text-base-content/50">
                   {formatTtl(timer?.ttlSeconds ?? null)}
                 </span>
               </summary>
               <ul>
-                {TTL_OPTIONS.map((option) => (
-                  <li key={String(option.seconds)}>
+                {TTL_OPTIONS.map((seconds) => (
+                  <li key={String(seconds)}>
                     <button
-                      className={(timer?.ttlSeconds ?? null) === option.seconds ? 'active' : ''}
+                      className={(timer?.ttlSeconds ?? null) === seconds ? 'active' : ''}
                       onClick={() => {
                         closeMenu();
-                        onSetTimer(option.seconds);
+                        onSetTimer(seconds);
                       }}
                     >
-                      {option.label}
+                      {formatTtl(seconds)}
                     </button>
                   </li>
                 ))}
@@ -335,7 +337,7 @@ export function ChatHeader({
               }}
             >
               <ImageIcon className="w-4 h-4" />
-              Chat background
+              {t('chat.background')}
             </button>
           </li>
           <li>
@@ -346,7 +348,7 @@ export function ChatHeader({
               }}
             >
               <Pencil className="w-4 h-4" />
-              {isSelf ? 'Name this chat' : 'Set a nickname'}
+              {isSelf ? t('chat.nameThisChat') : t('chat.setNickname')}
             </button>
           </li>
         </ul>

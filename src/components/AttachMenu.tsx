@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Camera, Image as ImageIcon, Video } from 'lucide-react';
+import { useT } from '../hooks/useT';
 
 interface AttachMenuProps {
   open: boolean;
@@ -30,6 +31,7 @@ export function AttachMenu({
   onRecordVideo,
   onChooseLibrary,
 }: AttachMenuProps) {
+  const t = useT();
   useEffect(() => {
     if (!open) return;
     function onKey(e: KeyboardEvent) {
@@ -42,9 +44,9 @@ export function AttachMenu({
   if (!open) return null;
 
   const entries = [
-    { label: 'Take photo', icon: Camera, run: onTakePhoto },
-    { label: 'Record video', icon: Video, run: onRecordVideo },
-    { label: 'Photo & video library', icon: ImageIcon, run: onChooseLibrary },
+    { label: t('attach.takePhoto'), icon: Camera, run: onTakePhoto },
+    { label: t('attach.recordVideo'), icon: Video, run: onRecordVideo },
+    { label: t('attach.library'), icon: ImageIcon, run: onChooseLibrary },
   ];
 
   return createPortal(
@@ -52,7 +54,7 @@ export function AttachMenu({
       className="motion-scrim fixed inset-0 z-50 flex items-end bg-scrim"
       role="dialog"
       aria-modal="true"
-      aria-label="Choose attachment source"
+      aria-label={t('attach.chooseSource')}
       onClick={onClose}
     >
       <div

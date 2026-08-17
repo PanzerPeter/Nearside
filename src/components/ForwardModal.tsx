@@ -14,6 +14,7 @@ import {
 import type { Identity } from '../lib/crypto/keys';
 import type { ConversationSummary, Message } from '../lib/types';
 import { NotebookPen, Search } from 'lucide-react';
+import { useT } from '../hooks/useT';
 
 interface ForwardModalProps {
   me: string;
@@ -47,6 +48,7 @@ interface Target {
  * there: it is the most common forward destination and it should not move.
  */
 export function ForwardModal({ me, msg, fromPeerId, identity, onClose }: ForwardModalProps) {
+  const t = useT();
   const [rows, setRows] = useState<ConversationSummary[] | null>(null);
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -59,7 +61,7 @@ export function ForwardModal({ me, msg, fromPeerId, identity, onClose }: Forward
     supabase.rpc('conversation_list').then(({ data, error }) => {
       if (!active) return;
       if (error) {
-        toast.error('Could not load your conversations.');
+        toast.error(t('forward.loadFailed'));
         setRows([]);
         return;
       }
@@ -129,8 +131,8 @@ export function ForwardModal({ me, msg, fromPeerId, identity, onClose }: Forward
     if (delivered.length > 0) {
       toast.success(
         delivered.length === 1
-          ? `Forwarded to ${delivered[0]}.`
-          : `Forwarded to ${delivered.length} chats.`
+          ? t('forward.doneOne', { name: delivered[0] })
+          : t('forward.doneMany', { count: delivered.length })
       );
     }
     // One toast per distinct cause, not per target: five chats refused for the
@@ -149,7 +151,7 @@ export function ForwardModal({ me, msg, fromPeerId, identity, onClose }: Forward
 
   return (
     <Modal
-      title="Forward to"
+      title={t('forward.title')}
       onClose={onClose}
       actions={
         <>
@@ -185,7 +187,7 @@ export function ForwardModal({ me, msg, fromPeerId, identity, onClose }: Forward
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search conversations..."
+          placeholder={t('forward.searchPlaceholder')}
           className="input input-sm flex-1 bg-base-200/50 border border-base-content/10 focus:border-primary"
           autoFocus
         />
@@ -201,8 +203,8 @@ export function ForwardModal({ me, msg, fromPeerId, identity, onClose }: Forward
         ) : visible.length === 0 ? (
           <p className="flex items-center justify-center h-full text-center text-sm text-base-content/55 px-4">
             {targets.length === 0
-              ? 'No other conversations to forward to.'
-              : 'No conversation matches that.'}
+              ? t('forward.noTargets')
+              : t('forward.noMatch')}
           </p>
         ) : (
           <ul className="space-y-1">

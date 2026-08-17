@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Eye, ShieldAlert } from 'lucide-react';
 import { setScreenGuard } from '../lib/screen-guard';
 import { restoreErrorMessage } from '../lib/restore-error';
+import { useT } from '../hooks/useT';
 
 interface Props {
   onCreate: () => Promise<string>;
@@ -30,6 +31,7 @@ export function IdentitySetup({
   onSignOut,
   secureStorage,
 }: Props) {
+  const t = useT();
   const [stage, setStage] = useState<Stage>('choose');
   const [phrase, setPhrase] = useState('');
   const [typed, setTyped] = useState('');
@@ -88,40 +90,34 @@ export function IdentitySetup({
       <div className="card bg-base-100 w-full max-w-md shadow-modal">
         <div className="card-body gap-4">
           {!secureStorage && (
-            <div className="alert alert-warning text-sm">
-              This browser cannot store your key securely. Use the Android app for anything you
-              intend to keep.
-            </div>
+            <div className="alert alert-warning text-sm">{t('identity.insecureBrowser')}</div>
           )}
 
           <p className="text-xs text-base-content/60">
-            Signed in as <span className="font-medium text-base-content/70">{account}</span>
+            {t('account.signedInAs')}{' '}
+            <span className="font-medium text-base-content/70">{account}</span>
           </p>
 
           {stage === 'choose' && (
             <>
-              <h1 className="card-title">Your key</h1>
-              <p className="text-sm text-base-content/70">
-                Your key never leaves this device, so we cannot reset it for you. Your recovery
-                phrase is the only way back in, and every account on this phone needs its own.
-              </p>
-              <button className="btn btn-primary" onClick={begin}>Create a new key</button>
+              <h1 className="card-title">{t('identity.yourKey')}</h1>
+              <p className="text-sm text-base-content/70">{t('identity.yourKeyBody')}</p>
+              <button className="btn btn-primary" onClick={begin}>
+                {t('identity.createKey')}
+              </button>
               <button className="btn btn-ghost" onClick={() => setStage('restore')}>
-                I have a recovery phrase
+                {t('identity.havePhrase')}
               </button>
               <button className="btn btn-ghost btn-sm" onClick={onSignOut}>
-                Sign out
+                {t('common.signOut')}
               </button>
             </>
           )}
 
           {stage === 'show' && (
             <>
-              <h1 className="card-title">Write these 12 words down</h1>
-              <p className="text-sm text-base-content/70">
-                On paper. Not in a screenshot, and not in another app on this phone, because both
-                go missing with the phone itself.
-              </p>
+              <h1 className="card-title">{t('identity.writeDown', { count: 12 })}</h1>
+              <p className="text-sm text-base-content/70">{t('identity.writeDownBody')}</p>
 
               <div className="relative">
                 <ol
@@ -145,17 +141,14 @@ export function IdentitySetup({
                     onClick={() => setRevealed(true)}
                   >
                     <Eye className="w-5 h-5" />
-                    Tap to show your phrase
+                    {t('identity.tapToShow')}
                   </button>
                 )}
               </div>
 
               <p className="flex items-start gap-2 text-xs text-base-content/60">
                 <ShieldAlert className="w-4 h-4 shrink-0 mt-px" />
-                <span>
-                  The only copy. Nobody at Nearside has it, and lose it with the phone and the
-                  vault is gone.
-                </span>
+                <span>{t('identity.onlyCopy')}</span>
               </p>
 
               <button
@@ -163,21 +156,19 @@ export function IdentitySetup({
                 disabled={!revealed}
                 onClick={() => { setTyped(''); setStage('confirm'); }}
               >
-                I have written them down
+                {t('identity.writtenDown')}
               </button>
             </>
           )}
 
           {stage === 'confirm' && (
             <>
-              <h1 className="card-title">Check your copy</h1>
+              <h1 className="card-title">{t('identity.checkCopy')}</h1>
               {secureStorage && (
-                <p className="text-xs text-base-content/50">
-                  Screenshots are blocked on this screen.
-                </p>
+                <p className="text-xs text-base-content/50">{t('identity.screenshotsBlocked')}</p>
               )}
               <p className="text-sm text-base-content/70">
-                Type words {checkIndexes.map((i) => i + 1).join(', ')}, separated by spaces.
+                {t('identity.typeWords', { words: checkIndexes.map((i) => i + 1).join(', ') })}
               </p>
               <input
                 className="input input-bordered font-mono"
@@ -191,14 +182,14 @@ export function IdentitySetup({
                 disabled={!confirmOk}
                 onClick={() => void finishConfirm()}
               >
-                Done
+                {t('common.done')}
               </button>
             </>
           )}
 
           {stage === 'restore' && (
             <>
-              <h1 className="card-title">Enter your recovery phrase</h1>
+              <h1 className="card-title">{t('identity.enterPhrase')}</h1>
               <textarea
                 className="textarea textarea-bordered font-mono"
                 rows={3}
@@ -208,8 +199,12 @@ export function IdentitySetup({
                 autoCorrect="off"
               />
               {error && <p className="text-error text-sm">{error}</p>}
-              <button className="btn btn-primary" onClick={restore}>Restore</button>
-              <button className="btn btn-ghost" onClick={() => setStage('choose')}>Back</button>
+              <button className="btn btn-primary" onClick={restore}>
+                {t('identity.restore')}
+              </button>
+              <button className="btn btn-ghost" onClick={() => setStage('choose')}>
+                {t('common.back')}
+              </button>
             </>
           )}
         </div>

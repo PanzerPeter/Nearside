@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Lock } from 'lucide-react';
 import { MIN_PASSPHRASE_LENGTH } from '../lib/app-lock';
 import { BrandMark } from './BrandMark';
+import { useT } from '../hooks/useT';
 
 interface Props {
   onUnlock: (passphrase: string) => Promise<boolean>;
@@ -16,6 +17,7 @@ interface Props {
 }
 
 export function AppLockScreen({ onUnlock, onUnlockWithRecoveryPhrase, waitMs, onSignOut }: Props) {
+  const t = useT();
   const [passphrase, setPassphrase] = useState('');
   const [phrase, setPhrase] = useState('');
   const [usingPhrase, setUsingPhrase] = useState(false);
@@ -69,14 +71,12 @@ export function AppLockScreen({ onUnlock, onUnlockWithRecoveryPhrase, waitMs, on
           <BrandMark size={32} />
           <Lock className="w-6 h-6 text-base-content/50" />
           <h1 className="card-title text-lg">
-            {usingPhrase ? 'Enter your recovery phrase' : 'Nearside is locked'}
+            {usingPhrase ? t('identity.enterPhrase') : t('lock.locked')}
           </h1>
 
           {usingPhrase ? (
             <>
-              <p className="text-sm text-base-content/60">
-                The twelve words you wrote down. They open the app and turn the lock off.
-              </p>
+              <p className="text-sm text-base-content/60">{t('lock.phraseBody')}</p>
               <textarea
                 className={`textarea textarea-bordered w-full h-24 text-center ${
                   wrong ? 'textarea-error' : ''
@@ -86,7 +86,7 @@ export function AppLockScreen({ onUnlock, onUnlockWithRecoveryPhrase, waitMs, on
                   setPhrase(e.target.value);
                   setWrong(false);
                 }}
-                placeholder="twelve words, separated by spaces"
+                placeholder={t('lock.phrasePlaceholder')}
                 autoFocus
                 autoCapitalize="none"
                 autoCorrect="off"
@@ -103,7 +103,7 @@ export function AppLockScreen({ onUnlock, onUnlockWithRecoveryPhrase, waitMs, on
                 setPassphrase(e.target.value);
                 setWrong(false);
               }}
-              placeholder="Passphrase"
+              placeholder={t('lock.passphrase')}
               autoFocus
               autoCapitalize="none"
               autoCorrect="off"
@@ -113,26 +113,26 @@ export function AppLockScreen({ onUnlock, onUnlockWithRecoveryPhrase, waitMs, on
 
           {wrong && remaining === 0 && (
             <p className="text-sm text-error">
-              {usingPhrase ? 'That is not this account’s phrase.' : 'That is not the passphrase.'}
+              {usingPhrase ? t('lock.wrongPhrase') : t('lock.wrongPassphrase')}
             </p>
           )}
           {remaining > 0 && (
             <p className="text-sm text-base-content/60">
-              Too many attempts. Try again in {Math.ceil(remaining / 1000)}s.
+              {t('lock.throttled', { seconds: Math.ceil(remaining / 1000) })}
             </p>
           )}
 
           <button type="submit" className="btn btn-primary w-full" disabled={blocked || !ready}>
-            {busy ? <span className="loading loading-spinner loading-sm" /> : 'Unlock'}
+            {busy ? <span className="loading loading-spinner loading-sm" /> : t('lock.unlock')}
           </button>
 
           {usingPhrase ? (
             <button type="button" className="btn btn-ghost btn-sm" onClick={() => switchTo(false)}>
-              Back to the passphrase
+              {t('lock.backToPassphrase')}
             </button>
           ) : (
             <button type="button" className="btn btn-ghost btn-sm" onClick={() => switchTo(true)}>
-              Forgot it?
+              {t('lock.forgotIt')}
             </button>
           )}
 
@@ -141,7 +141,7 @@ export function AppLockScreen({ onUnlock, onUnlockWithRecoveryPhrase, waitMs, on
             className="btn btn-ghost btn-xs text-base-content/50"
             onClick={onSignOut}
           >
-            Sign out instead
+            {t('lock.signOutInstead')}
           </button>
         </div>
       </form>

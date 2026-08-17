@@ -49,6 +49,10 @@ import { ReactionChips } from './ReactionChips';
 import { StickerAttachment } from './StickerAttachment';
 import { StickerPicker } from './StickerPicker';
 import { VoiceNote } from './VoiceNote';
+import { useT } from '../hooks/useT';
+// `roomSnippet` is a helper rather than a component, so it reaches the catalog
+// directly; aliased to stay distinct from the hook's `t`.
+import { t as translate } from '../lib/i18n';
 
 interface RoomViewProps {
   session: Session;
@@ -71,6 +75,7 @@ const POLL_DEGRADED_MS = 5_000;
  * the signature exists to surface.
  */
 export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewProps) {
+  const t = useT();
   const me = session.user.id;
   const [messages, setMessages] = useState<RoomMessage[]>([]);
   const [members, setMembers] = useState<RoomParticipant[]>([]);
@@ -305,7 +310,7 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
       // de-duplicates it by id.
       await appendMessage(row);
     } catch {
-      toast.error('Could not send. Check your connection.');
+      toast.error(t('room.sendFailed'));
     } finally {
       setSending(false);
     }
@@ -319,7 +324,7 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
       await removeMember(room.id, userId);
       await loadMembers();
     } catch {
-      toast.error('Could not remove them from the room.');
+      toast.error(t('room.removeFailed'));
     } finally {
       setRemoving(null);
     }
@@ -331,7 +336,7 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
       else await leaveRoom(room.id, me);
       onLeft();
     } catch {
-      toast.error(isOwner ? 'Could not delete the room.' : 'Could not leave the room.');
+      toast.error(isOwner ? t('room.deleteFailed') : t('room.leaveFailed'));
     }
   }
 
@@ -340,7 +345,11 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
       {/* Same top edge as ChatHeader, and inset the same way — see the comment
           there for why `lg:` puts it back. */}
       <header className="navbar bg-base-100 px-2 sm:px-4 pt-[calc(0.5rem+var(--safe-top))] shrink-0 border-b border-base-content/5 min-h-[3.5rem] gap-1">
-        <button className="btn btn-ghost btn-sm btn-square lg:hidden" onClick={onBack} title="Back">
+        <button
+          className="btn btn-ghost btn-sm btn-square lg:hidden"
+          onClick={onBack}
+          title={t('common.back')}
+        >
           <ArrowLeft className="w-4 h-4" />
         </button>
         <div className="flex-1 min-w-0">
@@ -351,8 +360,7 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
             <div className="min-w-0">
               <p className="font-semibold text-sm truncate">{room.title}</p>
               <p className="text-xs text-base-content/55 truncate">
-                {members.length} {members.length === 1 ? 'member' : 'members'} · end-to-end
-                encrypted
+                {t('room.memberCount', { count: members.length })} · {t('call.e2ee')}
               </p>
             </div>
           </div>
@@ -360,14 +368,14 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
         <button
           className="btn btn-ghost btn-sm btn-square"
           onClick={() => setShowMembers((v) => !v)}
-          title="Members"
+          title={t('room.members')}
         >
           <Users className="w-4 h-4" />
         </button>
         <button
           className="btn btn-ghost btn-sm btn-square text-error"
           onClick={() => void handleLeave()}
-          title={isOwner ? 'Delete room' : 'Leave room'}
+          title={isOwner ? t('room.delete') : t('room.leave')}
         >
           {isOwner ? <Trash2 className="w-4 h-4" /> : <LogOut className="w-4 h-4" />}
         </button>
@@ -503,11 +511,11 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
  *  A caption-less attachment has no text to show, so it is named by kind. */
 function roomSnippet(m: RoomMessage): string {
   if (m.text) return m.text;
-  if (m.media_type === 'audio') return '🎤 Voice message';
-  if (m.media_type === 'sticker') return 'Sticker';
-  if (m.media_type === 'video') return '🎬 Video';
-  if (m.media_type) return '📷 Photo';
-  return 'Message';
+  if (m.media_type === 'audio') return `🎤 ${translate('preview.voice')}`;
+  if (m.media_type === 'sticker') return translate('preview.sticker');
+  if (m.media_type === 'video') return `🎬 ${translate('preview.video')}`;
+  if (m.media_type) return `📷 ${translate('preview.photo')}`;
+  return translate('themes.sampleComposer');
 }
 
 interface RoomBubbleProps {
@@ -550,6 +558,7 @@ function RoomBubble({
   onReply,
   onJumpTo,
 }: RoomBubbleProps) {
+  const t = useT();
   const mine = m.sender_id === me;
   const [menuOpen, setMenuOpen] = useState(false);
   const readable = m.sender !== 'unverified' && m.sender !== 'unknown';
@@ -586,8 +595,8 @@ function RoomBubble({
             <button
               type="button"
               className="btn btn-ghost btn-sm btn-circle mr-1"
-              title="Reply"
-              aria-label="Reply"
+              title={t('message.reply')}
+              aria-label={t('message.reply')}
               onClick={() => {
                 onReply();
                 setMenuOpen(false);
@@ -661,10 +670,7 @@ function RoomBubble({
           ) : m.sender === 'unknown' ? (
             <p className="flex items-start gap-1.5 text-sm text-warning">
               <ShieldQuestion className="w-4 h-4 shrink-0 mt-0.5" />
-              <span>
-                This sender has published no signing key, so there is nothing to check this message
-                against.
-              </span>
+              <span>{t('room.unknownSender')}</span>
             </p>
           ) : (
             <>
@@ -694,7 +700,7 @@ function RoomBubble({
               {m.text === null && !m.media_path ? (
                 <p className="flex items-start gap-1.5 text-sm italic text-base-content/60">
                   <Lock className="w-4 h-4 shrink-0 mt-0.5" />
-                  <span>Sent before you joined, sealed with a key you do not have.</span>
+                  <span>{t('room.beforeYouJoined')}</span>
                 </p>
               ) : m.text ? (
                 <div className="text-sm whitespace-pre-wrap break-words">

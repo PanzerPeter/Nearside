@@ -9,6 +9,7 @@ import { MessageBubble } from './MessageBubble';
 import { SealedExchange } from './SealedExchange';
 import type { OpenedAnswer } from '../lib/sealed-exchange';
 import { ChevronDown, Timer } from 'lucide-react';
+import { useT } from '../hooks/useT';
 
 /** Group consecutive messages from the same sender within this window. */
 const GROUP_WINDOW_MS = 5 * 60 * 1000;
@@ -115,6 +116,7 @@ export function MessageThread({
   onStartEdit,
   onDelete,
 }: MessageThreadProps) {
+  const t = useT();
   const noticeIndex = timerChange
     ? timerChangeIndex(
         messages.map((m) => m.created_at),
@@ -162,7 +164,7 @@ export function MessageThread({
               {loadingOlder ? (
                 <span className="loading loading-spinner loading-xs" />
               ) : (
-                'Load older messages'
+                t('thread.loadOlder')
               )}
             </button>
           </div>
@@ -177,21 +179,17 @@ export function MessageThread({
             <div className="text-center px-6">
               {isSelf ? (
                 <>
-                  <p className="text-base-content/60 text-sm">
-                    Send yourself notes, photos and voice memos
-                  </p>
+                  <p className="text-base-content/60 text-sm">{t('thread.selfEmpty')}</p>
                   {/* "Your words", not "everything": the text is sealed with
                       the vault key, but an attachment is still an object in
                       Storage that the server can read. Claiming otherwise
                       here would be the app's first lie about the one
                       property it is selling. */}
-                  <p className="text-base-content/60 text-xs mt-1">
-                    Your words are encrypted with a key only this phone holds.
-                  </p>
+                  <p className="text-base-content/60 text-xs mt-1">{t('thread.selfEmptyNote')}</p>
                 </>
               ) : (
                 <p className="text-base-content/60 text-sm">
-                  Start the conversation with {peerLabel}
+                  {t('thread.startWith', { name: peerLabel })}
                 </p>
               )}
             </div>
@@ -350,8 +348,8 @@ export function MessageThread({
           onClick={scroll.scrollToLatest}
           aria-label={
             scroll.newSinceScroll > 0
-              ? `Jump to latest messages, ${scroll.newSinceScroll} new`
-              : 'Jump to latest messages'
+              ? t('thread.jumpToLatestNew', { count: scroll.newSinceScroll })
+              : t('thread.jumpToLatest')
           }
         >
           <ChevronDown className="w-4 h-4" />

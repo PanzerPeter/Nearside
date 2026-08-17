@@ -8,6 +8,7 @@
 // testable in the node suite this repo runs.
 
 import type { CallKind, FacingMode } from './types';
+import { t } from '../i18n';
 
 export type CallPhase =
   /** Nothing happening. The only phase with no peer. */
@@ -273,23 +274,23 @@ export function endLabel(state: CallState): string {
       // A call that never connected was not "ended" by anyone in a way worth
       // reporting — from the caller's side it was cancelled, from the
       // receiver's it was missed.
-      if (state.connectedAt !== null) return 'Call ended';
-      return state.outgoing ? 'Call cancelled' : 'Missed call';
+      if (state.connectedAt !== null) return t('call.ended');
+      return state.outgoing ? t('call.cancelled') : t('call.missed');
     case 'declined':
-      return 'Declined';
+      return t('call.declined');
     case 'remote-declined':
-      return 'Call declined';
+      return t('call.declinedByThem');
     case 'unanswered':
-      return state.outgoing ? 'No answer' : 'Missed call';
+      return state.outgoing ? t('call.noAnswer') : t('call.missed');
     case 'busy':
-      return 'On another call';
+      return t('call.busy');
     case 'failed':
-      return 'Could not connect';
+      return t('call.failed');
     case 'no-key':
-      return 'They have no encryption key yet';
+      return t('call.noKey');
     case 'key-changed':
-      return 'Their key changed. Verify before calling';
+      return t('call.keyChanged');
     default:
-      return 'Call ended';
+      return t('call.ended');
   }
 }

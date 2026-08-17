@@ -7,6 +7,7 @@ import type { Profile } from '../lib/types';
 import { useToast } from '../hooks/useToast';
 import { Avatar } from './Avatar';
 import { Modal } from './Modal';
+import { useT } from '../hooks/useT';
 
 interface CreateRoomModalProps {
   me: string;
@@ -27,6 +28,7 @@ const TITLE_MAX = 60;
  * be created.
  */
 export function CreateRoomModal({ me, identity, onCreated, onClose }: CreateRoomModalProps) {
+  const t = useT();
   const [title, setTitle] = useState('');
   const [friends, setFriends] = useState<Profile[]>([]);
   const [unreachable, setUnreachable] = useState<Set<string>>(new Set());
@@ -84,18 +86,18 @@ export function CreateRoomModal({ me, identity, onCreated, onClose }: CreateRoom
     try {
       const { roomId, skipped } = await createRoom(me, identity, trimmed, [...picked]);
       if (skipped.length > 0) {
-        toast.error(`${skipped.length} of them could not be added. They have no published key yet.`);
+        toast.error(t('room.skippedMembers', { count: skipped.length }));
       }
       onCreated(roomId);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Could not create the room.');
+      toast.error(error instanceof Error ? error.message : t('room.createFailed'));
       setBusy(false);
     }
   }
 
   return (
     <Modal
-      title="New room"
+      title={t('rooms.new')}
       onClose={onClose}
       actions={
         <>
@@ -115,7 +117,7 @@ export function CreateRoomModal({ me, identity, onCreated, onClose }: CreateRoom
       <div className="form-control">
         <label className="label pb-1" htmlFor="room-title">
           <span className="label-text text-xs font-medium uppercase tracking-wider text-base-content/60">
-            Room name
+            {t('room.name')}
           </span>
         </label>
         <input
@@ -125,12 +127,9 @@ export function CreateRoomModal({ me, identity, onCreated, onClose }: CreateRoom
           value={title}
           maxLength={TITLE_MAX}
           onChange={(e) => setTitle(e.target.value)}
-          placeholder="Weekend plans"
+          placeholder={t('room.namePlaceholder')}
         />
-        <span className="text-xs text-base-content/55 mt-1">
-          The name is stored as plain text so the server can list your rooms. Messages inside are
-          not.
-        </span>
+        <span className="text-xs text-base-content/55 mt-1">{t('room.nameNote')}</span>
       </div>
 
       <div className="divider my-4" />

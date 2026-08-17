@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Mic, Pause, Play } from 'lucide-react';
 import { formatDuration } from '../lib/audio';
+import { useT } from '../hooks/useT';
 
 interface VoicePreviewProps {
   /** Object URL for the staged recording, owned by the composer. */
@@ -24,6 +25,7 @@ interface VoicePreviewProps {
  * storage path and a sealed file key, none of which exist for a local blob.
  */
 export function VoicePreview({ url, durationMs }: VoicePreviewProps) {
+  const t = useT();
   const audioRef = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
   const [positionMs, setPositionMs] = useState(0);
@@ -61,8 +63,8 @@ export function VoicePreview({ url, durationMs }: VoicePreviewProps) {
         className="btn btn-circle btn-sm btn-primary shrink-0"
         onClick={toggle}
         disabled={!url}
-        title={playing ? 'Pause' : 'Play back the recording'}
-        aria-label={playing ? 'Pause playback' : 'Play back the recording'}
+        title={playing ? t('voice.pause') : t('voice.playBack')}
+        aria-label={playing ? t('voice.pausePlayback') : t('voice.playBack')}
       >
         {playing ? (
           <Pause className="h-4 w-4 fill-current" />
@@ -82,7 +84,7 @@ export function VoicePreview({ url, durationMs }: VoicePreviewProps) {
           // The native control, for the reason `VoiceNote` keeps it: dragging,
           // keyboard seeking and screen-reader semantics all come for free.
           className="h-1 w-full cursor-pointer accent-primary"
-          aria-label="Seek recording"
+          aria-label={t('voice.seekRecording')}
         />
         <p className="mt-1 flex items-center gap-1 text-xs text-base-content/60">
           <Mic className="h-3 w-3 shrink-0" />

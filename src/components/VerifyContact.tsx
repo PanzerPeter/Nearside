@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Camera, ShieldCheck } from 'lucide-react';
-import { SCAN_MESSAGES, scanQr } from '../lib/scan';
+import { scanMessage, scanQr } from '../lib/scan';
 import { safetyNumber } from '../lib/crypto/safety';
 import { safetyArt, type SafetyArt } from '../lib/crypto/safety-art';
 import { toBase64 } from '../lib/crypto/keys';
@@ -11,6 +11,8 @@ import { useToast } from '../hooks/useToast';
 import { Modal } from './Modal';
 import { QrCode } from './QrCode';
 import { SafetySigil } from './SafetySigil';
+import { useT } from '../hooks/useT';
+import type { MessageKey } from '../lib/i18n';
 
 interface VerifyContactProps {
   peerId: string;
@@ -23,7 +25,8 @@ interface VerifyContactProps {
   onClose: () => void;
 }
 
-const PAGES = ['Picture and words', 'Digits', 'QR code'];
+/** Keys, so the pager's labels follow the language like everything else. */
+const PAGES: MessageKey[] = ['verify.pagePicture', 'verify.pageDigits', 'verify.pageQr'];
 
 /**
  * The same check in three forms, one screen each: a picture and four words, the
@@ -44,6 +47,7 @@ export function VerifyContact({
   onVerified,
   onClose,
 }: VerifyContactProps) {
+  const t = useT();
   const [number, setNumber] = useState<string | null>(null);
   const [art, setArt] = useState<SafetyArt | null>(null);
   const [compared, setCompared] = useState(false);
@@ -90,16 +94,16 @@ export function VerifyContact({
       const result = await scanQr();
       if ('failure' in result) {
         if (result.failure === 'unsupported-platform') {
-          toast.error('Scanning needs the app. Compare the digits instead.');
+          toast.error(t('verify.scanNeedsApp'));
         } else if (result.failure !== 'cancelled') {
-          toast.error(SCAN_MESSAGES[result.failure]);
+          toast.error(scanMessage(result.failure));
         }
         return;
       }
 
       const scanned = parseSafetyPayload(result.value);
       if (!scanned) {
-        toast.error('That is not a safety-number code.');
+        toast.error(t('verify.notASafetyCode'));
         return;
       }
       if (scanned !== number.replace(/\s+/g, '')) {
@@ -108,12 +112,12 @@ export function VerifyContact({
         setScanMatched(false);
         setScanMismatched(true);
         setCompared(false);
-        toast.error('These do not match. Do not carry on until they do.');
+        toast.error(t('verify.mismatchToast'));
         return;
       }
       setScanMatched(true);
       setScanMismatched(false);
-      toast.success('The numbers match.');
+      toast.success(t('verify.matchToast'));
     } finally {
       setBusy(false);
     }
@@ -138,12 +142,12 @@ export function VerifyContact({
 
   return (
     <Modal
-      title={`Verify ${peerLabel}`}
+      title={t('verify.title', { name: peerLabel })}
       onClose={onClose}
       actions={
         <>
           <button className="btn btn-ghost" onClick={onClose}>
-            Cancel
+            {t('common.cancel')}
           </button>
           <button
             className="btn btn-primary gap-1.5"
@@ -151,7 +155,7 @@ export function VerifyContact({
             onClick={() => void confirm()}
           >
             <ShieldCheck className="w-4 h-4" />
-            Mark verified
+            {t('verify.markVerified')}
           </button>
         </>
       }
@@ -176,8 +180,7 @@ export function VerifyContact({
               {art && <SafetySigil art={art} size={132} />}
               <p className="font-mono text-sm tracking-wide">{art?.words.join(' · ')}</p>
               <p className="text-xs text-base-content/60 text-center max-w-xs">
-                The same picture and words on both phones. Read them aloud on a call where you
-                recognise the voice.
+                {t('verify.pictureBody')}
               </p>
             </section>
 
@@ -189,9 +192,7 @@ export function VerifyContact({
                   </span>
                 ))}
               </div>
-              <p className="text-xs text-base-content/60 text-center">
-                Where the picture and the words come from. Sixty digits, identical on both phones.
-              </p>
+              <p className="text-xs text-base-content/60 text-center">{t('verify.digitsBody')}</p>
             </section>
 
             <section className="w-full shrink-0 snap-center flex flex-col items-center justify-center gap-3 px-1">
@@ -204,10 +205,10 @@ export function VerifyContact({
                 disabled={busy}
               >
                 <Camera className="w-4 h-4" />
-                Scan theirs
+                {t('verify.scanTheirs')}
               </button>
               <p className="text-xs text-base-content/60 text-center max-w-xs">
-                Point this phone at the code on theirs. The app compares for you.
+                {t('verify.qrBody')}
               </p>
             </section>
           </div>
@@ -217,7 +218,7 @@ export function VerifyContact({
               <button
                 key={label}
                 type="button"
-                aria-label={label}
+                aria-label={t(label)}
                 aria-current={page === i}
                 onClick={() => goTo(i)}
                 className={`h-2 rounded-full transition-all ${
@@ -232,13 +233,10 @@ export function VerifyContact({
           {scanMatched ? (
             <p className="text-sm text-success flex items-center gap-1.5">
               <ShieldCheck className="w-4 h-4" />
-              Scanned and matching.
+              {t('verify.scanMatched')}
             </p>
           ) : scanMismatched ? (
-            <p className="text-sm text-error">
-              These codes are not the same. Do not verify {peerLabel} until they are. Scan
-              again once you are both on the right contact.
-            </p>
+            <p className="text-sm text-error">{t('verify.mismatch', { name: peerLabel })}</p>
           ) : (
             <label className="flex items-start gap-2.5 cursor-pointer">
               <input
@@ -248,7 +246,7 @@ export function VerifyContact({
                 onChange={(e) => setCompared(e.target.checked)}
               />
               <span className="text-sm text-base-content/70">
-                I compared these with {peerLabel} and they are identical.
+                {t('verify.compared', { name: peerLabel })}
               </span>
             </label>
           )}

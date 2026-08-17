@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { MoreHorizontal } from 'lucide-react';
 import { useSwipeActions } from '../hooks/useSwipeActions';
 import { isCoarsePointer } from '../lib/device';
+import { useT } from '../hooks/useT';
 
 export interface RowAction {
   key: string;
@@ -40,6 +41,7 @@ const ACTION_PX = 64;
  * the list would fall into three invisible controls per row.
  */
 export function SwipeRow({ actions, open, onOpenChange, children }: SwipeRowProps) {
+  const t = useT();
   const railWidth = actions.length * ACTION_PX;
   const [menuOpen, setMenuOpen] = useState(false);
   const [coarse] = useState(isCoarsePointer);
@@ -140,8 +142,8 @@ export function SwipeRow({ actions, open, onOpenChange, children }: SwipeRowProp
             e.stopPropagation();
             setMenuOpen((v) => !v);
           }}
-          title="Chat actions"
-          aria-label="Chat actions"
+          title={t('chatList.actions')}
+          aria-label={t('chatList.actions')}
           aria-expanded={menuOpen}
         >
           <MoreHorizontal className="w-4 h-4" />

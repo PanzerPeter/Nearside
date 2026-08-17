@@ -6,6 +6,7 @@ import { Profile, initial } from '../../lib/types';
 import { AVATAR_MAX_EDGE, compressImage } from '../../lib/compress';
 import { useToast } from '../../hooks/useToast';
 import { AvatarCropper } from '../AvatarCropper';
+import { useT } from '../../hooks/useT';
 
 /** Display names collide freely and keep their spaces and capitals; the only
  *  rule left is that there is one and that it fits. See 0022_display_name. */
@@ -33,6 +34,7 @@ export function ProfilePage({ session, profile, onUpdated }: ProfilePageProps) {
   const [pendingAvatar, setPendingAvatar] = useState<File | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const toast = useToast();
+  const t = useT();
 
   // Framing happens before the upload, so a picked photo waits here for the
   // cropper rather than going straight up centred.
@@ -41,7 +43,7 @@ export function ProfilePage({ session, profile, onUpdated }: ProfilePageProps) {
     e.target.value = '';
     if (!file) return;
     if (!file.type.startsWith('image/')) {
-      toast.error('Avatar must be an image.');
+      toast.error(t('profile.avatarMustBeImage'));
       return;
     }
     setPendingAvatar(file);
@@ -93,7 +95,7 @@ export function ProfilePage({ session, profile, onUpdated }: ProfilePageProps) {
     // Only the avatar was saved. Publishing `display_name` here would push the
     // half-typed input up to the app shell as though it had been committed.
     onUpdated({ ...profile, avatar_url: bustedUrl });
-    toast.success('Avatar updated.');
+    toast.success(t('profile.avatarUpdated'));
   }
 
   const nameChanged = display_name.trim() !== profile.display_name;
@@ -103,7 +105,7 @@ export function ProfilePage({ session, profile, onUpdated }: ProfilePageProps) {
     const normalized = display_name.trim();
     if (normalized === profile.display_name) return;
     if (!normalized || normalized.length > DISPLAY_NAME_MAX) {
-      toast.error(`Enter a display name, up to ${DISPLAY_NAME_MAX} characters.`);
+      toast.error(t('profile.nameTooLong', { count: DISPLAY_NAME_MAX }));
       return;
     }
     setSaving(true);
@@ -116,13 +118,13 @@ export function ProfilePage({ session, profile, onUpdated }: ProfilePageProps) {
     if (updateError) {
       toast.error(
         /duplicate|unique/i.test(updateError.message)
-          ? 'That name could not be saved.'
+          ? t('profile.nameNotSaved')
           : updateError.message,
       );
       return;
     }
     onUpdated({ ...profile, display_name: normalized, avatar_url: avatarUrl });
-    toast.success('Display name updated.');
+    toast.success(t('profile.nameUpdated'));
   }
 
   return (
@@ -133,7 +135,7 @@ export function ProfilePage({ session, profile, onUpdated }: ProfilePageProps) {
           className="relative group"
           onClick={() => fileRef.current?.click()}
           disabled={uploading}
-          title="Change avatar"
+          title={t('profile.changeAvatar')}
         >
           <div className="avatar placeholder">
             <div className="w-24 h-24 rounded-full bg-base-content/10 text-base-content/70 overflow-hidden ring ring-base-content/5">
@@ -165,13 +167,13 @@ export function ProfilePage({ session, profile, onUpdated }: ProfilePageProps) {
           className="hidden"
           onChange={handleAvatar}
         />
-        <p className="text-xs text-base-content/60">Tap the photo to upload an avatar</p>
+        <p className="text-xs text-base-content/60">{t('profile.tapPhoto')}</p>
       </div>
 
       <div className="form-control">
         <label className="label pb-1">
           <span className="label-text text-xs font-medium uppercase tracking-wider text-base-content/60">
-            Display name
+            {t('profile.displayName')}
           </span>
         </label>
         <div className="flex items-center gap-2">
@@ -187,13 +189,10 @@ export function ProfilePage({ session, profile, onUpdated }: ProfilePageProps) {
             onClick={handleSaveUsername}
             disabled={saving || !nameChanged}
           >
-            {saving ? <span className="loading loading-spinner loading-sm" /> : 'Save'}
+            {saving ? <span className="loading loading-spinner loading-sm" /> : t('common.save')}
           </button>
         </div>
-        <span className="text-xs text-base-content/60 mt-1">
-          Shown to friends in chats. Spaces and capitals are fine, and two people may pick the same
-          name. A display name is not an address, and nobody can find you by it.
-        </span>
+        <span className="text-xs text-base-content/60 mt-1">{t('profile.displayNameNote')}</span>
       </div>
 
       {pendingAvatar && (

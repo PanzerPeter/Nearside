@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useMobileBackClose } from '../../hooks/useMobileBackClose';
+import { useT } from '../../hooks/useT';
 
 /**
  * The pieces every settings page is built from.
@@ -168,6 +169,7 @@ export function SettingsPage({
   children: ReactNode;
 }) {
   useMobileBackClose(true, onBack);
+  const t = useT();
 
   return (
     <div>
@@ -176,7 +178,7 @@ export function SettingsPage({
           type="button"
           className="btn btn-ghost btn-sm btn-square"
           onClick={onBack}
-          aria-label="Back to settings"
+          aria-label={t('settings.backToSettings')}
         >
           <ChevronLeft className="w-5 h-5" />
         </button>

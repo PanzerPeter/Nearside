@@ -4,6 +4,7 @@ import { fullScreenRingAllowed, openFullScreenRingSettings } from '../../lib/cal
 import { isRingtoneMuted, setRingtoneMuted } from '../../lib/call/ringtone';
 import { isMobileNative } from '../../lib/platform';
 import { ActionRow, Card, InfoRow, ToggleRow } from './SettingsUi';
+import { useT } from '../../hooks/useT';
 
 /**
  * Calls, which are the one part of the app where a phone-level permission
@@ -17,6 +18,7 @@ import { ActionRow, Card, InfoRow, ToggleRow } from './SettingsUi';
  */
 export function CallsPage() {
   const native = isMobileNative();
+  const t = useT();
   // Null until the phone has been asked. Rendering either state before the
   // answer arrives would flash a claim about ringing on every phone that opens
   // this page.
@@ -43,31 +45,27 @@ export function CallsPage() {
           <ActionRow
             icon={PhoneCall}
             tone="warning"
-            label="Calls will not ring"
-            hint="Android is holding back full-screen notifications, so an incoming call arrives as a banner and a locked phone shows nothing."
-            action="Allow"
+            label={t('calls.willNotRing')}
+            hint={t('calls.willNotRingHint')}
+            action={t('common.allow')}
             onAction={() => void openFullScreenRingSettings()}
           />
         )}
         {native && ringAllowed === true && (
           <InfoRow
             icon={ShieldCheck}
-            label="Full-screen calls"
-            hint="A call takes over the screen, and a locked phone shows who is calling."
-            status="Allowed"
+            label={t('calls.fullScreen')}
+            hint={t('calls.fullScreenHint')}
+            status={t('common.allowed')}
           />
         )}
         {native && ringAllowed === null && (
-          <InfoRow icon={PhoneCall} label="Full-screen calls" hint="Checking…" />
+          <InfoRow icon={PhoneCall} label={t('calls.fullScreen')} hint={t('common.checking')} />
         )}
         <ToggleRow
           icon={BellRing}
-          label="Ring out loud"
-          hint={
-            ringMuted
-              ? 'A call arriving while the app is open stays silent. The screen still shows it.'
-              : 'Play a tone in the app when a call comes in. Separate from the message chime.'
-          }
+          label={t('calls.ringOutLoud')}
+          hint={ringMuted ? t('calls.ringOutLoudOff') : t('calls.ringOutLoudOn')}
           checked={!ringMuted}
           onChange={() => {
             const next = !ringMuted;
@@ -77,13 +75,10 @@ export function CallsPage() {
         />
       </Card>
 
-      <Card title="What a call leaves behind">
+      <Card title={t('calls.leavesBehind')}>
         <div className="px-3 py-2.5">
           <p className="text-xs text-base-content/70 leading-relaxed">
-            Nothing. Voice and video go straight between the two phones, encrypted, and the offers
-            and answers that set the call up are sealed to your contact&rsquo;s key. No row records
-            that a call happened, who it was with, or how long it lasted. Each phone does learn the
-            other&rsquo;s IP address.
+            {t('calls.leavesBehindBody')}
           </p>
         </div>
       </Card>

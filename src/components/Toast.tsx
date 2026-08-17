@@ -1,6 +1,7 @@
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { useToast, type ToastKind } from '../hooks/useToast';
+import { useT } from '../hooks/useT';
 
 // Same inline-alert palette as AuthForm's error/notice boxes, just with a
 // stronger border so the toast reads against arbitrary content behind it
@@ -17,6 +18,7 @@ const KIND_STYLES: Record<ToastKind, string> = {
  * overlaps the message input.
  */
 export function Toast() {
+  const t = useT();
   const { toasts, dismiss } = useToast();
 
   if (toasts.length === 0) return null;
@@ -37,7 +39,7 @@ export function Toast() {
             type="button"
             onClick={() => dismiss(toast.id)}
             className="btn btn-ghost btn-xs btn-square shrink-0"
-            title="Dismiss"
+            title={t('common.dismiss')}
           >
             <X className="w-3.5 h-3.5" />
           </button>
