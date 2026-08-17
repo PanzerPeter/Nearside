@@ -14,6 +14,34 @@ one of them drifts.
 
 ## [Unreleased]
 
+### Fixed
+
+- **An attachment that will not send now says why.** Every way a photo, video
+  or voice message could fail arrived as the same four words — "Could not send
+  media" — whether the file could not be read off the phone, the person you are
+  writing to has never published an encryption key, the connection dropped
+  halfway, or the server refused the row. Four problems with four different
+  remedies, and nothing on screen to tell them apart. Each now comes back as a
+  sentence naming the cause, and the underlying error is written to the device
+  log so a report can carry it. The only send that still reads as generic is one
+  that failed with nothing to say for itself.
+- **A refused send no longer leaves the file behind.** The key that seals an
+  attachment to its recipient was sealed *after* the bytes had already gone up,
+  so anything that went wrong at that step — the commonest being a contact whose
+  device has never published a key — left an encrypted file in storage that no
+  message would ever point at, and nothing collects those. Everything that can
+  refuse a send now happens before the upload, which also means the refusal is
+  instant instead of arriving after a photo has been uploaded for nothing.
+- **A file at exactly the size limit sends.** Encrypting a file makes it a few
+  dozen bytes larger, and the ceiling is checked on what is uploaded, so a
+  50 MB video was accepted by the composer and then rejected by the server after
+  the whole upload had been spent. The composer now accounts for the difference.
+- **A photo whose name has a bracket or a space in the wrong place sends.** The
+  file's extension is reused when the attachment is saved, and a second copy of
+  a download — `shot.jpg (1)` — carried the whole tail into the storage path,
+  where it was refused outright. Nothing about that was explainable to the person
+  trying to send the picture.
+
 ## [1.2.0] — 2026-08-17
 
 ### Changed

@@ -6,6 +6,12 @@
 // forwarding, the media trim — has to learn a second shape.
 
 import { classifyMedia, MEDIA_BATCH_LIMIT, MEDIA_MAX_BYTES } from './conversation';
+import { SEAL_OVERHEAD_BYTES } from './media-crypto';
+
+/** What a file may weigh at the picker. The bucket's limit is on the sealed
+ *  object, which is this plus a nonce and a tag — refusing at the door beats
+ *  refusing after a 50 MB upload. */
+const STAGE_MAX_BYTES = MEDIA_MAX_BYTES - SEAL_OVERHEAD_BYTES;
 
 export interface StagedMedia {
   /** Stable key for the preview strip. The same photo can be picked twice, so
@@ -72,7 +78,7 @@ export function stageFiles(
       unsupported.push(file.name);
       continue;
     }
-    if (file.size > MEDIA_MAX_BYTES) {
+    if (file.size > STAGE_MAX_BYTES) {
       tooLarge.push(file.name);
       continue;
     }

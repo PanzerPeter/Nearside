@@ -8,6 +8,17 @@ export interface BodyColumns {
   nonce: string;
 }
 
+/**
+ * What `sealBody` throws when there is no key to seal to.
+ *
+ * Exported because callers have to be able to tell this apart from a network
+ * failure or a server rejection: it is the one send failure that will not fix
+ * itself on a retry, and the only one whose remedy belongs to the other person.
+ * Matching on the text of an anonymous Error is how that used to be attempted,
+ * which is a rename away from silently classifying it as "unknown".
+ */
+export const NO_PEER_KEY = 'peer has no published key';
+
 interface Readable {
   ciphertext: string | null;
   nonce: string | null;
@@ -37,7 +48,7 @@ export async function sealBody(
   if (isSelfChat(me, peerId)) return sealForSelf(identity.vaultKey, text);
   // Throwing beats degrading: a fallback to plaintext here would be invisible
   // to the sender and would quietly falsify the product's central claim.
-  if (!peerPublic) throw new Error('peer has no published key');
+  if (!peerPublic) throw new Error(NO_PEER_KEY);
   return sealFor(identity.boxPrivate, peerPublic, text);
 }
 

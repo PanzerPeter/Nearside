@@ -17,11 +17,14 @@ import {
   classifyMedia,
   conversationFilter,
   fileExtension,
+  isSelfChat,
   mediaPath,
   MAX_MESSAGE_LENGTH,
+  MEDIA_MAX_BYTES,
 } from '../lib/conversation';
 import { stageFiles, type StagedMedia } from '../lib/staging';
-import { sealBody, sealMediaKey } from '../lib/sealed-body';
+import { sealBody, sealMediaKey, type BodyColumns } from '../lib/sealed-body';
+import { describeMediaError } from '../lib/media-errors';
 import { sealFile } from '../lib/media-crypto';
 import { peerPublicKey } from '../lib/peer-keys';
 import { MEDIA_SCAN_LIMIT, selectStaleMedia, type MediaRow } from '../lib/media';
@@ -68,6 +71,15 @@ export type MediaTarget =
    *  device that has none — the composer is disabled in both cases, and the
    *  upload refuses rather than trusting the caller to have checked. */
   | { kind: 'room'; roomId: string; roomKey: Uint8Array | null };
+
+/** An attachment with no caption. Both columns null, which `has_body` allows
+ *  precisely because the row carries a `media_path` instead. */
+type NoBody = { ciphertext: null; nonce: null };
+/** The file key as the two columns a 1:1 row stores it in. */
+type KeyColumns = Awaited<ReturnType<typeof sealMediaKey>>;
+/** The file key sealed under a room key, which is a `Sealed` and not columns —
+ *  it travels inside the row `sendRoomMessage` signs. */
+type SealedFileKey = Awaited<ReturnType<typeof sealRoomFileKey>>;
 
 interface MediaSendOptions {
   me: string;
@@ -155,13 +167,14 @@ export function useMediaSend({
         sent += 1;
         setSentCount(sent);
       }
-    } catch {
-      // `sealBody` throws outright when the peer has published no key, and
-      // `compressImage` can throw on an image the decoder refuses. Neither
-      // used to be caught: the rejection escaped the submit handler and left
-      // `uploading` true, so the composer sat spinning with no way back and
-      // nothing said about why.
-      onError('Could not send media.');
+    } catch (error) {
+      // A backstop, not the reporting path: `uploadStaged` handles and names
+      // its own failures now. What is left for this to catch is a rejection
+      // from somewhere unexpected, which would otherwise escape the submit
+      // handler and leave `uploading` true — a composer spinning with no way
+      // back and nothing said about why.
+      console.error('media send failed', error);
+      onError(describeMediaError(error));
     } finally {
       // In `finally`, not after each exit: this flag is what disables the
       // whole composer.
@@ -192,34 +205,104 @@ export function useMediaSend({
    *  past an error the sender has already been told about.
    *
    *  Split out so `send` owns the `uploading` flag on every path, including a
-   *  thrown one. */
+   *  thrown one.
+   *
+   *  Two rules hold the order of what follows together, and both are fixes for
+   *  the same report — an attachment that refused to send and said only "Could
+   *  not send media", with nothing on the device or in the row to say why:
+   *
+   *  1. Everything that can refuse this send happens **before** the upload.
+   *     Reading the file, sealing it, and sealing the row's columns are all
+   *     local, all fallible, and used to sit either side of the upload — so a
+   *     peer with no published key, the commonest refusal of the lot, was
+   *     discovered after the bytes were already in the bucket, where nothing
+   *     ever collected them.
+   *  2. Nothing throws out of here. Every failure is reported through `fail`,
+   *     which names the cause to the sender and puts the underlying error in
+   *     the console, where a device log can be read. A rejection escaping to
+   *     `send`'s catch loses which file failed and which step it failed at. */
   async function uploadStaged(
     { file, durationMs }: StagedMedia,
     kind: MediaType,
     caption: string,
     replyToId: string | null
   ): Promise<string | null> {
-    // Before the upload, not after: an object in the bucket that no row can
-    // ever point at is worse than a refusal.
-    if (target.kind === 'room' && !target.roomKey) {
-      onError('This device has no key for this room.');
+    /** Report and stop. The console line is not decoration: a toast is one
+     *  sentence, and a PostgREST code, a DOMException name and a sodium
+     *  failure are the three things that tell these apart. */
+    const fail = (message: string, error?: unknown): null => {
+      if (error !== undefined) console.error('media send failed', error);
+      onError(message);
       return null;
+    };
+
+    // Narrowed once. Re-reading the union further down does not re-narrow it,
+    // which is why the null check on the room key used to be repeated after
+    // the upload rather than deciding anything before it.
+    const room = target.kind === 'room' ? target : null;
+    const peer = target.kind === 'peer' ? target : null;
+    const roomKey = room?.roomKey ?? null;
+    if (room && !roomKey) return fail('This device has no key for this room.');
+
+    // The same predicate `sealBody` branches on, so the two cannot disagree
+    // about whether a key is needed: the self-chat seals under the vault key
+    // and has no peer to look one up for.
+    let peerKey: Uint8Array | null = null;
+    if (peer && !isSelfChat(me, peer.peerId)) {
+      try {
+        peerKey = await peerPublicKey(peer.peerId);
+      } catch (error) {
+        return fail(describeMediaError(error), error);
+      }
+      // Refused here rather than left to `sealBody`'s throw: this is the one
+      // send failure a retry cannot fix, and the remedy is the other person's.
+      if (!peerKey) {
+        return fail(
+          'This contact has not published an encryption key yet. Nothing can be sent to them until they open Nearside again on their device.'
+        );
+      }
     }
 
     // Images are re-encoded before they leave the device — a phone photo is
     // typically megabytes of resolution this UI never paints. Videos and voice
-    // notes go up as recorded (voice is already ~180 KB a minute).
+    // notes go up as recorded (voice is already ~180 KB a minute). Every
+    // failure inside `compressImage` returns the original file, so this cannot
+    // be what stops a send.
     const body =
       kind === 'image' ? await compressImage(file, { maxEdge: CHAT_IMAGE_MAX_EDGE }) : file;
+
+    // The one step in a send with no text-message equivalent, and the one most
+    // likely to fail on a phone: pulling the bytes off the device. A gallery
+    // item can be a cloud placeholder that was never downloaded, and a content
+    // URI's read permission does not always survive the app going to the
+    // background behind the picker. Both arrive as a DOMException carrying
+    // nothing but a name.
+    let bytes: Uint8Array;
+    try {
+      bytes = new Uint8Array(await body.arrayBuffer());
+    } catch (error) {
+      return fail(describeMediaError(error), error);
+    }
 
     // Sealed after compression, never before: compressImage decodes an image,
     // and ciphertext does not decode. The key is minted here, travels no
     // further than this function in the clear, and is sealed below — to the
     // recipient in a conversation, under the room key in a room.
-    const peerKey = target.kind === 'peer' ? await peerPublicKey(target.peerId) : null;
-    const { blob: sealedUpload, key: fileKey } = await sealFile(
-      new Uint8Array(await body.arrayBuffer())
-    );
+    let sealedUpload: Blob;
+    let fileKey: Uint8Array;
+    try {
+      ({ blob: sealedUpload, key: fileKey } = await sealFile(bytes));
+    } catch (error) {
+      return fail(describeMediaError(error), error);
+    }
+
+    // The bucket's own ceiling, checked before the upload rather than left to
+    // Storage. The seal adds a nonce and an authentication tag, so a file that
+    // staged at exactly the limit is over it by the time it goes up — and
+    // finding that out from the server costs the whole upload first.
+    if (sealedUpload.size > MEDIA_MAX_BYTES) {
+      return fail('That file is too large to send once encrypted.');
+    }
 
     // The extension is kept for the download filename only — the object itself
     // is opaque bytes served as application/octet-stream, so the name is the
@@ -227,18 +310,56 @@ export function useMediaSend({
     // deliberate, disclosed limit rather than an oversight: the path is already
     // visible to anyone who can list the bucket.
     const filename = `${crypto.randomUUID()}.${fileExtension(body)}`;
-    const path =
-      target.kind === 'peer'
-        ? mediaPath(me, target.peerId, filename)
-        : roomMediaPath(target.roomId, filename);
+
+    /**
+     * Everything the row needs, sealed while nothing has been uploaded yet.
+     *
+     * A union rather than a bag of nullable fields, for the reason `MediaTarget`
+     * is one: the two destinations need different columns, and a shape where
+     * both halves can be half-set is a null assertion at the insert waiting to
+     * be wrong.
+     */
+    type Prepared =
+      | { kind: 'peer'; peerId: string; path: string; body: BodyColumns | NoBody; key: KeyColumns }
+      | { kind: 'room'; roomId: string; roomKey: Uint8Array; path: string; key: SealedFileKey };
+
+    let prepared: Prepared;
+    try {
+      if (peer) {
+        const path = mediaPath(me, peer.peerId, filename);
+        prepared = {
+          kind: 'peer',
+          peerId: peer.peerId,
+          path,
+          // A caption is body text like any other and is sealed like any other.
+          body: caption
+            ? await sealBody(identity, peerKey, me, peer.peerId, caption)
+            : { ciphertext: null, nonce: null },
+          key: await sealMediaKey(identity, peerKey, me, peer.peerId, fileKey),
+        };
+      } else {
+        // Narrowing only: the refusal at the top already returned for a room
+        // with no key, and neither branch is reachable without one of the two.
+        if (!room || !roomKey) return fail('This device has no key for this room.');
+        prepared = {
+          kind: 'room',
+          roomId: room.roomId,
+          roomKey,
+          path: roomMediaPath(room.roomId, filename),
+          // `sendRoomMessage` seals the caption itself, under the room key.
+          key: await sealRoomFileKey(roomKey, fileKey),
+        };
+      }
+    } catch (error) {
+      return fail(describeMediaError(error), error);
+    }
+
+    const path = prepared.path;
     const { error: uploadError } = await supabase.storage
       .from('chat-media')
       .upload(path, sealedUpload, { contentType: sealedUpload.type });
 
-    if (uploadError) {
-      onError(uploadError.message);
-      return null;
-    }
+    if (uploadError) return fail(describeMediaError(uploadError), uploadError);
 
     /** Undo the upload when the row it belongs to never landed. Without it the
      *  bucket keeps bytes no row points at, and nothing ever collects them. */
@@ -246,31 +367,23 @@ export function useMediaSend({
       await supabase.storage.from('chat-media').remove([path]);
     };
 
-    if (target.kind === 'room') {
-      const roomKey = target.roomKey;
-      // Already refused above, before anything was uploaded; repeated here
-      // because a null check at the top of the function does not narrow a
-      // union read again down here.
-      if (!roomKey) {
-        await abandonUpload();
-        return null;
-      }
+    if (prepared.kind === 'room') {
       try {
         // The same insert an ordinary room message makes, with the media
         // columns filled in — so the signature covers them (v2) without this
         // path knowing how signing works.
         const row = await sendRoomMessage(
-          target.roomId,
+          prepared.roomId,
           me,
           identity,
-          roomKey,
+          prepared.roomKey,
           caption || null,
           {
             media: {
               path,
               type: kind,
               durationMs: kind === 'audio' ? durationMs : null,
-              key: await sealRoomFileKey(roomKey, fileKey),
+              key: prepared.key,
             },
             replyToId,
           }
@@ -278,43 +391,38 @@ export function useMediaSend({
         return row.id;
       } catch (error) {
         await abandonUpload();
-        onError(
-          /rate_limited_messages/.test(String((error as Error)?.message ?? error))
-            ? "You're sending messages too quickly. Give it a moment."
-            : 'Could not send media.'
-        );
-        return null;
+        return fail(describeMediaError(error), error);
       }
     }
 
-    const { data: inserted, error: insertError } = await supabase
-      .from('messages')
-      .insert({
-        user_id: me,
-        receiver_id: target.peerId,
-        // A caption is body text like any other and is sealed like any other.
-        ...(caption
-          ? await sealBody(identity, peerKey, me, target.peerId, caption)
-          : { ciphertext: null, nonce: null }),
-        ...(await sealMediaKey(identity, peerKey, me, target.peerId, fileKey)),
-        media_path: path,
-        media_type: kind,
-        media_duration_ms: kind === 'audio' ? durationMs : null,
-        reply_to_id: replyToId,
-      })
-      .select('id')
-      .single();
+    // A thrown insert is caught alongside a returned error: supabase-js does
+    // not retry writes, so a rejected fetch here is a failed send like any
+    // other — and one that leaves an object behind unless it is caught.
+    try {
+      const { data: inserted, error: insertError } = await supabase
+        .from('messages')
+        .insert({
+          user_id: me,
+          receiver_id: prepared.peerId,
+          ...prepared.body,
+          ...prepared.key,
+          media_path: path,
+          media_type: kind,
+          media_duration_ms: kind === 'audio' ? durationMs : null,
+          reply_to_id: replyToId,
+        })
+        .select('id')
+        .single();
 
-    if (insertError) {
+      if (insertError) {
+        await abandonUpload();
+        return fail(describeMediaError(insertError), insertError);
+      }
+      return inserted?.id ?? null;
+    } catch (error) {
       await abandonUpload();
-      onError(
-        /rate_limited_messages/.test(insertError.message)
-          ? "You're sending messages too quickly. Give it a moment."
-          : 'Could not send media.'
-      );
-      return null;
+      return fail(describeMediaError(error), error);
     }
-    return inserted?.id ?? null;
   }
 
   /**
@@ -344,8 +452,9 @@ export function useMediaSend({
       onSent();
       if (target.kind === 'peer') notifyReceiver(id, target.isSelf);
       else notifyRoom(id);
-    } catch {
-      onError('Could not send that sticker.');
+    } catch (error) {
+      console.error('sticker send failed', error);
+      onError(describeMediaError(error, 'Could not send that sticker.'));
     } finally {
       setUploading(false);
     }

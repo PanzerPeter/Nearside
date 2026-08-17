@@ -3,6 +3,16 @@
 // standard one — reaching for -sumo here would quietly undo that.
 import sodium from 'libsodium-wrappers';
 
+/**
+ * How much bigger a file gets when it is sealed: a 24-byte nonce in front and
+ * a 16-byte authentication tag inside the box.
+ *
+ * It matters because the bucket's size limit applies to what is *uploaded*, so
+ * a file staged at exactly the limit is over it by the time it goes up — and
+ * the sender finds out from the server, after the whole upload has been spent.
+ */
+export const SEAL_OVERHEAD_BYTES = 24 + 16;
+
 /** The nonce is prepended to the ciphertext rather than stored beside it:
  *  a file is one opaque object in Storage, and splitting its nonce into a
  *  database column would mean a row and an object that can drift apart. */
