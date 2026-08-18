@@ -9,22 +9,23 @@ device and nothing readable on the server.
 [![CI](https://github.com/PanzerPeter/Nearside/actions/workflows/test.yml/badge.svg)](https://github.com/PanzerPeter/Nearside/actions/workflows/test.yml)
 
 React + TypeScript + Vite, wrapped in Capacitor, backed by Supabase for auth,
-Postgres, realtime and storage. The browser build is a development convenience;
-the shipping targets are the two native builds.
+Postgres, realtime and storage. The browser and Electron builds are development
+conveniences; the shipping targets are the two native ones.
 
 - [Four decisions that shaped it](#four-decisions-that-shaped-it)
 - [Encryption](#encryption)
 - [Features](#features)
 - [Where the protection stops](#where-the-protection-stops)
 - [How it makes money](#how-it-makes-money)
-- [Quick start](#quick-start) · [Scripts](#scripts) · [Native builds](#native-builds)
+- [Quick start](#quick-start) · [Scripts](#scripts) · [Builds](#builds)
 - [Code tour](#code-tour) · [Testing](#testing) · [Contributing](#contributing)
 
 Longer reading: [DESIGN.md](DESIGN.md) for why it is built this way,
 [SECURITY.md](SECURITY.md) for the threat model and how to report a
 vulnerability, [CHANGELOG.md](CHANGELOG.md) for what has landed,
-[docs/APPEARANCE.md](docs/APPEARANCE.md) for themes and motion, and
-[docs/BUILDING.md](docs/BUILDING.md) for the native builds.
+[docs/APPEARANCE.md](docs/APPEARANCE.md) for themes and motion,
+[docs/BUILDING.md](docs/BUILDING.md) for the native builds, and
+[commands.md](commands.md) for the emulator and desktop workflow.
 
 ## Four decisions that shaped it
 
@@ -55,14 +56,15 @@ SDK appears in `package.json` or the Gradle build.
 Twelve words produce a seed. The seed is stored in Android's Keystore or the iOS
 Keychain, **per account**, and never leaves the device. Three keys derive from it
 through fixed context labels: a box key for peer messages, an Ed25519 signing
-key, and a vault key for your own notes.
+key, and a vault key for your own data.
 
-| Conversation | Sealed with |
+| Sealed thing | Sealed with |
 | --- | --- |
 | Self-chat | `crypto_secretbox` under the vault key |
 | One-to-one | `crypto_box` to the peer's published public key |
 | Room | one symmetric room key, sealed once per member, plus an Ed25519 signature **verified before decryption**. Every member holds the room key, so only the signature establishes authorship |
 | Attachment | a random per-file key; uploaded as `application/octet-stream` with the nonce prepended, the file key travelling sealed in the message row |
+| Sticker library, chat background | under the owner's vault key — file and label both, so neither the picture nor its name sits in Postgres in the clear |
 
 `src/lib/sealed-body.ts` is the only place a body is sealed or opened, and there
 is no plaintext fallback anywhere: `sealBody` throws when a peer has published no
@@ -74,16 +76,24 @@ Losing the twelve words loses the history. There is no reset path.
 ## Features
 
 - **Messaging.** Realtime 1:1 with typing indicators, read receipts, replies,
-  reactions, edit, soft delete, forwarding, and a note-to-self vault pinned to
-  the top of the list.
+  reactions, editing, soft delete, forwarding, drafts, per-chat mute, and a
+  note-to-self vault pinned to the top of the list.
 - **Group rooms.** One key per room, sealed to each member; adding a member is
   one row, not a re-encryption of the history. A message whose signature fails
   renders as a *warning* rather than being hidden, because a dropped message is
   an attack the user never learns about.
-- **Media.** Images re-encoded to WebP on device, video, voice notes up to two
-  minutes with a live level meter. Server-side pruning keeps the newest 20
-  photos/videos and 50 voice notes per conversation; pinning writes a decrypted
-  copy into app-private storage so it survives that. Pinning is free.
+- **Media.** Images re-encoded to WebP on the device, which drops EXIF on the
+  way; an animated image or one that would lose its orientation passes through
+  as-is with its metadata stripped instead. Video, plus voice notes up to two
+  minutes with a live level meter. Cleanup is client-side and per conversation —
+  the newest 20 photos/videos and 50 voice notes stay on the server, older
+  objects go on upload and when a chat reopens. Pinning writes a decrypted copy
+  into app-private storage so it survives that, and pinning is free.
+- **Stickers.** A personal library, sealed under your vault key. Sending one
+  takes the ordinary attachment path — fresh key, fresh upload — rather than
+  referencing a shared object, which would put "who sent which picture to whom,
+  and when" on the server for the one message type where the picture is the
+  whole message.
 - **Voice and video calls.** Peer-to-peer WebRTC: the media keys come out of a
   DTLS handshake between the two phones, so a TURN relay in the path forwards
   SRTP it cannot read. Signalling is sealed `crypto_box` over a Realtime
@@ -98,6 +108,14 @@ Losing the twelve words loses the history. There is no reset path.
 - **Trust.** Safety numbers, a verified badge in the header, and a blocked
   composer when a contact's key changes. The app does not guess whether that was
   a reinstall or an interception.
+- **Sealed exchange.** A question carrying the asker's own answer, where neither
+  side reads the other's until both exist. The rule is the SELECT policy on
+  `sealed_answers`, not a client-side check — this repository is public, and a
+  check in the client is one anyone can delete.
+- **In this conversation.** A panel that pulls the days somebody named and the
+  links somebody sent out of the local mirror. Every row keeps the exact phrase
+  and jumps to its message; a phrase resolves against its own message's
+  timestamp, so a year-old "friday" does not land this week.
 - **Private nicknames.** The other person is never told, and the name follows
   them into the sidebar, the header and your notifications.
 - **Disappearing messages.** Off, 5 minutes, an hour, a day, a week. The timer
@@ -112,11 +130,19 @@ Losing the twelve words loses the history. There is no reset path.
   picks up an unlocked phone.
 - **`FLAG_SECURE` where it matters.** A small Android plugin covers the recovery
   phrase and the lock screen, which also keeps them out of the recents thumbnail.
+  The app is excluded from Android backups for the same reason: the pinned files
+  and the decrypted mirror are plaintext, and a system backup copies both to
+  somebody else's servers.
+- **Several accounts on one phone.** Up to five, each with its own seed slot,
+  mirror and lock. Switching tears down every per-account cache first, so a
+  peer-key cache cannot follow one account into the next.
+- **Four languages.** English, Spanish, German and Russian, following the phone
+  by default. Catalogs are typed against the English one, so a missing line
+  fails `npm run typecheck` rather than reaching a phone.
 - **Chat backgrounds.** Per person and per conversation; your choice and your
-  peer's are separate rows and separate objects. Sealed under your vault key
-  like everything else in the bucket — the folder is shared with the
-  conversation's attachments, so an unsealed one would have been readable by the
-  person you were talking to.
+  peer's are separate rows and separate objects. Sealed under your vault key,
+  because the folder is shared with the conversation's attachments and an
+  unsealed one would have been readable by the person you were talking to.
 - **Survives bad networks.** Wake is detected from three signals (including a
   wall-clock jump, the only one that fires on a woken desktop), and one
   `generation` counter rebuilds every realtime subscription. When the WebSocket
@@ -134,7 +160,10 @@ Losing the twelve words loses the history. There is no reset path.
 The app ships a screen that says this too. In short:
 
 - The server knows who talks to whom, and when. Metadata is not encrypted.
-- `profiles.display_name` and `last_seen_at` are readable by the server.
+- `profiles.display_name`, `last_seen_at`, room titles and the nicknames you
+  give contacts are ordinary text columns.
+- Video metadata is not stripped. Photos lose their EXIF on the way out; there
+  is no cheap way to rewrite MP4 atoms on the device, and this is the gap.
 - A call that cannot find a direct path is relayed by a TURN provider, which
   sees that two addresses exchanged packets and not what was in them. The
   credentials are minted per call with a short life, and the transparency screen
@@ -147,11 +176,13 @@ The app ships a screen that says this too. In short:
 
 ## How it makes money
 
-Cosmetics, sold once, through RevenueCat: six decorative theme packs. That is
-the entire revenue line. Nothing functional is behind a purchase and there is no
-advertising SDK in the build. Light mode and OLED black are free, because
-charging for a screen someone can read outdoors would be a functional paywall
-wearing a cosmetic label. From the header of `src/lib/purchases.ts`:
+Cosmetics and voluntary support, both through RevenueCat: six decorative theme
+packs sold once each, and donation tiers that buy nothing the app does. That is
+the whole revenue line. Nothing functional sits behind a purchase and there is no
+advertising SDK in the build. The default theme, light mode and OLED black are
+free, because charging for a screen someone can read outdoors would be a
+functional paywall wearing a cosmetic label. From the header of
+`src/lib/purchases.ts`:
 
 > A privacy product that paywalls privacy has sold the thing it claims to
 > defend.
@@ -160,8 +191,9 @@ Store and entitlement setup lives in [docs/APPEARANCE.md](docs/APPEARANCE.md).
 
 ## Quick start
 
-**Prerequisites.** Node 20.19+ (Vite 8), a Supabase project. Android builds also
-need SDK 36 and JDK 21; iOS builds need macOS with Xcode 15+ and CocoaPods.
+**Prerequisites.** Node 22 (CI runs it; Vite 8 needs 20.19 at minimum) and a
+Supabase project. Android builds also need SDK 36 and JDK 21; iOS builds need
+macOS with Xcode 15+ and CocoaPods.
 
 ```bash
 npm install
@@ -189,7 +221,10 @@ Then, on the Supabase side:
    building both in a throwaway Postgres container and diffing their catalogs.
    It needs Docker and nothing else, and is the safe place to dry-run a new
    migration before pasting it into an editor with no undo.
-2. **Authentication → URL Configuration**: add your site URL and a `/*` redirect
+2. **Enable `pg_cron`** (Database → Extensions) and schedule the expiry sweep;
+   the statement is at the bottom of `schema.sql`. Without it, disappearing
+   messages vanish from the device on schedule but stay in Postgres.
+3. **Authentication → URL Configuration**: add your site URL and a `/*` redirect
    so password-reset links come back. For native builds add both deep links to
    **Additional Redirect URLs**. GoTrue rejects any `redirect_to` not on the
    list, and the emailed link then falls back to the site URL, which no phone can
@@ -199,7 +234,7 @@ Then, on the Supabase side:
    app.nearside://auth/confirm
    app.nearside://auth/recovery
    ```
-3. **Deploy the push function** (optional; inert until configured):
+4. **Deploy the push function** (optional; inert until configured):
 
    ```bash
    supabase functions deploy send-push --no-verify-jwt
@@ -208,7 +243,7 @@ Then, on the Supabase side:
 
    The REST key is server-side only. Vite inlines every `VITE_`-prefixed variable
    into the bundle, so putting it in `.env` would publish it inside every APK.
-4. **Deploy the call functions** (optional; calling degrades without them):
+5. **Deploy the call functions** (optional; calling degrades without them):
 
    ```bash
    supabase functions deploy call-ring
@@ -223,6 +258,8 @@ Then, on the Supabase side:
    bundle would be a free relay for anyone who unzips the APK, which is why it
    is minted server-side and never shipped.
 
+`delete-account` is the fourth function and needs no configuration.
+
 ## Scripts
 
 | Command | Purpose |
@@ -233,12 +270,12 @@ Then, on the Supabase side:
 | `npm run test` | vitest suite |
 | `npm run typecheck` | tsc on both tsconfigs, no emit |
 | `npm run lint` | ESLint |
-| `npm run android:sync` | Native build, copy into `android/` |
-| `npm run android:open` | Open `android/` in Android Studio |
-| `npm run ios:sync` | Native build, copy into `ios/` |
-| `npm run ios:open` | Open `ios/` in Xcode (macOS) |
+| `npm run db:verify` | Replay migrations against `schema.sql` in Docker and diff |
+| `npm run android:sync` · `android:open` | Native build into `android/`; open Android Studio |
+| `npm run ios:sync` · `ios:open` | Native build into `ios/`; open Xcode (macOS) |
+| `npm run electron:install` · `electron:start` · `electron:pack` | Desktop shell: install once, run, package |
 
-## Native builds
+## Builds
 
 ```bash
 npm run android:sync
@@ -246,30 +283,43 @@ cd android && JAVA_HOME=/usr/lib/jvm/java-21-openjdk ./gradlew assembleDebug
 ```
 
 `JAVA_HOME` must be pinned to 21. Gradle 8.14 fails at configuration time on a
-newer JDK without a useful message. Release builds run R8, and every plugin is
-reached reflectively, so `android/app/proguard-rules.pro` is the only thing
-keeping them; test a release build on hardware.
+newer JDK without a useful message. The sync sets `NEARSIDE_NATIVE=1`, which
+disables the PWA service worker — a Workbox precache inside a WebView keeps
+serving the previous build after an app update. Release builds run R8, and every
+plugin is reached reflectively, so `android/app/proguard-rules.pro` is the only
+thing keeping them; test a release build on hardware.
 
 The iOS project is configured but has **never been compiled**, and nothing in
 `ios/` can be built from a Linux checkout. Signing, the Xcode capabilities that
 have to be added by hand, export compliance, and the macOS options are all in
 [docs/BUILDING.md](docs/BUILDING.md).
 
+The Electron shell in `electron/` keeps its own `package.json` and
+`node_modules`, deliberately outside the root install. It is a convenience
+build, not a third shipping target: `cap sync` finds no plugin with an Electron
+implementation, so the seed sits in localStorage rather than a Keystore, and the
+local mirror, offline search, notifications, purchases and QR scanning are all
+absent. Messaging, calls, media and the sealed exchange work.
+[commands.md](commands.md) has the full list, and why launching it from a VS
+Code terminal exits silently.
+
 ## Code tour
 
 ```
 src/
-  components/   UI. ChatRoom is a shell; the work lives in hooks/
+  components/   UI. ChatRoom is a shell; the work lives in hooks/.
+                settings/ holds one file per settings page
   hooks/        useChatThread is the conversation hub, composing the outbox,
-                receipts and scroll position
+                receipts and scroll position; useCall owns calls app-wide
   lib/          Everything testable: crypto/, sealed-body.ts (the seal
                 boundary), message-queries.ts (returns rows still sealed),
                 localdb.ts (the local SQLite mirror), connection.ts (wake and
-                the generation counter), rooms.ts, purchases.ts
+                the generation counter), rooms.ts, stickers.ts, purchases.ts
   lib/call/     A call end to end: session.ts (the peer connection),
                 signaling.ts (sealed broadcast), state.ts + routing.ts (the
                 interleavings, as pure functions), warmup.ts (capture that
                 starts before the call needs it)
+  locales/      en, es, de, ru — typed against en
 supabase/
   schema.sql    The whole database as it stands. One file, for a fresh project
   migrations/   How it got there. Applied by hand, in apply-order.txt's order
@@ -278,6 +328,7 @@ supabase/
   verify/       npm run db:verify — replays both paths and diffs them
 android/        Capacitor shell, the mature target
 ios/            Capacitor shell, configured but never compiled
+electron/       Desktop shell, a convenience build
 ```
 
 Four seams are worth knowing before changing anything:
@@ -288,10 +339,10 @@ Four seams are worth knowing before changing anything:
 - **`lib/connection.ts`** owns wake detection and the `generation` counter. Every
   realtime subscriber keys its channel effect on that number, so don't add
   per-hook wake logic.
-- **`App.signOut`** tears down the outbox, pins, the local mirror, the peer-key
-  and room-key caches, the OneSignal id and the RevenueCat login. Any new
-  per-account cache has to be added there, or it leaks into the next account on
-  the phone.
+- **`App.signOut`** and `releaseAccount()` tear down the outbox, pins, the local
+  mirror, the peer-key and room-key caches, the OneSignal id and the RevenueCat
+  login. Any new per-account cache has to be added there, or it leaks into the
+  next account on the phone.
 - **`index.css`** folds two different safe-area mechanisms into
   `--safe-top` / `--safe-bottom`. Use those, never `env()` directly, or the fix
   works on only half the fleet.
@@ -312,10 +363,11 @@ vitest in a **node** environment over `src/**/*.test.ts`. There is no DOM or
 component setup, deliberately: logic that needs testing gets pushed out of
 components and into `src/lib/`, where it can be tested without a renderer.
 
-Three tests guard a decision rather than a function. `no-plaintext.test.ts` and
-`no-ads.test.ts` both keep the store listing true by construction, and
-`elevation.test.ts` fails if a banned Tailwind shadow class comes back, because
-the banding it causes is invisible on a desktop and obvious on a phone.
+Four tests guard a decision rather than a function. `no-plaintext.test.ts` and
+`no-ads.test.ts` keep the store listing true by construction, `elevation.test.ts`
+fails if a banned Tailwind shadow class comes back — the banding it causes is
+invisible on a desktop and obvious on a phone — and `version.test.ts` fails when
+any of the places carrying the version number drift apart.
 
 ## Contributing
 
@@ -327,6 +379,10 @@ Issues and pull requests are welcome. Before opening one:
   pass.
 - **Do not change** `BOX_CONTEXT`, `SIGN_CONTEXT` or `VAULT_CONTEXT` in
   `src/lib/crypto/keys.ts`. It invalidates every existing user's keys.
+- A schema change is two edits — a migration and the same change folded into
+  `schema.sql` — and `npm run db:verify` fails if you do only one.
+- A user-visible change gets a `CHANGELOG.md` entry written with it, in the same
+  register as the code comments: what changed for someone using the app.
 - Privacy claims in the UI are built from live queries and real schema. Keep them
   checkable.
 
