@@ -159,7 +159,13 @@ export function useChatThread({
     onQueued,
     onError,
   });
-  const scroll = useThreadScroll({ peerId, me, messages, pending: outbox.pending });
+  const scroll = useThreadScroll({
+    peerId,
+    me,
+    messages,
+    pending: outbox.pending,
+    peerTyping: friendTyping,
+  });
 
   useEffect(() => {
     newestAtRef.current = messages.length ? messages[messages.length - 1].created_at : null;

@@ -49,6 +49,9 @@ interface ThreadScrollOptions {
   me: string;
   messages: Message[];
   pending: PendingMessage[];
+  /** The peer's typing bubble, which is part of the thread's height and so
+   *  part of what "the bottom" means. */
+  peerTyping: boolean;
 }
 
 export function useThreadScroll({
@@ -56,6 +59,7 @@ export function useThreadScroll({
   me,
   messages,
   pending,
+  peerTyping,
 }: ThreadScrollOptions): ThreadScroll {
   const [atBottom, setAtBottom] = useState(true);
   const [newSinceScroll, setNewSinceScroll] = useState(0);
@@ -133,6 +137,18 @@ export function useThreadScroll({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages, pending]);
+
+  // The typing bubble appearing grows the list by its own height. A reader
+  // sitting at the bottom would otherwise have it land under the fold, which
+  // for an indicator is the same as not showing it at all. Only on the way in:
+  // its removal shrinks the list back, and scrolling for that would yank
+  // somebody who had meanwhile started reading upwards.
+  useEffect(() => {
+    if (!peerTyping || !atBottomRef.current) return;
+    bottomRef.current?.scrollIntoView({
+      behavior: prefersReducedMotion() ? 'auto' : 'smooth',
+    });
+  }, [peerTyping]);
 
   function handleListScroll() {
     const el = listRef.current;

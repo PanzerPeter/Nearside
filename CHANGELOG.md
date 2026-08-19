@@ -14,6 +14,18 @@ one of them drifts.
 
 ## [Unreleased]
 
+## [1.4.3] — 2026-08-19
+
+### Changed
+
+- **"Typing" moved out of the header and into the conversation.** It used to
+  take over the line that says whether the other person is online, so that line
+  flickered between two states for as long as somebody was writing. It is now a
+  bubble at the bottom of the thread, where the message being typed will
+  actually appear, and the header goes back to saying one thing steadily. If you
+  are already at the bottom of a conversation the view follows the bubble in, so
+  it can't arrive under the fold.
+
 ## [1.4.2] — 2026-08-17
 
 ### Fixed

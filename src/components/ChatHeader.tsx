@@ -39,7 +39,6 @@ interface ChatHeaderProps {
    *  the verify button has nothing to open. */
   peerKey: Uint8Array | null;
   friendStatus: PresenceStatus;
-  friendTyping: boolean;
   searchOpen: boolean;
   onBack: () => void;
   onOpenNickname: () => void;
@@ -82,7 +81,6 @@ export function ChatHeader({
   trust,
   peerKey,
   friendStatus,
-  friendTyping,
   searchOpen,
   onBack,
   onOpenNickname,
@@ -173,11 +171,6 @@ export function ChatHeader({
             // itself; what is worth saying here is that nobody else can read
             // any of it.
             <span>{t('chat.onlyYou')}</span>
-          ) : friendTyping ? (
-            <span className="inline-flex items-center gap-1.5 text-primary">
-              <span className="loading loading-dots loading-xs" />
-              {t('chat.typing')}
-            </span>
           ) : (
             <span className="inline-flex items-center gap-1.5">
               <StatusDot status={friendStatus} size={8} pulse />

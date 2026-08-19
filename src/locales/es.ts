@@ -95,7 +95,6 @@ export const es: Catalog = {
   'chat.keyChanged': 'Clave cambiada',
   'chat.keyChangedTitle': 'Su clave no es la que verificaste',
   'chat.onlyYou': 'Solo tú puedes ver esto',
-  'chat.typing': 'escribiendo',
   'chat.voiceCall': 'Llamada de voz',
   'chat.videoCall': 'Videollamada',
   'chat.cannotCall': 'Todavía no puedes llamar a este contacto',
@@ -171,6 +170,7 @@ export const es: Catalog = {
   'thread.selfEmpty': 'Mándate notas, fotos y memos de voz',
   'thread.selfEmptyNote': 'Tus palabras van cifradas con una clave que solo tiene este teléfono.',
   'thread.startWith': 'Empieza la conversación con {name}',
+  'thread.typing': '{name} está escribiendo',
 
   'common.dismiss': 'Descartar',
   'common.notNow': 'Ahora no',

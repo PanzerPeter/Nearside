@@ -95,7 +95,6 @@ export const de: Catalog = {
   'chat.keyChanged': 'Schlüssel geändert',
   'chat.keyChangedTitle': 'Der Schlüssel ist nicht der, den du verifiziert hast',
   'chat.onlyYou': 'Das sieht nur du',
-  'chat.typing': 'tippt',
   'chat.voiceCall': 'Sprachanruf',
   'chat.videoCall': 'Videoanruf',
   'chat.cannotCall': 'Dieser Kontakt ist noch nicht anrufbar',
@@ -172,6 +171,7 @@ export const de: Catalog = {
   'thread.selfEmptyNote':
     'Deine Worte sind mit einem Schlüssel verschlüsselt, den nur dieses Telefon hat.',
   'thread.startWith': 'Beginne die Unterhaltung mit {name}',
+  'thread.typing': '{name} tippt gerade',
 
   'common.dismiss': 'Ausblenden',
   'common.notNow': 'Jetzt nicht',

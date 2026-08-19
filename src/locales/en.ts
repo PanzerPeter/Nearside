@@ -104,7 +104,6 @@ export const en = {
   'chat.keyChanged': 'Key changed',
   'chat.keyChangedTitle': 'Their key is not the one you verified',
   'chat.onlyYou': 'Only you can see this',
-  'chat.typing': 'typing',
   'chat.voiceCall': 'Voice call',
   'chat.videoCall': 'Video call',
   'chat.cannotCall': 'Cannot call this contact yet',
@@ -183,6 +182,7 @@ export const en = {
   'thread.selfEmpty': 'Send yourself notes, photos and voice memos',
   'thread.selfEmptyNote': 'Your words are encrypted with a key only this phone holds.',
   'thread.startWith': 'Start the conversation with {name}',
+  'thread.typing': '{name} is typing',
 
   // ------------------------------------------------------- small surfaces
   'common.dismiss': 'Dismiss',

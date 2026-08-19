@@ -6,6 +6,7 @@ import { timerChangeIndex, type TimerChange } from '../lib/disappearing';
 import type { ReplyTargets } from '../hooks/useReplyTargets';
 import type { ThreadScroll } from '../hooks/useThreadScroll';
 import { MessageBubble } from './MessageBubble';
+import { TypingIndicator } from './TypingIndicator';
 import { SealedExchange } from './SealedExchange';
 import type { OpenedAnswer } from '../lib/sealed-exchange';
 import { ChevronDown, Timer } from 'lucide-react';
@@ -24,6 +25,9 @@ interface MessageThreadProps {
    *  match a real row's id and folding it in would leave a duplicate bubble
    *  once the realtime INSERT lands. */
   queued: PendingMessage[];
+  /** The peer is typing right now. False in the self-chat, where the only
+   *  person typing is you. */
+  friendTyping: boolean;
   hasMore: boolean;
   loadingOlder: boolean;
   peerReceipt: Receipt | null;
@@ -91,6 +95,7 @@ export function MessageThread({
   isSelf,
   messages,
   queued,
+  friendTyping,
   hasMore,
   loadingOlder,
   peerReceipt,
@@ -337,6 +342,12 @@ export function MessageThread({
               </div>
             );
           })}
+
+          {/* Last thing in the thread, above the bottom sentinel: the bubble
+              belongs where the message being written will appear, and putting
+              it after the sentinel would leave it below the point every
+              auto-scroll aims at. */}
+          {friendTyping && <TypingIndicator peerLabel={peerLabel} />}
         </div>
         <div ref={scroll.bottomRef} />
       </main>

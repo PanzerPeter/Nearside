@@ -196,6 +196,19 @@
     animation: message-in 190ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 
+  /* The dots in the typing bubble. Static here on purpose: the bounce is an
+     ambient, endlessly repeating animation, so it lives in the expressive set
+     below with the other two, and this is what is left when somebody has asked
+     for less motion — a bubble that appears and disappears still says what it
+     needs to. */
+  .typing-dot {
+    width: 0.4rem;
+    height: 0.4rem;
+    border-radius: 9999px;
+    background: currentColor;
+    opacity: 0.55;
+  }
+
   /* One diagonal sheen, marking the moment the body was actually sealed and
      accepted. It is not decoration standing in for encryption — it fires on a
      real state change (`pending` to `sent`) and on nothing else. */
@@ -608,6 +621,34 @@
 
   :root[data-motion='expressive'] .motion-float {
     animation: float-soft 5s ease-in-out infinite;
+  }
+
+  /* The typing bubble's three dots, lifted in turn. The stagger is what makes
+     this read as somebody writing rather than as a spinner: three dots pulsing
+     together is a loading state, and this is not one. */
+  @keyframes typing-dot {
+    0%,
+    60%,
+    100% {
+      opacity: 0.4;
+      transform: translate3d(0, 0, 0);
+    }
+    30% {
+      opacity: 1;
+      transform: translate3d(0, -3px, 0);
+    }
+  }
+
+  :root[data-motion='expressive'] .typing-dot {
+    animation: typing-dot 1.3s ease-in-out infinite;
+  }
+
+  :root[data-motion='expressive'] .typing-dot:nth-child(2) {
+    animation-delay: 0.16s;
+  }
+
+  :root[data-motion='expressive'] .typing-dot:nth-child(3) {
+    animation-delay: 0.32s;
   }
 
   /* The recording indicator, in place of Tailwind's flat opacity pulse: a dot

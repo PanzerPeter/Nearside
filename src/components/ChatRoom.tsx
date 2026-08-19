@@ -190,7 +190,6 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
         trust={trust}
         peerKey={peerKey}
         friendStatus={friendStatus}
-        friendTyping={thread.friendTyping}
         searchOpen={searchOpen}
         onBack={onBack}
         onOpenNickname={() => setNicknameOpen(true)}
@@ -309,6 +308,7 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
         isSelf={isSelf}
         messages={thread.messages}
         queued={queued}
+        friendTyping={thread.friendTyping && !isSelf}
         hasMore={thread.hasMore}
         loadingOlder={thread.loadingOlder}
         peerReceipt={thread.peerReceipt}

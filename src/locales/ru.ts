@@ -99,7 +99,6 @@ export const ru: Catalog = {
   'chat.keyChanged': 'Ключ изменился',
   'chat.keyChangedTitle': 'Его ключ — не тот, который ты подтвердил',
   'chat.onlyYou': 'Это видишь только ты',
-  'chat.typing': 'печатает',
   'chat.voiceCall': 'Голосовой звонок',
   'chat.videoCall': 'Видеозвонок',
   'chat.cannotCall': 'Этому контакту пока нельзя позвонить',
@@ -175,6 +174,7 @@ export const ru: Catalog = {
   'thread.selfEmpty': 'Отправляй себе заметки, фото и голосовые',
   'thread.selfEmptyNote': 'Твои слова зашифрованы ключом, который есть только у этого телефона.',
   'thread.startWith': 'Начни переписку с {name}',
+  'thread.typing': '{name} печатает',
 
   'common.dismiss': 'Скрыть',
   'common.notNow': 'Не сейчас',
