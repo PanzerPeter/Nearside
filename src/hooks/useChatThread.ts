@@ -32,6 +32,7 @@ import {
   type ConversationTimer,
 } from '../lib/disappearing';
 import { purgeExpired } from '../lib/localdb';
+import { unpinMedia } from '../lib/pins';
 
 /** Bounds how many pages a search jump will fetch looking for an old message,
  *  so a hit deep in history can't page indefinitely. */
@@ -230,6 +231,10 @@ export function useChatThread({
       const removed = await purgeExpired(Date.now());
       if (cancelled) return;
       const gone = new Set(removed);
+      // A pin keeps a picture past the server's pruning, not past a timer both
+      // people agreed to. Left behind, the decrypted bytes would outlive the
+      // message in app-private storage with nothing left pointing at them.
+      for (const id of removed) await unpinMedia(id).catch(() => {});
       const now = Date.now();
       setMessages((current) =>
         current.filter((m) => !gone.has(m.id) && !hasExpired(m.expires_at, now))

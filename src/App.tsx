@@ -51,7 +51,7 @@ import {
   type StoredAccount,
 } from './lib/accounts';
 import { clearSeed } from './lib/keystore';
-import { clearPinnedMedia } from './lib/pins';
+import { clearPinnedMedia, forgetPinIndex } from './lib/pins';
 import { forgetAllPeerKeys } from './lib/peer-keys';
 import { forgetAllPublishedKeys, forgetAllRoomKeys } from './lib/rooms';
 import { forgetStickers } from './lib/stickers';
@@ -284,6 +284,9 @@ function App() {
     // Decrypted attachments from the conversations of the account being left —
     // photos, videos and voice notes, in memory, same rule.
     forgetAllMedia();
+    // The pin index, which is a list of this account's message ids. Left
+    // behind, the next account's thread would be asked about them.
+    forgetPinIndex();
     // Signed URLs held for chat backgrounds. Each is a bearer token for one
     // object this account could read; the next one on the device may not.
     forgetAllBackgroundUrls();

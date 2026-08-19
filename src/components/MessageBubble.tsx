@@ -493,6 +493,12 @@ export function MessageBubble({
                         path={msg.media_path}
                         type={msg.media_type}
                         mediaKey={msg.media_key}
+                        // Recorded with a pin, so the words under a picture
+                        // survive the sender's trim along with the picture.
+                        caption={msg.text}
+                        // Already restored from a pin: the object named above
+                        // is gone, and the kept copy is the only source.
+                        restored={msg.media_restored}
                         // Anything else in the bubble can be wider than the
                         // picture and would otherwise leave bubble colour
                         // beside it.

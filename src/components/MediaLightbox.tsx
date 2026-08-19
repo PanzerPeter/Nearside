@@ -17,6 +17,9 @@ interface MediaLightboxProps {
   /** The storage object path, which is where the saved file gets its name. */
   path: string;
   type: VisualMediaType;
+  /** The message's body, recorded with the pin so a caption survives the
+   *  sender's trim along with the picture — see `lib/pin-restore.ts`. */
+  caption?: string | null;
   /** The thumbnail already found that this platform decodes no picture out of
    *  the file. Passed so the viewer never mounts a player that would play the
    *  soundtrack of a video it cannot show. */
@@ -38,6 +41,7 @@ export function MediaLightbox({
   url,
   path,
   type,
+  caption,
   noPicture: noPictureHint,
   onClose,
 }: MediaLightboxProps) {
@@ -112,7 +116,7 @@ export function MediaLightbox({
         toast.success(t('lightbox.unpinned'));
       } else {
         const bytes = new Uint8Array(await (await fetch(url)).arrayBuffer());
-        await pinMedia(messageId, path, bytes);
+        await pinMedia(messageId, path, bytes, { mediaType: type, caption: caption ?? '' });
         setPinned(true);
         toast.success(t('lightbox.pinned'));
       }

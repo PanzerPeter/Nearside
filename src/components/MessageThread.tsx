@@ -19,7 +19,9 @@ interface MessageThreadProps {
   me: string;
   peerLabel: string;
   isSelf: boolean;
-  messages: Message[];
+  /** Rendered as given — `ChatRoom` has already put back the media columns of
+   *  any row the sender trimmed and this device pinned. */
+  messages: readonly Message[];
   /** Queued sends, newest by construction — rendered after `messages` rather
    *  than merged into them, because a queue entry's client uuid will never
    *  match a real row's id and folding it in would leave a duplicate bubble

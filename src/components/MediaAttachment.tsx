@@ -15,6 +15,13 @@ interface MediaAttachmentProps {
   mediaKey?: Uint8Array | null;
   /** Voice notes are not routed here — see `VoiceNote`. */
   type: VisualMediaType;
+  /** The bubble's text, passed through to the viewer so pinning can keep it
+   *  alongside the picture. */
+  caption?: string | null;
+  /** These media columns were put back from this device's pin, so the object
+   *  they name is already gone — read the pinned copy and do not spend a
+   *  signature and a failed download proving it. */
+  restored?: boolean;
   /** Stretch the thumbnail to the bubble's full width, cropping what won't
    *  fit. Set when a caption is what sizes the bubble: left at its natural
    *  width, a picture narrower than the text leaves a band of bubble colour
@@ -32,7 +39,15 @@ interface MediaAttachmentProps {
  * never reveals, the browser's own overflow menu, and the viewer. One way is
  * enough, and it is the one you reach by tapping the thing you want.
  */
-export function MediaAttachment({ messageId, path, type, mediaKey, fill }: MediaAttachmentProps) {
+export function MediaAttachment({
+  messageId,
+  path,
+  type,
+  mediaKey,
+  caption,
+  restored,
+  fill,
+}: MediaAttachmentProps) {
   const t = useT();
   // Deferred: the placeholder below reserves the slot at the right size, so
   // nothing jumps when the picture lands, and a page of thirty messages stops
@@ -42,7 +57,8 @@ export function MediaAttachment({ messageId, path, type, mediaKey, fill }: Media
     mediaKey,
     type,
     messageId,
-    true
+    true,
+    restored
   );
   const [viewing, setViewing] = useState(false);
   // Set when this platform demuxed the file but could not decode its picture —
@@ -165,6 +181,7 @@ export function MediaAttachment({ messageId, path, type, mediaKey, fill }: Media
           url={url}
           path={path}
           type={type}
+          caption={caption}
           // What the thumbnail already learned, so the viewer does not mount a
           // player that would start the soundtrack before finding out for
           // itself.

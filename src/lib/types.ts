@@ -49,6 +49,11 @@ export interface Message {
   /** Client-only, never a column: the opened file key, set by `openRows`. Null
    *  when there is no attachment, or when this device cannot open it. */
   media_key?: Uint8Array | null;
+  /** Client-only, never a column: the media columns above were put back from
+   *  this device's pin because the server row had been trimmed — see
+   *  `lib/pin-restore.ts`. The object they name is gone, so the attachment
+   *  reads the pinned plaintext and never signs a URL for it. */
+  media_restored?: boolean;
   /** Recorded length of a voice note. Null for every other kind of media —
    *  stored because a WebM from MediaRecorder carries no duration header, so
    *  the bubble could not otherwise show a length before the file is fetched. */

@@ -14,6 +14,24 @@ one of them drifts.
 
 ## [Unreleased]
 
+## [1.4.4] — 2026-08-19
+
+### Fixed
+
+- **A pinned photo now really does outlive the pruning it was pinned against.**
+  Pinning keeps a copy of an attachment on your phone so it survives the
+  server's clean-up of old files, and half of that was working: the copy was
+  kept, but once the person who sent it pruned their end, their message came
+  back as "media removed" and the picture you had deliberately saved was
+  unreachable behind it. The message is now rebuilt from what your phone kept —
+  **including the caption it was sent with**, which the clean-up used to write
+  over. Pins made before this update keep the picture; only captions saved from
+  now on can be restored, because before this there was nothing holding them.
+- **A pin no longer outlives the message.** A photo you pinned in a
+  disappearing conversation goes when the timer takes the message, and one the
+  sender deletes for everyone goes with the deletion. Pinning is a way around
+  the storage limit, not around either of those.
+
 ## [1.4.3] — 2026-08-19
 
 ### Changed

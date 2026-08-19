@@ -692,6 +692,9 @@ function RoomBubble({
                     path={m.media_path}
                     type={m.media_type === 'video' ? 'video' : 'image'}
                     mediaKey={m.mediaKey}
+                    // Recorded with a pin, so the words under the picture are
+                    // kept with it — the same bargain the 1:1 bubble makes.
+                    caption={m.text}
                     fill
                   />
                 </div>

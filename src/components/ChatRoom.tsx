@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Session } from '@supabase/supabase-js';
 import { Message, Profile } from '../lib/types';
 import { isSelfChat, messageSnippet } from '../lib/conversation';
@@ -28,6 +28,9 @@ import { useChatThread } from '../hooks/useChatThread';
 import { usePeerTrust } from '../hooks/usePeerTrust';
 import { useMediaSend } from '../hooks/useMediaSend';
 import { useStickers } from '../hooks/useStickers';
+import { usePins } from '../hooks/usePins';
+import { restorePinned } from '../lib/pin-restore';
+import { unpinMedia } from '../lib/pins';
 import { StickerPicker } from './StickerPicker';
 import { useMessageEditing } from '../hooks/useMessageEditing';
 import { useDraft } from '../hooks/useDraft';
@@ -157,6 +160,23 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
   );
   // Quoted messages, including the ones that are older than the loaded window.
   const replyTargets = useReplyTargets(me, friend.id, thread.messages, open);
+
+  // Attachments this device pinned, so a row the sender has since trimmed is
+  // rendered from the kept bytes instead of as the placeholder their device
+  // wrote over it. Only the thread is given the restored list: a forward or a
+  // reply quote would be describing the server's copy, which really is gone.
+  const pins = usePins();
+  const shown = useMemo(() => restorePinned(thread.messages, pins), [thread.messages, pins]);
+  // A delete-for-everyone is the sender asking for the message to be gone, and
+  // a pin is not a way around that: the kept bytes go with it. Watched here
+  // rather than in the delete handler because the delete usually happens on the
+  // other phone and arrives as an update.
+  useEffect(() => {
+    if (pins.size === 0) return;
+    for (const msg of thread.messages) {
+      if (msg.deleted_at && pins.has(msg.id)) void unpinMedia(msg.id).catch(() => {});
+    }
+  }, [thread.messages, pins]);
 
   // A queued send carries the id its server row will have, so the two lists
   // can name the same message for the moment between the row being merged and
@@ -306,7 +326,7 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
         me={me}
         peerLabel={peerLabel}
         isSelf={isSelf}
-        messages={thread.messages}
+        messages={shown}
         queued={queued}
         friendTyping={thread.friendTyping && !isSelf}
         hasMore={thread.hasMore}

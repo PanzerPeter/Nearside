@@ -12,6 +12,7 @@ import {
   type SQLiteDBConnection,
 } from '@capacitor-community/sqlite';
 import { isMobileNative } from './platform';
+import type { MediaType } from './types';
 
 export interface CachedMessage {
   id: string;
@@ -32,6 +33,17 @@ export interface PinnedMedia {
   message_id: string;
   file_path: string;
   pinned_at: string;
+  /** What the message row held when the pin was made. The sender's device
+   *  nulls those columns when it trims the object (`trimOldMedia`), so without
+   *  a copy here the bubble has nothing left to render the kept bytes from —
+   *  see `lib/pin-restore.ts`. Null on pins written before this was recorded.
+   *
+   *  `caption` is plaintext, like everything else in this store: it is the
+   *  body this device had already decrypted, and spec §7 discloses that the
+   *  mirror holds decrypted text at rest. */
+  media_path: string | null;
+  media_type: MediaType | null;
+  caption: string | null;
 }
 
 /** A peer's public key as this device first saw it, and whether a human ever
@@ -96,7 +108,10 @@ CREATE TABLE IF NOT EXISTS contacts (
 CREATE TABLE IF NOT EXISTS pins (
   message_id TEXT PRIMARY KEY,
   file_path  TEXT NOT NULL,
-  pinned_at  TEXT NOT NULL
+  pinned_at  TEXT NOT NULL,
+  media_path TEXT,
+  media_type TEXT,
+  caption    TEXT
 );
 
 CREATE TABLE IF NOT EXISTS chat_flags (
@@ -171,10 +186,20 @@ export async function openLocalDb(userId: string): Promise<void> {
     // SQLite has no ADD COLUMN IF NOT EXISTS. A store created by an earlier
     // build already has the table, so CREATE TABLE IF NOT EXISTS skips the new
     // column and every write below fails on an unknown column instead.
-    try {
-      await db.execute('ALTER TABLE messages_cache ADD COLUMN expires_at TEXT');
-    } catch {
-      // Already there.
+    for (const column of [
+      'messages_cache ADD COLUMN expires_at TEXT',
+      // The three a pin needs to put a trimmed row back together. A store
+      // created by an earlier build has the `pins` table without them, and
+      // every write below would fail on an unknown column.
+      'pins ADD COLUMN media_path TEXT',
+      'pins ADD COLUMN media_type TEXT',
+      'pins ADD COLUMN caption TEXT',
+    ]) {
+      try {
+        await db.execute(`ALTER TABLE ${column}`);
+      } catch {
+        // Already there.
+      }
     }
     return;
   }
@@ -307,12 +332,15 @@ export async function putPin(row: PinnedMedia): Promise<void> {
     return;
   }
   await db?.run(
-    `INSERT INTO pins (message_id, file_path, pinned_at)
-     VALUES (?, ?, ?)
+    `INSERT INTO pins (message_id, file_path, pinned_at, media_path, media_type, caption)
+     VALUES (?, ?, ?, ?, ?, ?)
      ON CONFLICT(message_id) DO UPDATE SET
        file_path = excluded.file_path,
-       pinned_at = excluded.pinned_at`,
-    [row.message_id, row.file_path, row.pinned_at]
+       pinned_at = excluded.pinned_at,
+       media_path = excluded.media_path,
+       media_type = excluded.media_type,
+       caption = excluded.caption`,
+    [row.message_id, row.file_path, row.pinned_at, row.media_path, row.media_type, row.caption]
   );
 }
 

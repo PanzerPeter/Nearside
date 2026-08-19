@@ -82,7 +82,12 @@ export function useSignedMediaUrl(
   /** Wait until the placeholder is near the viewport before fetching. Set by
    *  the components that render a placeholder of the right size — anything that
    *  reserves no space would load everything at once anyway. */
-  defer = false
+  defer = false,
+  /** These media columns came back from a pin rather than from the server
+   *  (`lib/pin-restore.ts`), so the object they name was deleted by the sender's
+   *  trim. Go to the pinned copy first: signing a URL for it would spend a round
+   *  trip to be told what is already known, on every mount, forever. */
+  preferPin = false
 ): SignedMedia {
   const [url, setUrl] = useState<string | null>(null);
   const [failure, setFailure] = useState<MediaFailure | null>(null);
@@ -147,6 +152,12 @@ export function useSignedMediaUrl(
     const giveUp = async (reason: MediaFailure) => {
       if (!(await fallBackToPin())) setFailure(reason);
     };
+
+    // The pinned copy is the whole source for a restored row. If it has gone
+    // too — a cleared cache, a restore that did not carry the sandbox — the
+    // ordinary path below still runs and reports honestly why there is nothing
+    // to show.
+    if (preferPin && (await fallBackToPin())) return;
 
     const { data, error } = await supabase.storage
       .from('chat-media')
@@ -223,7 +234,7 @@ export function useSignedMediaUrl(
     // first key it ever saw; a plain `mediaKey` dependency reintroduces the
     // re-decrypt loop described at the ref's declaration.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [path, token, kind, messageId, releaseOwnedUrl]);
+  }, [path, token, kind, messageId, preferPin, releaseOwnedUrl]);
 
   // Attachment-scoped state, reset when this component is pointed at a
   // different object.
