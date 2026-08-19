@@ -318,6 +318,8 @@ export const de: Catalog = {
   'requests.unknown': 'unbekannt',
   'requests.accept': 'Annehmen',
   'requests.decline': 'Ablehnen',
+  'requests.declinedHidden':
+    'Anfrage abgelehnt, und diese Person ist auf diesem Gerät ausgeblendet. Rückgängig unter Einstellungen › Ausgeblendete Anfragen.',
   'rooms.title': 'Räume',
   'rooms.new': 'Neuer Raum',
   'rooms.empty':
@@ -446,8 +448,8 @@ export const de: Catalog = {
   'connect.or': 'oder',
   'connect.alreadyFriends': 'Ihr seid bereits Kontakte.',
   'connect.alreadySent': 'Du hast schon eine Anfrage geschickt. Die Antwort steht noch aus.',
-  'connect.alreadyReceived':
-    'Du hast bereits eine Anfrage bekommen. Nimm sie in deiner Liste offener Anfragen an.',
+  'connect.acceptedTheirs':
+    'Diese Person hatte dir schon eine Anfrage geschickt — damit ist sie angenommen. Ihr seid verbunden.',
   'connect.rateLimited': 'Zu viele Kontaktanfragen in der letzten Stunde.',
   'connect.raced':
     'Ihr habt euch im selben Moment hinzugefügt. Nimm die Anfrage in deiner Liste an.',

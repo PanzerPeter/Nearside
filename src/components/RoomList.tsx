@@ -11,6 +11,7 @@ import {
   loadChatFlags,
   setMuted,
   setPinned,
+  subscribeChatFlags,
   sortByFlags,
   type ChatFlags,
 } from '../lib/chat-flags';
@@ -82,6 +83,9 @@ export function RoomList({
 
   useEffect(() => {
     void refreshFlags();
+    // Rooms and conversations keep one flag store between them, so a mute set
+    // from either list has to reach the other — see `subscribeChatFlags`.
+    return subscribeChatFlags(() => void refreshFlags());
   }, [refreshFlags]);
 
   const ordered = useMemo(
@@ -167,7 +171,7 @@ export function RoomList({
                         label: pinned ? t('chatList.unpin') : t('chatList.pin'),
                         icon: pinned ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4" />,
                         onClick: () => {
-                          void setPinned(room.id, 'room', !pinned).then(refreshFlags);
+                          void setPinned(room.id, 'room', !pinned);
                         },
                       },
                       {
@@ -175,7 +179,7 @@ export function RoomList({
                         label: muted ? t('chatList.unmute') : t('chatList.mute'),
                         icon: muted ? <Bell className="w-4 h-4" /> : <BellOff className="w-4 h-4" />,
                         onClick: () => {
-                          void setMuted(room.id, 'room', !muted).then(refreshFlags);
+                          void setMuted(room.id, 'room', !muted);
                         },
                       },
                     ]}

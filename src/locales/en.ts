@@ -331,6 +331,8 @@ export const en = {
   'requests.unknown': 'unknown',
   'requests.accept': 'Accept',
   'requests.decline': 'Decline',
+  'requests.declinedHidden':
+    'Request declined, and they are hidden on this device. Undo that in Settings › Hidden requests.',
   'rooms.title': 'Rooms',
   'rooms.new': 'New room',
   'rooms.empty': 'No rooms yet. A room is a group conversation with one shared key.',
@@ -458,7 +460,8 @@ export const en = {
   'connect.or': 'or',
   'connect.alreadyFriends': 'You are already friends.',
   'connect.alreadySent': 'You already sent them a request. Waiting on their reply.',
-  'connect.alreadyReceived': 'They already sent you a request. Accept it from your pending list.',
+  'connect.acceptedTheirs':
+    'They had already sent you a request, so that accepted it. You are connected.',
   'connect.rateLimited': 'Too many friend requests in the last hour.',
   'connect.raced': 'They added you at the same moment. Accept their request from your pending list.',
   'connect.badCode': 'That code does not work. Ask for a fresh one.',

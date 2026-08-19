@@ -19,6 +19,27 @@ import {
   type ChatFlagsRow,
 } from './localdb';
 
+/*
+ * One place to hear that this device's opinion changed.
+ *
+ * The flags are written from screens that do not share a subtree with the list
+ * that renders them — "Hidden requests" lives under the settings tab, and the
+ * chat list stays mounted behind it. Without this, unhiding somebody left the
+ * list holding the flags it had read on mount: the request that had been
+ * hidden stayed hidden until the app was restarted, which is the one thing
+ * that screen exists to undo.
+ */
+const listeners = new Set<() => void>();
+
+export function subscribeChatFlags(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+function announce(): void {
+  for (const listener of listeners) listener();
+}
+
 export interface ChatFlags {
   id: string;
   kind: string;
@@ -47,18 +68,22 @@ export async function loadChatFlags(): Promise<Map<string, ChatFlags>> {
  *  they were pinned, and a boolean would leave them in an arbitrary order. */
 export async function setPinned(id: string, kind: 'peer' | 'room', on: boolean): Promise<void> {
   await setChatFlag(id, kind, 'pinned_at', on ? new Date().toISOString() : null);
+  announce();
 }
 
 export async function setMuted(id: string, kind: 'peer' | 'room', on: boolean): Promise<void> {
   await setChatFlag(id, kind, 'muted_at', on ? new Date().toISOString() : null);
+  announce();
 }
 
 export async function setDismissed(id: string, on: boolean): Promise<void> {
   await setChatFlag(id, 'peer', 'dismissed_at', on ? new Date().toISOString() : null);
+  announce();
 }
 
 export async function forgetChat(id: string): Promise<void> {
   await forgetChatFlags(id);
+  announce();
 }
 
 interface Sortable {

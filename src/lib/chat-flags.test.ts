@@ -1,5 +1,15 @@
-import { describe, expect, it } from 'vitest';
-import { isMuted, mutedIds, sortByFlags, visibleRequests, type ChatFlags } from './chat-flags';
+import { beforeEach, describe, expect, it } from 'vitest';
+import {
+  isMuted,
+  mutedIds,
+  setDismissed,
+  setPinned,
+  sortByFlags,
+  subscribeChatFlags,
+  visibleRequests,
+  type ChatFlags,
+} from './chat-flags';
+import { clearLocalDb, openLocalDb } from './localdb';
 
 const flag = (id: string, over: Partial<ChatFlags> = {}): [string, ChatFlags] => [
   id,
@@ -91,5 +101,43 @@ describe('visibleRequests', () => {
   it('shows everything when nobody has been dismissed', () => {
     const requests = [{ id: 'r1', requester_id: 'a' }];
     expect(visibleRequests(requests, new Map()).map((r) => r.id)).toEqual(['r1']);
+  });
+});
+
+describe('flag changes are announced', () => {
+  const ME = '11111111-1111-1111-1111-111111111111';
+
+  beforeEach(async () => {
+    await openLocalDb(ME);
+    await clearLocalDb();
+  });
+
+  // The chat list stays mounted behind the settings tab, so unhiding somebody
+  // on the "Hidden requests" screen has to reach it. Without this it read the
+  // flags once on mount and went on hiding the request until a restart — in
+  // the one screen whose whole job is undoing a decline.
+  it('tells a subscriber when a dismissal is lifted', async () => {
+    let heard = 0;
+    const stop = subscribeChatFlags(() => (heard += 1));
+    await setDismissed('peer', true);
+    await setDismissed('peer', false);
+    expect(heard).toBe(2);
+    stop();
+  });
+
+  it('covers pins and mutes too, so one mechanism carries them all', async () => {
+    let heard = 0;
+    const stop = subscribeChatFlags(() => (heard += 1));
+    await setPinned('peer', 'peer', true);
+    expect(heard).toBe(1);
+    stop();
+  });
+
+  it('stops telling a subscriber that unsubscribed', async () => {
+    let heard = 0;
+    const stop = subscribeChatFlags(() => (heard += 1));
+    stop();
+    await setDismissed('peer', true);
+    expect(heard).toBe(0);
   });
 });

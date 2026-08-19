@@ -319,6 +319,8 @@ export const ru: Catalog = {
   'requests.unknown': 'неизвестно',
   'requests.accept': 'Принять',
   'requests.decline': 'Отклонить',
+  'requests.declinedHidden':
+    'Запрос отклонён, и человек скрыт на этом устройстве. Отменить можно в «Настройки › Скрытые запросы».',
   'rooms.title': 'Комнаты',
   'rooms.new': 'Новая комната',
   'rooms.empty': 'Комнат пока нет. Комната — это групповая переписка с одним общим ключом.',
@@ -440,7 +442,8 @@ export const ru: Catalog = {
   'connect.or': 'или',
   'connect.alreadyFriends': 'Вы уже контакты.',
   'connect.alreadySent': 'Ты уже отправил запрос. Ждём ответа.',
-  'connect.alreadyReceived': 'Тебе уже отправили запрос. Прими его в списке ожидающих.',
+  'connect.acceptedTheirs':
+    'Тебе уже отправляли запрос — теперь он принят. Вы на связи.',
   'connect.rateLimited': 'Слишком много запросов за последний час.',
   'connect.raced': 'Вас добавили в тот же момент. Прими встречный запрос в списке ожидающих.',
   'connect.badCode': 'Этот код не работает. Попроси свежий.',

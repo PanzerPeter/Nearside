@@ -315,6 +315,8 @@ export const es: Catalog = {
   'requests.unknown': 'desconocido',
   'requests.accept': 'Aceptar',
   'requests.decline': 'Rechazar',
+  'requests.declinedHidden':
+    'Solicitud rechazada; además queda oculta en este dispositivo. Puedes deshacerlo en Ajustes › Solicitudes ocultas.',
   'rooms.title': 'Salas',
   'rooms.new': 'Sala nueva',
   'rooms.empty': 'Todavía no hay salas. Una sala es una conversación de grupo con una clave compartida.',
@@ -436,7 +438,8 @@ export const es: Catalog = {
   'connect.or': 'o',
   'connect.alreadyFriends': 'Ya sois contactos.',
   'connect.alreadySent': 'Ya le enviaste una solicitud. Falta que responda.',
-  'connect.alreadyReceived': 'Ya te envió una solicitud. Acéptala desde tus pendientes.',
+  'connect.acceptedTheirs':
+    'Ya te había enviado una solicitud y con esto queda aceptada. Ya estáis conectados.',
   'connect.rateLimited': 'Demasiadas solicitudes en la última hora.',
   'connect.raced': 'Te añadió en el mismo momento. Acepta su solicitud desde tus pendientes.',
   'connect.badCode': 'Ese código no sirve. Pide uno nuevo.',

@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { parseConnectPayload, parseSafetyPayload, safetyPayload } from './connect';
+import {
+  connectOutcome,
+  parseConnectPayload,
+  parseSafetyPayload,
+  safetyPayload,
+} from './connect';
 
 describe('connect payload', () => {
   it('round-trips a well-formed payload', () => {
@@ -37,5 +42,33 @@ describe('safety payload', () => {
 
   it('rejects non-digits', () => {
     expect(parseSafetyPayload('nearside-safety:v1:12345abcde')).toBeNull();
+  });
+});
+
+describe('connectOutcome', () => {
+  const ME = 'me';
+  const THEM = 'them';
+
+  it('sends a request when the pair has no row', () => {
+    expect(connectOutcome(undefined, ME)).toBe('send');
+  });
+
+  it('says nothing to do when the two are already friends', () => {
+    expect(connectOutcome({ id: 'f', requester_id: THEM, status: 'accepted' }, ME)).toBe(
+      'already-friends'
+    );
+  });
+
+  it('says the request is already out when it was mine', () => {
+    expect(connectOutcome({ id: 'f', requester_id: ME, status: 'pending' }, ME)).toBe(
+      'already-sent'
+    );
+  });
+
+  // The declined-then-hidden case. Their pending request is not in the list to
+  // be accepted from, because declining hid them; holding their code is the
+  // consent that was going to be given by tapping accept.
+  it('accepts their pending request rather than pointing at a list', () => {
+    expect(connectOutcome({ id: 'f', requester_id: THEM, status: 'pending' }, ME)).toBe('accept');
   });
 });

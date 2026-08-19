@@ -74,3 +74,34 @@ export function parseSafetyPayload(text: string): string | null {
  *  `mint_connect_code`. Only the countdown reads it; expiry itself is decided
  *  server-side, so a device with a wrong clock cannot extend a token. */
 export const CONNECT_CODE_TTL_MS = 10 * 60 * 1000;
+
+/** The friendship row a redeem found for this pair, if there was one. */
+export interface PriorFriendship {
+  id: string;
+  requester_id: string;
+  status: string;
+}
+
+/**
+ * What redeeming somebody's code should do about the friendship that already
+ * exists between the two of you.
+ *
+ * `accept` is the case this exists for. Declining a request deletes the row and
+ * *hides* the person (`setDismissed`), so if they ask again the request never
+ * reaches the list — and telling somebody to "accept it from your pending list"
+ * when the list is empty by design is a dead end with no way out of it. Holding
+ * their code is the same consent accepting would have been, so it accepts.
+ *
+ * Everything else is a message, not an action: a code cannot un-send a request
+ * you made yourself, and it cannot make you more friends than friends.
+ */
+export type ConnectOutcome = 'accept' | 'already-friends' | 'already-sent' | 'send';
+
+export function connectOutcome(
+  prior: PriorFriendship | undefined,
+  me: string
+): ConnectOutcome {
+  if (!prior) return 'send';
+  if (prior.status === 'accepted') return 'already-friends';
+  return prior.requester_id === me ? 'already-sent' : 'accept';
+}

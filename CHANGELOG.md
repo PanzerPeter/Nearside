@@ -14,6 +14,24 @@ one of them drifts.
 
 ## [Unreleased]
 
+## [1.4.5] — 2026-08-20
+
+### Fixed
+
+- **Declining a request by accident is no longer a dead end.** Declining also
+  hides that person on this device, so anything they sent afterwards was
+  swallowed silently — and adding them yourself answered "they already sent you
+  a request, accept it from your pending list", which was a list they had been
+  hidden from. Now: the decline says out loud that they were hidden and where
+  to undo it, unhiding them in Settings puts their waiting request straight
+  back in the list instead of needing a restart, and scanning or typing their
+  code accepts the request they already sent and unhides them in the same
+  gesture.
+- **A pin, mute or unhide made on one screen now shows on the others at once.**
+  The chat list, the room list and the settings pages each held their own copy
+  of those flags, so a change made in one could sit unnoticed in another until
+  the app was restarted.
+
 ## [1.4.4] — 2026-08-19
 
 ### Fixed

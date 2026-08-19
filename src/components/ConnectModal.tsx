@@ -9,8 +9,10 @@ import {
   connectPayload,
   mintConnectCode,
   parseConnectPayload,
+  connectOutcome,
   redeemConnectCode,
 } from '../lib/connect';
+import { setDismissed } from '../lib/chat-flags';
 import { markVerified } from '../lib/verification';
 import { useToast } from '../hooks/useToast';
 import { Modal } from './Modal';
@@ -76,7 +78,12 @@ export function ConnectModal({ session, identity, onClose, initialTab = 'show' }
       {tab === 'show' ? (
         <ShowCode session={session} identity={identity} />
       ) : (
-        <AddSomeone me={session.user.id} onConnected={onClose} toastError={toast.error} />
+        <AddSomeone
+          me={session.user.id}
+          onConnected={onClose}
+          toastError={toast.error}
+          toastSuccess={toast.success}
+        />
       )}
     </Modal>
   );
@@ -186,9 +193,10 @@ interface AddSomeoneProps {
   me: string;
   onConnected: () => void;
   toastError: (message: string) => void;
+  toastSuccess: (message: string) => void;
 }
 
-function AddSomeone({ me, onConnected, toastError }: AddSomeoneProps) {
+function AddSomeone({ me, onConnected, toastError, toastSuccess }: AddSomeoneProps) {
   const t = useT();
   const [typed, setTyped] = useState('');
   const [busy, setBusy] = useState(false);
@@ -222,14 +230,36 @@ function AddSomeone({ me, onConnected, toastError }: AddSomeoneProps) {
         // in the list is still a key handed over in person.
         if (publicKey) await markVerified(peerId, publicKey);
 
-        if (prior) {
+        // Holding their code is consent, so it also lifts whatever hid them.
+        // Declining a request hides the person (`declineRequest`), and a
+        // dismissal left in place here would go on swallowing every request
+        // they send afterwards — for someone the user has just gone out of
+        // their way to add.
+        await setDismissed(peerId, false).catch(() => {});
+
+        const outcome = connectOutcome(prior, me);
+        if (outcome === 'already-friends' || outcome === 'already-sent') {
           toastError(
-            prior.status === 'accepted'
-              ? t('connect.alreadyFriends')
-              : prior.requester_id === me
-                ? t('connect.alreadySent')
-                : t('connect.alreadyReceived')
+            outcome === 'already-friends' ? t('connect.alreadyFriends') : t('connect.alreadySent')
           );
+          return;
+        }
+
+        // Their request is already on the table. Accepting it here is the
+        // whole fix for an accidental decline: the request that used to be
+        // pointed at ("accept it from your pending list") is not in that list,
+        // because declining hid them from it.
+        if (outcome === 'accept' && prior) {
+          const { error } = await supabase
+            .from('friendships')
+            .update({ status: 'accepted' })
+            .eq('id', prior.id);
+          if (error) {
+            toastError(error.message);
+            return;
+          }
+          toastSuccess(t('connect.acceptedTheirs'));
+          if (alive.current) onConnected();
           return;
         }
 
@@ -260,7 +290,7 @@ function AddSomeone({ me, onConnected, toastError }: AddSomeoneProps) {
         if (alive.current) setBusy(false);
       }
     },
-    [me, onConnected, toastError, t]
+    [me, onConnected, toastError, toastSuccess, t]
   );
 
   async function scan() {

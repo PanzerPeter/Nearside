@@ -20,6 +20,7 @@ import {
   setMuted,
   setPinned,
   sortByFlags,
+  subscribeChatFlags,
   visibleRequests,
   type ChatFlags,
 } from '../lib/chat-flags';
@@ -30,6 +31,7 @@ import { Modal } from './Modal';
 import type { Identity } from '../lib/crypto/keys';
 import type { RoomSummary } from '../lib/rooms';
 import { useT } from '../hooks/useT';
+import { useToast } from '../hooks/useToast';
 
 /** Conversation-list refresh cadence while realtime is healthy — a backstop for
  *  the one failure realtime cannot report about itself, not a delivery
@@ -74,6 +76,7 @@ export function FriendsList({
   onSelectRoom,
 }: FriendsListProps) {
   const t = useT();
+  const toast = useToast();
   const me = session.user.id;
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [pendingRequests, setPendingRequests] = useState<Friendship[]>([]);
@@ -134,6 +137,11 @@ export function FriendsList({
 
   useEffect(() => {
     void refreshFlags();
+    // Also whenever anything writes a flag — including the settings screens,
+    // which are mounted beside this list rather than inside it. Unhiding
+    // somebody there has to put their request back in the strip below without
+    // waiting for a restart.
+    return subscribeChatFlags(() => void refreshFlags());
   }, [refreshFlags]);
 
   // Previews come from the local mirror, since 0023 took the body away from the
@@ -502,7 +510,7 @@ export function FriendsList({
         label: pinned ? t('chatList.unpin') : t('chatList.pin'),
         icon: pinned ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4" />,
         onClick: () => {
-          void setPinned(id, 'peer', !pinned).then(refreshFlags);
+          void setPinned(id, 'peer', !pinned);
         },
       },
     ];
@@ -514,7 +522,7 @@ export function FriendsList({
         label: muted ? t('chatList.unmute') : t('chatList.mute'),
         icon: muted ? <Bell className="w-4 h-4" /> : <BellOff className="w-4 h-4" />,
         onClick: () => {
-          void setMuted(id, 'peer', !muted).then(refreshFlags);
+          void setMuted(id, 'peer', !muted);
         },
       },
       {
@@ -535,9 +543,9 @@ export function FriendsList({
     setRemoving(false);
     if (error) return;
     setConfirmRemove(null);
-    // The row goes when the list is re-read; the flags carry the dismissal that
-    // keeps them out of the requests strip.
-    await refreshFlags();
+    // The row goes when the list is re-read; the flags carry the dismissal
+    // that keeps them out of the requests strip, and `setDismissed` announces
+    // it — see the subscription above.
     void fetchConversations();
     void fetchPendingRequests();
   }
@@ -553,8 +561,13 @@ export function FriendsList({
     // Declining hides them too. `friendships_insert_own` only checks that the
     // requester is themself, so without this a declined request can be sent
     // again immediately, and again after that.
+    //
+    // Said out loud, because the hiding is the part nobody would guess. A tap
+    // meant for Accept used to silently swallow every request that person sent
+    // afterwards, with the way back buried in a settings page the user had no
+    // reason to look at.
     if (requesterId) await setDismissed(requesterId, true).catch(() => {});
-    await refreshFlags();
+    toast.success(t('requests.declinedHidden'));
     void fetchPendingRequests();
   }
 
