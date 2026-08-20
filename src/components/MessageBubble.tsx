@@ -10,7 +10,7 @@ import { ReactionChips } from './ReactionChips';
 import { useSwipeToReply } from '../hooks/useSwipeToReply';
 import { useToast } from '../hooks/useToast';
 import { useT } from '../hooks/useT';
-import { MAX_MESSAGE_LENGTH, messageSnippet } from '../lib/conversation';
+import { MAX_MESSAGE_LENGTH, canEditBody, messageSnippet } from '../lib/conversation';
 import { isForwardable } from '../lib/forward';
 import { isCoarsePointer } from '../lib/device';
 import { motionDuration } from '../lib/motion';
@@ -192,12 +192,14 @@ export function MessageBubble({
         ]
       : []),
     // Edit and delete stay own-only: you can't change a message you didn't
-    // send. Media has no editable body — the caption travels with the file.
-    ...(isOwn && msg.text && !msg.media_path
+    // send. A caption is an ordinary body in the same two sealed columns, so
+    // the words under a photo, a video or a voice note are editable exactly as
+    // a text message is — see `canEditBody` for the one thing that isn't.
+    ...(isOwn && canEditBody(msg)
       ? [
           {
             key: 'edit',
-            label: t('message.edit'),
+            label: msg.media_path ? t('message.editCaption') : t('message.edit'),
             icon: <Pencil className="w-4 h-4" />,
             onSelect: () => onStartEdit(msg),
           },
@@ -289,9 +291,52 @@ export function MessageBubble({
             isOwn ? 'rounded-br-md bg-primary text-primary-content' : 'rounded-bl-md bg-neutral text-neutral-content'
           }`}
         >
+          {/* The attachment stays on screen while its caption is being
+              rewritten. Editing used to replace the whole bubble with a bare
+              box, which for a photo meant typing a description of a picture
+              that was no longer there. */}
+          {msg.media_path &&
+            msg.media_type &&
+            (msg.media_type === 'audio' ? (
+              <div className="mb-1.5">
+                <VoiceNote
+                  messageId={msg.id}
+                  path={msg.media_path}
+                  durationMs={msg.media_duration_ms}
+                  mediaKey={msg.media_key}
+                />
+              </div>
+            ) : msg.media_type === 'sticker' ? (
+              <div className="mb-1.5">
+                <StickerAttachment
+                  messageId={msg.id}
+                  path={msg.media_path}
+                  mediaKey={msg.media_key}
+                />
+              </div>
+            ) : (
+              // Flush with the bubble's edges, the same way it sits when the
+              // message is merely being read.
+              <div className="-mx-3.5 -mt-2 mb-1.5 overflow-hidden rounded-t-2xl">
+                <MediaAttachment
+                  messageId={msg.id}
+                  path={msg.media_path}
+                  type={msg.media_type}
+                  mediaKey={msg.media_key}
+                  caption={msg.text}
+                  restored={msg.media_restored}
+                  // The editor is a fixed-width box, so the picture is never
+                  // the thing setting the bubble's width here.
+                  fill
+                />
+              </div>
+            ))}
           <textarea
             ref={editTextareaRef}
             rows={1}
+            // Only ever empty on an attachment — a text message with nothing in
+            // it cannot be saved, so it needs no invitation to try.
+            placeholder={msg.media_path ? t('message.captionPlaceholder') : undefined}
             // Transparent and borderless: the bubble around it is the box. The
             // caret and selection inherit the bubble's own text colour, which
             // is the only thing keeping them visible on the primary fill.

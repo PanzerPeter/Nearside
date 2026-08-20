@@ -123,6 +123,8 @@ export const en = {
   'message.reply': 'Reply',
   'message.forward': 'Forward',
   'message.edit': 'Edit',
+  'message.editCaption': 'Edit caption',
+  'message.captionPlaceholder': 'Add a caption',
   'message.deleted': 'This message was deleted',
   'message.forwarded': 'Forwarded',
   'message.unavailable': 'Message unavailable',

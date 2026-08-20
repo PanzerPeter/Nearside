@@ -117,6 +117,8 @@ export const ru: Catalog = {
   'message.reply': 'Ответить',
   'message.forward': 'Переслать',
   'message.edit': 'Изменить',
+  'message.editCaption': 'Изменить подпись',
+  'message.captionPlaceholder': 'Добавить подпись',
   'message.deleted': 'Это сообщение удалено',
   'message.forwarded': 'Переслано',
   'message.unavailable': 'Сообщение недоступно',

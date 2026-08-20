@@ -14,6 +14,21 @@ one of them drifts.
 
 ## [Unreleased]
 
+## [1.4.6] — 2026-08-20
+
+### Fixed
+
+- **The words under a photo, a video or a voice note can now be corrected.**
+  A caption is an ordinary message body — sealed the same way, in the same two
+  columns — but the message menu asked for a row with no attachment on it, so a
+  typo under a picture could only be fixed by deleting the picture and sending
+  it again. Editing one now opens the message with the attachment still on
+  screen, so you are correcting a caption rather than describing something you
+  can no longer see, and clearing the box takes the caption back and leaves the
+  attachment standing on its own. A sticker sent by itself is still not
+  editable: it draws with no bubble around it, so there is nothing for words to
+  sit on.
+
 ## [1.4.5] — 2026-08-20
 
 ### Fixed

@@ -113,6 +113,8 @@ export const es: Catalog = {
   'message.reply': 'Responder',
   'message.forward': 'Reenviar',
   'message.edit': 'Editar',
+  'message.editCaption': 'Editar el pie',
+  'message.captionPlaceholder': 'Añadir un pie',
   'message.deleted': 'Este mensaje se eliminó',
   'message.forwarded': 'Reenviado',
   'message.unavailable': 'Mensaje no disponible',

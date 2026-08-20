@@ -390,7 +390,7 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
           editing={
             editingId
               ? {
-                  canSave: editing.editingText.trim().length > 0,
+                  canSave: editing.canSave,
                   saving: editing.savingEdit,
                   onSave: () => void editing.saveEdit(editingId),
                   onCancel: editing.cancelEdit,

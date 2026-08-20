@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
   classifyMedia,
   conversationFilter,
+  canEditBody,
   conversationKey,
   isConversationFolder,
+  isBodyOptional,
   isSelfChat,
   mediaPath,
   messageSnippet,
@@ -17,6 +19,30 @@ const B = '00000000-0000-0000-0000-00000000000b';
 
 function file(name: string, type: string): File {
   return new File(['x'], name, { type });
+}
+
+function message(overrides: Partial<Message> = {}): Message {
+  return {
+    id: '1',
+    user_id: A,
+    receiver_id: B,
+    text: null,
+    ciphertext: null,
+    nonce: null,
+    media_path: null,
+    media_type: null,
+    media_key_ciphertext: null,
+    media_key_nonce: null,
+    media_duration_ms: null,
+    reply_to_id: null,
+    forwarded: false,
+    sealed_prompt: false,
+    edited_at: null,
+    deleted_at: null,
+    expires_at: null,
+    created_at: new Date().toISOString(),
+    ...overrides,
+  };
 }
 
 describe('conversationKey', () => {
@@ -170,30 +196,6 @@ describe('classifyMedia', () => {
 });
 
 describe('messageSnippet', () => {
-  function message(overrides: Partial<Message> = {}): Message {
-    return {
-      id: '1',
-      user_id: A,
-      receiver_id: B,
-      text: null,
-      ciphertext: null,
-      nonce: null,
-      media_path: null,
-      media_type: null,
-      media_key_ciphertext: null,
-      media_key_nonce: null,
-      media_duration_ms: null,
-      reply_to_id: null,
-      forwarded: false,
-    sealed_prompt: false,
-      edited_at: null,
-      deleted_at: null,
-      expires_at: null,
-      created_at: new Date().toISOString(),
-      ...overrides,
-    };
-  }
-
   it('quotes the body when there is one', () => {
     expect(messageSnippet(message({ text: 'see you at six' }))).toBe('see you at six');
   });
@@ -255,5 +257,46 @@ describe('tombstonePatch', () => {
       if (column === 'deleted_at') continue;
       expect(value).toBeNull();
     }
+  });
+});
+
+describe('canEditBody', () => {
+  it('lets you rewrite a text message', () => {
+    expect(canEditBody(message({ text: 'see you at six' }))).toBe(true);
+  });
+
+  it('lets you rewrite the caption under a photo, a video or a voice note', () => {
+    expect(canEditBody(message({ text: 'look', media_path: 'p.jpg', media_type: 'image' }))).toBe(
+      true
+    );
+    expect(canEditBody(message({ media_path: 'v.mp4', media_type: 'video' }))).toBe(true);
+    expect(canEditBody(message({ media_path: 'a.webm', media_type: 'audio' }))).toBe(true);
+  });
+
+  it('leaves a bare sticker alone', () => {
+    expect(canEditBody(message({ media_path: 's.webp', media_type: 'sticker' }))).toBe(false);
+  });
+
+  it('still edits a sticker that was sent with something written under it', () => {
+    expect(canEditBody(message({ text: 'this one', media_path: 's.webp', media_type: 'sticker' })))
+      .toBe(true);
+  });
+
+  it('has nothing to edit on a deleted message', () => {
+    expect(
+      canEditBody(message({ text: 'oops', deleted_at: new Date().toISOString() }))
+    ).toBe(false);
+  });
+});
+
+describe('isBodyOptional', () => {
+  it('lets an attachment lose its caption and stand on its own', () => {
+    expect(isBodyOptional(message({ text: 'look', media_path: 'p.jpg', media_type: 'image' }))).toBe(
+      true
+    );
+  });
+
+  it('refuses to empty a text message — that is what deleting is', () => {
+    expect(isBodyOptional(message({ text: 'see you at six' }))).toBe(false);
   });
 });

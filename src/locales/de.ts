@@ -113,6 +113,8 @@ export const de: Catalog = {
   'message.reply': 'Antworten',
   'message.forward': 'Weiterleiten',
   'message.edit': 'Bearbeiten',
+  'message.editCaption': 'Bildunterschrift bearbeiten',
+  'message.captionPlaceholder': 'Bildunterschrift hinzufügen',
   'message.deleted': 'Diese Nachricht wurde gelöscht',
   'message.forwarded': 'Weitergeleitet',
   'message.unavailable': 'Nachricht nicht verfügbar',

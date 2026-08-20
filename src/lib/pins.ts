@@ -167,6 +167,23 @@ export async function pinMedia(
 }
 
 /**
+ * Re-record a pinned attachment's caption after its message was edited.
+ *
+ * The pin copied the caption off the row precisely because the row will not
+ * always have one — once the server trims the message, the pin is the only
+ * copy of the words under the picture. That makes it a second place the text
+ * lives, and an edit that skipped it would put the old caption back the moment
+ * the trim landed.
+ */
+export async function repinCaption(messageId: string, caption: string): Promise<void> {
+  const pin = await cachedPin(messageId);
+  if (!pin || pin.caption === caption) return;
+  const row = { ...pin, caption };
+  await putPin(row);
+  withPin(row);
+}
+
+/**
  * An object URL for the pinned copy, or null if there is no pin or the file has
  * gone. The caller owns the URL and must revoke it.
  */

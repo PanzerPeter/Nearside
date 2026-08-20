@@ -19,6 +19,41 @@ export function messageSnippet(
   return '';
 }
 
+/**
+ * Whether this message's body is one the sender can still rewrite.
+ *
+ * A caption is body text like any other — it is sealed by the same `sealBody`
+ * and lives in the same two columns — so a photo sent with the wrong word
+ * under it was editable everywhere except in the menu, which used to require
+ * the row to carry no attachment at all. A voice note counts too: the words
+ * under it are the only part of it that can be corrected without recording
+ * again.
+ *
+ * A bare sticker is the exception, and not an arbitrary one: it renders with
+ * no bubble around it (see `MessageBubble`'s `stickerAlone`), so there is no
+ * surface for a caption to sit on. One sent with something written under it
+ * already has that surface and edits like anything else.
+ */
+export function canEditBody(
+  msg: Pick<Message, 'text' | 'media_path' | 'media_type' | 'deleted_at'>
+): boolean {
+  if (msg.deleted_at) return false;
+  if (msg.text) return true;
+  return !!msg.media_path && msg.media_type !== 'sticker';
+}
+
+/**
+ * Whether saving an empty body is a change rather than an accident.
+ *
+ * Only when something else in the row survives it: an attachment stands on its
+ * own, and clearing the caption is how a caption is taken back. Emptying a text
+ * message would leave a bubble with nothing in it, which is what deleting is
+ * for — so the save control stays inert there instead.
+ */
+export function isBodyOptional(msg: Pick<Message, 'media_path'>): boolean {
+  return !!msg.media_path;
+}
+
 /** Deterministic folder/channel key for a 1:1 conversation (order-independent).
  *  For the self-chat both halves are the same id, which still yields the
  *  two-segment shape `isConversationFolder` and the storage policies expect. */
