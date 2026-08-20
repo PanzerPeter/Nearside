@@ -1,6 +1,10 @@
 export interface Profile {
   id: string;
   display_name: string;
+  /** A short self-written note, shown on the profile card. Optional because
+   *  most queries in the app do not select it: it is read where it is
+   *  displayed, and nowhere else. */
+  bio?: string | null;
   avatar_url?: string | null;
   last_seen_at?: string | null;
 }

@@ -204,8 +204,7 @@ export const en = {
   'verify.sigilLabel': 'Safety sigil: {words}',
   'notifyPrompt.title': 'Know when someone writes',
   'notifyPrompt.body1': 'Right now Nearside can only reach you while it is open on screen.',
-  'notifyPrompt.body2':
-    'A notification tells you who wrote, and nothing more. The server has no readable copy of a message to quote from. You can turn this off later in Settings.',
+  'notifyPrompt.body2': 'A notification tells you who wrote, and nothing more. You can turn it off later in Settings.',
   'update.available': 'Update available',
   'update.body': 'Reload to get the latest version. Your chats and login stay as they are.',
   'update.updating': 'Updating…',
@@ -364,10 +363,9 @@ export const en = {
   'nickname.title': 'Nickname',
   'nickname.selfPlaceholder': 'Note to self',
   'nickname.selfLabel': 'Name for this chat',
-  'nickname.label': 'Nickname for @{name}',
+  'nickname.label': 'Nickname for {name}',
   'nickname.selfNote': 'Only you ever see this chat, so name it whatever you like.',
-  'nickname.notePrefix': 'Only you see this. @{name} is not told, and their display name stays',
-  'nickname.noteSuffix': 'everywhere else.',
+  'nickname.note': 'Only you see this. {name} is not told.',
   'sealed.intro':
     '{name} sees the question straight away. Neither of you can read the other’s answer until you have both answered.',
   'sealed.theQuestion': 'The question',
@@ -638,6 +636,18 @@ export const en = {
   'server.push_alerts.label': 'Notification sound cooldown',
   'server.push_alerts.note':
     'When a conversation last made your phone make a sound, so a burst of messages arrives as one alert instead of six. One row per pair of people, overwritten each time. It is a coarser copy of what the message rows above already record, and the reason your phone never has to tell the server which chat you have open.',
+  'server.room_message_reactions.label': 'Reactions in rooms',
+  'server.room_message_reactions.note':
+    'The same as reactions in a one-to-one chat, and unencrypted for the same reason: a single emoji carries too little to seal usefully, and the server would still see who reacted to what.',
+  'server.room_receipts.label': 'Room read marks',
+  'server.room_receipts.note':
+    'How far each member has read in each room. One row per person per room, overwritten as they read. Timing information, like the ticks in a one-to-one chat.',
+  'server.room_message_pushes.label': 'Room notification log',
+  'server.room_message_pushes.note':
+    'One row per room message that has been notified, so nobody gets the same banner twice. It records that a notification went out, never what was in the message.',
+  'server.room_push_alerts.label': 'Room notification cooldown',
+  'server.room_push_alerts.note':
+    'When a room last made your phone make a sound, so a busy group arrives as one alert instead of twenty. One row per person per room, overwritten each time.',
   'server.push_config.label': 'Server configuration',
   'server.push_config.note': 'Server plumbing for notifications. It holds nothing about you.',
   'serverView.intro':
@@ -666,6 +676,11 @@ export const en = {
   'serverView.callsTitle': 'Calls',
   'serverView.callsBody':
     'A call leaves no row anywhere above. Voice and video travel directly between the two phones, encrypted end to end; the offers and answers that set the call up are sealed to your contact’s key and sent over a channel the server relays without storing. Nothing records that a call happened, who it was with, or how long it lasted. What each phone does learn is the other’s IP address — see “Where this protection stops”.',
+  'serverView.driftTitle': 'This screen describes some tables incompletely.',
+  'serverView.driftUnlisted': 'stored but not described:',
+  'serverView.driftMissing': 'described but no longer stored:',
+  'serverView.driftSuffix':
+    'Every list on this screen is written by hand; this compares them against the live database, so a gap shows up here instead of going unnoticed.',
   'serverView.export': 'Export everything',
   'serverView.exportNote':
     'Encrypted columns export as the ciphertext the server holds. Your key is not in the file.',
@@ -675,8 +690,7 @@ export const en = {
   'cropper.hint': 'Drag to move, pinch or use the slider to zoom.',
   'call.e2ee': 'End-to-end encrypted',
   'room.name': 'Room name',
-  'room.nameNote':
-    'The name is stored as plain text so the server can list your rooms. Messages inside are not.',
+  'room.nameNote': 'Everyone in the room sees this name.',
   'room.unknownSender':
     'This sender has published no signing key, so there is nothing to check this message against.',
   'room.memberCount#one': '{count} member',
@@ -724,10 +738,8 @@ export const en = {
   'language.hint': 'What the app is written in',
   'language.system': 'Match my device',
   'language.systemHint': 'Follows the phone, and changes when it does.',
-  'language.note':
-    'Changes everything the app writes. It does not touch your messages: those are sealed, and neither this device nor the server translates them.',
-  'language.untranslated':
-    'The Terms of Service, the Privacy Policy and the open source licenses stay in English. They are legal documents, and a translation of one is not the one you agreed to.',
+  'language.note': 'Changes everything the app writes.',
+  'language.untranslated': 'The Terms, the Privacy Policy and the licenses stay in English.',
 
   // ------------------------------------------------- settings: appearance
   'appearance.themes': 'Themes',
@@ -739,8 +751,7 @@ export const en = {
 
   // ------------------------------------------------------- theme store
   'themes.title': 'Appearance',
-  'themes.intro':
-    'Every feature in Nearside is free: the encryption, the vault, group rooms, and pinning media to your phone. These are looks. Buying one is the only way to pay for any of it.',
+  'themes.intro': 'Every feature in Nearside is free. These are looks — and the only way to pay for any of it.',
   'themes.included': 'Included',
   'themes.packs': 'Packs',
   'themes.bySupport': 'Included with your support. Thank you.',
@@ -775,11 +786,9 @@ export const en = {
   'notifications.refused': 'Notifications stay off until you allow them.',
   'notifications.noLongerAsking': 'Android is no longer asking. Turn them on in {location}.',
   'notifications.mutedChats': 'Muted chats',
-  'notifications.mutedChatsHint':
-    'Swipe a chat to mute it. On Android the notification is discarded on this phone, before it is shown, so the server is never told which chats you keep quiet. The desktop app has no such hook and will still ring.',
+  'notifications.mutedChatsHint': 'Swipe a chat to mute it. The desktop app still rings.',
   'notifications.mentions': 'Mentions in rooms',
-  'notifications.mentionsHint':
-    'Highlighted in the room, but they get the same notification as any other message: your name is inside the encrypted message, so the server cannot see it.',
+  'notifications.mentionsHint': 'Highlighted in the room. The notification looks like any other message.',
 
   // ------------------------------------------------------ settings: calls
   'calls.willNotRing': 'Calls will not ring',
@@ -793,8 +802,7 @@ export const en = {
   'calls.ringOutLoudOn':
     'Play a tone in the app when a call comes in. Separate from the message chime.',
   'calls.leavesBehind': 'What a call leaves behind',
-  'calls.leavesBehindBody':
-    'Nothing. Voice and video go straight between the two phones, encrypted, and the offers and answers that set the call up are sealed to your contact’s key. No row records that a call happened, who it was with, or how long it lasted. Each phone does learn the other’s IP address.',
+  'calls.leavesBehindBody': 'Nothing. Calls go directly between the two phones and leave no record. Each phone does learn the other’s IP address.',
 
   // ---------------------------------------------------- settings: privacy
   'privacy.onThisDevice': 'On this device',
@@ -825,16 +833,20 @@ export const en = {
   'hidden.empty': 'Nobody is hidden on this device.',
   'hidden.deletedAccount': 'Account no longer exists',
   'hidden.unhide': 'Unhide',
-  'hidden.note':
-    'Hidden on this device. They cannot message or call you: that needs a contact you accepted. They can still send a request; you just will not see it. There is no block list on the server, so nothing here tells us who you are avoiding.',
+  'hidden.note': 'Hidden on this device. They cannot message or call you unless you accept them again.',
   'hidden.footnote': 'Declining a request or deleting a chat hides that person here.',
 
   // ---------------------------------------------------- settings: profile
   'profile.changeAvatar': 'Change avatar',
   'profile.tapPhoto': 'Tap the photo to upload an avatar',
   'profile.displayName': 'Display name',
-  'profile.displayNameNote':
-    'Shown to friends in chats. Spaces and capitals are fine, and two people may pick the same name. A display name is not an address, and nobody can find you by it.',
+  'profile.displayNameNote': 'Shown to friends in chats. Two people can pick the same name.',
+  'profile.bio': 'About you',
+  'profile.bioPlaceholder': 'A line or two about you.',
+  'profile.bioNote': 'Shown on your profile to people you are connected to.',
+  'profile.bioTooLong': 'An about text can be up to {count} characters.',
+  'profile.bioUpdated': 'Profile text updated.',
+  'profile.bioNotSaved': 'That text could not be saved.',
   'profile.avatarMustBeImage': 'Avatar must be an image.',
   'profile.avatarUpdated': 'Avatar updated.',
   'profile.nameTooLong': 'Enter a display name, up to {count} characters.',
@@ -846,16 +858,14 @@ export const en = {
   'storage.offlineCopy': 'Offline copy',
   'storage.decrypted': 'Decrypted messages',
   'storage.decryptedEmpty': 'Nothing yet. It fills as you open conversations.',
-  'storage.decryptedHint':
-    'Across {conversations}. Search reads this copy, so a conversation this device never opened cannot be searched.',
+  'storage.decryptedHint': 'Across {conversations}. Only chats this device has opened can be searched.',
   'storage.clearMirror': 'Clear the offline copy',
   'storage.clearMirrorBody':
     'Search goes quiet until you open each conversation again, and anything the server has already deleted is gone for good. Your contacts stay verified.',
   'storage.mirrorCleared': 'Offline copy cleared. It rebuilds as you open conversations.',
   'storage.pinnedFiles': 'Pinned files',
   'storage.pinnedLabel': 'Kept forever, on this phone',
-  'storage.pinnedHint':
-    'The server prunes older photos, videos and voice notes. A pin keeps a copy here, so it survives that.',
+  'storage.pinnedHint': 'The server prunes older media; a pin keeps a copy on this phone.',
   'storage.pinnedBrowser': 'Pinning needs the app. A browser has no private storage to keep the file in.',
   'storage.unmeasured': '{files} could not be measured',
   'storage.unmeasuredHint': 'The pin is recorded but the file is gone from this phone.',
@@ -867,8 +877,7 @@ export const en = {
   'storage.clearFailed': 'Could not clear that.',
   'storage.mediaCache': 'Media cache',
   'storage.mediaCacheLabel': 'Attachments held in memory',
-  'storage.mediaCacheHint':
-    'Photos and videos you opened this session, so scrolling back does not decrypt them again. It empties when the app closes.',
+  'storage.mediaCacheHint': 'Photos and videos you opened this session. It empties when the app closes.',
   'storage.currentlyHeld': 'Currently held',
   'storage.note':
     'None of this is on the server. Clearing it frees space here and changes nothing anywhere else.',
@@ -909,4 +918,18 @@ export const en = {
   'account.deleteConfirmLabel': 'Type your display name to confirm deletion',
   'account.deletePermanently': 'Permanently delete',
   'account.deleteFailed': 'Could not delete your account.',
+
+  // ---------------------------------------------------- profile card
+  'profileCard.title': 'Profile',
+  'profileCard.viewPhoto': 'View photo',
+  'profileCard.bio': 'About',
+  'profileCard.bioEmpty': 'They haven’t written anything here.',
+  'profileCard.bioEmptySelf': 'You haven’t written anything here yet.',
+  'profileCard.loadFailed': 'Couldn’t load this profile.',
+  'profileCard.yourNameFor': 'Your name for them',
+  'profileCard.noNickname': 'Not set',
+  'profileCard.setNickname': 'Set',
+  'profileCard.changeNickname': 'Change',
+  'profileCard.nicknameNote': 'Only you see this name.',
+  'profileCard.selfHint': 'Edit yours in Settings → Profile.',
 } as const;

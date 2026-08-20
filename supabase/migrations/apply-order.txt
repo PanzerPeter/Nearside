@@ -49,3 +49,7 @@
 0037_room_push.sql
 0038_alert_ladder.sql
 0039_sealed_backgrounds.sql
+0040_profile_bio.sql
+0041_sealed_nicknames.sql
+0042_token_hygiene.sql
+0043_table_columns.sql

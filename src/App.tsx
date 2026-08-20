@@ -158,7 +158,10 @@ function App() {
     if (!session) return;
     const { data } = await supabase
       .from('profiles')
-      .select('id, display_name, avatar_url, last_seen_at')
+      // `bio` only here, not in the friend and deep-link reads below: the
+      // profile card fetches it for whoever it is showing, and the friend list
+      // never renders one.
+      .select('id, display_name, bio, avatar_url, last_seen_at')
       .eq('id', session.user.id)
       .maybeSingle();
     if (data) {
@@ -235,7 +238,7 @@ function App() {
 
   // Private friend nicknames, loaded once and kept live for the whole app. The
   // sidebar, the chat header and the notification titles all read them.
-  useNicknameSync(session);
+  useNicknameSync(session, identity);
 
   // Hardware and browser back close the open chat, and return the settings tab
   // to the chat list, rather than leaving the app. Both are full-screen

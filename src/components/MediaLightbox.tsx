@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Check, Download, Pin, PinOff, VideoOff, X } from 'lucide-react';
 import type { VisualMediaType } from '../lib/types';
 import { videoTrackIsUnsupported } from '../lib/media';
@@ -35,6 +36,9 @@ interface MediaLightboxProps {
  * `blob:` URL minted inside the WebView does not exist over there. What the
  * user got was a black page of the decrypted bytes rendered as text, with no
  * way back and no way to save. Nothing leaves the WebView now.
+ *
+ * It is called from inside a message bubble, which is why it needs both a
+ * portal and the propagation stops below — see the render.
  */
 export function MediaLightbox({
   messageId,
@@ -127,10 +131,30 @@ export function MediaLightbox({
     }
   }
 
-  return (
+  // Out of the bubble's DOM subtree. `position: fixed` does not escape one: a
+  // bubble mid-swipe carries a `transform`, which makes it the containing block
+  // for anything fixed inside it, and it is `overflow-hidden` besides. The
+  // viewer would be positioned against — and clipped to — the message it came
+  // from.
+  return createPortal(
     <div
       className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center"
-      onClick={onClose}
+      onClick={(e) => {
+        // A portal moves the DOM node, not the React tree: synthetic events
+        // still travel from here up to MessageBubble, whose click, contextmenu
+        // and double-click handlers put the reaction menu in the middle of the
+        // photo and fired a reply on a double tap. The viewer is a screen of
+        // its own and ends every gesture that reaches it.
+        e.stopPropagation();
+        onClose();
+      }}
+      onContextMenu={(e) => e.stopPropagation()}
+      onDoubleClick={(e) => e.stopPropagation()}
+      // Swipe-to-reply sits on the bubble too, and would read a drag across the
+      // picture as a pull on the message behind it.
+      onPointerDown={(e) => e.stopPropagation()}
+      onPointerMove={(e) => e.stopPropagation()}
+      onPointerUp={(e) => e.stopPropagation()}
     >
       <div className="absolute top-0 right-0 left-0 flex justify-end gap-2 p-3 pt-safe">
         <button
@@ -214,6 +238,7 @@ export function MediaLightbox({
           />
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

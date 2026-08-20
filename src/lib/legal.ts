@@ -17,7 +17,7 @@ export interface LegalSection {
   body: ReactNode;
 }
 
-export const LAST_UPDATED = 'August 13, 2026';
+export const LAST_UPDATED = 'August 20, 2026';
 
 /**
  * The address a data request actually reaches.

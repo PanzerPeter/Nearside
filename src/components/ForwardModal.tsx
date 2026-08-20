@@ -235,9 +235,9 @@ export function ForwardModal({ me, msg, fromPeerId, identity, onClose }: Forward
                     {/* The handle stays visible under a nickname for the same
                         reason it does in the sidebar: two people you renamed
                         have to be tellable apart by something they chose. */}
-                    {!target.isSelf && target.label !== `@${target.display_name}` && (
+                    {!target.isSelf && target.label !== target.display_name && (
                       <span className="block truncate text-[0.7rem] text-base-content/60">
-                        @{target.display_name}
+                        {target.display_name}
                       </span>
                     )}
                   </span>

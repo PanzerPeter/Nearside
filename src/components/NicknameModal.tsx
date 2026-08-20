@@ -8,11 +8,14 @@ import {
   useNickname,
 } from '../lib/nicknames';
 import { Check, Trash2 } from 'lucide-react';
+import type { Identity } from '../lib/crypto/keys';
 import { useT } from '../hooks/useT';
 
 interface NicknameModalProps {
   me: string;
   peerId: string;
+  /** The nickname is sealed under this key before it is written (0041). */
+  identity: Identity;
   /** The peer's real handle, shown as the thing a nickname replaces. */
   display_name: string;
   /** True when this is the self-chat, which is named rather than nicknamed. */
@@ -24,6 +27,7 @@ interface NicknameModalProps {
 export function NicknameModal({
   me,
   peerId,
+  identity,
   display_name,
   isSelf = false,
   onClose,
@@ -45,7 +49,7 @@ export function NicknameModal({
     // the only field on screen — refusing that as invalid input would be
     // pedantic when the Remove button does exactly the same thing.
     const error = value.trim()
-      ? await saveNickname(me, peerId, value)
+      ? await saveNickname(me, peerId, value, identity)
       : await clearNickname(me, peerId);
     setBusy(false);
     if (error) {
@@ -114,15 +118,7 @@ export function NicknameModal({
       </form>
 
       <p className="text-xs text-base-content/55 mt-3">
-        {isSelf ? (
-          t('nickname.selfNote')
-        ) : (
-          <>
-            {t('nickname.notePrefix', { name: display_name })}{' '}
-            <span className="font-medium text-base-content/70">@{display_name}</span>{' '}
-            {t('nickname.noteSuffix')}
-          </>
-        )}
+        {isSelf ? t('nickname.selfNote') : t('nickname.note', { name: display_name })}
       </p>
     </Modal>
   );

@@ -56,12 +56,6 @@
 -- 1. Extensions
 -- ===========================================================================
 
--- pg_trgm backed the trigram index on messages.content. Both the index and
--- the column are gone (0023 — the server stopped reading bodies), and the
--- extension is kept only because it is installed on the live project and this
--- file describes that project. Nothing here uses it.
-CREATE EXTENSION IF NOT EXISTS pg_trgm;
-
 -- pg_net issues the push trigger's HTTP call off the inserting transaction.
 -- It creates and owns the `net` schema, so there is no WITH SCHEMA clause.
 CREATE EXTENSION IF NOT EXISTS pg_net;
@@ -112,6 +106,16 @@ REVOKE ALL ON FUNCTION public.set_updated_at() FROM PUBLIC, anon, authenticated;
   with the person who chose it. The client has always enforced this (32
   characters, trimmed); the CHECKs are for the callers that are not the client.
 
+  `bio` is a short note people write about themselves, shown on the profile card
+  behind the chat header's avatar. Plaintext, deliberately (0040): there is no
+  key every friend already holds, so sealing it would mean one box of the text
+  per friendship, re-sealed on every edit and every new friendship — bought for
+  a paragraph that sits beside a display name and an avatar the server reads
+  anyway, the avatar being an object in a public bucket. It is listed in the
+  readable columns on the transparency screen instead. Multi-line on purpose,
+  which is why it has a length CHECK and no control-character one: it renders in
+  a block of its own, never inline.
+
   `public_key` / `signing_key` are the PUBLIC halves of the device identity —
   X25519 for sealing to this user, Ed25519 for verifying room messages from
   them. The seed they derive from never reaches this database and there is no
@@ -125,6 +129,7 @@ REVOKE ALL ON FUNCTION public.set_updated_at() FROM PUBLIC, anon, authenticated;
 CREATE TABLE IF NOT EXISTS public.profiles (
   id             uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   display_name   text NOT NULL,
+  bio            text,
   avatar_url     text,
   last_seen_at   timestamptz,
   public_key     text,
@@ -136,7 +141,11 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   -- Measured after trimming, so "   " cannot pass as a name and leave a row
   -- that renders blank everywhere it appears.
   CONSTRAINT display_name_length CHECK (char_length(btrim(display_name)) BETWEEN 1 AND 32),
-  CONSTRAINT display_name_single_line CHECK (display_name ~ '^[^[:cntrl:]]+$')
+  CONSTRAINT display_name_single_line CHECK (display_name ~ '^[^[:cntrl:]]+$'),
+
+  -- Null when nothing has been written. The CHECK is what keeps "never wrote
+  -- one" and "wrote a space" from being different states in the database.
+  CONSTRAINT bio_length CHECK (bio IS NULL OR char_length(btrim(bio)) BETWEEN 1 AND 200)
 );
 
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
@@ -384,8 +393,12 @@ CREATE TABLE IF NOT EXISTS public.connect_tokens (
   code       text PRIMARY KEY,
   user_id    uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   expires_at timestamptz NOT NULL,
-  used_at    timestamptz,
-  used_by    uuid REFERENCES auth.users(id) ON DELETE SET NULL
+  -- Single-use is `used_at IS NULL` and nothing more. There was a `used_by`
+  -- beside it until 0042: written on every redemption, read by nothing, and
+  -- therefore a timestamped list of who added whom, kept for whoever
+  -- eventually asked. `friendships` records the connection; the minute it
+  -- happened is not needed to do so.
+  used_at    timestamptz
 );
 
 ALTER TABLE public.connect_tokens ENABLE ROW LEVEL SECURITY;
@@ -450,7 +463,7 @@ DECLARE
 BEGIN
   IF auth.uid() IS NULL THEN RAISE EXCEPTION 'not_authenticated'; END IF;
   UPDATE public.connect_tokens t
-     SET used_at = now(), used_by = auth.uid()
+     SET used_at = now()
    WHERE t.code = upper(redeem_connect_code.code)
      AND t.used_at IS NULL
      AND t.expires_at > now()
@@ -1292,20 +1305,46 @@ CREATE POLICY "chat_backgrounds_delete_own" ON public.chat_backgrounds
   Self-nicknames are allowed on purpose (no owner <> peer CHECK): the self-chat
   is addressed as peer_id = owner_id, so this is what lets someone rename
   "Note to self" without a second mechanism.
+
+  Sealed under the owner's vault key since 0041, like a sticker's label. The row
+  was owner-only from the start — no policy has ever let the person it names
+  read it — so there is no second party to seal to and no key to hand out; the
+  vault key is already on the device. Until then the label was private from the
+  app and readable by the server, which is the one gap this schema does not
+  leave anywhere else.
+
+  `nickname` is the plaintext column it replaces, kept nullable for the rows
+  written before that. The client renders them, then re-seals and clears them
+  as it meets them, so the column empties itself and can be dropped once
+  `WHERE nickname IS NOT NULL` returns nothing.
 */
 CREATE TABLE IF NOT EXISTS public.friend_nicknames (
-  owner_id   uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-  peer_id    uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-  nickname   text NOT NULL,
-  updated_at timestamptz NOT NULL DEFAULT now(),
+  owner_id            uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  peer_id             uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  -- Pre-0041 rows only. Nullable, and null on everything written since.
+  nickname            text,
+  nickname_ciphertext text,
+  nickname_nonce      text,
+  updated_at          timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (owner_id, peer_id),
   -- Measured after trimming, so " " cannot pass as a one-character nickname
   -- and leave a row that renders as a blank name.
-  CONSTRAINT nickname_length CHECK (char_length(btrim(nickname)) BETWEEN 1 AND 32),
+  CONSTRAINT nickname_length
+    CHECK (nickname IS NULL OR char_length(btrim(nickname)) BETWEEN 1 AND 32),
   -- Displayed inline in the sidebar and the chat header, so a newline or other
   -- control character would break that line. Rejected at the column rather
-  -- than trusted to be stripped by whichever client wrote it.
-  CONSTRAINT nickname_single_line CHECK (nickname ~ '^[^[:cntrl:]]+$')
+  -- than trusted to be stripped by whichever client wrote it. The sealed
+  -- column gets no such CHECK and cannot: the database cannot read it, which
+  -- is the point, so the client's normalizer is the only enforcement left.
+  CONSTRAINT nickname_single_line
+    CHECK (nickname IS NULL OR nickname ~ '^[^[:cntrl:]]+$'),
+  -- Both halves of the seal or neither. A ciphertext without its nonce is a
+  -- name that can never be opened again.
+  CONSTRAINT nickname_seal_complete
+    CHECK (num_nonnulls(nickname_ciphertext, nickname_nonce) IN (0, 2)),
+  -- And one of the two ways of holding it. Neither is a blank line.
+  CONSTRAINT nickname_plaintext_or_sealed
+    CHECK (nickname IS NOT NULL OR nickname_ciphertext IS NOT NULL)
 );
 
 CREATE INDEX IF NOT EXISTS friend_nicknames_peer_idx
@@ -2131,6 +2170,12 @@ BEGIN
   DELETE FROM public.messages      WHERE expires_at IS NOT NULL AND expires_at <= now();
   DELETE FROM public.room_messages WHERE expires_at IS NOT NULL AND expires_at <= now();
 
+  -- Spent and expired connect codes (0042). Expiry, not tidying: a token past
+  -- `expires_at` is one `redeem_connect_code` already refuses, so nothing is
+  -- taken away. Used codes are reachable only through this condition, which is
+  -- what stops a redeemed code being minted again while it is still live.
+  DELETE FROM public.connect_tokens WHERE expires_at < now();
+
   -- Best effort. The rows above held the only copies of these files' keys, so
   -- the bytes are already unopenable; this reclaims the listing.
   IF array_length(doomed, 1) > 0 THEN
@@ -2651,6 +2696,42 @@ $$;
 
 REVOKE ALL ON FUNCTION public.public_table_names() FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.public_table_names() TO authenticated;
+
+/*
+  And the columns of those tables, for the same screen and the same reason
+  (0043).
+
+  The table list above catches a table nobody described. Columns are what the
+  cards actually make claims about — "server reads: user_id, receiver_id,
+  created_at" is a hand-written list, and a hand-written list drifts. This is
+  what lets the screen notice that it has, and say so, rather than going on
+  describing a database that has changed underneath it.
+
+  Names only, and only from `public`: no types, no defaults, no contents.
+  Dropped columns and Postgres's own system columns are excluded, or the screen
+  would report `ctid` and every column ever removed as things the server holds
+  about you.
+*/
+CREATE OR REPLACE FUNCTION public.public_table_columns()
+RETURNS TABLE (table_name text, column_name text)
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+SET search_path = ''
+AS $$
+  SELECT c.relname::text, a.attname::text
+    FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    JOIN pg_attribute a ON a.attrelid = c.oid
+   WHERE n.nspname = 'public'
+     AND c.relkind = 'r'
+     AND a.attnum > 0
+     AND NOT a.attisdropped
+   ORDER BY c.relname, a.attnum;
+$$;
+
+REVOKE ALL ON FUNCTION public.public_table_columns() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.public_table_columns() TO authenticated;
 
 -- ===========================================================================
 -- 12. Realtime

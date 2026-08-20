@@ -1,5 +1,12 @@
 // Private friend nicknames: the name YOU gave someone, visible only to you.
 //
+// Sealed under the vault key since 0041, so "visible only to you" is now true
+// of the server as well as of the app — it was a plaintext column before, which
+// made the claim true of everything except the one party in a position to
+// collect it. Rows written before that still hold plaintext; they are rendered,
+// re-sealed and cleared as they are met (`resealPlaintext`), so the old column
+// empties itself rather than waiting on anybody.
+//
 // Backed by public.friend_nicknames (0016), one row per (owner, peer). The
 // display_name remains the identity; a nickname is a label painted over it in
 // this user's own client, and nothing here changes how anyone is looked up.
@@ -15,19 +22,41 @@ import { Session } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 import { useConnection } from './connection';
 import { SELF_CHAT_LABEL } from './conversation';
+import { openForSelf, sealForSelf } from './crypto/seal';
+import type { Identity } from './crypto/keys';
 
 /** Matches the `nickname_length` CHECK in 0016. */
 export const MAX_NICKNAME_LENGTH = 32;
 
+/** A row as the database holds it: sealed, or — before 0041 — not. */
 export interface NicknameRow {
   owner_id: string;
+  peer_id: string;
+  /** Pre-0041 rows only. Null on everything written since. */
+  nickname: string | null;
+  nickname_ciphertext: string | null;
+  nickname_nonce: string | null;
+}
+
+/** A row whose name has been opened. The rest of this module works in these. */
+export interface OpenedNickname {
   peer_id: string;
   nickname: string;
 }
 
-/** The peer → nickname map a set of rows describes. Pure, and the only place
- *  that decides the map's shape, so `loadNicknames` stays a fetch. */
-export function nicknameMapFrom(rows: NicknameRow[]): Map<string, string> {
+/** Every column the store needs. Named once because the select and the realtime
+ *  refetch must not drift apart. */
+const COLUMNS = 'owner_id, peer_id, nickname, nickname_ciphertext, nickname_nonce';
+
+/** True for a row still carrying its name in the clear. Pure, and the whole
+ *  test for whether 0041's migration still has work left on this device. */
+export function isPlaintextRow(row: NicknameRow): boolean {
+  return row.nickname !== null && row.nickname_ciphertext === null;
+}
+
+/** The peer → nickname map a set of opened rows describes. Pure, and the only
+ *  place that decides the map's shape, so `loadNicknames` stays a fetch. */
+export function nicknameMapFrom(rows: OpenedNickname[]): Map<string, string> {
   const map = new Map<string, string>();
   for (const row of rows) {
     // Normalized on read as well as on write, so a row predating a tightened
@@ -37,6 +66,39 @@ export function nicknameMapFrom(rows: NicknameRow[]): Map<string, string> {
     if (nickname) map.set(row.peer_id, nickname);
   }
   return map;
+}
+
+/**
+ * Open what is sealed, take the rest at face value.
+ *
+ * A row that will not open is skipped rather than thrown on. The way that
+ * happens is a row sealed under a different account's vault key — impossible
+ * through the policy, but a name that cannot be decrypted must not take the
+ * whole sidebar's naming down with it.
+ */
+export async function openNicknames(
+  vaultKey: Uint8Array,
+  rows: NicknameRow[]
+): Promise<OpenedNickname[]> {
+  const opened: OpenedNickname[] = [];
+  for (const row of rows) {
+    if (row.nickname_ciphertext && row.nickname_nonce) {
+      try {
+        opened.push({
+          peer_id: row.peer_id,
+          nickname: await openForSelf(vaultKey, {
+            ciphertext: row.nickname_ciphertext,
+            nonce: row.nickname_nonce,
+          }),
+        });
+      } catch {
+        console.error('nickname could not be opened', row.peer_id);
+      }
+    } else if (row.nickname) {
+      opened.push({ peer_id: row.peer_id, nickname: row.nickname });
+    }
+  }
+  return opened;
 }
 
 /** peer id → nickname. Replaced wholesale on change so the identity check in
@@ -67,9 +129,15 @@ export function normalizeNickname(raw: string): string | null {
 
 /**
  * How to name a conversation in one line: the nickname if one was given, the
- * self-chat's default label for your own notes, `@display_name` otherwise.
+ * self-chat's default label for your own notes, the display name otherwise.
  * Pure, so the fallback chain is testable without a store. `useNickname`
  * supplies the first argument.
+ *
+ * The display name used to be prefixed with an `@`, which read as a handle —
+ * something you could type at a search box to find the person. There has been
+ * no directory to type it into since 0022b, and connect codes replaced the one
+ * flow that ever needed one. The sigil was promising a lookup the app does not
+ * have.
  */
 export function formatDisplayName(
   nickname: string | null | undefined,
@@ -80,7 +148,7 @@ export function formatDisplayName(
   if (nick) return nick;
   if (selfChat) return SELF_CHAT_LABEL;
   const name = display_name?.trim();
-  return name ? `@${name}` : 'unknown';
+  return name ? name : 'unknown';
 }
 
 /** The nickname held for `peerId`, or null. For code outside the React tree. */
@@ -109,23 +177,60 @@ export function resetNicknames(): void {
   publish(new Map());
 }
 
+/**
+ * Seal the names of any pre-0041 rows and clear the plaintext behind them.
+ *
+ * Runs after the store has been published, never before: the names are already
+ * on screen by then, and a device that goes offline mid-sweep has changed
+ * nothing a later pass will not finish. Failures are logged and dropped for the
+ * same reason — the row still renders from its plaintext, so the only cost of
+ * not migrating today is migrating tomorrow.
+ */
+async function resealPlaintext(me: string, rows: NicknameRow[], identity: Identity): Promise<void> {
+  for (const row of rows.filter(isPlaintextRow)) {
+    const nickname = normalizeNickname(row.nickname ?? '');
+    if (!nickname) continue;
+    try {
+      const sealed = await sealForSelf(identity.vaultKey, nickname);
+      const { error } = await supabase
+        .from('friend_nicknames')
+        // One write, both halves: a row that dropped its plaintext without
+        // gaining a ciphertext would be a name nobody could read again, and
+        // `nickname_plaintext_or_sealed` refuses it anyway.
+        .update({
+          nickname: null,
+          nickname_ciphertext: sealed.ciphertext,
+          nickname_nonce: sealed.nonce,
+        })
+        .eq('owner_id', me)
+        .eq('peer_id', row.peer_id);
+      if (error) throw error;
+    } catch (error) {
+      console.error('nickname re-seal failed', error);
+      return;
+    }
+  }
+}
+
 /** Replace the store from the server. RLS already scopes rows to the owner;
  *  the explicit filter is belt and braces, and keeps the query intentional. */
-async function loadNicknames(me: string): Promise<void> {
+async function loadNicknames(me: string, identity: Identity): Promise<void> {
   const { data, error } = await supabase
     .from('friend_nicknames')
-    .select('owner_id, peer_id, nickname')
+    .select(COLUMNS)
     .eq('owner_id', me);
 
   if (error) {
-    // Not fatal: without nicknames every name falls back to @display_name.
+    // Not fatal: without nicknames every name falls back to the display name.
     // Logged because a missing migration (PGRST205) surfaces here first,
     // before anyone tries to set one.
     console.error('nickname load failed', error);
     return;
   }
 
-  publish(nicknameMapFrom((data ?? []) as NicknameRow[]));
+  const rows = (data ?? []) as NicknameRow[];
+  publish(nicknameMapFrom(await openNicknames(identity.vaultKey, rows)));
+  void resealPlaintext(me, rows, identity);
 }
 
 /**
@@ -133,16 +238,20 @@ async function loadNicknames(me: string): Promise<void> {
  * from App. Re-runs on wake (`generation`) because a channel joined to a socket
  * that no longer exists rejoins nothing on its own.
  */
-export function useNicknameSync(session: Session | null): void {
+export function useNicknameSync(session: Session | null, identity: Identity | null): void {
   const { generation } = useConnection();
 
   useEffect(() => {
-    if (!session) {
+    // No identity means no vault key, and a sealed name cannot be read without
+    // one. Nothing is shown rather than something wrong: every name falls back
+    // to its display name for the moment the keys take to derive, and this
+    // effect re-runs when they land.
+    if (!session || !identity) {
       resetNicknames();
       return;
     }
     const me = session.user.id;
-    void loadNicknames(me);
+    void loadNicknames(me, identity);
 
     const channel = supabase
       .channel(`nicknames:${me}`)
@@ -152,8 +261,9 @@ export function useNicknameSync(session: Session | null): void {
         () => {
           // RLS scopes this stream to our own rows, so anything arriving is
           // relevant. Refetching the handful of rows cannot drift the way
-          // patching the map per event kind can.
-          void loadNicknames(me);
+          // patching the map per event kind can — and the payload is
+          // ciphertext, so patching would mean opening it here anyway.
+          void loadNicknames(me, identity);
         }
       )
       .subscribe();
@@ -161,7 +271,7 @@ export function useNicknameSync(session: Session | null): void {
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [session, generation]);
+  }, [session, identity, generation]);
 }
 
 /** Subscribe a component to the whole map. For the callers that name several
@@ -220,7 +330,8 @@ function describeNicknameError(error: WriteError | null | undefined): string {
 export async function saveNickname(
   me: string,
   peerId: string,
-  raw: string
+  raw: string,
+  identity: Identity
 ): Promise<string | null> {
   const nickname = normalizeNickname(raw);
   if (!nickname) return 'Enter a nickname, or remove the one you have.';
@@ -230,10 +341,21 @@ export async function saveNickname(
   next.set(peerId, nickname);
   publish(next);
 
+  const sealed = await sealForSelf(identity.vaultKey, nickname);
   const { error } = await supabase
     .from('friend_nicknames')
     .upsert(
-      { owner_id: me, peer_id: peerId, nickname },
+      {
+        owner_id: me,
+        peer_id: peerId,
+        // Explicitly null, not omitted: an upsert onto a pre-0041 row would
+        // otherwise leave the old plaintext beside the new ciphertext, and the
+        // reader prefers the ciphertext — so the stale name would sit in the
+        // database, readable, for as long as the row lived.
+        nickname: null,
+        nickname_ciphertext: sealed.ciphertext,
+        nickname_nonce: sealed.nonce,
+      },
       { onConflict: 'owner_id,peer_id' }
     );
 

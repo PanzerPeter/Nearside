@@ -49,7 +49,7 @@ export function AccountRail({ profile, profileFailed, onOpenSettings }: AccountR
         <span className="min-w-0 flex-1">
           {profile ? (
             <span className="block truncate text-sm font-medium text-base-content">
-              @{profile.display_name}
+              {profile.display_name}
             </span>
           ) : profileFailed ? (
             <span className="block truncate text-sm font-medium text-warning">

@@ -4,6 +4,7 @@ import { Camera } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { Profile, initial } from '../../lib/types';
 import { AVATAR_MAX_EDGE, compressImage } from '../../lib/compress';
+import { MAX_BIO_LENGTH, bioLength, normalizeBio } from '../../lib/bio';
 import { useToast } from '../../hooks/useToast';
 import { AvatarCropper } from '../AvatarCropper';
 import { useT } from '../../hooks/useT';
@@ -19,7 +20,7 @@ interface ProfilePageProps {
 }
 
 /**
- * The two things other people see: the photo and the name.
+ * What other people see: the photo, the name, and the line about yourself.
  *
  * It owns its own Save button rather than taking one from a modal footer — as a
  * page there is no footer to put it in, and a button beside the field it commits
@@ -28,6 +29,8 @@ interface ProfilePageProps {
 export function ProfilePage({ session, profile, onUpdated }: ProfilePageProps) {
   const [display_name, setUsername] = useState(profile.display_name);
   const [avatarUrl, setAvatarUrl] = useState(profile.avatar_url ?? null);
+  const [bio, setBio] = useState(profile.bio ?? '');
+  const [savingBio, setSavingBio] = useState(false);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   /** A picked photo waiting to be framed. */
@@ -127,6 +130,38 @@ export function ProfilePage({ session, profile, onUpdated }: ProfilePageProps) {
     toast.success(t('profile.nameUpdated'));
   }
 
+  // Compared against what would be stored rather than against the raw field,
+  // so trailing whitespace does not arm the Save button on a bio that has not
+  // actually changed.
+  const normalizedBio = normalizeBio(bio);
+  const bioChanged = (normalizedBio ?? null) !== (profile.bio ?? null);
+
+  async function handleSaveBio() {
+    if (!bioChanged) return;
+    setSavingBio(true);
+    // Null, never '': `bio_length` refuses a blank string, so clearing the
+    // field has to send the absence rather than an empty one.
+    const { error: updateError } = await supabase
+      .from('profiles')
+      .update({ bio: normalizedBio })
+      .eq('id', session.user.id);
+    setSavingBio(false);
+
+    if (updateError) {
+      toast.error(
+        // 23514 is the CHECK constraint — the only way the value itself can be
+        // refused, and the one case where the server's own wording says
+        // nothing useful to the person who typed it.
+        updateError.code === '23514'
+          ? t('profile.bioTooLong', { count: MAX_BIO_LENGTH })
+          : t('profile.bioNotSaved'),
+      );
+      return;
+    }
+    onUpdated({ ...profile, bio: normalizedBio, avatar_url: avatarUrl });
+    toast.success(t('profile.bioUpdated'));
+  }
+
   return (
     <>
       <div className="flex flex-col items-center gap-3 mb-5">
@@ -193,6 +228,36 @@ export function ProfilePage({ session, profile, onUpdated }: ProfilePageProps) {
           </button>
         </div>
         <span className="text-xs text-base-content/60 mt-1">{t('profile.displayNameNote')}</span>
+      </div>
+
+      <div className="form-control mt-4">
+        <label className="label pb-1">
+          <span className="label-text text-xs font-medium uppercase tracking-wider text-base-content/60">
+            {t('profile.bio')}
+          </span>
+        </label>
+        <textarea
+          className="textarea min-h-24 w-full bg-base-200/50 border border-base-content/10 focus:border-primary"
+          value={bio}
+          onChange={(e) => setBio(e.target.value)}
+          placeholder={t('profile.bioPlaceholder')}
+          // Capped here as well as in `normalizeBio`, so typing stops at the
+          // limit instead of silently losing the tail on save.
+          maxLength={MAX_BIO_LENGTH}
+        />
+        <div className="mt-1 flex items-start gap-2">
+          <span className="flex-1 text-xs text-base-content/60">{t('profile.bioNote')}</span>
+          <span className="shrink-0 text-xs tabular-nums text-base-content/50">
+            {bioLength(bio)}/{MAX_BIO_LENGTH}
+          </span>
+        </div>
+        <button
+          className="btn btn-primary btn-sm mt-2 self-end"
+          onClick={handleSaveBio}
+          disabled={savingBio || !bioChanged}
+        >
+          {savingBio ? <span className="loading loading-spinner loading-xs" /> : t('common.save')}
+        </button>
       </div>
 
       {pendingAvatar && (

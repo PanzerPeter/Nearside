@@ -76,6 +76,7 @@ export const TABLE_REPORTS: TableSpec[] = [
     readable: [
       'id',
       'display_name',
+      'bio',
       'avatar_url',
       'last_seen_at',
       'public_key',
@@ -131,14 +132,19 @@ export const TABLE_REPORTS: TableSpec[] = [
     label: 'server.message_receipts.label',
     readable: ['user_id', 'peer_id', 'delivered_at', 'read_at', 'updated_at'],
     opaque: [],
-    note: 'server.message_reactions.note',
+    note: 'server.message_receipts.note',
   },
   {
     table: 'friend_nicknames',
     group: 'about-you',
     label: 'server.friend_nicknames.label',
+    // `nickname` is the plaintext column 0041 replaced. Still listed under
+    // what the server reads, because rows written before that migration still
+    // carry it until the device that owns them opens the app once — and a
+    // screen that stopped naming it would be claiming a migration finished
+    // before it had.
     readable: ['owner_id', 'peer_id', 'nickname', 'updated_at'],
-    opaque: [],
+    opaque: ['nickname_ciphertext', 'nickname_nonce'],
     note: 'server.friend_nicknames.note',
   },
   {
@@ -150,14 +156,22 @@ export const TABLE_REPORTS: TableSpec[] = [
     // image this app uploaded in the clear; 0039 seals them under the vault
     // key, like a sticker.
     opaque: ['key_ciphertext', 'key_nonce'],
-    note: 'server.friend_nicknames.note',
+    note: 'server.chat_backgrounds.note',
   },
   {
     table: 'rooms',
     group: 'about-you',
     label: 'server.rooms.label',
-    readable: ['id', 'title', 'created_by', 'created_at', 'ttl_seconds', 'ttl_set_by'],
-    opaque: [],
+    readable: [
+      'id',
+      'title',
+      'created_by',
+      'created_at',
+      'ttl_seconds',
+      'ttl_set_by',
+      'avatar_path',
+    ],
+    opaque: ['avatar_key_ciphertext', 'avatar_key_nonce'],
     note: 'server.rooms.note',
   },
   {
@@ -166,7 +180,7 @@ export const TABLE_REPORTS: TableSpec[] = [
     label: 'server.room_participants.label',
     readable: ['room_id', 'user_id', 'colour_index', 'joined_at'],
     opaque: [],
-    note: 'server.rooms.note',
+    note: 'server.room_participants.note',
   },
   {
     table: 'room_keys',
@@ -179,10 +193,39 @@ export const TABLE_REPORTS: TableSpec[] = [
   {
     table: 'room_messages',
     group: 'content',
-    label: 'server.room_participants.label',
-    readable: ['id', 'room_id', 'sender_id', 'created_at', 'expires_at'],
-    opaque: ['ciphertext', 'nonce', 'signature'],
-    note: 'server.room_participants.note',
+    label: 'server.room_messages.label',
+    readable: [
+      'id',
+      'room_id',
+      'sender_id',
+      'created_at',
+      'edited_at',
+      'deleted_at',
+      'reply_to_id',
+      'media_path',
+      'media_type',
+      'media_duration_ms',
+      'sig_v',
+      'expires_at',
+    ],
+    opaque: ['ciphertext', 'nonce', 'signature', 'media_key_ciphertext', 'media_key_nonce'],
+    note: 'server.room_messages.note',
+  },
+  {
+    table: 'room_message_reactions',
+    group: 'content',
+    label: 'server.room_message_reactions.label',
+    readable: ['id', 'message_id', 'user_id', 'emoji', 'created_at'],
+    opaque: [],
+    note: 'server.room_message_reactions.note',
+  },
+  {
+    table: 'room_receipts',
+    group: 'about-you',
+    label: 'server.room_receipts.label',
+    readable: ['room_id', 'user_id', 'read_at', 'updated_at'],
+    opaque: [],
+    note: 'server.room_receipts.note',
   },
   {
     table: 'sealed_answers',
@@ -198,7 +241,7 @@ export const TABLE_REPORTS: TableSpec[] = [
     label: 'server.stickers.label',
     readable: ['id', 'user_id', 'path', 'sort', 'created_at'],
     opaque: ['key_ciphertext', 'key_nonce', 'label_ciphertext', 'label_nonce'],
-    note: 'server.sealed_answers.note',
+    note: 'server.stickers.note',
   },
   {
     table: 'conversation_timers',
@@ -220,9 +263,9 @@ export const TABLE_REPORTS: TableSpec[] = [
     table: 'connect_tokens',
     group: 'about-you',
     label: 'server.connect_tokens.label',
-    readable: ['code', 'user_id', 'expires_at', 'used_at', 'used_by'],
+    readable: ['code', 'user_id', 'expires_at', 'used_at'],
     opaque: [],
-    note: 'server.conversation_timers.note',
+    note: 'server.connect_tokens.note',
   },
   {
     table: 'message_pushes',
@@ -237,9 +280,27 @@ export const TABLE_REPORTS: TableSpec[] = [
     table: 'push_alerts',
     group: 'plumbing',
     label: 'server.push_alerts.label',
-    readable: ['receiver_id', 'sender_id', 'alerted_at'],
+    readable: ['receiver_id', 'sender_id', 'alerted_at', 'streak'],
     opaque: [],
     note: 'server.push_alerts.note',
+    infrastructure: true,
+  },
+  {
+    table: 'room_message_pushes',
+    group: 'plumbing',
+    label: 'server.room_message_pushes.label',
+    readable: ['message_id', 'sent_at'],
+    opaque: [],
+    note: 'server.room_message_pushes.note',
+    infrastructure: true,
+  },
+  {
+    table: 'room_push_alerts',
+    group: 'plumbing',
+    label: 'server.room_push_alerts.label',
+    readable: ['receiver_id', 'room_id', 'alerted_at', 'streak'],
+    opaque: [],
+    note: 'server.room_push_alerts.note',
     infrastructure: true,
   },
   {
@@ -248,7 +309,7 @@ export const TABLE_REPORTS: TableSpec[] = [
     label: 'server.push_config.label',
     readable: ['id', 'function_url', 'updated_at'],
     opaque: ['trigger_secret'],
-    note: 'server.message_pushes.note',
+    note: 'server.push_config.note',
     infrastructure: true,
   },
 ];
@@ -269,6 +330,47 @@ export function missingTables(actual: string[]): string[] {
   return TABLE_REPORTS.filter((t) => !present.has(t.table)).map((t) => t.table);
 }
 
+/** One table's disagreement with the database, in both directions. */
+export interface ColumnDrift {
+  table: string;
+  /** Columns the database holds that no card describes. The dangerous
+   *  direction: the screen is silently under-reporting what is stored. */
+  unlisted: string[];
+  /** Columns a card claims that the database no longer has. Harmless to a
+   *  reader and fatal to the screen's credibility — it means nobody has
+   *  checked. */
+  missing: string[];
+}
+
+/**
+ * Column-level drift, table by table.
+ *
+ * `unlistedTables` catches a whole table nobody described. This catches the
+ * commoner and quieter case: a migration adds a column to a table that is
+ * already on the screen, and the card goes on listing the columns it listed
+ * last year. Every card here makes a claim of the form "the server reads
+ * exactly these", and until 0043 nothing checked it.
+ *
+ * Tables the database does not have are skipped rather than reported as having
+ * every column missing — `missingTables` already says the table is gone, and
+ * repeating it column by column buries that.
+ */
+export function columnDrift(actual: Map<string, string[]>): ColumnDrift[] {
+  const drift: ColumnDrift[] = [];
+  for (const spec of TABLE_REPORTS) {
+    const columns = actual.get(spec.table);
+    if (!columns) continue;
+    const described = new Set([...spec.readable, ...spec.opaque]);
+    const present = new Set(columns);
+    const unlisted = columns.filter((c) => !described.has(c));
+    const missing = [...described].filter((c) => !present.has(c));
+    if (unlisted.length > 0 || missing.length > 0) {
+      drift.push({ table: spec.table, unlisted, missing });
+    }
+  }
+  return drift;
+}
+
 export interface TableReport extends TableSpec {
   /** Rows this account can see. Null when the table is infrastructure, or
    *  when RLS refuses the count — both of which are honest answers and
@@ -280,6 +382,8 @@ export interface StoredDataReport {
   tables: TableReport[];
   unlisted: string[];
   missing: string[];
+  /** Empty when every card's column list matches the live database. */
+  drift: ColumnDrift[];
 }
 
 export interface GroupedTables extends GroupSpec {
@@ -310,6 +414,20 @@ async function schemaTableNames(): Promise<string[]> {
   return (data as { table_name: string }[] | null)?.map((r) => r.table_name) ?? [];
 }
 
+/** table → its columns, from the database itself (0043). Names only; the RPC
+ *  returns no types, no defaults and no contents. */
+async function schemaColumns(): Promise<Map<string, string[]>> {
+  const { data, error } = await supabase.rpc('public_table_columns');
+  if (error) throw error;
+  const map = new Map<string, string[]>();
+  for (const row of (data as { table_name: string; column_name: string }[] | null) ?? []) {
+    const columns = map.get(row.table_name);
+    if (columns) columns.push(row.column_name);
+    else map.set(row.table_name, [row.column_name]);
+  }
+  return map;
+}
+
 /**
  * Counts run as the signed-in user, so RLS scopes them to that user's own
  * rows — the number shown is what the server holds about *them*, not what it
@@ -328,13 +446,16 @@ export async function describeStoredData(): Promise<StoredDataReport> {
 
   // A schema the client cannot enumerate is not a reason to fail the whole
   // screen — the per-table reports above are still true. Report no drift
-  // rather than inventing some.
+  // rather than inventing some. The two RPCs fail independently: an older
+  // project that has 0027 but not 0043 still gets its table check.
   const actual = await schemaTableNames().catch(() => null);
+  const columns = await schemaColumns().catch(() => null);
 
   return {
     tables,
     unlisted: actual ? unlistedTables(actual) : [],
     missing: actual ? missingTables(actual) : [],
+    drift: columns ? columnDrift(columns) : [],
   };
 }
 
@@ -344,7 +465,12 @@ export async function describeStoredData(): Promise<StoredDataReport> {
 export async function exportEverything(): Promise<string> {
   const payload: Record<string, unknown> = {
     exported_at: new Date().toISOString(),
-    note: 'server.push_config.note' +
+    // Not a translated string: this is a line inside a JSON document, read
+    // wherever the file ends up rather than on a screen with a language
+    // setting. It was assembled from a message key by mistake, which put the
+    // literal text `server.push_config.note` in every export.
+    note:
+      'Sealed columns export as the ciphertext the server holds. ' +
       'They are unreadable without the key on your device, which is not in this file.',
   };
 

@@ -608,7 +608,7 @@ export function FriendsList({
                 <div className="flex items-center gap-2 min-w-0">
                   <Avatar display_name={req.profiles?.display_name} url={req.profiles?.avatar_url} size={28} />
                   <span className="text-sm text-base-content truncate">
-                    @{req.profiles?.display_name ?? t('requests.unknown')}
+                    {req.profiles?.display_name ?? t('requests.unknown')}
                   </span>
                 </div>
                 <div className="flex gap-1.5 shrink-0">

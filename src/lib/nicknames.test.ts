@@ -1,22 +1,38 @@
 import { describe, expect, it } from 'vitest';
 import { SELF_CHAT_LABEL } from './conversation';
+import sodium from 'libsodium-wrappers';
 import {
   MAX_NICKNAME_LENGTH,
   formatDisplayName,
+  isPlaintextRow,
   nicknameFor,
   nicknameMapFrom,
   normalizeNickname,
+  openNicknames,
   resetNicknames,
   subscribeNicknames,
   type NicknameRow,
 } from './nicknames';
+import { sealForSelf } from './crypto/seal';
 
 const ME = '00000000-0000-0000-0000-00000000000a';
 const PEER = '00000000-0000-0000-0000-00000000000b';
 const OTHER = '00000000-0000-0000-0000-00000000000c';
 
-function row(peerId: string, nickname: string): NicknameRow {
-  return { owner_id: ME, peer_id: peerId, nickname };
+/** An opened row, which is what `nicknameMapFrom` works in. */
+function row(peerId: string, nickname: string) {
+  return { peer_id: peerId, nickname };
+}
+
+/** A row as it was written before 0041: plaintext, no seal. */
+function plaintextRow(peerId: string, nickname: string): NicknameRow {
+  return {
+    owner_id: ME,
+    peer_id: peerId,
+    nickname,
+    nickname_ciphertext: null,
+    nickname_nonce: null,
+  };
 }
 
 describe('normalizeNickname', () => {
@@ -64,18 +80,21 @@ describe('formatDisplayName', () => {
     expect(formatDisplayName('Bobby', 'bob')).toBe('Bobby');
   });
 
-  it('falls back to @display_name with no nickname', () => {
-    expect(formatDisplayName(null, 'bob')).toBe('@bob');
-    expect(formatDisplayName(undefined, 'bob')).toBe('@bob');
+  it('falls back to the bare display name with no nickname', () => {
+    // No `@`: it read as a handle you could look somebody up by, and there has
+    // been nothing to look anybody up in since the directory went. Asserted
+    // rather than left implicit, so putting the sigil back is a failing test.
+    expect(formatDisplayName(null, 'bob')).toBe('bob');
+    expect(formatDisplayName(undefined, 'bob')).toBe('bob');
   });
 
   it('treats a whitespace-only nickname as absent', () => {
-    expect(formatDisplayName('   ', 'bob')).toBe('@bob');
+    expect(formatDisplayName('   ', 'bob')).toBe('bob');
   });
 
   it('degrades to a placeholder when neither is known', () => {
     // A conversation row can be in hand before its profile read lands;
-    // "@undefined" on a chat header would be worse than saying nothing.
+    // "undefined" on a chat header would be worse than saying nothing.
     expect(formatDisplayName(null, null)).toBe('unknown');
   });
 
@@ -110,6 +129,71 @@ describe('nicknameMapFrom', () => {
 
   it('is empty for no rows', () => {
     expect(nicknameMapFrom([]).size).toBe(0);
+  });
+});
+
+describe('openNicknames', () => {
+  it('opens a sealed row', async () => {
+    await sodium.ready;
+    const vaultKey = sodium.randombytes_buf(sodium.crypto_secretbox_KEYBYTES);
+    const sealed = await sealForSelf(vaultKey, 'Bobby');
+    const rows: NicknameRow[] = [
+      {
+        owner_id: ME,
+        peer_id: PEER,
+        nickname: null,
+        nickname_ciphertext: sealed.ciphertext,
+        nickname_nonce: sealed.nonce,
+      },
+    ];
+    expect(await openNicknames(vaultKey, rows)).toEqual([{ peer_id: PEER, nickname: 'Bobby' }]);
+  });
+
+  it('still reads a row written before 0041', async () => {
+    await sodium.ready;
+    const vaultKey = sodium.randombytes_buf(sodium.crypto_secretbox_KEYBYTES);
+    // The migration is backwards compatible on purpose: a nickname set on an
+    // older build keeps rendering until the device re-seals it.
+    expect(await openNicknames(vaultKey, [plaintextRow(PEER, 'Bobby')])).toEqual([
+      { peer_id: PEER, nickname: 'Bobby' },
+    ]);
+  });
+
+  it('skips a row it cannot open rather than failing the whole load', async () => {
+    await sodium.ready;
+    const vaultKey = sodium.randombytes_buf(sodium.crypto_secretbox_KEYBYTES);
+    const otherKey = sodium.randombytes_buf(sodium.crypto_secretbox_KEYBYTES);
+    const sealed = await sealForSelf(otherKey, 'Bobby');
+    const rows: NicknameRow[] = [
+      {
+        owner_id: ME,
+        peer_id: PEER,
+        nickname: null,
+        nickname_ciphertext: sealed.ciphertext,
+        nickname_nonce: sealed.nonce,
+      },
+      plaintextRow(OTHER, 'Caz'),
+    ];
+    // One unreadable name must not cost the sidebar every other name it has.
+    expect(await openNicknames(vaultKey, rows)).toEqual([{ peer_id: OTHER, nickname: 'Caz' }]);
+  });
+});
+
+describe('isPlaintextRow', () => {
+  it('is what decides whether 0041 still has work to do on this device', async () => {
+    await sodium.ready;
+    const vaultKey = sodium.randombytes_buf(sodium.crypto_secretbox_KEYBYTES);
+    const sealed = await sealForSelf(vaultKey, 'Bobby');
+    expect(isPlaintextRow(plaintextRow(PEER, 'Bobby'))).toBe(true);
+    expect(
+      isPlaintextRow({
+        owner_id: ME,
+        peer_id: PEER,
+        nickname: null,
+        nickname_ciphertext: sealed.ciphertext,
+        nickname_nonce: sealed.nonce,
+      })
+    ).toBe(false);
   });
 });
 

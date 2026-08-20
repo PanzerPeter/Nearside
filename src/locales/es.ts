@@ -191,8 +191,7 @@ export const es: Catalog = {
   'verify.sigilLabel': 'Sello de seguridad: {words}',
   'notifyPrompt.title': 'Entérate cuando alguien te escriba',
   'notifyPrompt.body1': 'Ahora mismo Nearside solo puede avisarte mientras está abierto en pantalla.',
-  'notifyPrompt.body2':
-    'La notificación te dice quién ha escrito y nada más. El servidor no tiene ninguna copia legible del mensaje que pueda citar. Puedes desactivarlo más tarde en Ajustes.',
+  'notifyPrompt.body2': 'Una notificación te dice quién escribió y nada más. Puedes desactivarlas luego en Ajustes.',
   'update.available': 'Hay una actualización',
   'update.body': 'Recarga para tener la última versión. Tus chats y tu sesión se quedan como están.',
   'update.updating': 'Actualizando…',
@@ -347,11 +346,9 @@ export const es: Catalog = {
   'nickname.title': 'Apodo',
   'nickname.selfPlaceholder': 'Nota para mí',
   'nickname.selfLabel': 'Nombre de este chat',
-  'nickname.label': 'Apodo de @{name}',
+  'nickname.label': 'Apodo de {name}',
   'nickname.selfNote': 'Este chat solo lo ves tú, así que ponle el nombre que quieras.',
-  'nickname.notePrefix':
-    'Esto solo lo ves tú. A @{name} no se le avisa, y su nombre visible sigue siendo',
-  'nickname.noteSuffix': 'en todo lo demás.',
+  'nickname.note': 'Solo tú lo ves. A {name} no se le avisa.',
   'sealed.intro':
     '{name} ve la pregunta al momento. Ninguno de los dos puede leer la respuesta del otro hasta que hayáis respondido los dos.',
   'sealed.theQuestion': 'La pregunta',
@@ -614,6 +611,18 @@ export const es: Catalog = {
   'server.push_alerts.label': 'Enfriamiento del sonido de notificación',
   'server.push_alerts.note':
     'Cuándo hizo sonar tu teléfono por última vez una conversación, para que una ráfaga de mensajes llegue como un aviso y no como seis. Una fila por pareja de personas, sobrescrita cada vez. Es una copia más gruesa de lo que ya registran las filas de mensajes de arriba, y la razón por la que tu teléfono nunca tiene que decirle al servidor qué chat tienes abierto.',
+  'server.room_message_reactions.label': 'Reacciones en salas',
+  'server.room_message_reactions.note':
+    'Igual que las reacciones en un chat de dos, y sin cifrar por el mismo motivo: un solo emoji aporta muy poco al sellarlo, y el servidor seguiría viendo quién reaccionó a qué.',
+  'server.room_receipts.label': 'Marcas de lectura en salas',
+  'server.room_receipts.note':
+    'Hasta dónde ha leído cada miembro en cada sala. Una fila por persona y sala, que se sobrescribe al leer. Información de tiempos, como los ticks de un chat de dos.',
+  'server.room_message_pushes.label': 'Registro de notificaciones de salas',
+  'server.room_message_pushes.note':
+    'Una fila por cada mensaje de sala ya notificado, para que nadie reciba dos veces el mismo aviso. Registra que se envió una notificación, nunca lo que decía el mensaje.',
+  'server.room_push_alerts.label': 'Pausa de sonido en salas',
+  'server.room_push_alerts.note':
+    'Cuándo sonó tu teléfono por última vez por una sala, para que un grupo activo llegue como un aviso y no como veinte. Una fila por persona y sala, sobrescrita cada vez.',
   'server.push_config.label': 'Configuración del servidor',
   'server.push_config.note':
     'Fontanería del servidor para las notificaciones. No contiene nada sobre ti.',
@@ -643,6 +652,11 @@ export const es: Catalog = {
   'serverView.callsTitle': 'Llamadas',
   'serverView.callsBody':
     'Una llamada no deja ninguna fila arriba. La voz y el vídeo viajan directos entre los dos teléfonos, cifrados de extremo a extremo; las ofertas y respuestas que montan la llamada van selladas con la clave de tu contacto y viajan por un canal que el servidor retransmite sin guardar. Nada registra que hubo una llamada, con quién ni cuánto duró. Lo que sí conoce cada teléfono es la IP del otro: mira «Dónde termina esta protección».',
+  'serverView.driftTitle': 'Esta pantalla describe algunas tablas de forma incompleta.',
+  'serverView.driftUnlisted': 'guardado pero no descrito:',
+  'serverView.driftMissing': 'descrito pero ya no guardado:',
+  'serverView.driftSuffix':
+    'Todas las listas de esta pantalla están escritas a mano; esto las compara con la base de datos en vivo, así que una diferencia aparece aquí en vez de pasar desapercibida.',
   'serverView.export': 'Exportarlo todo',
   'serverView.exportNote':
     'Las columnas cifradas se exportan como el texto cifrado que guarda el servidor. Tu clave no va en el archivo.',
@@ -652,8 +666,7 @@ export const es: Catalog = {
   'cropper.hint': 'Arrastra para mover; pellizca o usa el control para acercar.',
   'call.e2ee': 'Cifrado de extremo a extremo',
   'room.name': 'Nombre de la sala',
-  'room.nameNote':
-    'El nombre se guarda como texto plano para que el servidor pueda listar tus salas. Los mensajes de dentro no.',
+  'room.nameNote': 'Todos los de la sala ven este nombre.',
   'room.unknownSender':
     'Quien envía esto no ha publicado clave de firma, así que no hay nada con lo que comprobar el mensaje.',
   'room.memberCount#one': '{count} miembro',
@@ -701,10 +714,8 @@ export const es: Catalog = {
   'language.hint': 'El idioma en el que está escrita la app',
   'language.system': 'El de mi dispositivo',
   'language.systemHint': 'Sigue al teléfono y cambia cuando él cambia.',
-  'language.note':
-    'Cambia todo lo que escribe la app. No toca tus mensajes: van sellados, y ni este dispositivo ni el servidor los traducen.',
-  'language.untranslated':
-    'Las Condiciones del servicio, la Política de privacidad y las licencias de código abierto permanecen en inglés. Son documentos legales, y la traducción de uno no es el que aceptaste.',
+  'language.note': 'Cambia todo lo que escribe la app.',
+  'language.untranslated': 'Los Términos, la Política de Privacidad y las licencias siguen en inglés.',
 
   'appearance.themes': 'Temas',
   'appearance.reduceMotion': 'Reducir el movimiento',
@@ -716,8 +727,7 @@ export const es: Catalog = {
   'appearance.hapticsNote': 'La vibración también sigue este interruptor.',
 
   'themes.title': 'Apariencia',
-  'themes.intro':
-    'Todo en Nearside es gratis: el cifrado, la bóveda, las salas de grupo y fijar archivos en tu teléfono. Esto son solo aspectos. Comprar uno es la única forma de pagar por lo demás.',
+  'themes.intro': 'Todas las funciones de Nearside son gratis. Esto es apariencia, y la única forma de pagarlas.',
   'themes.included': 'Incluidos',
   'themes.packs': 'Packs',
   'themes.bySupport': 'Incluidos con tu apoyo. Gracias.',
@@ -753,11 +763,9 @@ export const es: Catalog = {
   'notifications.refused': 'Seguirán desactivadas hasta que des permiso.',
   'notifications.noLongerAsking': 'Android ya no lo pregunta. Actívalas en {location}.',
   'notifications.mutedChats': 'Chats silenciados',
-  'notifications.mutedChatsHint':
-    'Desliza un chat para silenciarlo. En Android la notificación se descarta en este teléfono, antes de mostrarse, así que el servidor nunca sabe qué chats mantienes en silencio. La app de escritorio no tiene ese enganche y seguirá sonando.',
+  'notifications.mutedChatsHint': 'Desliza un chat para silenciarlo. La app de escritorio sigue sonando.',
   'notifications.mentions': 'Menciones en salas',
-  'notifications.mentionsHint':
-    'Se resaltan en la sala, pero reciben la misma notificación que cualquier otro mensaje: tu nombre va dentro del mensaje cifrado, así que el servidor no puede verlo.',
+  'notifications.mentionsHint': 'Se resaltan en la sala. La notificación es como la de cualquier otro mensaje.',
 
   'calls.willNotRing': 'Las llamadas no sonarán',
   'calls.willNotRingHint':
@@ -771,8 +779,7 @@ export const es: Catalog = {
   'calls.ringOutLoudOn':
     'Reproduce un tono en la app cuando entra una llamada. Independiente del sonido de mensajes.',
   'calls.leavesBehind': 'Qué deja atrás una llamada',
-  'calls.leavesBehindBody':
-    'Nada. La voz y el vídeo van directos entre los dos teléfonos, cifrados, y las ofertas y respuestas que montan la llamada van selladas con la clave de tu contacto. Ninguna fila registra que hubo una llamada, con quién ni cuánto duró. Lo que sí ocurre es que cada teléfono conoce la dirección IP del otro.',
+  'calls.leavesBehindBody': 'Nada. Las llamadas van directamente entre los dos teléfonos y no dejan registro. Eso sí, cada teléfono conoce la IP del otro.',
 
   'privacy.onThisDevice': 'En este dispositivo',
   'privacy.appLock': 'Bloqueo de la app',
@@ -801,15 +808,19 @@ export const es: Catalog = {
   'hidden.empty': 'No hay nadie oculto en este dispositivo.',
   'hidden.deletedAccount': 'La cuenta ya no existe',
   'hidden.unhide': 'Mostrar',
-  'hidden.note':
-    'Ocultas en este dispositivo. No pueden escribirte ni llamarte: para eso hace falta un contacto que hayas aceptado. Sí pueden mandar una solicitud; simplemente no la verás. No hay lista de bloqueo en el servidor, así que nada de esto nos dice a quién estás evitando.',
+  'hidden.note': 'Ocultas en este dispositivo. No pueden escribirte ni llamarte a menos que vuelvas a aceptarlas.',
   'hidden.footnote': 'Rechazar una solicitud o borrar un chat oculta a esa persona aquí.',
 
   'profile.changeAvatar': 'Cambiar la foto',
   'profile.tapPhoto': 'Toca la foto para subir una imagen',
   'profile.displayName': 'Nombre visible',
-  'profile.displayNameNote':
-    'Es lo que ven tus amigos en los chats. Puede llevar espacios y mayúsculas, y dos personas pueden elegir el mismo. Un nombre visible no es una dirección, y nadie puede encontrarte por él.',
+  'profile.displayNameNote': 'Se muestra a tus amigos en los chats. Dos personas pueden elegir el mismo nombre.',
+  'profile.bio': 'Acerca de ti',
+  'profile.bioPlaceholder': 'Una o dos líneas sobre ti.',
+  'profile.bioNote': 'Se muestra en tu perfil a las personas con las que estás conectado.',
+  'profile.bioTooLong': 'El texto puede tener hasta {count} caracteres.',
+  'profile.bioUpdated': 'Texto del perfil actualizado.',
+  'profile.bioNotSaved': 'Ese texto no se pudo guardar.',
   'profile.avatarMustBeImage': 'La foto de perfil tiene que ser una imagen.',
   'profile.avatarUpdated': 'Foto de perfil actualizada.',
   'profile.nameTooLong': 'Escribe un nombre visible, de hasta {count} caracteres.',
@@ -820,16 +831,14 @@ export const es: Catalog = {
   'storage.offlineCopy': 'Copia sin conexión',
   'storage.decrypted': 'Mensajes descifrados',
   'storage.decryptedEmpty': 'Nada todavía. Se llena a medida que abres conversaciones.',
-  'storage.decryptedHint':
-    'En {conversations}. La búsqueda lee esta copia, así que una conversación que este dispositivo nunca abrió no se puede buscar.',
+  'storage.decryptedHint': 'En {conversations}. Solo se pueden buscar los chats que este dispositivo ha abierto.',
   'storage.clearMirror': 'Vaciar la copia sin conexión',
   'storage.clearMirrorBody':
     'La búsqueda se queda muda hasta que vuelvas a abrir cada conversación, y lo que el servidor ya haya borrado se pierde. Tus contactos siguen verificados.',
   'storage.mirrorCleared': 'Copia sin conexión vaciada. Se rehace al abrir conversaciones.',
   'storage.pinnedFiles': 'Archivos fijados',
   'storage.pinnedLabel': 'Guardados para siempre en este teléfono',
-  'storage.pinnedHint':
-    'El servidor va limpiando fotos, vídeos y notas de voz antiguos. Fijar guarda aquí una copia, que sobrevive a esa limpieza.',
+  'storage.pinnedHint': 'El servidor borra el contenido más antiguo; un anclaje conserva una copia en este teléfono.',
   'storage.pinnedBrowser':
     'Fijar necesita la app. Un navegador no tiene almacenamiento privado donde guardar el archivo.',
   'storage.unmeasured': '{files} sin poder medir',
@@ -842,8 +851,7 @@ export const es: Catalog = {
   'storage.clearFailed': 'No se pudo vaciar.',
   'storage.mediaCache': 'Caché de archivos',
   'storage.mediaCacheLabel': 'Adjuntos guardados en memoria',
-  'storage.mediaCacheHint':
-    'Fotos y vídeos que abriste en esta sesión, para no descifrarlos otra vez al volver atrás. Se vacía al cerrar la app.',
+  'storage.mediaCacheHint': 'Fotos y vídeos que abriste en esta sesión. Se vacía al cerrar la app.',
   'storage.currentlyHeld': 'Ocupado ahora',
   'storage.note':
     'Nada de esto está en el servidor. Vaciarlo libera espacio aquí y no cambia nada en ningún otro sitio.',
@@ -882,4 +890,18 @@ export const es: Catalog = {
   'account.deleteConfirmLabel': 'Escribe tu nombre visible para confirmar el borrado',
   'account.deletePermanently': 'Eliminar para siempre',
   'account.deleteFailed': 'No se pudo eliminar tu cuenta.',
+
+  // ---------------------------------------------------- profile card
+  'profileCard.title': 'Perfil',
+  'profileCard.viewPhoto': 'Ver foto',
+  'profileCard.bio': 'Acerca de',
+  'profileCard.bioEmpty': 'No ha escrito nada aquí.',
+  'profileCard.bioEmptySelf': 'Todavía no has escrito nada aquí.',
+  'profileCard.loadFailed': 'No se pudo cargar este perfil.',
+  'profileCard.yourNameFor': 'Tu nombre para esta persona',
+  'profileCard.noNickname': 'Sin definir',
+  'profileCard.setNickname': 'Definir',
+  'profileCard.changeNickname': 'Cambiar',
+  'profileCard.nicknameNote': 'Solo tú ves este nombre.',
+  'profileCard.selfHint': 'Edita el tuyo en Ajustes → Perfil.',
 };

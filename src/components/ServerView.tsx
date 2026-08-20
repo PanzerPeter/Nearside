@@ -123,6 +123,42 @@ export function ServerView({ onClose, onOpenLimits }: ServerViewProps) {
             </div>
           )}
 
+          {/* Column-level drift, which is the quiet half of going stale: a
+              migration adds a column to a table that is already described
+              here, and the card goes on listing what it listed last year.
+              Every "server reads: …" below is a hand-written claim, and this
+              is what holds it against the live database. */}
+          {report.drift.length > 0 && (
+            <div className="alert alert-warning mt-4 text-sm items-start">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+              <div className="min-w-0">
+                <p className="font-medium">{t('serverView.driftTitle')}</p>
+                <ul className="text-xs mt-1 space-y-1">
+                  {report.drift.map((entry) => (
+                    <li key={entry.table} className="break-words">
+                      <span className="font-mono">{entry.table}</span>
+                      {entry.unlisted.length > 0 && (
+                        <>
+                          {' — '}
+                          {t('serverView.driftUnlisted')}{' '}
+                          <span className="font-mono">{entry.unlisted.join(', ')}</span>
+                        </>
+                      )}
+                      {entry.missing.length > 0 && (
+                        <>
+                          {' — '}
+                          {t('serverView.driftMissing')}{' '}
+                          <span className="font-mono">{entry.missing.join(', ')}</span>
+                        </>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+                <p className="text-xs mt-1">{t('serverView.driftSuffix')}</p>
+              </div>
+            </div>
+          )}
+
           {/* Grouped rather than one run of eighteen cards. Flat, the list read
               as a pile of things the server holds; under headings, the shape of
               the answer is visible before any single row is: sealed content,

@@ -14,6 +14,67 @@ one of them drifts.
 
 ## [Unreleased]
 
+## [1.5.0] — 2026-08-20
+
+### Added
+
+- **Tap someone's picture in a chat header to see who they are.** Their photo,
+  the name they chose, the name you gave them, whether you have verified them,
+  and a new line they can write about themselves. The card is read-only apart
+  from the nickname: verifying, the background and the disappearing-message
+  timer already live in the ⋮ menu beside it, and a second door to each of them
+  is a second thing to keep in step.
+- **You can write a short line about yourself**, in Settings → Profile, shown to
+  people you are connected to. It is stored unencrypted, like your display name
+  and your photo; “What the server knows” lists it, which is where that belongs.
+  Sealing it would mean a separate copy encrypted for every contact, re-made
+  every time you edited a word — a great deal of machinery around a paragraph
+  that sits beside a face the server can already see.
+
+### Changed
+
+- **The private nickname you give a contact is now encrypted before it is
+  stored.** It was always hidden from the person it names — they are never told
+  — but it sat in the database as ordinary text, so “only you can see this” was
+  true of the app and not of the server. It is now sealed with the key on your
+  phone, like your stickers and their names. Nicknames set before this update
+  keep working and are re-encrypted the first time each device opens the app.
+- **Names no longer carry an `@` in front of them.** The sigil suggested a
+  handle you could look somebody up by, and there has been nothing to look
+  anybody up in since the directory was removed — people are added by connect
+  code or QR now.
+- **“What the server knows” describes the whole database again.** Four tables
+  behind group chats — reactions, read marks and the two notification tables —
+  had never been described, so the screen was showing its own “this is out of
+  date” warning. Six cards were also explaining the wrong table, having each
+  picked up the note belonging to the one above it.
+- **That screen now checks its own column lists against the live database.** It
+  could already tell you about a table nobody had described; it could not tell
+  you about a column, which is what its “server reads: …” lines actually claim.
+  If those lists ever fall behind again, the screen says so in the app instead
+  of quietly under-reporting what is stored about you.
+- **Less small print.** Settings hints, the notes under fields and the new
+  profile card had drifted into explaining how the server works, in places where
+  the job was to help you decide something. They say the useful half now. The
+  explanations have not gone anywhere: they are in the privacy policy and on
+  “What the server knows”, which are written for somebody who came to read them.
+- **Three things the server was keeping for nobody are gone.** A record of who
+  redeemed whose connect code — written on every connection and read by
+  nothing; spent connect codes, which now expire away with everything else; and
+  a leftover search extension from before the server stopped holding message
+  text, whose presence suggested it still could.
+
+### Fixed
+
+- **Opening a photo full-screen no longer puts the reaction menu on top of it.**
+  A long press, or a double click on a computer, reached the message underneath
+  the viewer — so reactions appeared in the middle of the picture, and a double
+  tap started a reply to it. Nothing that happens inside the viewer reaches the
+  conversation behind it now.
+- **Exported data no longer carries a piece of the app's own source in it.** The
+  explanatory note at the top of the file had been assembled wrongly and read
+  `server.push_config.note` where the sentence should have been.
+
 ## [1.4.6] — 2026-08-20
 
 ### Fixed

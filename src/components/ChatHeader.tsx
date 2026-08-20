@@ -41,6 +41,9 @@ interface ChatHeaderProps {
   friendStatus: PresenceStatus;
   searchOpen: boolean;
   onBack: () => void;
+  /** Open the profile card. The avatar is the way in — it is the one thing in
+   *  the header that is a picture of the person rather than a control. */
+  onOpenProfile: () => void;
   onOpenNickname: () => void;
   onToggleSearch: () => void;
   onOpenVerify: () => void;
@@ -83,6 +86,7 @@ export function ChatHeader({
   friendStatus,
   searchOpen,
   onBack,
+  onOpenProfile,
   onOpenNickname,
   onToggleSearch,
   onOpenVerify,
@@ -119,14 +123,21 @@ export function ChatHeader({
       >
         <ArrowLeft className="w-5 h-5" />
       </button>
-      <div className="relative shrink-0" style={{ width: 36, height: 36 }}>
+      <button
+        type="button"
+        className="relative shrink-0 rounded-full transition-opacity hover:opacity-80"
+        style={{ width: 36, height: 36 }}
+        onClick={onOpenProfile}
+        title={t('profileCard.title')}
+        aria-label={t('profileCard.title')}
+      >
         <Avatar display_name={friend.display_name} url={friend.avatar_url} size={36} />
         {isSelf && (
           <span className="absolute -bottom-0.5 -right-0.5 rounded-full bg-base-100 p-0.5">
             <NotebookPen className="w-3 h-3 text-primary" />
           </span>
         )}
-      </div>
+      </button>
       {/* The name is the button that opens the nickname editor: it is the
           thing being renamed, so it needs no icon of its own to explain it. */}
       <button
@@ -134,7 +145,7 @@ export function ChatHeader({
         className="min-w-0 flex-1 text-left rounded-lg px-1 -mx-1 hover:bg-base-content/5 transition-colors"
         onClick={onOpenNickname}
         title={
-          isSelf ? t('chat.nameThisChat') : nickname ? `@${friend.display_name}` : t('chat.setNickname')
+          isSelf ? t('chat.nameThisChat') : nickname ? friend.display_name : t('chat.setNickname')
         }
       >
         <p className="font-semibold text-sm truncate flex items-center gap-1.5">

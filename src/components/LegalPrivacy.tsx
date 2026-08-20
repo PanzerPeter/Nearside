@@ -47,8 +47,9 @@ export const privacySections: LegalSection[] = [
     body: (
       <p>
         Message bodies, captions, vault notes, room messages, and every photo, video, and voice
-        recording are encrypted on your device before upload. The server stores a ciphertext and a
-        nonce. Attachments are uploaded as opaque bytes with their file key sealed to the recipient,
+        recording are encrypted on your device before upload. So are your stickers and their names,
+        the background you pick for a conversation, and the private nicknames you give contacts. The
+        server stores a ciphertext and a nonce. Attachments are uploaded as opaque bytes with their file key sealed to the recipient,
         so neither the database nor the storage bucket can reveal them, and neither can a legal order
         served on the hosting provider.
       </p>
@@ -61,18 +62,17 @@ export const privacySections: LegalSection[] = [
       <>
         <p>
           Encryption hides content, not the fact of a conversation. In plain text the server holds
-          your email address and password hash, your display name, your avatar, your public keys,
-          and when you were last seen. It holds who you are connected to and when you connected. For
+          your email address and password hash, your display name, your avatar, the short text you
+          write about yourself on your profile, your public keys, and when you were last seen. It holds who you are connected to and when you connected. For
           every message it holds the sender, the recipient, the timestamp, whether it was edited,
           deleted, or forwarded, and for attachments the file size and the length of a voice note.
         </p>
         <p>
-          Four more things are stored as ordinary text and people are often surprised by them. Emoji
-          reactions are not encrypted, in conversations and in rooms alike. Delivery and read
-          timestamps are not encrypted, and in a room that includes who has read it. The private
-          nicknames you give contacts are hidden from the contact but not from the server. Room
-          titles are readable, because the server has to list your rooms, so treat a room title like
-          the outside of an envelope.
+          Three more things are stored as ordinary text and people are often surprised by them.
+          Emoji reactions are not encrypted, in conversations and in rooms alike. Delivery and read
+          timestamps are not encrypted, and in a room that includes who has read it. Room titles are
+          readable, because the server has to list your rooms, so treat a room title like the
+          outside of an envelope.
         </p>
         <p>
           Your avatar is stored in a public bucket and served from a URL that needs no sign-in.
@@ -225,7 +225,7 @@ export const privacySections: LegalSection[] = [
     title: 'Children',
     body: (
       <p>
-        Nearside is not for under 16s. If you believe a child has created an account, write to{' '}
+        Nearside is not for under 14s. If you believe a child has created an account, write to{' '}
         {CONTACT_EMAIL} and it will be removed.
       </p>
     ),

@@ -1,12 +1,46 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   TABLE_GROUPS,
   TABLE_REPORTS,
+  columnDrift,
   groupTables,
   missingTables,
   type TableReport,
   unlistedTables,
 } from './server-view';
+
+/**
+ * table → columns, read out of `supabase/schema.sql`.
+ *
+ * The screen checks itself against the live database at runtime (0043). This
+ * checks it against the schema at build time, which is the difference between
+ * a user being told the page is incomplete and the page never shipping
+ * incomplete. Block comments are stripped first — the schema is mostly prose —
+ * and constraint lines are skipped, since a CHECK is not a column.
+ */
+function schemaColumns(): Map<string, string[]> {
+  const sql = readFileSync(new URL('../../supabase/schema.sql', import.meta.url), 'utf8').replace(
+    /\/\*[\s\S]*?\*\//g,
+    ''
+  );
+  const tables = new Map<string, string[]>();
+  for (const match of sql.matchAll(
+    /CREATE TABLE IF NOT EXISTS public\.(\w+) \(([\s\S]*?)\n\);/g
+  )) {
+    const columns: string[] = [];
+    for (const raw of match[2].split('\n')) {
+      const line = raw.trim();
+      if (!line || line.startsWith('--')) continue;
+      if (/^(PRIMARY KEY|UNIQUE|CONSTRAINT|FOREIGN KEY|CHECK)\b/i.test(line)) continue;
+      const name = line.split(/\s+/)[0];
+      // Continuation lines of a multi-line CHECK reach here as fragments.
+      if (/^[a-z_][a-z0-9_]*$/.test(name)) columns.push(name);
+    }
+    tables.set(match[1], columns);
+  }
+  return tables;
+}
 
 /** The specs as the screen renders them, with a row count stubbed in. */
 const asReports = (): TableReport[] => TABLE_REPORTS.map((t) => ({ ...t, rows: 0 }));
@@ -59,11 +93,65 @@ describe('server view', () => {
     expect(backgrounds?.readable).toContain('media_path');
   });
 
-  it('admits that room titles and nicknames are readable text', () => {
+  it('admits that room titles are readable text', () => {
     expect(TABLE_REPORTS.find((t) => t.table === 'rooms')?.readable).toContain('title');
-    expect(TABLE_REPORTS.find((t) => t.table === 'friend_nicknames')?.readable).toContain(
-      'nickname'
-    );
+  });
+
+  it('marks a nickname as sealed while still admitting the old column', () => {
+    // 0041 sealed it. The plaintext column survives for rows written before
+    // that migration, and the screen keeps naming it until it is dropped —
+    // describing the seal alone would claim a migration finished early.
+    const nicknames = TABLE_REPORTS.find((t) => t.table === 'friend_nicknames');
+    expect(nicknames?.opaque).toContain('nickname_ciphertext');
+    expect(nicknames?.opaque).toContain('nickname_nonce');
+    expect(nicknames?.readable).toContain('nickname');
+  });
+
+  it('lists the profile text as something the server reads', () => {
+    // 0040 put it there in the open, deliberately. If it is ever sealed, this
+    // test is what says the screen has to be told.
+    expect(TABLE_REPORTS.find((t) => t.table === 'profiles')?.readable).toContain('bio');
+  });
+
+  it('names each table with its own label and note', () => {
+    // Six cards used to carry the note of the table above them — the reader
+    // was given the wrong explanation, confidently. Nothing renders the
+    // mismatch, so only this catches it.
+    for (const spec of TABLE_REPORTS) {
+      expect(spec.label).toBe(`server.${spec.table}.label`);
+      expect(spec.note).toBe(`server.${spec.table}.note`);
+    }
+  });
+
+  it('describes every table the schema holds, column for column', () => {
+    // The whole point of the screen. A migration that adds a table or a column
+    // without describing it fails here, rather than showing a user a page that
+    // quietly under-reports what is stored about them.
+    const schema = schemaColumns();
+    expect(unlistedTables([...schema.keys()])).toEqual([]);
+    expect(missingTables([...schema.keys()])).toEqual([]);
+    expect(columnDrift(schema)).toEqual([]);
+  });
+
+  it('flags a column the database holds and no card describes', () => {
+    const schema = new Map([['profiles', [...(TABLE_REPORTS[0].readable ?? []), 'shoe_size']]]);
+    expect(columnDrift(schema)).toEqual([
+      { table: 'profiles', unlisted: ['shoe_size'], missing: [] },
+    ]);
+  });
+
+  it('flags a column a card claims and the database no longer has', () => {
+    const schema = new Map([['profiles', ['id']]]);
+    const [drift] = columnDrift(schema);
+    expect(drift.table).toBe('profiles');
+    expect(drift.missing).toContain('display_name');
+    expect(drift.unlisted).toEqual([]);
+  });
+
+  it('says nothing about a table the database does not have', () => {
+    // `missingTables` already reports it. Repeating it column by column would
+    // bury the one line that matters.
+    expect(columnDrift(new Map())).toEqual([]);
   });
 
   it('seals the room key but not who holds a copy', () => {

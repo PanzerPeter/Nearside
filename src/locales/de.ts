@@ -192,8 +192,7 @@ export const de: Catalog = {
   'verify.sigilLabel': 'Sicherheitszeichen: {words}',
   'notifyPrompt.title': 'Erfahre, wenn dir jemand schreibt',
   'notifyPrompt.body1': 'Im Moment erreicht Nearside dich nur, solange es auf dem Bildschirm offen ist.',
-  'notifyPrompt.body2':
-    'Eine Mitteilung sagt dir, wer geschrieben hat, und sonst nichts. Der Server hat keine lesbare Kopie der Nachricht, aus der er zitieren könnte. Du kannst das später in den Einstellungen wieder ausschalten.',
+  'notifyPrompt.body2': 'Eine Benachrichtigung nennt nur, wer geschrieben hat. Du kannst sie später in den Einstellungen abschalten.',
   'update.available': 'Update verfügbar',
   'update.body':
     'Lade neu, um die neueste Version zu bekommen. Deine Chats und deine Anmeldung bleiben, wie sie sind.',
@@ -351,11 +350,9 @@ export const de: Catalog = {
   'nickname.title': 'Spitzname',
   'nickname.selfPlaceholder': 'Notiz an mich',
   'nickname.selfLabel': 'Name für diesen Chat',
-  'nickname.label': 'Spitzname für @{name}',
+  'nickname.label': 'Spitzname für {name}',
   'nickname.selfNote': 'Diesen Chat siehst nur du, nenn ihn also, wie du magst.',
-  'nickname.notePrefix':
-    'Das siehst nur du. @{name} erfährt nichts davon, und der Anzeigename bleibt überall sonst',
-  'nickname.noteSuffix': '.',
+  'nickname.note': 'Das siehst nur du. {name} erfährt nichts davon.',
   'sealed.intro':
     '{name} sieht die Frage sofort. Keiner von euch kann die Antwort des anderen lesen, bevor ihr beide geantwortet habt.',
   'sealed.theQuestion': 'Die Frage',
@@ -626,6 +623,18 @@ export const de: Catalog = {
   'server.push_alerts.label': 'Abklingzeit für den Mitteilungston',
   'server.push_alerts.note':
     'Wann eine Unterhaltung dein Telefon zuletzt einen Ton machen ließ, damit ein Schwall von Nachrichten als eine Meldung ankommt statt als sechs. Eine Zeile pro Personenpaar, jedes Mal überschrieben. Es ist eine gröbere Kopie dessen, was die Nachrichtenzeilen oben ohnehin festhalten, und der Grund, warum dein Telefon dem Server nie sagen muss, welchen Chat du offen hast.',
+  'server.room_message_reactions.label': 'Reaktionen in Räumen',
+  'server.room_message_reactions.note':
+    'Wie Reaktionen im Einzelchat, und aus demselben Grund unverschlüsselt: ein einzelnes Emoji trägt zu wenig, als dass Verschlüsseln etwas brächte, und der Server sähe weiterhin, wer worauf reagiert hat.',
+  'server.room_receipts.label': 'Lesemarken in Räumen',
+  'server.room_receipts.note':
+    'Wie weit jedes Mitglied in jedem Raum gelesen hat. Eine Zeile pro Person und Raum, beim Lesen überschrieben. Zeitangaben, wie die Haken im Einzelchat.',
+  'server.room_message_pushes.label': 'Benachrichtigungsprotokoll für Räume',
+  'server.room_message_pushes.note':
+    'Eine Zeile pro Raumnachricht, für die eine Benachrichtigung verschickt wurde, damit niemand dieselbe zweimal bekommt. Festgehalten wird, dass benachrichtigt wurde — nie, was in der Nachricht stand.',
+  'server.room_push_alerts.label': 'Tonpause für Räume',
+  'server.room_push_alerts.note':
+    'Wann ein Raum dein Telefon zuletzt zum Klingen gebracht hat, damit eine lebhafte Gruppe als ein Signal ankommt und nicht als zwanzig. Eine Zeile pro Person und Raum, jedes Mal überschrieben.',
   'server.push_config.label': 'Serverkonfiguration',
   'server.push_config.note':
     'Server-Technik für Mitteilungen. Sie enthält nichts über dich.',
@@ -655,6 +664,11 @@ export const de: Catalog = {
   'serverView.callsTitle': 'Anrufe',
   'serverView.callsBody':
     'Ein Anruf hinterlässt oben keine einzige Zeile. Ton und Bild gehen direkt zwischen den beiden Telefonen, Ende-zu-Ende verschlüsselt; die Angebote und Antworten, die den Anruf aufbauen, sind an den Schlüssel deines Kontakts versiegelt und laufen über einen Kanal, den der Server weiterreicht, ohne ihn zu speichern. Nichts hält fest, dass ein Anruf stattfand, mit wem oder wie lange. Was jedes Telefon erfährt, ist die IP-Adresse des anderen — siehe „Wo dieser Schutz endet“.',
+  'serverView.driftTitle': 'Dieser Bildschirm beschreibt einige Tabellen unvollständig.',
+  'serverView.driftUnlisted': 'gespeichert, aber nicht beschrieben:',
+  'serverView.driftMissing': 'beschrieben, aber nicht mehr gespeichert:',
+  'serverView.driftSuffix':
+    'Jede Liste hier ist von Hand geschrieben; dieser Abgleich hält sie gegen die laufende Datenbank, damit eine Lücke hier auftaucht statt unbemerkt zu bleiben.',
   'serverView.export': 'Alles exportieren',
   'serverView.exportNote':
     'Verschlüsselte Spalten werden als das Chiffrat exportiert, das der Server hält. Dein Schlüssel ist nicht in der Datei.',
@@ -664,8 +678,7 @@ export const de: Catalog = {
   'cropper.hint': 'Zum Verschieben ziehen; zum Zoomen aufziehen oder den Regler nutzen.',
   'call.e2ee': 'Ende-zu-Ende verschlüsselt',
   'room.name': 'Raumname',
-  'room.nameNote':
-    'Der Name wird als Klartext gespeichert, damit der Server deine Räume auflisten kann. Die Nachrichten darin nicht.',
+  'room.nameNote': 'Alle im Raum sehen diesen Namen.',
   'room.unknownSender':
     'Der Absender hat keinen Signaturschlüssel veröffentlicht, es gibt also nichts, woran sich diese Nachricht prüfen ließe.',
   'room.memberCount#one': '{count} Mitglied',
@@ -713,10 +726,8 @@ export const de: Catalog = {
   'language.hint': 'In welcher Sprache die App geschrieben ist',
   'language.system': 'Wie mein Gerät',
   'language.systemHint': 'Folgt dem Telefon und wechselt mit ihm.',
-  'language.note':
-    'Ändert alles, was die App schreibt. Deine Nachrichten bleiben unberührt: die sind versiegelt, und weder dieses Gerät noch der Server übersetzt sie.',
-  'language.untranslated':
-    'Nutzungsbedingungen, Datenschutzerklärung und die Open-Source-Lizenzen bleiben auf Englisch. Das sind Rechtstexte, und die Übersetzung eines Rechtstexts ist nicht der Text, dem du zugestimmt hast.',
+  'language.note': 'Ändert alles, was die App schreibt.',
+  'language.untranslated': 'Die Nutzungsbedingungen, die Datenschutzerklärung und die Lizenzen bleiben auf Englisch.',
 
   'appearance.themes': 'Themes',
   'appearance.reduceMotion': 'Bewegung reduzieren',
@@ -728,8 +739,7 @@ export const de: Catalog = {
   'appearance.hapticsNote': 'Das Haptik-Feedback richtet sich ebenfalls nach diesem Schalter.',
 
   'themes.title': 'Darstellung',
-  'themes.intro':
-    'Alles in Nearside ist kostenlos: die Verschlüsselung, der Tresor, Gruppenräume und das Anheften von Medien auf deinem Telefon. Hier geht es nur ums Aussehen. Ein Theme zu kaufen ist die einzige Möglichkeit, für den Rest zu bezahlen.',
+  'themes.intro': 'Alle Funktionen von Nearside sind kostenlos. Das hier ist Optik — und die einzige Möglichkeit, dafür zu bezahlen.',
   'themes.included': 'Enthalten',
   'themes.packs': 'Packs',
   'themes.bySupport': 'In deiner Unterstützung enthalten. Danke.',
@@ -764,11 +774,9 @@ export const de: Catalog = {
   'notifications.refused': 'Sie bleiben aus, bis du sie erlaubst.',
   'notifications.noLongerAsking': 'Android fragt nicht mehr. Schalte sie unter {location} ein.',
   'notifications.mutedChats': 'Stummgeschaltete Chats',
-  'notifications.mutedChatsHint':
-    'Wische über einen Chat, um ihn stummzuschalten. Unter Android wird die Mitteilung auf diesem Telefon verworfen, bevor sie erscheint — der Server erfährt also nie, welche Chats du stumm hältst. Die Desktop-App hat diesen Haken nicht und klingelt weiter.',
+  'notifications.mutedChatsHint': 'Wische über einen Chat, um ihn stummzuschalten. Die Desktop-App klingelt weiter.',
   'notifications.mentions': 'Erwähnungen in Räumen',
-  'notifications.mentionsHint':
-    'Im Raum hervorgehoben, aber sie lösen dieselbe Mitteilung aus wie jede andere Nachricht: dein Name steckt in der verschlüsselten Nachricht, der Server kann ihn nicht sehen.',
+  'notifications.mentionsHint': 'Im Raum hervorgehoben. Die Benachrichtigung sieht aus wie bei jeder anderen Nachricht.',
 
   'calls.willNotRing': 'Anrufe klingeln nicht',
   'calls.willNotRingHint':
@@ -782,8 +790,7 @@ export const de: Catalog = {
   'calls.ringOutLoudOn':
     'Spielt in der App einen Ton ab, wenn ein Anruf eingeht. Unabhängig vom Nachrichtenton.',
   'calls.leavesBehind': 'Was ein Anruf hinterlässt',
-  'calls.leavesBehindBody':
-    'Nichts. Ton und Bild gehen verschlüsselt direkt von Telefon zu Telefon, und die Angebote und Antworten, die den Anruf aufbauen, sind an den Schlüssel deines Kontakts versiegelt. Keine Zeile hält fest, dass ein Anruf stattfand, mit wem oder wie lange. Jedes der beiden Telefone erfährt allerdings die IP-Adresse des anderen.',
+  'calls.leavesBehindBody': 'Nichts. Anrufe laufen direkt zwischen den beiden Telefonen und hinterlassen keine Spur. Jedes Telefon erfährt allerdings die IP-Adresse des anderen.',
 
   'privacy.onThisDevice': 'Auf diesem Gerät',
   'privacy.appLock': 'App-Sperre',
@@ -812,16 +819,20 @@ export const de: Catalog = {
   'hidden.empty': 'Auf diesem Gerät ist niemand ausgeblendet.',
   'hidden.deletedAccount': 'Konto existiert nicht mehr',
   'hidden.unhide': 'Einblenden',
-  'hidden.note':
-    'Nur auf diesem Gerät ausgeblendet. Schreiben oder anrufen können sie dich nicht — dafür braucht es einen Kontakt, den du angenommen hast. Eine Anfrage können sie weiterhin senden; du siehst sie nur nicht. Auf dem Server gibt es keine Sperrliste, hier verrät also nichts, wem du aus dem Weg gehst.',
+  'hidden.note': 'Auf diesem Gerät ausgeblendet. Schreiben oder anrufen können sie dich nur, wenn du sie wieder annimmst.',
   'hidden.footnote':
     'Wer eine Anfrage ablehnt oder einen Chat löscht, blendet die Person hier aus.',
 
   'profile.changeAvatar': 'Profilbild ändern',
   'profile.tapPhoto': 'Tippe auf das Bild, um ein Profilbild hochzuladen',
   'profile.displayName': 'Anzeigename',
-  'profile.displayNameNote':
-    'Das sehen Freunde in Chats. Leerzeichen und Großbuchstaben sind in Ordnung, und zwei Leute dürfen denselben Namen wählen. Ein Anzeigename ist keine Adresse, und niemand findet dich darüber.',
+  'profile.displayNameNote': 'Wird Freunden in Chats angezeigt. Zwei Personen dürfen denselben Namen wählen.',
+  'profile.bio': 'Über dich',
+  'profile.bioPlaceholder': 'Ein, zwei Zeilen über dich.',
+  'profile.bioNote': 'Steht in deinem Profil, sichtbar für alle, mit denen du verbunden bist.',
+  'profile.bioTooLong': 'Der Text darf bis zu {count} Zeichen lang sein.',
+  'profile.bioUpdated': 'Profiltext aktualisiert.',
+  'profile.bioNotSaved': 'Dieser Text konnte nicht gespeichert werden.',
   'profile.avatarMustBeImage': 'Das Profilbild muss ein Bild sein.',
   'profile.avatarUpdated': 'Profilbild aktualisiert.',
   'profile.nameTooLong': 'Gib einen Anzeigenamen ein, höchstens {count} Zeichen.',
@@ -832,8 +843,7 @@ export const de: Catalog = {
   'storage.offlineCopy': 'Offline-Kopie',
   'storage.decrypted': 'Entschlüsselte Nachrichten',
   'storage.decryptedEmpty': 'Noch nichts. Sie füllt sich, während du Unterhaltungen öffnest.',
-  'storage.decryptedHint':
-    'Aus {conversations}. Die Suche liest diese Kopie — eine Unterhaltung, die dieses Gerät nie geöffnet hat, lässt sich also nicht durchsuchen.',
+  'storage.decryptedHint': 'Über {conversations}. Durchsuchbar ist nur, was dieses Gerät geöffnet hat.',
   'storage.clearMirror': 'Offline-Kopie leeren',
   'storage.clearMirrorBody':
     'Die Suche bleibt stumm, bis du jede Unterhaltung wieder öffnest, und was der Server bereits gelöscht hat, ist endgültig weg. Deine Kontakte bleiben verifiziert.',
@@ -841,8 +851,7 @@ export const de: Catalog = {
     'Offline-Kopie geleert. Sie baut sich neu auf, während du Unterhaltungen öffnest.',
   'storage.pinnedFiles': 'Angeheftete Dateien',
   'storage.pinnedLabel': 'Für immer auf diesem Telefon',
-  'storage.pinnedHint':
-    'Der Server räumt ältere Fotos, Videos und Sprachnachrichten weg. Anheften behält hier eine Kopie, die das überlebt.',
+  'storage.pinnedHint': 'Der Server räumt ältere Medien ab; ein Pin behält eine Kopie auf diesem Telefon.',
   'storage.pinnedBrowser':
     'Anheften braucht die App. Ein Browser hat keinen privaten Speicher für die Datei.',
   'storage.unmeasured': '{files} nicht messbar',
@@ -856,8 +865,7 @@ export const de: Catalog = {
   'storage.clearFailed': 'Das ließ sich nicht leeren.',
   'storage.mediaCache': 'Medien-Cache',
   'storage.mediaCacheLabel': 'Anhänge im Arbeitsspeicher',
-  'storage.mediaCacheHint':
-    'Fotos und Videos, die du in dieser Sitzung geöffnet hast, damit sie beim Zurückscrollen nicht erneut entschlüsselt werden. Beim Schließen der App wird er geleert.',
+  'storage.mediaCacheHint': 'Fotos und Videos, die du in dieser Sitzung geöffnet hast. Leert sich, wenn die App schließt.',
   'storage.currentlyHeld': 'Derzeit belegt',
   'storage.note':
     'Nichts davon liegt auf dem Server. Leeren schafft hier Platz und ändert sonst nirgends etwas.',
@@ -896,4 +904,18 @@ export const de: Catalog = {
   'account.deleteConfirmLabel': 'Gib deinen Anzeigenamen ein, um die Löschung zu bestätigen',
   'account.deletePermanently': 'Endgültig löschen',
   'account.deleteFailed': 'Dein Konto konnte nicht gelöscht werden.',
+
+  // ---------------------------------------------------- profile card
+  'profileCard.title': 'Profil',
+  'profileCard.viewPhoto': 'Foto ansehen',
+  'profileCard.bio': 'Über',
+  'profileCard.bioEmpty': 'Hier steht noch nichts.',
+  'profileCard.bioEmptySelf': 'Du hast hier noch nichts geschrieben.',
+  'profileCard.loadFailed': 'Dieses Profil konnte nicht geladen werden.',
+  'profileCard.yourNameFor': 'Dein Name für diese Person',
+  'profileCard.noNickname': 'Nicht gesetzt',
+  'profileCard.setNickname': 'Setzen',
+  'profileCard.changeNickname': 'Ändern',
+  'profileCard.nicknameNote': 'Diesen Namen siehst nur du.',
+  'profileCard.selfHint': 'Ändern kannst du das unter Einstellungen → Profil.',
 };

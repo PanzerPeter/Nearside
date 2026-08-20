@@ -84,10 +84,7 @@ export function StickerPicker({ drawer, onSelect, onError }: StickerPickerProps)
         ) : drawer.stickers.length === 0 ? (
           <div className="flex flex-col items-center gap-2 py-10 px-4 text-center">
             <p className="text-sm text-base-content/60">No stickers yet.</p>
-            <p className="text-xs text-base-content/40">
-              Add a picture and it stays sealed to your account. Nobody else can see your
-              collection, including us.
-            </p>
+            <p className="text-xs text-base-content/40">Add a picture to start one.</p>
           </div>
         ) : shown.length === 0 ? (
           <p className="py-10 text-center text-sm text-base-content/50">

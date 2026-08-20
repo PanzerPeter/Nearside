@@ -13,6 +13,7 @@ import { ConversationSearch } from './ConversationSearch';
 import { ConversationPanel } from './ConversationPanel';
 import { ChatBackgroundModal } from './ChatBackgroundModal';
 import { NicknameModal } from './NicknameModal';
+import { ProfileCard } from './ProfileCard';
 import { ForwardModal } from './ForwardModal';
 import { AskSealedModal } from './AskSealedModal';
 import { VerifyContact } from './VerifyContact';
@@ -80,6 +81,7 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
   const [panelOpen, setPanelOpen] = useState(false);
   const [backgroundOpen, setBackgroundOpen] = useState(false);
   const [nicknameOpen, setNicknameOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [verifyOpen, setVerifyOpen] = useState(false);
   const [askSealedOpen, setAskSealedOpen] = useState(false);
   // The message whose "Forward" was chosen, and so the one the picker will
@@ -212,6 +214,7 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
         friendStatus={friendStatus}
         searchOpen={searchOpen}
         onBack={onBack}
+        onOpenProfile={() => setProfileOpen(true)}
         onOpenNickname={() => setNicknameOpen(true)}
         onToggleSearch={() => {
           setPanelOpen(false);
@@ -281,10 +284,24 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
         />
       )}
 
+      {profileOpen && (
+        <ProfileCard
+          userId={friend.id}
+          fallback={friend}
+          nickname={nickname}
+          isSelf={isSelf}
+          trust={trust}
+          friendStatus={friendStatus}
+          onEditNickname={() => setNicknameOpen(true)}
+          onClose={() => setProfileOpen(false)}
+        />
+      )}
+
       {nicknameOpen && (
         <NicknameModal
           me={me}
           peerId={friend.id}
+          identity={identity}
           display_name={friend.display_name}
           isSelf={isSelf}
           onClose={() => setNicknameOpen(false)}
