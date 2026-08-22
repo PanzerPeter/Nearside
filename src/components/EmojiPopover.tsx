@@ -10,6 +10,7 @@ import {
   useState,
 } from 'react';
 import { createPortal } from 'react-dom';
+import { dismissesOnScroll } from '../lib/popover-dismiss';
 
 const EmojiPicker = lazy(() => import('./EmojiPicker'));
 
@@ -98,12 +99,21 @@ export function EmojiPopover({
       setPos({ top, left, width, height });
     }
 
-    // Dismiss when the *page* scrolls (so the picker can't float away from its
-    // trigger) — but ignore scrolls that originate inside the picker's own
-    // emoji list, which would otherwise close it the moment you browse emojis.
+    // Dismiss only when the scroll actually moves the trigger — see
+    // `dismissesOnScroll`. Closing on any scroll anywhere meant the message
+    // thread's own auto-scroll shut the picker every time the peer sent a
+    // message or started typing.
     function onScroll(e: Event) {
-      if (panelRef.current?.contains(e.target as Node)) return;
-      onClose();
+      const target = e.target as Node | null;
+      if (
+        dismissesOnScroll({
+          target,
+          panel: panelRef.current,
+          anchor: anchorRef.current,
+        })
+      ) {
+        onClose();
+      }
     }
 
     place();

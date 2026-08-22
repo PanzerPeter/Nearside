@@ -157,6 +157,17 @@
 }
 
 @layer utilities {
+  /* Selection inside a surface that is itself painted in a theme colour — a
+     message bubble, whose own fill is the brand accent the rule above selects
+     with. Accent on accent showed nothing at all, which is why selecting the
+     text of a message you were editing looked like it had not selected. The
+     surface's own text colour is the one colour guaranteed to contrast with
+     what it sits on, so the highlight borrows that instead. */
+  .selection-on-fill ::selection,
+  .selection-on-fill::selection {
+    background: color-mix(in oklch, currentColor 30%, transparent);
+  }
+
   /* Notch inset added on top of the shared top bar's own height. */
   .pt-safe {
     padding-top: var(--safe-top);

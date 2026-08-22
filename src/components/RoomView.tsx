@@ -621,7 +621,7 @@ function RoomBubble({
             transform: swipe.offset ? `translateX(${(mine ? -1 : 1) * swipe.offset}px)` : undefined,
           }}
           {...swipe.handlers}
-          className={`text-left rounded-2xl px-3 py-2 ${
+          className={`selection-on-fill text-left rounded-2xl px-3 py-2 ${
             m.sender === 'unverified'
               ? 'bg-error/10 border border-error/40'
               : m.sender === 'unknown'

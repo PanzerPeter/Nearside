@@ -14,6 +14,21 @@ one of them drifts.
 
 ## [Unreleased]
 
+## [1.5.1] — 2026-08-22
+
+### Fixed
+
+- **The emoji and sticker picker stays open when the other person types or
+  sends something.** The thread scrolls itself down to keep the newest message
+  in view, and the picker was closing on any scroll anywhere on the screen —
+  including one it had nothing to do with. It now closes only on a scroll that
+  actually moves the button it hangs from, so the reaction picker still gets out
+  of the way when the message it belongs to scrolls past.
+- **Selecting text in a message you are editing now shows the highlight.** The
+  selection colour was the same accent your own messages are painted with, so
+  the highlight was drawn in the bubble's own colour, on the bubble — there, but
+  impossible to see. It takes the bubble's text colour instead.
+
 ## [1.5.0] — 2026-08-20
 
 ### Added

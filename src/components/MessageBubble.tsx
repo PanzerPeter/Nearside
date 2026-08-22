@@ -287,7 +287,7 @@ export function MessageBubble({
         // The save and cancel controls live in the composer, not here — see
         // `Composer`'s `editing` prop.
         <div
-          className={`w-[85%] sm:w-[70%] px-3.5 py-2 rounded-2xl shadow-[0_1px_2px_rgba(0,0,0,0.28)] ring-2 ring-primary/60 ${
+          className={`selection-on-fill w-[85%] sm:w-[70%] px-3.5 py-2 rounded-2xl shadow-[0_1px_2px_rgba(0,0,0,0.28)] ring-2 ring-primary/60 ${
             isOwn ? 'rounded-br-md bg-primary text-primary-content' : 'rounded-bl-md bg-neutral text-neutral-content'
           }`}
         >
@@ -338,8 +338,11 @@ export function MessageBubble({
             // it cannot be saved, so it needs no invitation to try.
             placeholder={msg.media_path ? t('message.captionPlaceholder') : undefined}
             // Transparent and borderless: the bubble around it is the box. The
-            // caret and selection inherit the bubble's own text colour, which
-            // is the only thing keeping them visible on the primary fill.
+            // caret takes the bubble's own text colour, which is the only thing
+            // keeping it visible on the primary fill; the selection behind it
+            // gets there through `selection-on-fill` on the bubble, because a
+            // `::selection` painted in the accent is invisible on a bubble that
+            // is painted in the accent.
             className="block w-full bg-transparent border-0 outline-none resize-none p-0 text-base leading-6 caret-current placeholder:opacity-60 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
             value={editingText}
             onChange={(e) => onEditingTextChange(e.target.value)}
@@ -457,7 +460,7 @@ export function MessageBubble({
               // bubble; the ring is what keeps it visibly attached to the
               // message it acts on.
               menuOpen ? 'ring-2 ring-primary/60' : ''
-            } relative overflow-hidden ${sealing ? 'seal-sweep' : ''}`}
+            } selection-on-fill relative overflow-hidden ${sealing ? 'seal-sweep' : ''}`}
           >
             {isDeleted ? (
               t('message.deleted')
