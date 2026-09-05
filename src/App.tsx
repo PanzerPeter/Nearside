@@ -42,7 +42,7 @@ import {
 } from './lib/purchases';
 import { ownedPacks } from './lib/theme-grants';
 import { useNicknameSync } from './lib/nicknames';
-import { clearAll } from './lib/outbox';
+import { clearFor as clearOutboxFor } from './lib/outbox';
 import { clearLocalDb, clearLocalDbFor, openLocalDb } from './lib/localdb';
 import {
   forgetAccount,
@@ -51,7 +51,7 @@ import {
   type StoredAccount,
 } from './lib/accounts';
 import { clearSeed } from './lib/keystore';
-import { clearPinnedMedia, forgetPinIndex } from './lib/pins';
+import { clearPinnedMedia, clearPinnedMediaFor, forgetPinIndex } from './lib/pins';
 import { forgetAllPeerKeys } from './lib/peer-keys';
 import { forgetAllPublishedKeys, forgetAllRoomKeys } from './lib/rooms';
 import { forgetStickers } from './lib/stickers';
@@ -312,7 +312,10 @@ function App() {
   }, []);
 
   const signOut = useCallback(async () => {
-    await clearAll();
+    // Scoped to this account, not the whole store: the outbox database is
+    // device-wide and a second account signed in on the same phone has its own
+    // unsent messages in it, which this sign-out is no reason to discard.
+    if (userId) await clearOutboxFor(userId).catch(() => {});
     // Before `clearLocalDb`, which drops the rows naming these files. Pinned
     // attachments are decrypted bytes in the sandbox and the store is the only
     // thing that knows where they are.
@@ -381,6 +384,15 @@ function App() {
   const forgetAccountFully = useCallback(
     async (target: StoredAccount) => {
       await forgetAccount(target.userId).catch(() => {});
+      // That account's unsent bodies, which are message content like any other
+      // and are not addressed by anything below: the outbox is one device-wide
+      // database and dropping the mirror leaves it untouched.
+      await clearOutboxFor(target.userId).catch(() => {});
+      // Before the mirror, for the reason `signOut` gives: the `pins` rows are
+      // the only map to the decrypted files in the sandbox, so clearing the
+      // store first strands them there — photos and voice notes belonging to an
+      // account this device has just been told to forget.
+      await clearPinnedMediaFor(target.userId, userId).catch(() => {});
       await clearLocalDbFor(target.userId, userId).catch(() => {});
       await clearLock(target.userId).catch(() => {});
       await clearSeed(target.userId).catch(() => {});

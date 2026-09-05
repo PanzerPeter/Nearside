@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_ATTEMPTS, enqueue, isDuplicateSend, nextDelayMs } from './outbox';
+import { MAX_ATTEMPTS, belongsTo, clearFor, enqueue, isDuplicateSend, nextDelayMs } from './outbox';
 import { PendingMessage } from './types';
 
 function samplePending(overrides: Partial<PendingMessage> = {}): PendingMessage {
@@ -72,5 +72,33 @@ describe('isDuplicateSend', () => {
     expect(isDuplicateSend({ code: '23503', message: 'foreign key violation' })).toBe(false);
     expect(isDuplicateSend({ message: 'rate_limited_messages' })).toBe(false);
     expect(isDuplicateSend({})).toBe(false);
+  });
+});
+
+describe('belongsTo', () => {
+  // The store is one database per device while everything in it is per account,
+  // so this is the whole of the scoping. `listFor` and `clearFor` share it
+  // rather than each writing the comparison out: they disagreed once, and the
+  // shape of the bug was one account's sign-out silently discarding another
+  // account's unsent messages.
+  it('matches only the account that queued the message', () => {
+    const mine = samplePending({ user_id: 'me' });
+    expect(belongsTo(mine, 'me')).toBe(true);
+    expect(belongsTo(mine, 'someone-else')).toBe(false);
+  });
+
+  it('does not confuse the sender with the recipient', () => {
+    // A message I sent to you belongs to me. Scoping on `receiver_id` — the
+    // one field the store actually indexes — would clear it from your queue.
+    const mine = samplePending({ user_id: 'me', receiver_id: 'friend' });
+    expect(belongsTo(mine, 'friend')).toBe(false);
+  });
+});
+
+describe('clearFor', () => {
+  // Same condition as `enqueue` above: no `indexedDB` in this environment. The
+  // contract is that a sign-out is never blocked by storage that isn't there.
+  it('resolves rather than throwing when IndexedDB is unavailable', async () => {
+    await expect(clearFor('me')).resolves.toBeUndefined();
   });
 });

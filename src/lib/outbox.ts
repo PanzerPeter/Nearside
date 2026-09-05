@@ -129,14 +129,45 @@ export async function dequeue(id: string): Promise<void> {
 }
 
 /**
- * Drop every queued message on this device, when a session ends. An unsent
- * body is message content, and left in IndexedDB it outlives both sign-out and
- * account deletion, the one case where the data is meant to be gone for good.
+ * Whether a queued row belongs to `userId`.
+ *
+ * The store is one database per *device*, not per account — an unsent body is
+ * addressed to a peer and the index is on `receiver_id`, so the account that
+ * wrote it is only ever a field. Every read and every delete therefore has to
+ * apply this itself, and they share the one definition so they cannot drift:
+ * a `listFor` that scoped and a clear that did not is how one account's
+ * sign-out came to discard another's queue.
  */
-export async function clearAll(): Promise<void> {
+export function belongsTo(msg: PendingMessage, userId: string): boolean {
+  return msg.user_id === userId;
+}
+
+/**
+ * Drop everything `userId` has queued on this device, when their session ends.
+ * An unsent body is message content, and left in IndexedDB it outlives both
+ * sign-out and account deletion, the one case where the data is meant to be
+ * gone for good.
+ *
+ * Scoped to the one account, and not `store.clear()`, because the database is
+ * device-wide while everything it holds is not. A second account signed in on
+ * the same phone keeps its own queue: it is not being signed out, its messages
+ * have not been sent, and nothing tells it they were dropped.
+ *
+ * A cursor rather than the `receiver_id` index — that index answers "to whom",
+ * and the question here is "from whom".
+ */
+export async function clearFor(userId: string): Promise<void> {
   await withStore<void>('readwrite', undefined, (store, resolve) => {
-    const req = store.clear();
-    req.onsuccess = () => resolve(undefined);
+    const req = store.openCursor();
+    req.onsuccess = () => {
+      const cursor = req.result;
+      if (!cursor) {
+        resolve(undefined);
+        return;
+      }
+      if (belongsTo(cursor.value as PendingMessage, userId)) cursor.delete();
+      cursor.continue();
+    };
     req.onerror = () => resolve(undefined);
   });
 }
@@ -154,7 +185,7 @@ export async function listFor(me: string, peerId: string): Promise<PendingMessag
     req.onerror = () => resolve([]);
   });
   return rows
-    .filter((m) => m.user_id === me)
+    .filter((m) => belongsTo(m, me))
     .sort((a, b) => (a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0));
 }
 

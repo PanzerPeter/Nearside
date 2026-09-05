@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { generateMnemonic, isValidMnemonic, seedFromMnemonic } from './mnemonic';
-import { identityFromSeed } from './keys';
+import { identityFromSeed, toBase64 } from './keys';
 import {
   openBytesFrom,
   openForSelf,
@@ -15,6 +15,11 @@ import {
 import { safetyNumber } from './safety';
 
 const PHRASE = 'legal winner thank year wave sausage worth useful legal winner thank yellow';
+
+const hex = (bytes: Uint8Array): string =>
+  Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
 
 describe('mnemonic', () => {
   it('generates twelve valid words', () => {
@@ -32,6 +37,25 @@ describe('mnemonic', () => {
     const b = await seedFromMnemonic(PHRASE);
     expect(a).toHaveLength(32);
     expect(Array.from(a)).toEqual(Array.from(b));
+  });
+
+  // Written down rather than compared against itself, which is the only form
+  // of this test that is worth anything.
+  //
+  // Every account in existence is its phrase and nothing else: there is no
+  // reset path and no copy of the seed anywhere but the phone it was made on.
+  // So the derivation is a contract with people who are not here to renegotiate
+  // it, and anything that moves it — a bip39 upgrade, a change to
+  // `normalizeMnemonic`, a different slice of the 64 bytes — locks every one of
+  // them out of their own messages, silently, on the version that ships it.
+  //
+  // A test that derives twice and compares agrees with itself no matter what
+  // the answer became. These are the answers, from the build real accounts were
+  // made under. The phrase is BIP-39's own published vector, so the seed is
+  // checkable against the spec rather than only against us.
+  it('derives the seed the specification says, and not some other seed', async () => {
+    const seed = await seedFromMnemonic(PHRASE);
+    expect(hex(seed)).toBe('878386efb78845b3355bd15ea4d39ef97d179cb712b77d5c12b6be415fffeffe');
   });
 
   // A phrase is typed on a phone and pasted on a desktop, and a paste carries
@@ -88,6 +112,22 @@ describe('identity', () => {
     expect(id.boxPublic).toHaveLength(32);
     expect(id.signPublic).toHaveLength(32);
     expect(id.vaultKey).toHaveLength(32);
+  });
+
+  // The three keys, pinned for the same reason as the seed and separately from
+  // it: `identityFromSeed` mixes in `BOX_CONTEXT`, `SIGN_CONTEXT` and
+  // `VAULT_CONTEXT`, so a correct seed still yields a stranger's keys if one of
+  // those labels is edited. The box key is what peers seal to, the signing key
+  // is what rooms verify authorship against, and the vault key is what opens
+  // this device's own notes — a drift in any of them is an account that loads
+  // and can read nothing.
+  it('derives the same three keys it always has', async () => {
+    const id = await identityFromSeed(await seedFromMnemonic(PHRASE));
+    expect(await toBase64(id.boxPublic)).toBe('Z9pmXszV5Wt1X4xVjRnNDIIyE2RVJn67Oj0Zy0A+LDk=');
+    expect(await toBase64(id.signPublic)).toBe('vZNlisdjHLF5Y6YF3gzZqDKS9WqKZ0WNdOOJ/JBGPms=');
+    expect(hex(id.vaultKey)).toBe(
+      'b869e5052de7a543b74af664d67520a9e787d5408c9a234413e7efd8ad40c081'
+    );
   });
 
   it('is reproducible from the phrase alone', async () => {

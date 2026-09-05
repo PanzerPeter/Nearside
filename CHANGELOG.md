@@ -14,6 +14,43 @@ one of them drifts.
 
 ## [Unreleased]
 
+## [1.5.2] — 2026-09-05
+
+### Fixed
+
+- **Signing out of one account no longer discards another account's unsent
+  messages.** Messages waiting to be sent are kept in one place shared by
+  everybody signed in on the phone, and signing out emptied all of it rather
+  than only the part belonging to whoever was leaving. A second account could
+  lose a message it had written and never been told did not arrive. The same
+  went for deleting an account.
+- **Removing an account from this device now takes its kept photos and voice
+  notes with it.** Pinning an attachment writes a decrypted copy into the app's
+  private storage, and the record of which copies belong to which account lives
+  inside that account. Removing an account erased the record first, which left
+  the pictures on the phone with nothing able to name them, count them, or
+  delete them — on a device that had just been told to forget the person they
+  belonged to.
+- **A message written with no signal is no longer given up on after half a
+  minute.** Sending was retried five times on a doubling delay and then reported
+  as failed, and a phone in a lift or a tunnel spent all five without any of
+  them ever reaching a network. Attempts now count only the times a server
+  actually refused the message; with no signal the queue waits, and sends as
+  soon as there is one.
+- **Deleting your account now also removes it from the account switcher.** The
+  row stayed behind and only revealed the account was gone when somebody tapped
+  it and was asked to sign in.
+
+### Changed
+
+- Dependencies moved to their latest compatible releases — Capacitor 8.5.1 and
+  its plugins, Supabase 2.115, OneSignal 5.5.4, RevenueCat 13.5 — all of them
+  patch and minor updates within the versions already in use. The recovery
+  phrase's derivation is now pinned to written-down values in the test suite
+  rather than only compared against itself, so an upgrade that quietly moved it
+  fails the build instead of locking every existing account out of its own
+  messages.
+
 ## [1.5.1] — 2026-08-22
 
 ### Fixed

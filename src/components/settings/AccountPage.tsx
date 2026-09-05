@@ -4,11 +4,12 @@ import { LogOut } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { Profile } from '../../lib/types';
 import { confirmsUsername } from '../../lib/account';
-import type { StoredAccount } from '../../lib/accounts';
-import { clearAll } from '../../lib/outbox';
+import { forgetAccount, type StoredAccount } from '../../lib/accounts';
+import { clearFor as clearOutboxFor } from '../../lib/outbox';
 import { clearLocalDb } from '../../lib/localdb';
 import { clearPinnedMedia } from '../../lib/pins';
 import { clearSeed } from '../../lib/keystore';
+import { clearLock } from '../../lib/app-lock';
 import { useToast } from '../../hooks/useToast';
 import { AccountSwitcher } from '../AccountSwitcher';
 import { Card } from './SettingsUi';
@@ -81,13 +82,20 @@ export function AccountPage({
       // decrypted mirror and its private key — leaving either behind would keep
       // a deleted account's plaintext and key material on a phone that may well
       // have another account signed into it.
-      await clearAll();
+      await clearOutboxFor(session.user.id);
       // Before `clearLocalDb`: the pin rows are the only map to the decrypted
       // files in the sandbox, and a deleted account must not leave its photos
       // and voice notes behind on a phone somebody else uses.
       await clearPinnedMedia().catch(() => {});
       await clearLocalDb();
       await clearSeed(session.user.id);
+      // The same two `signOut` does, and for the same reasons — more so here,
+      // because this account is not coming back. A surviving roster row offers
+      // a deleted account as a switch target and only finds out it is gone when
+      // somebody taps it, and a surviving lock verifier is a passphrase screen
+      // belonging to a user that no longer exists.
+      await forgetAccount(session.user.id).catch(() => {});
+      await clearLock(session.user.id).catch(() => {});
       await supabase.auth.signOut();
     } finally {
       window.location.reload();

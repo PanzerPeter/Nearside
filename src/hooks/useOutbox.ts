@@ -7,6 +7,7 @@
 
 import { useEffect, useRef, useState, type MutableRefObject } from 'react';
 import { supabase } from '../lib/supabase';
+import { getConnectionState } from '../lib/connection';
 import { Message, PendingMessage } from '../lib/types';
 import { MAX_MESSAGE_LENGTH } from '../lib/conversation';
 import { fetchOwnMessageRow } from '../lib/message-queries';
@@ -23,6 +24,15 @@ import {
   nextDelayMs,
   MAX_ATTEMPTS,
 } from '../lib/outbox';
+
+/**
+ * How long the queue waits before looking again while the device is offline.
+ *
+ * Not a backoff — nothing is being retried, because nothing is attempted with
+ * no network. It is only a safety net under the `online` event, which some
+ * stacks never fire and which is wrong behind a captive portal.
+ */
+const OFFLINE_RECHECK_MS = 30_000;
 
 export interface Outbox {
   /** Sends not yet acknowledged by the server. Rendered after `messages`
@@ -281,6 +291,17 @@ export function useOutbox({
         ...queued.map((msg) => ({ msg, durable: true })),
         ...[...unqueuedRef.current.values()].map((msg) => ({ msg, durable: false })),
       ];
+
+      // An attempt is a record of the server refusing a message, not of time
+      // spent away from a network. Spending them offline burnt all five inside
+      // half a minute — backoff runs 1+2+4+8+16s — and dropped the queue with
+      // "Message failed to send.", which is the one outcome the outbox exists
+      // to prevent. So nothing is attempted with no network at all; the
+      // `online` listener above flushes the moment there is one.
+      if (!getConnectionState().online) {
+        if (attemptList.length > 0) scheduleFlush(OFFLINE_RECHECK_MS);
+        return;
+      }
 
       const stillQueued: PendingMessage[] = [];
       for (const { msg, durable } of attemptList) {

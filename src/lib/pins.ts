@@ -11,7 +11,15 @@
 // gallery is a separate action the user takes in the viewer: a pin keeps
 // something in Nearside without publishing it to the phone.
 import { Directory, Filesystem } from '@capacitor/filesystem';
-import { allPins, cachedPin, pinnedIds, putPin, removePin, type PinnedMedia } from './localdb';
+import {
+  allPins,
+  cachedPin,
+  openLocalDb,
+  pinnedIds,
+  putPin,
+  removePin,
+  type PinnedMedia,
+} from './localdb';
 import { mimeForPath } from './media';
 import type { MediaType } from './types';
 import { isMobileNative } from './platform';
@@ -256,6 +264,42 @@ export async function clearPinnedMedia(): Promise<void> {
       );
     }
     await removePin(pin.message_id);
+  }
+}
+
+/**
+ * The same, for an account this device is *not* signed into.
+ *
+ * The account switcher can remove an account without ever entering it, and that
+ * account's pinned attachments are decrypted bytes sitting in the sandbox. They
+ * are not reached by anything else on that path: the file names carry no user
+ * id, so one shared `pins/` folder holds every account's kept files, and the
+ * only record of which are whose is the `pins` table inside that account's own
+ * mirror. Dropping the mirror without this leaves the bytes behind with nothing
+ * left that can name them — unreachable, uncountable by the storage screen, and
+ * undeletable through the app.
+ *
+ * There is one connection, so this becomes the other account for the duration
+ * and hands ownership back, exactly as `clearLocalDbFor` does. The index
+ * `clearPinnedMedia` empties on the way belongs to whoever is signed in rather
+ * than to the account being removed, so it is refilled from their store
+ * afterwards; left empty, their own thread would stop showing pins it still has.
+ */
+export async function clearPinnedMediaFor(
+  userId: string,
+  restoreUserId: string | null
+): Promise<void> {
+  if (userId === restoreUserId) {
+    await clearPinnedMedia();
+    return;
+  }
+  await openLocalDb(userId);
+  await clearPinnedMedia();
+  if (restoreUserId) {
+    await openLocalDb(restoreUserId);
+    await loadPins();
+  } else {
+    forgetPinIndex();
   }
 }
 

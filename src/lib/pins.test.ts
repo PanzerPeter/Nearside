@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { clearLocalDb, openLocalDb } from './localdb';
 import {
   clearPinnedMedia,
+  clearPinnedMediaFor,
+  pinsLoaded,
   forgetPinIndex,
   loadPins,
   pinMedia,
@@ -117,5 +119,62 @@ describe('pins', () => {
     await pinMedia('m2', PATH, bytes, { mediaType: 'image', caption: 'second' });
     const files = [...pinsSnapshot().values()].map((p) => p.file_path);
     expect(new Set(files).size).toBe(2);
+  });
+});
+
+// Removing an account from the switcher without ever signing into it. The pin
+// files carry no user id — one shared `pins/` folder holds every account's kept
+// bytes — so the `pins` table inside that account's own mirror is the only
+// record of which files are whose. Dropping the mirror without clearing them
+// first leaves decrypted photos and voice notes in the sandbox with nothing
+// left that can name them.
+describe('clearPinnedMediaFor', () => {
+  beforeEach(async () => {
+    await openLocalDb(OTHER);
+    await clearLocalDb();
+    await openLocalDb(ME);
+    await clearLocalDb();
+    forgetPinIndex();
+    await loadPins();
+  });
+
+  it("clears the other account's pins and leaves the signed-in one's alone", async () => {
+    await openLocalDb(OTHER);
+    await pinMedia('theirs', PATH, bytes, { mediaType: 'image', caption: '' });
+
+    await openLocalDb(ME);
+    await loadPins();
+    await pinMedia('mine', PATH, bytes, { mediaType: 'image', caption: '' });
+
+    await clearPinnedMediaFor(OTHER, ME);
+
+    // Mine survived, and the index — which belongs to whoever is signed in, not
+    // to the account being removed — was refilled rather than left empty.
+    expect(pinsSnapshot().has('mine')).toBe(true);
+    expect(pinsSnapshot().size).toBe(1);
+
+    await openLocalDb(OTHER);
+    await loadPins();
+    expect(pinsSnapshot().size).toBe(0);
+  });
+
+  it('hands ownership back, so the next write lands in the right store', async () => {
+    await clearPinnedMediaFor(OTHER, ME);
+    await pinMedia('mine', PATH, bytes, { mediaType: 'image', caption: '' });
+
+    await openLocalDb(OTHER);
+    await loadPins();
+    expect(pinsSnapshot().has('mine')).toBe(false);
+  });
+
+  // Nobody signed in: the switcher can remove an account from the sign-in
+  // screen, where there is no store to hand ownership back to.
+  it('empties the index when there is no account to return to', async () => {
+    await openLocalDb(OTHER);
+    await pinMedia('theirs', PATH, bytes, { mediaType: 'image', caption: '' });
+
+    await clearPinnedMediaFor(OTHER, null);
+    expect(pinsSnapshot().size).toBe(0);
+    expect(pinsLoaded()).toBe(false);
   });
 });
