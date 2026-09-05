@@ -11,8 +11,11 @@ dist-ssr
 .idea
 .DS_Store
 
-.env
-.env.local
+# Every local env file, not only the two that happened to exist when this was
+# written — `.env.production` and friends carry the same project keys and were
+# not covered. `.env.example` is the tracked template and is the one exception.
+.env*
+!.env.example
 
 # Firebase service account keys and client config — never commit
 *-firebase-adminsdk-*.json
@@ -28,6 +31,15 @@ android/local.properties
 android/keystore.properties
 *.jks
 *.keystore
+
+# Build artifacts, wherever they are made. `android/.gitignore` already carries
+# `*.apk`, but that rule only reaches inside `android/` — a release APK copied
+# to the repo root to be side-loaded onto the phone went in with an unrelated
+# fix and stayed, nine versions stale, in a public repo. Keep the copy on disk,
+# not in the history: it is 35 MB every time, and a stale one is worse than
+# none, because somebody downloads it and judges the wrong app.
+*.apk
+*.aab
 
 # iOS build output lives in ios/.gitignore, which `cap add ios` wrote and
 # which already covers Pods/, DerivedData and the copied web assets.

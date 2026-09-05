@@ -122,7 +122,7 @@ export function IdentitySetup({
               <div className="relative">
                 <ol
                   className={`grid grid-cols-2 gap-1.5 font-mono text-sm bg-base-200 rounded-box p-3 transition-[filter] ${
-                    revealed ? '' : 'blur-sm select-none'
+                    revealed ? '' : 'blur-xs select-none'
                   }`}
                   style={{ transitionDuration: 'var(--motion-enter-duration)' }}
                   aria-hidden={!revealed}
@@ -171,7 +171,7 @@ export function IdentitySetup({
                 {t('identity.typeWords', { words: checkIndexes.map((i) => i + 1).join(', ') })}
               </p>
               <input
-                className="input input-bordered font-mono"
+                className="input font-mono"
                 value={typed}
                 onChange={(e) => setTyped(e.target.value)}
                 autoCapitalize="none"
@@ -191,7 +191,7 @@ export function IdentitySetup({
             <>
               <h1 className="card-title">{t('identity.enterPhrase')}</h1>
               <textarea
-                className="textarea textarea-bordered font-mono"
+                className="textarea font-mono"
                 rows={3}
                 value={typed}
                 onChange={(e) => { setTyped(e.target.value); setError(''); }}

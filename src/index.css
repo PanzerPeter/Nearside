@@ -1,12 +1,401 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* Tailwind CSS 4 and daisyUI 5. There is no `tailwind.config.js` any more:
+   Tailwind 4 does not read one unless pointed at it with `@config`, and
+   daisyUI 5 has no JS plugin options at all — themes are declared here or not
+   at all. So this file is now the whole of the design configuration. */
+@import 'tailwindcss' source(none);
+
+/* Explicit rather than Tailwind 4's automatic source detection. Auto-detection
+   walks the project and skips what git ignores, which would drag in the web
+   bundles `cap sync` copies into `ios/App/App/public` and `electron/app` —
+   stale duplicates of this app's own markup, keeping deleted classes alive in
+   the output long after the source stopped using them. These two paths are
+   what `content` named in the v3 config. */
+@source '../index.html';
+@source './';
+
+/* Built-in themes off: every theme this app ships is defined below, and
+   daisyUI's own `light`/`dark` would otherwise be emitted unused. `logs: false`
+   keeps the plugin's banner out of three build logs per release. */
+@plugin "daisyui" {
+  themes: false;
+  logs: false;
+}
+
+/* Discord-family cool-grey dark system with a single blue accent.
+
+   Every theme below repeats the shape and status tokens. A theme that omits
+   `--surface-ring` or `--receipt-read` does not inherit them from `nearside`,
+   it renders them as the literal string.
+
+   `--depth` and `--noise` are daisyUI 5 additions with no v4 equivalent, and
+   they are pinned to 0 in every theme on purpose: left at their default of 1,
+   daisyUI mixes a gradient and a drop shadow into buttons, badges, alerts,
+   toggles and menus. This app's surfaces are deliberately flat, and the
+   elevation system below is what does its lifting. */
+@plugin "daisyui/theme" {
+  name: "nearside";
+  default: true;
+  prefersdark: true;
+  color-scheme: dark;
+  --color-primary: #3b82f6;
+  --color-primary-content: #ffffff;
+  --color-secondary: #7a86ad;
+  --color-secondary-content: #010102;
+  --color-accent: #3b82f6;
+  --color-accent-content: #ffffff;
+  --color-neutral: #383b40;
+  --color-neutral-content: #f7f8f8;
+  --color-base-100: #2a2c31;
+  --color-base-200: #202225;
+  --color-base-300: #1a1b1e;
+  --color-base-content: #e8e9eb;
+  --color-info: #3b82f6;
+  --color-info-content: #ffffff;
+  --color-success: #27a644;
+  --color-success-content: #ffffff;
+  --color-warning: #e0a63b;
+  --color-warning-content: #010102;
+  --color-error: #eb5757;
+  --color-error-content: #ffffff;
+  --radius-box: 0.75rem;
+  --radius-field: 0.5rem;
+  --radius-selector: 1.9rem;
+  --border: 1px;
+  --surface-ring: #2a2c31;
+  --receipt-read: #86efac;
+  --presence-offline: #4b4d52;
+  --depth: 0;
+  --noise: 0;
+}
+
+/* Two more themes that ship free, for the same reason the messenger does: a
+   phone used in daylight and a phone with an OLED panel are ergonomic needs,
+   not cosmetics, and selling a readable screen is selling the app back to the
+   person who already has it. The paid packs below are looks; these two are
+   legibility.
+
+   Light themes invert the surface ladder: `neutral` (the incoming bubble) has
+   to be a *raised* surface here, not daisyUI's usual near-black, or every
+   message the friend sends lands in a dark slab. And the read tick sits on the
+   primary bubble, so it goes lighter than the bubble, never darker. */
+@plugin "daisyui/theme" {
+  name: "nearside-daylight";
+  color-scheme: light;
+  --color-primary: #2563eb;
+  --color-primary-content: #ffffff;
+  --color-secondary: #5b6675;
+  --color-secondary-content: #ffffff;
+  --color-accent: #2563eb;
+  --color-accent-content: #ffffff;
+  --color-neutral: #e6ebf2;
+  --color-neutral-content: #1b2430;
+  --color-base-100: #ffffff;
+  --color-base-200: #f4f6fa;
+  --color-base-300: #e8ecf3;
+  --color-base-content: #1b2430;
+  --color-info: #2563eb;
+  --color-info-content: #ffffff;
+  --color-success: #15803d;
+  --color-success-content: #ffffff;
+  --color-warning: #a16207;
+  --color-warning-content: #ffffff;
+  --color-error: #b91c1c;
+  --color-error-content: #ffffff;
+  --radius-box: 0.75rem;
+  --radius-field: 0.5rem;
+  --radius-selector: 1.9rem;
+  --border: 1px;
+  --surface-ring: #ffffff;
+  --receipt-read: #a7f3d0;
+  --presence-offline: #b6bfcc;
+  --depth: 0;
+  --noise: 0;
+}
+
+/* base-300 is true #000000 on purpose: on an OLED panel that is an unlit
+   pixel, which is where the battery saving comes from. The ladder above it
+   stays visible so surfaces don't merge into one void. */
+@plugin "daisyui/theme" {
+  name: "nearside-void";
+  color-scheme: dark;
+  --color-primary: #4c8dff;
+  --color-primary-content: #ffffff;
+  --color-secondary: #8a93a6;
+  --color-secondary-content: #000000;
+  --color-accent: #4c8dff;
+  --color-accent-content: #ffffff;
+  --color-neutral: #1c1d21;
+  --color-neutral-content: #f2f4f7;
+  --color-base-100: #0c0c0e;
+  --color-base-200: #060607;
+  --color-base-300: #000000;
+  --color-base-content: #f2f4f7;
+  --color-info: #4c8dff;
+  --color-info-content: #ffffff;
+  --color-success: #2ecc71;
+  --color-success-content: #00120a;
+  --color-warning: #f0b429;
+  --color-warning-content: #120c00;
+  --color-error: #ff5c5c;
+  --color-error-content: #120000;
+  --radius-box: 0.75rem;
+  --radius-field: 0.5rem;
+  --radius-selector: 1.9rem;
+  --border: 1px;
+  --surface-ring: #0c0c0e;
+  --receipt-read: #86efac;
+  --presence-offline: #3a3d44;
+  --depth: 0;
+  --noise: 0;
+}
+
+/* The cosmetic packs (Plan 5 Task 2). Each is a full theme rather than an
+   accent swap, because a half-themed app looks broken rather than bought. */
+@plugin "daisyui/theme" {
+  name: "nearside-midnight";
+  color-scheme: dark;
+  --color-primary: #6ea8fe;
+  --color-primary-content: #0b1020;
+  --color-secondary: #8892b0;
+  --color-secondary-content: #0b1020;
+  --color-accent: #6ea8fe;
+  --color-accent-content: #0b1020;
+  --color-neutral: #1b2a4a;
+  --color-neutral-content: #e7ecf7;
+  --color-base-100: #141c31;
+  --color-base-200: #101728;
+  --color-base-300: #0b1020;
+  --color-base-content: #e7ecf7;
+  --color-info: #6ea8fe;
+  --color-info-content: #0b1020;
+  --color-success: #3ec27a;
+  --color-success-content: #06120b;
+  --color-warning: #e0a63b;
+  --color-warning-content: #0b1020;
+  --color-error: #f2777a;
+  --color-error-content: #0b1020;
+  --radius-box: 0.75rem;
+  --radius-field: 0.5rem;
+  --radius-selector: 1.9rem;
+  --border: 1px;
+  --surface-ring: #141c31;
+  --receipt-read: #a7f3d0;
+  --presence-offline: #3a4560;
+  --depth: 0;
+  --noise: 0;
+}
+
+/* Light theme: the read tick sits on a dark primary bubble, so it has to go
+   lighter, not darker, exactly as it does on the dark one. */
+@plugin "daisyui/theme" {
+  name: "nearside-paper";
+  color-scheme: light;
+  --color-primary: #8a6d3b;
+  --color-primary-content: #fffaf0;
+  --color-secondary: #9c8a6e;
+  --color-secondary-content: #fffaf0;
+  --color-accent: #8a6d3b;
+  --color-accent-content: #fffaf0;
+  --color-neutral: #e0d8c6;
+  --color-neutral-content: #332b1d;
+  --color-base-100: #fffdf7;
+  --color-base-200: #f6f2e9;
+  --color-base-300: #ece6d8;
+  --color-base-content: #332b1d;
+  --color-info: #3d6b8a;
+  --color-info-content: #fffaf0;
+  --color-success: #3f7d44;
+  --color-success-content: #fffaf0;
+  --color-warning: #9a6b1f;
+  --color-warning-content: #fffaf0;
+  --color-error: #a83232;
+  --color-error-content: #fffaf0;
+  --radius-box: 0.75rem;
+  --radius-field: 0.5rem;
+  --radius-selector: 1.9rem;
+  --border: 1px;
+  --surface-ring: #fffdf7;
+  --receipt-read: #d7f0c8;
+  --presence-offline: #c4bba6;
+  --depth: 0;
+  --noise: 0;
+}
+
+@plugin "daisyui/theme" {
+  name: "nearside-terminal";
+  color-scheme: dark;
+  --color-primary: #4ade80;
+  --color-primary-content: #04150a;
+  --color-secondary: #3f6b4c;
+  --color-secondary-content: #dcffe6;
+  --color-accent: #4ade80;
+  --color-accent-content: #04150a;
+  --color-neutral: #123018;
+  --color-neutral-content: #dcffe6;
+  --color-base-100: #0e1a11;
+  --color-base-200: #0b130d;
+  --color-base-300: #050a06;
+  --color-base-content: #d6f5de;
+  --color-info: #4ade80;
+  --color-info-content: #04150a;
+  --color-success: #4ade80;
+  --color-success-content: #04150a;
+  --color-warning: #d9b04a;
+  --color-warning-content: #04150a;
+  --color-error: #f2777a;
+  --color-error-content: #04150a;
+  --radius-box: 0.5rem;
+  --radius-field: 0.25rem;
+  --radius-selector: 0.25rem;
+  --border: 1px;
+  --surface-ring: #0e1a11;
+  --receipt-read: #bbf7d0;
+  --presence-offline: #2a4531;
+  --depth: 0;
+  --noise: 0;
+}
+
+/* A mint tick disappears into this bubble's warm red; the read state borrows
+   the theme's other end of the spectrum instead, which still reads as "not the
+   white delivered tick" at 12px. */
+@plugin "daisyui/theme" {
+  name: "nearside-sunset";
+  color-scheme: dark;
+  --color-primary: #e0563f;
+  --color-primary-content: #fff4f0;
+  --color-secondary: #b58ad6;
+  --color-secondary-content: #1b1024;
+  --color-accent: #e0563f;
+  --color-accent-content: #fff4f0;
+  --color-neutral: #3a2450;
+  --color-neutral-content: #f4e9fa;
+  --color-base-100: #2b1a3c;
+  --color-base-200: #211430;
+  --color-base-300: #170d21;
+  --color-base-content: #f0e4f5;
+  --color-info: #8aa8ff;
+  --color-info-content: #1b1024;
+  --color-success: #34c77b;
+  --color-success-content: #06120b;
+  --color-warning: #f0b429;
+  --color-warning-content: #1b1024;
+  --color-error: #ff5c7a;
+  --color-error-content: #1b1024;
+  --radius-box: 0.75rem;
+  --radius-field: 0.5rem;
+  --radius-selector: 1.9rem;
+  --border: 1px;
+  --surface-ring: #2b1a3c;
+  --receipt-read: #ffd479;
+  --presence-offline: #4d3a63;
+  --depth: 0;
+  --noise: 0;
+}
+
+/* Amber, not mint: a pale green on this pink bubble is the same lightness as
+   the white delivered tick and the two stop separating. The radii are softer
+   than the rest of the family — the roundness is the point of the pack. */
+@plugin "daisyui/theme" {
+  name: "nearside-sakura";
+  color-scheme: light;
+  --color-primary: #d6336c;
+  --color-primary-content: #fff5f8;
+  --color-secondary: #9c7b8c;
+  --color-secondary-content: #fff5f8;
+  --color-accent: #d6336c;
+  --color-accent-content: #fff5f8;
+  --color-neutral: #fbe3ec;
+  --color-neutral-content: #4a2436;
+  --color-base-100: #fffafc;
+  --color-base-200: #fdeef4;
+  --color-base-300: #f7dde8;
+  --color-base-content: #4a2436;
+  --color-info: #5b7fbe;
+  --color-info-content: #fff5f8;
+  --color-success: #2f7d52;
+  --color-success-content: #fff5f8;
+  --color-warning: #96661c;
+  --color-warning-content: #fff5f8;
+  --color-error: #b3282f;
+  --color-error-content: #fff5f8;
+  --radius-box: 1rem;
+  --radius-field: 0.75rem;
+  --radius-selector: 1.9rem;
+  --border: 1px;
+  --surface-ring: #fffafc;
+  --receipt-read: #ffd166;
+  --presence-offline: #d9c3cd;
+  --depth: 0;
+  --noise: 0;
+}
+
+/* The only theme with no accent hue at all. Own and incoming bubbles separate
+   by lightness instead: a light-grey primary carrying dark text against a
+   dark-grey neutral carrying light text. An accent-coloured mono theme would
+   just be the default with the blue moved. Its read tick is inverted against
+   every other theme's — this bubble is light and its text is dark, so the tick
+   has to go darker to be seen at all. */
+@plugin "daisyui/theme" {
+  name: "nearside-graphite";
+  color-scheme: dark;
+  --color-primary: #b3bac4;
+  --color-primary-content: #15171a;
+  --color-secondary: #7d858f;
+  --color-secondary-content: #15171a;
+  --color-accent: #b3bac4;
+  --color-accent-content: #15171a;
+  --color-neutral: #2b2f34;
+  --color-neutral-content: #e6e8ea;
+  --color-base-100: #1d2024;
+  --color-base-200: #16181c;
+  --color-base-300: #0f1113;
+  --color-base-content: #e6e8ea;
+  --color-info: #9aa3ae;
+  --color-info-content: #15171a;
+  --color-success: #6fa585;
+  --color-success-content: #15171a;
+  --color-warning: #b6a179;
+  --color-warning-content: #15171a;
+  --color-error: #c98b8b;
+  --color-error-content: #15171a;
+  --radius-box: 0.5rem;
+  --radius-field: 0.375rem;
+  --radius-selector: 0.375rem;
+  --border: 1px;
+  --surface-ring: #1d2024;
+  --receipt-read: #1f5c3a;
+  --presence-offline: #4a4f56;
+  --depth: 0;
+  --noise: 0;
+}
+
+/* What `theme.extend` held in the v3 config.
+
+   `inline` matters for the three shadows and the scrim: without it Tailwind
+   emits `--shadow-overlay: var(--elev-overlay)` on `:root` and the utility
+   points at that, adding a level of indirection to a variable that is
+   deliberately re-declared under `[data-surface='light']` further down.
+   Inlining puts `var(--elev-overlay)` straight into the utility, so the
+   surface swap reaches it the same way it did in v3. */
+@theme {
+  --font-sans:
+    Inter, 'SF Pro Display', -apple-system, system-ui, 'Segoe UI', Roboto,
+    sans-serif;
+}
+
+@theme inline {
+  --color-scrim: var(--scrim);
+  --shadow-overlay: var(--elev-overlay);
+  --shadow-modal: var(--elev-modal);
+  --shadow-sheet: var(--elev-sheet);
+}
 
 @layer base {
-  /* `color-scheme` is deliberately NOT set here. Every daisyUI theme in
-     tailwind.config.js declares its own, and a hard-coded `dark` on :root
-     survived the theme switch — which rendered the light "Paper" pack's native
-     controls, scrollbars and form widgets dark against a cream page. */
+  /* `color-scheme` is deliberately NOT set here. Every daisyUI theme block
+     above declares its own, and a hard-coded `dark` on :root survived the
+     theme switch — which rendered the light "Paper" pack's native controls,
+     scrollbars and form widgets dark against a cream page. `purchases.ts`
+     reads this same property back to pick the system-bar icon style. */
 
   :root {
     /* The one place system-bar insets are named. Two mechanisms have to agree:
@@ -112,7 +501,7 @@
 
   /* Selection uses the brand accent. */
   ::selection {
-    background: oklch(var(--p) / 0.3);
+    background: color-mix(in oklab, var(--color-primary) 30%, transparent);
   }
 
   /* Subtle press feedback on every button — touch devices have no hover. */
@@ -129,12 +518,12 @@
   }
 
   ::-webkit-scrollbar-thumb {
-    background: oklch(var(--bc) / 0.2);
+    background: color-mix(in oklab, var(--color-base-content) 20%, transparent);
     border-radius: 9999px;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    background: oklch(var(--bc) / 0.3);
+    background: color-mix(in oklab, var(--color-base-content) 30%, transparent);
   }
 
   /* Honour the OS setting: every CSS-driven transition and animation
@@ -370,12 +759,12 @@
     from {
       box-shadow:
         0 1px 2px rgba(0, 0, 0, 0.28),
-        0 0 0 0 oklch(var(--p) / 0.5);
+        0 0 0 0 color-mix(in oklab, var(--color-primary) 50%, transparent);
     }
     to {
       box-shadow:
         0 1px 2px rgba(0, 0, 0, 0.28),
-        0 0 0 7px oklch(var(--p) / 0);
+        0 0 0 7px transparent;
     }
   }
 
@@ -612,7 +1001,7 @@
     position: absolute;
     inset: 0;
     border-radius: 9999px;
-    background: oklch(var(--su));
+    background: var(--color-success);
     animation: presence-pulse 2.6s ease-out infinite;
     pointer-events: none;
   }
@@ -667,11 +1056,11 @@
      this indicator exists to answer. */
   @keyframes rec-ring {
     0% {
-      box-shadow: 0 0 0 0 oklch(var(--er) / 0.6);
+      box-shadow: 0 0 0 0 color-mix(in oklab, var(--color-error) 60%, transparent);
     }
     70%,
     100% {
-      box-shadow: 0 0 0 7px oklch(var(--er) / 0);
+      box-shadow: 0 0 0 7px transparent;
     }
   }
 
@@ -692,11 +1081,12 @@ em-emoji-picker {
   --shadow: var(--elev-overlay);
   /* emoji-mart only accepts RGB triples through its shadow DOM boundary, so
      these must stay literal — they cannot reference the theme's CSS custom
-     properties. Keep them mirrored by hand: this must match `primary` in
-     tailwind.config.js (currently #3b82f6). */
+     properties. Keep them mirrored by hand: this must match `--color-primary`
+     in the `nearside` theme block above (currently #3b82f6). */
   --rgb-accent: 59, 130, 246;
-  /* Must match `base-100` in tailwind.config.js (currently #2a2c31), and the
-     `--surface-ring` token — same surface, mirrored by hand for the same reason. */
+  /* Must match `--color-base-100` in the `nearside` theme block above
+     (currently #2a2c31), and the `--surface-ring` token — same surface,
+     mirrored by hand for the same reason. */
   --rgb-background: 42, 44, 49;
   --font-family: Inter, system-ui, sans-serif;
   /* The category strip is ten tabs sharing the panel's width, and at

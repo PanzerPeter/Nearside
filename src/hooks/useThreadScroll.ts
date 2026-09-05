@@ -15,8 +15,8 @@ const HIGHLIGHT_MS = 1200;
 const AT_BOTTOM_SLACK_PX = 120;
 
 export interface ThreadScroll {
-  listRef: RefObject<HTMLDivElement>;
-  bottomRef: RefObject<HTMLDivElement>;
+  listRef: RefObject<HTMLDivElement | null>;
+  bottomRef: RefObject<HTMLDivElement | null>;
   /** Whether the list is scrolled (near) to the bottom. The ref is the source
    *  of truth logic reads synchronously; `atBottom` is its render-facing
    *  mirror, and exists only to gate the jump-to-latest button. */

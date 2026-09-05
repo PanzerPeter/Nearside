@@ -78,7 +78,7 @@ export function AppLockScreen({ onUnlock, onUnlockWithRecoveryPhrase, waitMs, on
             <>
               <p className="text-sm text-base-content/60">{t('lock.phraseBody')}</p>
               <textarea
-                className={`textarea textarea-bordered w-full h-24 text-center ${
+                className={`textarea w-full h-24 text-center ${
                   wrong ? 'textarea-error' : ''
                 }`}
                 value={phrase}
@@ -97,7 +97,7 @@ export function AppLockScreen({ onUnlock, onUnlockWithRecoveryPhrase, waitMs, on
           ) : (
             <input
               type="password"
-              className={`input input-bordered w-full text-center ${wrong ? 'input-error' : ''}`}
+              className={`input w-full text-center ${wrong ? 'input-error' : ''}`}
               value={passphrase}
               onChange={(e) => {
                 setPassphrase(e.target.value);

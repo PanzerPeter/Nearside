@@ -92,11 +92,11 @@ export function UpdatePrompt() {
     <div
       // Above the toast layer (z-100): this is the one thing on screen the user
       // is being asked to act on, so nothing transient may sit over its buttons.
-      className="fixed inset-x-0 bottom-0 z-[110] flex justify-center px-3 pb-[calc(0.75rem+var(--safe-bottom))] pointer-events-none"
+      className="fixed inset-x-0 bottom-0 z-110 flex justify-center px-3 pb-[calc(0.75rem+var(--safe-bottom))] pointer-events-none"
       role="status"
       aria-live="polite"
     >
-      <div className="pointer-events-auto w-full max-w-md rounded-2xl bg-base-100/95 backdrop-blur border border-base-content/10 shadow-modal p-4 animate-message-in">
+      <div className="pointer-events-auto w-full max-w-md rounded-2xl bg-base-100/95 backdrop-blur-sm border border-base-content/10 shadow-modal p-4 animate-message-in">
         <div className="flex items-start gap-3">
           <div className="w-10 h-10 rounded-full bg-primary/10 grid place-items-center shrink-0">
             <Sparkles className="w-5 h-5 text-primary" />

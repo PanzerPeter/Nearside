@@ -56,7 +56,7 @@ export function ConnectModal({ session, identity, onClose, initialTab = 'show' }
         </button>
       }
     >
-      <div role="tablist" className="tabs tabs-boxed bg-base-200/50 mb-4">
+      <div role="tablist" className="tabs tabs-box bg-base-200/50 mb-4">
         <button
           role="tab"
           className={`tab gap-1.5 ${tab === 'show' ? 'tab-active' : ''}`}

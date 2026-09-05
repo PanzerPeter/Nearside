@@ -16,7 +16,7 @@ export interface MessageMenuAction {
 interface MessageMenuProps {
   open: boolean;
   /** The bubble this menu belongs to; placement is measured from its rect. */
-  anchorRef: RefObject<HTMLElement>;
+  anchorRef: RefObject<HTMLElement | null>;
   /** Which edge of the bubble the card lines up with — own messages sit on
    *  the right of the thread, the friend's on the left. */
   align: 'start' | 'end';

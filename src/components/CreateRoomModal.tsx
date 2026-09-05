@@ -114,9 +114,9 @@ export function CreateRoomModal({ me, identity, onCreated, onClose }: CreateRoom
         </>
       }
     >
-      <div className="form-control">
-        <label className="label pb-1" htmlFor="room-title">
-          <span className="label-text text-xs font-medium uppercase tracking-wider text-base-content/60">
+      <div className="flex flex-col">
+        <label className="flex select-none items-center justify-between pb-1" htmlFor="room-title">
+          <span className="text-xs font-medium uppercase tracking-wider text-base-content/60">
             {t('room.name')}
           </span>
         </label>

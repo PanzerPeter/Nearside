@@ -173,7 +173,7 @@ export function ProfilePage({ session, profile, onUpdated }: ProfilePageProps) {
           title={t('profile.changeAvatar')}
         >
           <div className="avatar placeholder">
-            <div className="w-24 h-24 rounded-full bg-base-content/10 text-base-content/70 overflow-hidden ring ring-base-content/5">
+            <div className="w-24 h-24 rounded-full bg-base-content/10 text-base-content/70 overflow-hidden ring-3 ring-base-content/5">
               {avatarUrl ? (
                 <img src={avatarUrl} alt="avatar" className="w-full h-full object-cover" />
               ) : (
@@ -205,9 +205,9 @@ export function ProfilePage({ session, profile, onUpdated }: ProfilePageProps) {
         <p className="text-xs text-base-content/60">{t('profile.tapPhoto')}</p>
       </div>
 
-      <div className="form-control">
-        <label className="label pb-1">
-          <span className="label-text text-xs font-medium uppercase tracking-wider text-base-content/60">
+      <div className="flex flex-col">
+        <label className="flex select-none items-center justify-between pb-1">
+          <span className="text-xs font-medium uppercase tracking-wider text-base-content/60">
             {t('profile.displayName')}
           </span>
         </label>
@@ -230,9 +230,9 @@ export function ProfilePage({ session, profile, onUpdated }: ProfilePageProps) {
         <span className="text-xs text-base-content/60 mt-1">{t('profile.displayNameNote')}</span>
       </div>
 
-      <div className="form-control mt-4">
-        <label className="label pb-1">
-          <span className="label-text text-xs font-medium uppercase tracking-wider text-base-content/60">
+      <div className="flex flex-col mt-4">
+        <label className="flex select-none items-center justify-between pb-1">
+          <span className="text-xs font-medium uppercase tracking-wider text-base-content/60">
             {t('profile.bio')}
           </span>
         </label>

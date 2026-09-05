@@ -66,7 +66,7 @@ export function SealedExchange({
   if (msg.deleted_at) {
     return (
       <div className="my-3 flex justify-center">
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-base-300/80 px-3 py-1 text-[0.7rem] font-medium text-base-content/60 ring-1 ring-base-content/5 backdrop-blur-sm">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-base-300/80 px-3 py-1 text-[0.7rem] font-medium text-base-content/60 ring-1 ring-base-content/5 backdrop-blur-xs">
           <Lock className="h-3 w-3 shrink-0" />
           {t('sealed.withdrawn', { name: isOwn ? t('common.you') : peerLabel })}
         </span>
@@ -79,7 +79,7 @@ export function SealedExchange({
   return (
     <div className="my-3 flex justify-center">
       <div
-        className={`relative w-full max-w-md overflow-hidden rounded-2xl bg-base-100 p-4 shadow-sm ring-1 ${
+        className={`relative w-full max-w-md overflow-hidden rounded-2xl bg-base-100 p-4 shadow-xs ring-1 ${
           state === 'revealed' ? 'ring-primary/30' : 'ring-base-content/10'
         } ${revealing ? 'seal-sweep' : ''}`}
       >
@@ -109,7 +109,7 @@ export function SealedExchange({
             {t('sealed.questionUnreadable')}
           </p>
         ) : (
-          <p className="whitespace-pre-wrap break-words text-[0.95rem] font-medium leading-6">
+          <p className="whitespace-pre-wrap wrap-break-word text-[0.95rem] font-medium leading-6">
             {msg.text}
           </p>
         )}
@@ -119,7 +119,7 @@ export function SealedExchange({
             <textarea
               rows={2}
               maxLength={MAX_MESSAGE_LENGTH}
-              className="textarea w-full resize-none rounded-2xl border border-base-content/10 bg-base-300 leading-6 focus:border-primary/60 focus:outline-none"
+              className="textarea w-full resize-none rounded-2xl border border-base-content/10 bg-base-300 leading-6 focus:border-primary/60 focus:outline-hidden"
               placeholder={t('sealed.replyPlaceholder')}
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
@@ -202,7 +202,7 @@ function Answer({ label, text, sealed }: { label: string; text: string | null; s
           {t('sealed.answerUnreadable')}
         </p>
       ) : (
-        <p className="whitespace-pre-wrap break-words text-sm leading-6">{text}</p>
+        <p className="whitespace-pre-wrap wrap-break-word text-sm leading-6">{text}</p>
       )}
     </div>
   );

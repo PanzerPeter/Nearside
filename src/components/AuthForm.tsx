@@ -17,10 +17,10 @@ const DISPLAY_NAME_MAX = 32;
 // Shared field styling — one source of truth for the four inputs so the focus
 // treatment (blue border + soft ring, no default outline) stays consistent.
 const INPUT_CLASS =
-  'input w-full bg-base-200/50 border border-base-content/10 focus:border-primary focus:bg-base-200 focus:outline-none focus:ring-2 focus:ring-primary/25 transition-all';
+  'input w-full bg-base-200/50 border border-base-content/10 focus:border-primary focus:bg-base-200 focus:outline-hidden focus:ring-2 focus:ring-primary/25 transition-all';
 
 const LABEL_CLASS =
-  'label-text text-xs font-medium uppercase tracking-wider text-base-content/60';
+  'text-xs font-medium uppercase tracking-wider text-base-content/60';
 
 interface AuthFormProps {
   /**
@@ -171,8 +171,8 @@ export function AuthForm({ onCancel }: AuthFormProps = {}) {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {isSignUp && (
-              <div className="form-control">
-                <label className="label pb-1">
+              <div className="flex flex-col">
+                <label className="flex select-none items-center justify-between pb-1">
                   <span className={LABEL_CLASS}>{t('profile.displayName')}</span>
                 </label>
                 {/* No pattern and no minimum: a display name is not a handle.
@@ -192,8 +192,8 @@ export function AuthForm({ onCancel }: AuthFormProps = {}) {
               </div>
             )}
 
-            <div className="form-control">
-              <label className="label pb-1">
+            <div className="flex flex-col">
+              <label className="flex select-none items-center justify-between pb-1">
                 <span className={LABEL_CLASS}>{t('auth.email')}</span>
               </label>
               <input
@@ -207,8 +207,8 @@ export function AuthForm({ onCancel }: AuthFormProps = {}) {
               />
             </div>
 
-            <div className="form-control">
-              <label className="label pb-1">
+            <div className="flex flex-col">
+              <label className="flex select-none items-center justify-between pb-1">
                 <span className={LABEL_CLASS}>{t('auth.password')}</span>
               </label>
               <input

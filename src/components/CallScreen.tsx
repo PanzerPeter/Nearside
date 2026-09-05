@@ -190,10 +190,10 @@ export function CallScreen() {
 
         {showRemote && (
           <div className="absolute top-4 left-0 right-0 flex flex-col items-center gap-1">
-            <p className="rounded-full bg-base-300/70 px-3 py-1 text-sm font-medium backdrop-blur">
+            <p className="rounded-full bg-base-300/70 px-3 py-1 text-sm font-medium backdrop-blur-sm">
               {state.peerName}
             </p>
-            <p className="rounded-full bg-base-300/60 px-2.5 py-0.5 text-xs text-base-content/80 backdrop-blur">
+            <p className="rounded-full bg-base-300/60 px-2.5 py-0.5 text-xs text-base-content/80 backdrop-blur-sm">
               {status}
             </p>
           </div>
@@ -213,7 +213,7 @@ export function CallScreen() {
           autoPlay
           playsInline
           muted
-          className={`absolute right-4 w-28 aspect-[3/4] rounded-xl object-cover bg-black shadow-overlay${
+          className={`absolute right-4 w-28 aspect-3/4 rounded-xl object-cover bg-black shadow-overlay${
             state.facing === 'user' ? ' -scale-x-100' : ''
           }${state.cameraOff ? ' hidden' : ''}`}
           style={{ top: 'calc(1rem + var(--safe-top))' }}

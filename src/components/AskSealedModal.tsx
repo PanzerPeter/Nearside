@@ -64,7 +64,7 @@ export function AskSealedModal({ peerLabel, busy, onAsk, onClose }: AskSealedMod
             autoFocus
             rows={2}
             maxLength={MAX_MESSAGE_LENGTH}
-            className="textarea w-full resize-none rounded-2xl border border-base-content/10 bg-base-300 leading-6 focus:border-primary/60 focus:outline-none"
+            className="textarea w-full resize-none rounded-2xl border border-base-content/10 bg-base-300 leading-6 focus:border-primary/60 focus:outline-hidden"
             placeholder={t('sealed.questionPlaceholder')}
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
@@ -79,7 +79,7 @@ export function AskSealedModal({ peerLabel, busy, onAsk, onClose }: AskSealedMod
           <textarea
             rows={3}
             maxLength={MAX_MESSAGE_LENGTH}
-            className="textarea w-full resize-none rounded-2xl border border-base-content/10 bg-base-300 leading-6 focus:border-primary/60 focus:outline-none"
+            className="textarea w-full resize-none rounded-2xl border border-base-content/10 bg-base-300 leading-6 focus:border-primary/60 focus:outline-hidden"
             placeholder={t('sealed.answerPlaceholder')}
             value={answer}
             onChange={(e) => setAnswer(e.target.value)}

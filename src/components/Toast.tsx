@@ -27,12 +27,12 @@ export function Toast() {
     <div
       role="status"
       aria-live="polite"
-      className="fixed inset-x-0 bottom-[calc(5rem+var(--safe-bottom))] z-[100] flex flex-col items-center gap-2 px-4 pointer-events-none"
+      className="fixed inset-x-0 bottom-[calc(5rem+var(--safe-bottom))] z-100 flex flex-col items-center gap-2 px-4 pointer-events-none"
     >
       {toasts.map((toast) => (
         <div
           key={toast.id}
-          className={`motion-toast pointer-events-auto flex items-center gap-2 max-w-sm w-full sm:w-auto rounded-lg border px-3 py-2.5 shadow-overlay backdrop-blur-sm ${KIND_STYLES[toast.kind]}`}
+          className={`motion-toast pointer-events-auto flex items-center gap-2 max-w-sm w-full sm:w-auto rounded-lg border px-3 py-2.5 shadow-overlay backdrop-blur-xs ${KIND_STYLES[toast.kind]}`}
         >
           <p className="text-sm flex-1">{toast.message}</p>
           <button

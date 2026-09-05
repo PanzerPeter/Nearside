@@ -174,7 +174,7 @@ export function VerifyContact({
               const el = e.currentTarget;
               setPage(Math.round(el.scrollLeft / el.clientWidth));
             }}
-            className="flex overflow-x-auto snap-x snap-mandatory min-h-[18rem] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            className="flex overflow-x-auto snap-x snap-mandatory min-h-[18rem] scrollbar-none [&::-webkit-scrollbar]:hidden"
           >
             <section className="w-full shrink-0 snap-center flex flex-col items-center justify-center gap-3 px-1">
               {art && <SafetySigil art={art} size={132} />}

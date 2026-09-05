@@ -246,7 +246,7 @@ export function ChatHeader({
         </button>
         <ul
           tabIndex={0}
-          className="dropdown-content menu bg-base-100 rounded-box z-30 w-72 p-2 shadow"
+          className="dropdown-content menu bg-base-100 rounded-box z-30 w-72 p-2 shadow-sm"
         >
           {/* First in the menu because it is the one entry here that does
               something rather than configures something. Absent in the

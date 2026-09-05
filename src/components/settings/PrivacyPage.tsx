@@ -66,7 +66,7 @@ export function PrivacyPage({ appLock }: PrivacyPageProps) {
             <p className="text-xs text-base-content/70">{t('privacy.appLockIntro')}</p>
             <input
               type="password"
-              className="input input-bordered input-sm w-full"
+              className="input input-sm w-full"
               placeholder={t('privacy.passphrasePlaceholder', { count: MIN_PASSPHRASE_LENGTH })}
               value={lockPhrase}
               onChange={(e) => {
@@ -78,7 +78,7 @@ export function PrivacyPage({ appLock }: PrivacyPageProps) {
             />
             <input
               type="password"
-              className="input input-bordered input-sm w-full"
+              className="input input-sm w-full"
               placeholder={t('privacy.passphraseAgain')}
               value={lockRepeat}
               onChange={(e) => {
@@ -116,7 +116,7 @@ export function PrivacyPage({ appLock }: PrivacyPageProps) {
           <label className="flex items-center justify-between gap-3 px-3 py-2.5">
             <span className="text-sm">{t('privacy.lockAfter')}</span>
             <select
-              className="select select-bordered select-sm"
+              className="select select-sm"
               value={appLock.relock}
               onChange={(e) => void appLock.setRelock(e.target.value as RelockAfter)}
             >

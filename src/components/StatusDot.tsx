@@ -3,8 +3,10 @@ import type { MessageKey } from '../lib/i18n';
 import { useT } from '../hooks/useT';
 
 const COLORS: Record<PresenceStatus, string> = {
-  active: 'oklch(var(--su))', // success green — open & focused
-  background: 'oklch(var(--wa))', // warning amber — open but backgrounded
+  // daisyUI 5 stores whole colours under the long names; v4 stored the bare
+  // oklch components under `--su`/`--wa` and these had to wrap them.
+  active: 'var(--color-success)', // success green — open & focused
+  background: 'var(--color-warning)', // warning amber — open but backgrounded
   offline: 'var(--presence-offline)', // muted grey — not connected
 };
 

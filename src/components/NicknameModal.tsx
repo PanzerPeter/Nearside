@@ -113,7 +113,7 @@ export function NicknameModal({
           aria-label={
             isSelf ? t('nickname.selfLabel') : t('nickname.label', { name: display_name })
           }
-          className="input input-bordered w-full bg-base-200/50 focus:border-primary"
+          className="input w-full bg-base-200/50 focus:border-primary"
         />
       </form>
 

@@ -343,7 +343,7 @@ export function MessageBubble({
             // gets there through `selection-on-fill` on the bubble, because a
             // `::selection` painted in the accent is invisible on a bubble that
             // is painted in the accent.
-            className="block w-full bg-transparent border-0 outline-none resize-none p-0 text-base leading-6 caret-current placeholder:opacity-60 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            className="block w-full bg-transparent border-0 outline-hidden resize-none p-0 text-base leading-6 caret-current placeholder:opacity-60 scrollbar-none [&::-webkit-scrollbar]:hidden"
             value={editingText}
             onChange={(e) => onEditingTextChange(e.target.value)}
             onKeyDown={(e) => {
@@ -422,7 +422,7 @@ export function MessageBubble({
               transition: swiping ? 'none' : 'transform 0.2s ease-out',
               touchAction: canReply ? 'pan-y' : undefined,
             }}
-            className={`rounded-2xl whitespace-pre-wrap break-words cursor-default ${
+            className={`rounded-2xl whitespace-pre-wrap wrap-break-word cursor-default ${
               // A bare sticker keeps the rounding (reaction chips and the menu
               // ring still anchor to this box) and drops everything that would
               // draw a frame around it.

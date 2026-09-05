@@ -83,7 +83,7 @@ function isGrouped(msg: Message | PendingMessage, prev: Message | PendingMessage
 function TimerNotice({ label }: { label: string }) {
   return (
     <div className="flex justify-center my-4">
-      <span className="inline-flex items-center gap-1.5 text-[0.7rem] font-medium text-base-content/60 bg-base-300/80 px-3 py-1 rounded-full ring-1 ring-base-content/5 backdrop-blur-sm">
+      <span className="inline-flex items-center gap-1.5 text-[0.7rem] font-medium text-base-content/60 bg-base-300/80 px-3 py-1 rounded-full ring-1 ring-base-content/5 backdrop-blur-xs">
         <Timer className="w-3 h-3 shrink-0" />
         {label}
       </span>
@@ -225,7 +225,7 @@ export function MessageThread({
               >
                 {showDateDivider && (
                   <div className="flex justify-center my-4">
-                    <span className="text-[0.7rem] font-medium text-base-content/60 bg-base-300/80 px-3 py-1 rounded-full ring-1 ring-base-content/5 backdrop-blur-sm">
+                    <span className="text-[0.7rem] font-medium text-base-content/60 bg-base-300/80 px-3 py-1 rounded-full ring-1 ring-base-content/5 backdrop-blur-xs">
                       {msgDate}
                     </span>
                   </div>

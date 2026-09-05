@@ -42,7 +42,36 @@ export default tseslint.config(
       'react-refresh': reactRefresh,
     },
     rules: {
+      // react-hooks 7 turned the React Compiler's rules on inside
+      // `recommended`. Fourteen of the sixteen pass on this codebase as-is and
+      // are worth having — `purity`, `immutability`, `set-state-in-render`,
+      // `error-boundaries` and the memoization rules all now fail the build
+      // rather than showing up as a re-render nobody can explain.
       ...reactHooks.configs.recommended.rules,
+
+      // The two that don't pass, and why they are off rather than fixed.
+      //
+      // `refs` fires 27 times, every one of them on `ref={scroll.listRef}` —
+      // a ref *passed* to an element after travelling out of a custom hook's
+      // return object. The compiler cannot see through the object, so it reads
+      // a plain hand-off as a read of `.current` during render. None of the
+      // 27 is a real render-phase ref read, and a rule that is wrong every
+      // time it speaks trains you to stop reading lint output.
+      //
+      // `set-state-in-effect` fires 51 times, and it is describing this app's
+      // architecture rather than a defect: every realtime subscriber keys its
+      // effect on `connection.ts`'s `generation` counter and sets state when
+      // the refetch beside it lands (see CLAUDE.md, "Wake, generation, and the
+      // polling fallback"). `useDegraded` is the shape in miniature — an
+      // effect that syncs a timer to external socket health. The rule's advice
+      // is to derive instead, which for a value that arrives from a socket is
+      // not available.
+      //
+      // Both are left as a deliberate, recorded decision, not an oversight:
+      // re-check them if the thread ever moves off effect-driven fetching.
+      'react-hooks/refs': 'off',
+      'react-hooks/set-state-in-effect': 'off',
+
       'react-refresh/only-export-components': [
         'warn',
         { allowConstantExport: true },

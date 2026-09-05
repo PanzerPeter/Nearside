@@ -22,9 +22,9 @@ export interface ThemeOption {
    *  before the stored language has been read, so the words are looked up
    *  where the card is drawn. */
   description: MessageKey;
-  /** daisyUI theme applied to `document.documentElement`. Must exist in
-   *  `tailwind.config.js`, or the attribute resolves to no variables at all
-   *  and the app renders unstyled. */
+  /** daisyUI theme applied to `document.documentElement`. Must have a
+   *  `@plugin "daisyui/theme"` block in `src/index.css`, or the attribute
+   *  resolves to no variables at all and the app renders unstyled. */
   theme: string;
   /** Three swatches for the store card, so a theme can be judged from the
    *  list without opening the preview. */
@@ -289,22 +289,20 @@ export function applyTheme(theme: string): void {
  * white clock and battery icons on top of a cream header.
  *
  * Read from the live daisyUI variables rather than a table, so a theme edit in
- * `tailwind.config.js` cannot drift from it.
+ * `src/index.css` cannot drift from it.
  */
 function syncBrowserChrome(): void {
   try {
     const root = getComputedStyle(document.documentElement);
     const meta = document.querySelector('meta[name="theme-color"]');
-    const canvas = root.getPropertyValue('--b3').trim();
-    // daisyUI v4 emits the bare oklch components ("22.23% .006 271"), not a
-    // colour — and not HSL, which is what this used to wrap them in. A
-    // malformed value is dropped silently, so the tag simply never moved.
-    if (meta && canvas) meta.setAttribute('content', `oklch(${canvas})`);
+    // daisyUI 5 stores a whole colour under the long name. v4 stored the bare
+    // oklch components under `--b3` and this had to wrap them in `oklch()`;
+    // doing that now would produce `oklch(#1a1b1e)`, which is malformed, and a
+    // malformed value is dropped silently — the tag would simply never move.
+    const canvas = root.getPropertyValue('--color-base-300').trim();
+    if (meta && canvas) meta.setAttribute('content', canvas);
 
-    // The status bar sits over the top bar, which is base-100 — that surface,
-    // not the canvas, is what the clock has to stay legible against.
-    const surface = root.getPropertyValue('--b1').trim();
-    const light = surfaceIsLight(surface);
+    const light = surfaceIsLight(root.colorScheme);
     syncSystemBars(light);
 
     // Shadows and the modal scrim are tuned per surface, not per pack: the
@@ -322,13 +320,25 @@ function syncBrowserChrome(): void {
 
 /**
  * Whether the active surface reads as light, or null when the theme has not
- * resolved yet. The first oklch component is a lightness percentage, which is
- * all either caller needs.
+ * resolved yet.
+ *
+ * This used to read the lightness off the front of `--b1`, because daisyUI 4
+ * emitted every colour as bare oklch components and the first of them was a
+ * percentage. daisyUI 5 emits whole colours in whatever format the theme block
+ * wrote — hex for all nine here, but nothing stops a later one using
+ * `oklch()`, `color-mix()` or a named colour — so there is no longer a number
+ * to parse, and parsing what is there now yields NaN rather than an error.
+ *
+ * `color-scheme` is the replacement because every theme block declares one and
+ * it is the same signal the browser itself uses to pick native control and
+ * scrollbar colours. Using it for the system bars keeps those two agreeing,
+ * which is the whole point of not taking the phone's dark-mode setting.
  */
-function surfaceIsLight(surface: string): boolean | null {
-  if (!surface) return null;
-  const lightness = Number.parseFloat(surface);
-  return Number.isNaN(lightness) ? null : lightness >= 60;
+function surfaceIsLight(colorScheme: string): boolean | null {
+  if (colorScheme === 'light') return true;
+  if (colorScheme === 'dark') return false;
+  // `normal` — no theme has resolved yet, or a stylesheet has not loaded.
+  return null;
 }
 
 /**

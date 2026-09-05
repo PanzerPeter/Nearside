@@ -14,6 +14,24 @@ one of them drifts.
 
 ## [Unreleased]
 
+## [1.5.3] — 2026-09-05
+
+### Changed
+
+- **The libraries the app is built on were brought up to date, several of them
+  by whole major versions.** Nothing was meant to look or behave differently,
+  and most of the work went into keeping it that way: the pieces that quietly
+  changed meaning between versions — how thick a ring around an avatar is, how
+  strong the blur over a hidden recovery phrase is, whether buttons get a
+  gradient — were each pinned back to what they already were. What it buys is a
+  line that still receives security and bug fixes; the previous one had stopped.
+- **The emoji picker no longer leans on an abandoned package.** It was a
+  twenty-line wrapper, last touched in early 2023, and it was the only thing
+  keeping the whole interface a major version behind. Those twenty lines now
+  live in the app, and one long-standing quirk went with them: the picker used
+  to keep whichever close-handler it was given when it first opened, so it
+  could stop closing after the conversation around it re-rendered.
+
 ## [1.5.2] — 2026-09-05
 
 ### Fixed

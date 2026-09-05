@@ -139,11 +139,14 @@ describe('every listed theme exists', () => {
   // A theme name with no daisyUI block behind it does not fall back to the
   // default: `data-theme` resolves to no custom properties at all and the app
   // renders as unstyled HTML. A typo here is a white screen, not a wrong colour.
-  const config = readFileSync('tailwind.config.js', 'utf8');
+  // daisyUI 5 has no JS plugin options, so the themes live in the stylesheet
+  // now — one `@plugin "daisyui/theme"` block each — rather than in
+  // `tailwind.config.js`, which Tailwind 4 does not read and which is gone.
+  const config = readFileSync('src/index.css', 'utf8');
 
   for (const { name, theme } of [...FREE_THEMES, ...PACKS]) {
-    it(`defines ${name} (${theme}) in tailwind.config.js`, () => {
-      expect(config).toMatch(new RegExp(`['"]?${theme}['"]?\\s*:\\s*\\{`));
+    it(`defines ${name} (${theme}) in src/index.css`, () => {
+      expect(config).toMatch(new RegExp(`@plugin\\s+"daisyui/theme"\\s*\\{\\s*name:\\s*"${theme}";`));
     });
   }
 
@@ -152,7 +155,17 @@ describe('every listed theme exists', () => {
     // renders the literal string `var(--receipt-read)` as a colour, which
     // computes to nothing and leaves the glyph invisible.
     for (const token of ['--surface-ring', '--receipt-read', '--presence-offline']) {
-      const declared = config.match(new RegExp(`'${token}'`, 'g')) ?? [];
+      const declared = config.match(new RegExp(`${token}:`, 'g')) ?? [];
+      expect(declared.length).toBe(FREE_THEMES.length + PACKS.length);
+    }
+  });
+
+  it('pins depth and noise off in every theme', () => {
+    // daisyUI 5 additions with no v4 equivalent. Left at their default of 1
+    // they mix a gradient and a drop shadow into buttons, badges, alerts and
+    // toggles — an effect this app's flat surfaces never had.
+    for (const token of ['--depth: 0', '--noise: 0']) {
+      const declared = config.match(new RegExp(`${token};`, 'g')) ?? [];
       expect(declared.length).toBe(FREE_THEMES.length + PACKS.length);
     }
   });

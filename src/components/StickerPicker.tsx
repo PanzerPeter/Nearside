@@ -68,7 +68,7 @@ export function StickerPicker({ drawer, onSelect, onError }: StickerPickerProps)
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={t('stickers.search')}
-            className="w-full bg-transparent text-sm focus:outline-none"
+            className="w-full bg-transparent text-sm focus:outline-hidden"
             autoCapitalize="none"
             autoCorrect="off"
             spellCheck={false}

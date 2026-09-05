@@ -135,7 +135,7 @@ export function ServerView({ onClose, onOpenLimits }: ServerViewProps) {
                 <p className="font-medium">{t('serverView.driftTitle')}</p>
                 <ul className="text-xs mt-1 space-y-1">
                   {report.drift.map((entry) => (
-                    <li key={entry.table} className="break-words">
+                    <li key={entry.table} className="wrap-break-word">
                       <span className="font-mono">{entry.table}</span>
                       {entry.unlisted.length > 0 && (
                         <>

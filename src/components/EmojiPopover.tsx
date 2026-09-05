@@ -17,7 +17,7 @@ const EmojiPicker = lazy(() => import('./EmojiPicker'));
 interface EmojiPopoverProps {
   open: boolean;
   /** The button that toggles the popover; positioning anchors to its rect. */
-  anchorRef: RefObject<HTMLElement>;
+  anchorRef: RefObject<HTMLElement | null>;
   onSelect: (emoji: string) => void;
   onClose: () => void;
   /**

@@ -143,7 +143,7 @@ export function SettingsPanel({
         onClick={() => setSection('profile')}
       >
         <div className="avatar placeholder shrink-0">
-          <div className="w-12 h-12 rounded-full bg-base-content/10 text-base-content/70 overflow-hidden ring ring-base-content/5">
+          <div className="w-12 h-12 rounded-full bg-base-content/10 text-base-content/70 overflow-hidden ring-3 ring-base-content/5">
             {profile.avatar_url ? (
               <img src={profile.avatar_url} alt="" className="w-full h-full object-cover" />
             ) : (

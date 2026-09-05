@@ -706,7 +706,7 @@ function RoomBubble({
                   <span>{t('room.beforeYouJoined')}</span>
                 </p>
               ) : m.text ? (
-                <div className="text-sm whitespace-pre-wrap break-words">
+                <div className="text-sm whitespace-pre-wrap wrap-break-word">
                   <MessageText text={m.text} handles={handles} myHandle={myHandle} />
                 </div>
               ) : null}

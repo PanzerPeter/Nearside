@@ -17,7 +17,7 @@ describe('branding', () => {
   // The rename is enforced rather than trusted: a stray "chatly" in a theme
   // name or an IndexedDB key is invisible in review and breaks at runtime.
   it('leaves no reference to the old product name', () => {
-    const roots = ['src', 'index.html', 'package.json', 'tailwind.config.js', 'vite.config.ts'];
+    const roots = ['src', 'index.html', 'package.json', 'vite.config.ts'];
     const files = roots.flatMap((r) => (statSync(r).isDirectory() ? walk(r) : [r]));
     const offenders = files.filter((f) => {
       if (f.endsWith('branding.test.ts')) return false;

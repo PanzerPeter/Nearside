@@ -98,13 +98,13 @@ export function ProfileCard({
           onClick={() => setZoomed(true)}
           disabled={!profile.avatar_url}
           title={profile.avatar_url ? t('profileCard.viewPhoto') : undefined}
-          className="rounded-full ring ring-base-content/5 disabled:cursor-default"
+          className="rounded-full ring-3 ring-base-content/5 disabled:cursor-default"
         >
           <Avatar display_name={profile.display_name} url={profile.avatar_url} size={96} />
         </button>
 
         <div className="min-w-0">
-          <p className="text-lg font-semibold break-words">{profile.display_name}</p>
+          <p className="text-lg font-semibold wrap-break-word">{profile.display_name}</p>
           {/* Presence, not a second copy of the header's status line: the
               header is behind this card and cannot be read while it is open. */}
           <p className="mt-0.5 flex items-center justify-center gap-1.5 text-xs text-base-content/60">
@@ -154,7 +154,7 @@ export function ProfileCard({
           ) : bio ? (
             // Pre-wrapped: newlines are the one thing a bio keeps that a
             // display name does not, so they have to survive the render too.
-            <p className="mt-1 whitespace-pre-wrap break-words text-sm">{bio}</p>
+            <p className="mt-1 whitespace-pre-wrap wrap-break-word text-sm">{bio}</p>
           ) : (
             <p className="mt-1 text-sm italic text-base-content/50">
               {isSelf ? t('profileCard.bioEmptySelf') : t('profileCard.bioEmpty')}
@@ -193,7 +193,7 @@ export function ProfileCard({
 
       {zoomed && profile.avatar_url && (
         <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/95 p-6"
+          className="fixed inset-0 z-60 flex items-center justify-center bg-black/95 p-6"
           onClick={() => setZoomed(false)}
         >
           <img
