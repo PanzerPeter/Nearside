@@ -13,9 +13,9 @@ Please do not open a public issue for anything that lets someone read a message,
 impersonate a sender, or reach a key.
 
 Include what you need to demonstrate it: the version or commit, the platform, and
-the steps. There is no bug bounty — this is a solo project — but every report is
-answered, and anything valid is credited in [CHANGELOG.md](CHANGELOG.md) unless
-you would rather not be.
+the steps. There is no bug bounty, since this is a solo project, but every
+report is answered, and anything valid is credited in
+[CHANGELOG.md](CHANGELOG.md) unless you would rather not be.
 
 Expect a first reply within a week.
 
@@ -25,13 +25,13 @@ Anything that breaks one of these:
 
 - A message body, an attachment, or a call's media is readable by the server, by
   a relay, or by anyone but the intended recipients.
-- A recovery seed or a derived key leaves the device — into Postgres, a log, a
+- A recovery seed or a derived key leaves the device: into Postgres, a log, a
   crash report, a notification payload, or an analytics call.
 - A message is attributed to someone who did not send it (this is what the
   Ed25519 signature in a room exists to prevent).
 - A row is readable or writable by an account that RLS should have excluded.
 - The app lock, `FLAG_SECURE`, or per-account isolation on a shared phone can be
-  bypassed — for example one account inheriting another's key material or cache.
+  bypassed, for example one account inheriting another's key material or cache.
 - A key change is accepted silently rather than blocking the composer.
 
 ## What is out of scope
@@ -40,8 +40,10 @@ Not because it does not matter, but because the app already says so on its own
 transparency screen and in [README.md](README.md#where-the-protection-stops):
 
 - **Metadata.** The server knows who talks to whom and when, plus
-  `display_name` and `last_seen_at`. This is not encrypted and is not claimed to
-  be.
+  `display_name`, `bio` and `last_seen_at`. This is not encrypted and is not
+  claimed to be. The private nickname you give a contact is the one profile
+  field that is: `0041` sealed it under the owner's vault key, and rows written
+  before that are re-sealed as each device meets them.
 - **A compromised device.** The seed lives in the Android Keystore or the iOS
   Keychain, but a rooted or jailbroken phone can reach what runs on it.
 - **A recipient keeping a copy.** Screenshots, a camera pointed at a screen, and
@@ -70,30 +72,30 @@ transparency screen and in [README.md](README.md#where-the-protection-stops):
   and the server-side search that read it. Reads return rows still sealed
   (`src/lib/message-queries.ts`); opening happens at the component boundary.
 - **Calls.** Media is peer-to-peer with keys from the DTLS handshake. Signalling
-  is sealed `crypto_box` over a Realtime broadcast topic — SDP *and* ICE
+  is sealed `crypto_box` over a Realtime broadcast topic, SDP *and* ICE
   candidates, because a candidate carries the device's LAN address and public
-  IP — and broadcast persists nothing, so there is no `calls` table by
+  IP. Broadcast persists nothing, so there is no `calls` table by
   construction.
 - **Notifications** carry a sender and never content. Not as a policy: after
   `0023` the push function has no body it could leak.
 - **Sealed exchange.** A question whose two answers are released only once both
   exist. Fair exchange between parties who distrust each other is impossible
-  without a referee, so there is one — the RLS policy on `sealed_answers`
-  (`schema.sql` section 5c) — and it holds two ciphertexts it cannot open. The
+  without a referee, so there is one: the RLS policy on `sealed_answers`
+  (`schema.sql` section 5c), and it holds two ciphertexts it cannot open. The
   withholding is not enforced anywhere in the client, deliberately: this
   repository is public, and a check that lives in the app is a check anyone can
   delete.
 
   Its limit, stated rather than implied away: you can answer with nonsense to
   force the reveal. Nothing prevents that. What it costs is that the nonsense is
-  immutable — there is no UPDATE policy and no UPDATE grant — and stays in the
-  thread under your name. A compromised server could also release your answer
-  early, which would let the other side read before writing; it could not let
-  them change what they wrote, and it still cannot read either answer.
+  immutable, because there is no UPDATE policy and no UPDATE grant, and stays
+  in the thread under your name. A compromised server could also release your
+  answer early, which would let the other side read before writing; it could
+  not let them change what they wrote, and it still cannot read either answer.
 
 - **"In this conversation"** extracts dates and links from the decrypted copy in
   the device's own SQLite mirror (`src/lib/localdb.ts`, one file per account).
-  No network call is made to build it and nothing about it is uploaded — there
+  No network call is made to build it and nothing about it is uploaded. There
   is nothing to upload it to, since the server holds no bodies. It is a second
   reader of plaintext already at rest on the device, so it inherits exactly the
   exposure that mirror already has, and nothing more.

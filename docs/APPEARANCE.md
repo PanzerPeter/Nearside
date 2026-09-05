@@ -13,13 +13,13 @@ RevenueCat entitlement id, its store product id, and what `packOffers()`
 matches an offering on. `purchases.test.ts` fails if a listed theme has no
 block behind it, if a block is missing one of the `--surface-ring`,
 `--receipt-read` or `--presence-offline` tokens the components read, or if it
-leaves daisyUI 5's `--depth`/`--noise` at their default of 1 — those add a
+leaves daisyUI 5's `--depth`/`--noise` at their default of 1, which adds a
 gradient and a drop shadow to buttons, badges and toggles that this app's flat
 surfaces never had.
 
 There is no `tailwind.config.js`: Tailwind 4 does not read one unless pointed
 at it with `@config`, and daisyUI 5 has no JS plugin options at all. Each
-theme block also declares its own `color-scheme`, which is not decoration —
+theme block also declares its own `color-scheme`, which is not decoration:
 `purchases.ts` reads it back to choose the Android system-bar icon style.
 
 ### Selling a pack, per store

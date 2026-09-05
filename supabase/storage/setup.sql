@@ -31,7 +31,9 @@ ON CONFLICT (id) DO UPDATE
 -- Attachments are sealed on the device and uploaded as opaque bytes, so
 -- application/octet-stream is the only type they can be announced as — see
 -- 0025_sealed_media_mime.sql, which this must not contradict. The image types
--- remain because chat backgrounds share this bucket and are not sealed.
+-- remain for chat backgrounds written before 0039 sealed them: those rows have
+-- null key columns and still point at a plain JPEG or PNG. The list can narrow
+-- to octet-stream alone once none are left.
 --
 -- The whitelist no longer says anything about what the sealed objects contain;
 -- file_size_limit is the control still doing work here.

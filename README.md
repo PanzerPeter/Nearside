@@ -46,10 +46,12 @@ minutes.
 consequence: after `0023` the push function has no body it could leak.
 
 **The privacy claims are checked, not written.** The in-app transparency screen
-reads the real schema through `public_table_names()` instead of reciting copy
-that can go stale. Two tests hold the line in CI: `no-plaintext.test.ts` fails if
-a body ever reaches an insert payload, `no-ads.test.ts` fails if an advertising
-SDK appears in `package.json` or the Gradle build.
+reads the real schema through `public_table_names()` and
+`public_table_columns()` instead of reciting copy that can go stale, so a table
+or a column nobody described says so in the app rather than going unmentioned.
+Two tests hold the line in CI: `no-plaintext.test.ts` fails if a body ever
+reaches an insert payload, `no-ads.test.ts` fails if an advertising SDK appears
+in `package.json` or the Gradle build.
 
 ## Encryption
 
@@ -64,7 +66,7 @@ key, and a vault key for your own data.
 | One-to-one | `crypto_box` to the peer's published public key |
 | Room | one symmetric room key, sealed once per member, plus an Ed25519 signature **verified before decryption**. Every member holds the room key, so only the signature establishes authorship |
 | Attachment | a random per-file key; uploaded as `application/octet-stream` with the nonce prepended, the file key travelling sealed in the message row |
-| Sticker library, chat background | under the owner's vault key — file and label both, so neither the picture nor its name sits in Postgres in the clear |
+| Sticker library, chat background, private nickname | under the owner's vault key, the label and the nickname sealed alongside the file, so neither the picture nor the name it goes by sits in Postgres in the clear |
 
 `src/lib/sealed-body.ts` is the only place a body is sealed or opened, and there
 is no plaintext fallback anywhere: `sealBody` throws when a peer has published no
@@ -81,24 +83,26 @@ Losing the twelve words loses the history. There is no reset path.
 - **Group rooms.** One key per room, sealed to each member; adding a member is
   one row, not a re-encryption of the history. A message whose signature fails
   renders as a *warning* rather than being hidden, because a dropped message is
-  an attack the user never learns about.
+  an attack the user never learns about. Typing `@` completes against the member
+  list on the device, since the mention travels inside the sealed body and the
+  server never learns one happened.
 - **Media.** Images re-encoded to WebP on the device, which drops EXIF on the
   way; an animated image or one that would lose its orientation passes through
   as-is with its metadata stripped instead. Video, plus voice notes up to two
-  minutes with a live level meter. Cleanup is client-side and per conversation —
+  minutes with a live level meter. Cleanup is client-side and per conversation:
   the newest 20 photos/videos and 50 voice notes stay on the server, older
   objects go on upload and when a chat reopens. Pinning writes a decrypted copy
   into app-private storage so it survives that, and pinning is free.
 - **Stickers.** A personal library, sealed under your vault key. Sending one
-  takes the ordinary attachment path — fresh key, fresh upload — rather than
-  referencing a shared object, which would put "who sent which picture to whom,
-  and when" on the server for the one message type where the picture is the
-  whole message.
+  takes the ordinary attachment path, with a fresh key and a fresh upload,
+  rather than referencing a shared object, which would put "who sent which
+  picture to whom, and when" on the server for the one message type where the
+  picture is the whole message.
 - **Voice and video calls.** Peer-to-peer WebRTC: the media keys come out of a
   DTLS handshake between the two phones, so a TURN relay in the path forwards
   SRTP it cannot read. Signalling is sealed `crypto_box` over a Realtime
-  broadcast topic — SDP and ICE candidates both, because a candidate line carries
-  the device's addresses — and broadcast leaves no row, so there is no `calls`
+  broadcast topic, SDP and ICE candidates both, because a candidate line carries
+  the device's addresses. Broadcast leaves no row, so there is no `calls`
   table and no record that a call happened. A locked phone rings through a
   full-screen notification, and answering it from the lock screen goes straight
   to "Connecting…": the caller's topic is joined from the notification rather
@@ -110,14 +114,21 @@ Losing the twelve words loses the history. There is no reset path.
   a reinstall or an interception.
 - **Sealed exchange.** A question carrying the asker's own answer, where neither
   side reads the other's until both exist. The rule is the SELECT policy on
-  `sealed_answers`, not a client-side check — this repository is public, and a
+  `sealed_answers`, not a client-side check. This repository is public, and a
   check in the client is one anyone can delete.
 - **In this conversation.** A panel that pulls the days somebody named and the
   links somebody sent out of the local mirror. Every row keeps the exact phrase
   and jumps to its message; a phrase resolves against its own message's
   timestamp, so a year-old "friday" does not land this week.
 - **Private nicknames.** The other person is never told, and the name follows
-  them into the sidebar, the header and your notifications.
+  them into the sidebar, the header and your notifications. Sealed under your
+  vault key since 1.5.0, so "only you can see this" is true of the server as
+  well as of the app.
+- **Profile cards.** Tapping someone's picture in a chat header opens their
+  photo, the name they chose, the name you gave them, whether you have verified
+  them, and a line they wrote about themselves. That line is an ordinary text
+  column, like the display name and the avatar beside it, and the transparency
+  screen lists it as one rather than implying it is sealed.
 - **Disappearing messages.** Off, 5 minutes, an hour, a day, a week. The timer
   belongs to the *conversation*, not to one side's preference: a per-user setting
   would let one party keep a copy the other believed was gone. The server stamps
@@ -160,8 +171,9 @@ Losing the twelve words loses the history. There is no reset path.
 The app ships a screen that says this too. In short:
 
 - The server knows who talks to whom, and when. Metadata is not encrypted.
-- `profiles.display_name`, `last_seen_at`, room titles and the nicknames you
-  give contacts are ordinary text columns.
+- `profiles.display_name`, `profiles.bio`, `last_seen_at` and room titles are
+  ordinary text columns. The nickname you give a contact is not one: it is
+  sealed under your vault key.
 - Video metadata is not stripped. Photos lose their EXIF on the way out; there
   is no cheap way to rewrite MP4 atoms on the device, and this is the gap.
 - A call that cannot find a direct path is relayed by a TURN provider, which
@@ -205,8 +217,8 @@ Then, on the Supabase side:
 
 1. **Build the schema.** On a fresh project, run
    [`supabase/schema.sql`](supabase/schema.sql) then
-   [`supabase/storage/setup.sql`](supabase/storage/setup.sql) in the SQL editor
-   — one file for the whole database, with no dead columns and nothing to
+   [`supabase/storage/setup.sql`](supabase/storage/setup.sql) in the SQL
+   editor. One file for the whole database, with no dead columns and nothing to
    replay in the right order.
 
    To bring an *existing* project forward instead, apply
@@ -251,7 +263,7 @@ Then, on the Supabase side:
    supabase secrets set CLOUDFLARE_TURN_KEY_ID=... CLOUDFLARE_TURN_API_TOKEN=...
    ```
 
-   `call-ring` is the push that wakes a locked phone — without it a call only
+   `call-ring` is the push that wakes a locked phone; without it a call only
    reaches a friend who already has the app open. `call-ice` mints short-lived
    TURN credentials per call; without it calls fall back to STUN alone and the
    ones behind carrier-grade NAT do not connect. A long-lived TURN secret in the
@@ -284,10 +296,10 @@ cd android && JAVA_HOME=/usr/lib/jvm/java-21-openjdk ./gradlew assembleDebug
 
 `JAVA_HOME` must be pinned to 21. Gradle 8.14 fails at configuration time on a
 newer JDK without a useful message. The sync sets `NEARSIDE_NATIVE=1`, which
-disables the PWA service worker — a Workbox precache inside a WebView keeps
-serving the previous build after an app update. Release builds run R8, and every
-plugin is reached reflectively, so `android/app/proguard-rules.pro` is the only
-thing keeping them; test a release build on hardware.
+disables the PWA service worker, because a Workbox precache inside a WebView
+keeps serving the previous build after an app update. Release builds run R8,
+and every plugin is reached reflectively, so `android/app/proguard-rules.pro` is
+the only thing keeping them; test a release build on hardware.
 
 The iOS project is configured but has **never been compiled**, and nothing in
 `ios/` can be built from a Linux checkout. Signing, the Xcode capabilities that
@@ -319,13 +331,13 @@ src/
                 signaling.ts (sealed broadcast), state.ts + routing.ts (the
                 interleavings, as pure functions), warmup.ts (capture that
                 starts before the call needs it)
-  locales/      en, es, de, ru — typed against en
+  locales/      en, es, de, ru, each typed against en
 supabase/
   schema.sql    The whole database as it stands. One file, for a fresh project
   migrations/   How it got there. Applied by hand, in apply-order.txt's order
   storage/      Buckets and their policies
   functions/    send-push, delete-account, call-ring, call-ice (Deno)
-  verify/       npm run db:verify — replays both paths and diffs them
+  verify/       npm run db:verify: replays both paths and diffs them
 android/        Capacitor shell, the mature target
 ios/            Capacitor shell, configured but never compiled
 electron/       Desktop shell, a convenience build
@@ -365,8 +377,8 @@ components and into `src/lib/`, where it can be tested without a renderer.
 
 Four tests guard a decision rather than a function. `no-plaintext.test.ts` and
 `no-ads.test.ts` keep the store listing true by construction, `elevation.test.ts`
-fails if a banned Tailwind shadow class comes back — the banding it causes is
-invisible on a desktop and obvious on a phone — and `version.test.ts` fails when
+fails if a banned Tailwind shadow class comes back (the banding it causes is
+invisible on a desktop and obvious on a phone), and `version.test.ts` fails when
 any of the places carrying the version number drift apart.
 
 ## Contributing
@@ -379,8 +391,8 @@ Issues and pull requests are welcome. Before opening one:
   pass.
 - **Do not change** `BOX_CONTEXT`, `SIGN_CONTEXT` or `VAULT_CONTEXT` in
   `src/lib/crypto/keys.ts`. It invalidates every existing user's keys.
-- A schema change is two edits — a migration and the same change folded into
-  `schema.sql` — and `npm run db:verify` fails if you do only one.
+- A schema change is two edits, a migration and the same change folded into
+  `schema.sql`, and `npm run db:verify` fails if you do only one.
 - A user-visible change gets a `CHANGELOG.md` entry written with it, in the same
   register as the code comments: what changed for someone using the app.
 - Privacy claims in the UI are built from live queries and real schema. Keep them
@@ -392,7 +404,7 @@ only appear on a reconnect. Never paste a recovery phrase, a key or a token into
 one.
 
 Found a security problem? Open a **private security advisory** on the repository
-rather than a public issue — [SECURITY.md](SECURITY.md) says what is in scope
+rather than a public issue. [SECURITY.md](SECURITY.md) says what is in scope
 and what the app already admits to.
 
 This is a solo project built for a competition deadline, so reviews may be slow

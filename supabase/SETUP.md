@@ -13,17 +13,17 @@ its own. Run the query before trusting it.
 
 Every migration in
 [`migrations/apply-order.txt`](migrations/apply-order.txt) is live, `0001`
-through `0034`, with no gaps. The live database and `schema.sql` now describe
-the same thing — which is the assumption `npm run db:verify` results are only
+through `0043`, with no gaps. The live database and `schema.sql` describe the
+same thing, which is the assumption every `npm run db:verify` result is only
 worth anything under.
 
 `0034` was applied before `0033`, a departure from the apply order and a safe
-one: the two files touch nothing in common — `0033` adds the `stickers` table
+one: the two files touch nothing in common. `0033` adds the `stickers` table
 and widens the `messages_media_type_check` CHECK, `0034` adds triggers,
-constraints and policies elsewhere — and neither replaces a function or policy
+constraints and policies elsewhere, and neither replaces a function or policy
 the other creates. `npm run db:verify` against the swapped order fingerprints
-identically to `schema.sql` (576 facts), so the database this project holds is
-the one this repo describes regardless of which of the two landed first.
+identically to `schema.sql`, so the database this project holds is the one this
+repo describes regardless of which of the two landed first.
 
 `0001`–`0019a` were replayed onto this project during Plan 1; `0020` onward were
 applied individually and are the ones the platform's migration history records.
@@ -38,15 +38,15 @@ SELECT to_regclass('public.sealed_answers') IS NOT NULL AS table_live,
 ```
 
 Two policies, SELECT and INSERT. There is deliberately no UPDATE policy and no
-UPDATE grant — an editable answer would defeat the protocol.
+UPDATE grant, because an editable answer would defeat the protocol.
 
 `0031_grant_hygiene.sql` is applied. It was two corrections found by replaying
 the folder into a throwaway Postgres (`npm run db:verify`) rather than by
 anything the app did, and neither was reachable from the app:
 
 - `conversation_list()` was executable by `anon`. `0022` revoked it; `0023`
-  rebuilt the function with `DROP FUNCTION` — required, because removing
-  `last_message` changes the return type — and the new one was created without
+  rebuilt the function with `DROP FUNCTION`, required because removing
+  `last_message` changes the return type, and the new one was created without
   a REVOKE, so the default `EXECUTE TO PUBLIC` came back. Not a disclosure: with
   no JWT `auth.uid()` is NULL, `peers` is empty and the join to `profiles`
   matches nothing, so an anonymous call returned zero rows. What it closed is an
@@ -69,7 +69,7 @@ SELECT has_function_privilege('anon', 'public.conversation_list()', 'EXECUTE')
 1. **The `pg_cron` extension** (1.6.4, in `pg_catalog`). The file's functions do
    not depend on it, but the sweep never runs without it.
 2. **A one-off `cron.schedule` call**, quoted at the bottom of the file and
-   deliberately left out of its body — it fails with a duplicate-jobname error
+   deliberately left out of its body. It fails with a duplicate-jobname error
    if re-run, which would make the rest of the file unsafe to re-run.
 
 Job `nearside-expire`, `* * * * *`, active. Confirm with:
@@ -82,7 +82,7 @@ SELECT status, return_message, start_time FROM cron.job_run_details
 ```
 
 Without it the columns and triggers exist and stamp `expires_at` correctly, and
-nothing is ever deleted — which is the failure mode that looks like the feature
+nothing is ever deleted, which is the failure mode that looks like the feature
 working.
 
 ### `0030_theme_grants.sql` — applied, no rows
@@ -97,7 +97,7 @@ SELECT public.grant_theme_packs('tester@example.com');   -- all six packs
 SELECT public.revoke_theme_grants('tester@example.com'); -- take them back
 ```
 
-Both are `SECURITY DEFINER` and revoked from `authenticated` and `anon` — they
+Both are `SECURITY DEFINER` and revoked from `authenticated` and `anon`: they
 read `auth.users` by email, and a client that could call them would be able to
 award itself the entire catalogue. Confirm the lockdown survived a later
 migration with:
@@ -111,7 +111,7 @@ SELECT has_function_privilege('authenticated',
 
 The sticker library: the `stickers` table, and `'sticker'` added to
 `messages_media_type_check`. It is two steps, because the table alone is half
-the feature — the migration, then `storage/setup.sql`, which is written to be
+the feature: the migration, then `storage/setup.sql`, which is written to be
 re-run and creates the `stickers` bucket alongside the two that already exist.
 Both are in:
 
@@ -123,7 +123,7 @@ SELECT to_regclass('public.stickers') IS NOT NULL AS table_live,
 
 Four policies on the table, four more on `storage.objects`. Sending a sticker is
 the ordinary attachment path into `chat-media`, so nothing about it reaches the
-`stickers` bucket — that bucket is the library, and it is owner-only on every
+`stickers` bucket. That bucket is the library, and it is owner-only on every
 verb.
 
 ### `0034_write_guards.sql` — applied
@@ -132,7 +132,7 @@ Closes what a row-level policy cannot see, because it is shown one row and not
 the change. The one that mattered: `friendships_update_addressee` pinned
 `addressee_id` and left `requester_id` free, so the addressee of any row they
 controlled could point it at a stranger, set `'accepted'`, and hold a friendship
-that stranger was never asked for — which is the only gate in front of DMs and
+that stranger was never asked for, which is the only gate in front of DMs and
 published keys. Also: tombstones are final, `edited_at` is stamped by the server
 rather than claimed by the client, `expires_at` and `created_at` stop being
 writable after insert, `DELETE` on `messages` is gone as policy and as
@@ -157,6 +157,79 @@ It also repaired data on the way through: any `profiles.display_name` outside
 second friendship row for a pair that already had one was deleted (accepted
 kept over pending, then oldest). Both were no-ops on a project this client is
 the only writer for.
+
+### `0035`–`0038` — applied, the notification ladder and rooms catching up
+
+`0035_push_alerts.sql` gives `send-push` somewhere to remember when it last made
+a receiver's phone make a noise, so a burst of messages arrives as one alert and
+a run of silent notifications. `0036_room_parity.sql` gives rooms what 1:1 chats
+already had: attachments, replies, reactions, edits, deletes and read state,
+with the per-file key sealed under the *room* key rather than to one recipient,
+and `sig_v` so the signature starts covering the new columns.
+`0037_room_push.sql` makes a room message send a push at all, through
+`room_message_pushes` (which claims the send) and `room_push_alerts` (which
+throttles it per receiver per room). `0038_alert_ladder.sql` adds one integer
+column to each of those two tables and nothing else.
+
+```sql
+SELECT to_regclass('public.push_alerts')         IS NOT NULL AS alerts_live,
+       to_regclass('public.room_message_pushes') IS NOT NULL AS room_pushes,
+       to_regclass('public.room_push_alerts')    IS NOT NULL AS room_alerts;
+```
+
+`send-push` has to be redeployed after `0037`: an older copy ignores
+`room_message_id` and answers "message_id required", so rooms stay silent while
+everything else looks healthy.
+
+### `0039`–`0041` — applied, three columns that were still in the clear
+
+- **`0039_sealed_backgrounds.sql`** seals chat backgrounds under the owner's
+  vault key. They were the last image the app uploaded as a plain JPEG, into a
+  folder whose policy opens it to both participants, so the picture behind your
+  thread was readable by the server and by the person you were talking to.
+  `chat_backgrounds` gets `key_ciphertext` / `key_nonce` and a both-or-neither
+  CHECK. Rows written before it keep null keys, keep pointing at a plaintext
+  object, and keep rendering; they are replaced when that person next sets one.
+- **`0040_profile_bio.sql`** adds `profiles.bio`, deliberately plaintext. There
+  is no key every friend of yours already holds, so sealing it would mean one
+  ciphertext per friendship, re-sealed on every edit and repaired on every key
+  rotation, for a paragraph that sits beside an avatar in a public bucket.
+  `src/lib/server-view.ts` lists it among the readable columns of `profiles`,
+  which is where the honest half of that decision lives.
+- **`0041_sealed_nicknames.sql`** seals `friend_nicknames.nickname` under the
+  owner's vault key, the same treatment stickers got in `0033`. The row was
+  already owner-only, so there was no second party to seal to and no key to
+  distribute. `nickname` becomes nullable and keeps its CHECKs; rows written
+  before this still hold plaintext, render, and are re-sealed as each device
+  meets them, so the old column empties itself.
+
+```sql
+SELECT count(*) FILTER (WHERE nickname IS NOT NULL) AS still_plaintext,
+       count(*) FILTER (WHERE nickname_ciphertext IS NOT NULL) AS sealed
+  FROM public.friend_nicknames;
+```
+
+### `0042`–`0043` — applied
+
+`0042_token_hygiene.sql` removes three records the database was keeping for
+nobody: `connect_tokens.used_by`, which nothing has ever selected and which was
+a standing list of who added whom; spent connect codes, now swept by
+`expire_messages()` but only once `expires_at` has passed, because deleting a
+used code inside its ten minutes would free the string to be minted again; and
+the `pg_trgm` extension, unused since `0023` took the column it indexed.
+
+`0043_table_columns.sql` adds `public_table_columns()`, the counterpart of
+`public_table_names()` from `0027`. The transparency screen could already catch
+a table nobody had described; now it catches a column, which is what its
+"server reads: …" lines actually claim. It reports names only, for `public`
+only: no types, no defaults, no contents, no row counts.
+
+```sql
+SELECT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm')
+         AS should_be_false,
+       has_function_privilege('authenticated',
+         'public.public_table_columns()', 'EXECUTE') AS should_be_true;
+```
 
 ## What the server holds
 
@@ -196,20 +269,26 @@ Still open, both dashboard-only:
 
 Open since `0019`. `handle_new_user()` reads the display name from the signup
 metadata, preferring `display_name` and falling back to `username` so a client
-mid-upgrade still works. Names are not unique and have no format constraint —
+mid-upgrade still works. Names are not unique and have no format constraint:
 people are found by connect code, not by name.
 
 Always create users through the app; the trigger needs that metadata.
 
 ## Storage
 
-[`storage/setup.sql`](storage/setup.sql) creates both buckets and their
-policies. Run it once, after the schema.
+[`storage/setup.sql`](storage/setup.sql) creates all three buckets and their
+policies. It is written to be re-run, and the sticker bucket arrived that way
+alongside `0033`.
 
-- `avatars` — public, 5 MB, image types. Avatars are not sealed.
-- `chat-media` — private, 50 MB, `application/octet-stream` plus image types.
-  Attachments go up sealed as octet-stream; the image types are there because
-  chat backgrounds share this bucket and are not sealed.
+- `avatars`: public, 5 MB, image types. Avatars are not sealed.
+- `chat-media`: private, 50 MB, `application/octet-stream` plus image types.
+  Attachments go up sealed as octet-stream. The image types are left over from
+  chat backgrounds, which were plaintext until `0039` sealed them; rows written
+  before that still point at a plain JPEG or PNG and still render, so the list
+  can narrow to octet-stream alone once no null-key background rows are left.
+- `stickers`: private, 1 MB, octet-stream only, owner-only on every verb. This
+  is the library. Sending a sticker is the ordinary attachment path into
+  `chat-media` and never touches this bucket.
 
 Policies key `chat-media` off the conversation folder
 (`{sortedUidA}_{sortedUidB}/`), so only the two participants can read or write.
@@ -224,7 +303,7 @@ rows, so that drift fails instead of shipping.
 [`maintenance/reset-data.sql`](maintenance/reset-data.sql) empties the project:
 one `DELETE FROM auth.users` and the cascade takes every table with it. It is
 not a migration, it is not in `apply-order.txt`, and `db:verify` does not read
-it — no schema changes, only rows.
+it, since it makes no schema changes and touches only rows.
 
 Two things in it are easy to get wrong and are the reason it is a documented
 script rather than a one-liner someone types:
@@ -232,13 +311,14 @@ script rather than a one-liner someone types:
 - **The buckets have to be emptied first, and not in SQL.**
   `storage.protect_delete()` raises on a direct DELETE from a storage table,
   and because the SQL editor runs a script as one transaction, that raise
-  rolls back the `auth.users` delete with it — the reset does nothing at all.
+  rolls back the `auth.users` delete with it, and the reset does nothing at
+  all.
   [`maintenance/empty-buckets.mjs`](maintenance/empty-buckets.mjs) walks the
   three buckets through the Storage API; it takes `SUPABASE_URL` and
   `SUPABASE_SERVICE_ROLE_KEY` from the environment and has a `--dry-run`. The
-  service_role key must not go in `.env` — Vite reads that file and ships it.
+  service_role key must not go in `.env`, which Vite reads and ships.
 - **Every signed-in device has to sign out afterwards.** The server is not the
-  only copy — each install holds a decrypted SQLite mirror, an outbox, pinned
+  only copy: each install holds a decrypted SQLite mirror, an outbox, pinned
   bytes, the account roster and a seed, and `App.signOut` is what clears them
   together.
 
@@ -280,8 +360,8 @@ each is declared in [`config.toml`](config.toml).
 - **`call-ring`** — needed for calls to reach a phone that is not already
   showing the app. It resolves the caller from their JWT, checks the two are
   friends, and sends a OneSignal push carrying a caller id, a display name, a
-  call id and `voice`/`video` — nothing else, because there is nothing else about
-  a call the server holds. `CallNotificationExtension` intercepts it on the
+  call id and `voice`/`video`, and nothing else, because there is nothing else
+  about a call the server holds. `CallNotificationExtension` intercepts it on the
   device and raises a full-screen ring in its place.
 
   ```bash
@@ -289,15 +369,15 @@ each is declared in [`config.toml`](config.toml).
   ```
 
   Shares `ONESIGNAL_APP_ID` and `ONESIGNAL_REST_API_KEY` with `send-push`.
-  Without it a call still rings a friend who has the app open — the offer goes
-  over the realtime topic either way — and reaches nobody else.
+  Without it a call still rings a friend who has the app open, since the offer
+  goes over the realtime topic either way, and reaches nobody else.
 
 - **`call-ice`** — needed for calls behind carrier-grade NAT, which on mobile
   networks is most of them. It mints Cloudflare TURN credentials against the
   caller's JWT, one set per call and good for an hour, inside a monthly egress
   budget it checks before minting (default 900 GB, under the free 1,000). The
   client falls back to STUN alone when this is unreachable, so a missing
-  deployment is calls that mostly work and sometimes never connect — the worst
+  deployment is calls that mostly work and sometimes never connect, the worst
   failure mode there is to debug.
 
   ```bash
@@ -308,22 +388,22 @@ each is declared in [`config.toml`](config.toml).
   Optional beside those: `CLOUDFLARE_ACCOUNT_ID` and
   `CLOUDFLARE_ANALYTICS_API_TOKEN` for the relayed-bytes check, and
   `TURN_MONTHLY_BUDGET_GB` to stop minting credentials past a spend cap. The
-  API token is server-side only — a long-lived TURN secret in the bundle is a
+  API token is server-side only: a long-lived TURN secret in the bundle is a
   free relay for anyone who unzips the APK.
 
 - **`send-push`** — the OneSignal sender. Two callers: the sending device
   (`src/lib/push.ts`, which is the live path) and `0014`/`0037`'s database
-  triggers. The triggers are applied but inert on this project — `push_config`
-  is empty, so both return immediately. Turning them on means deploying with
+  triggers. The triggers are applied but inert on this project, because
+  `push_config` is empty, so both return immediately. Turning them on means deploying with
   `--no-verify-jwt`, setting `PUSH_TRIGGER_SECRET`, and inserting a
-  `push_config` row pointing at the function URL with the same secret — in that
+  `push_config` row pointing at the function URL with the same secret, in that
   order.
 
   It takes either `{ message_id }` or `{ room_message_id }`. The room branch
   fans out to `room_participants` minus the sender, claims the send in
   `room_message_pushes`, and throttles per receiver per room in
   `room_push_alerts`. A room banner carries the room's title and the sender's
-  `@display_name` — never a private nickname, because one notification
+  `@display_name`, never a private nickname, because one notification
   addresses many people at once, and never a body, because the server has none.
 
   Redeploy it after applying `0037`: an old copy ignores `room_message_id` and
@@ -338,20 +418,22 @@ each is declared in [`config.toml`](config.toml).
 - **`connect_tokens` likewise.** Reachable only through `mint_connect_code()`
   and `redeem_connect_code()`, which are `SECURITY DEFINER` and revoked from
   `anon`. A client that could read the table could enumerate live codes.
-- **`pg_trgm` and `pg_net` live in `public`** (WARN) — where `0010` and `0014`
-  put them. `pg_trgm` is now unused: `0023` dropped both the trigram index and
-  the column it covered. It is kept because moving an extension between schemas
-  on a live project is not worth the risk of the move failing halfway.
+- **`pg_net` lives in `public`** (WARN), where `0014` put it. It is kept there
+  because moving an extension between schemas on a live project is not worth
+  the risk of the move failing halfway. `pg_trgm` was beside it until `0042`
+  dropped it: `0023` had already taken the trigram index and the column it
+  covered, so the extension was left naming a capability the server no longer
+  has.
 - **`SECURITY DEFINER` functions callable by `authenticated`** (WARN):
   `redeem_connect_code`, `mint_connect_code`, `rooms_for_me`, `is_room_member`,
   `is_room_owner`, `set_conversation_timer`, `set_room_timer`,
   `public_table_names`. Going through a definer function is the point in each
-  case — it is what lets the connect pair be normalized, `set_by` recorded as
+  case: it is what lets the connect pair be normalized, `set_by` recorded as
   the caller rather than trusted from the client, and the room-membership policy
   escape its own recursion.
 - **`rls_auto_enable()` is executable by both client roles** (WARN). It backs
   the platform's `ensure_rls` event trigger, is owned by `postgres`, and appears
-  in no migration here — it is platform configuration, not ours to revoke.
+  in no migration here. It is platform configuration, not ours to revoke.
 - **Leaked-password protection is disabled** (WARN) — see the auth section.
 
 Two things deliberately **not** changed:
@@ -368,8 +450,10 @@ Two things deliberately **not** changed:
 
 ## Notes
 
-- Media cleanup is client-side: the newest 20 media per conversation are kept,
-  older files removed on upload and re-checked when a chat opens. The
-  disappearing-message sweep (`0029`) is the only server-side deletion.
+- Media cleanup is client-side: the newest 20 photos and videos per
+  conversation are kept, and the newest 50 voice notes, with older files
+  removed on upload and re-checked when a chat opens. The disappearing-message
+  sweep (`0029`), which `0042` extended to spent connect codes, is the only
+  server-side deletion.
 - `.env` holds the project URL and publishable key. Keys are not pasted into
   this file, and secrets never belong in the repo at all.
