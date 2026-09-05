@@ -100,13 +100,13 @@ export function NotificationsPrompt({ userId }: NotificationsPromptProps) {
       }
     >
       <div className="flex flex-col items-center text-center gap-3">
-        <span className="w-12 h-12 rounded-2xl bg-primary/15 text-primary flex items-center justify-center">
+        <span className="w-12 h-12 rounded-box bg-primary/15 text-primary flex items-center justify-center">
           <Bell className="w-6 h-6" />
         </span>
-        <p className="text-sm text-base-content/75 leading-relaxed">
+        <p className="text-body text-strong leading-relaxed">
           {t('notifyPrompt.body1')}
         </p>
-        <p className="text-sm text-base-content/75 leading-relaxed">
+        <p className="text-body text-strong leading-relaxed">
           {t('notifyPrompt.body2')}
         </p>
       </div>

@@ -57,9 +57,9 @@ export function ConversationPanel({
   const dateCount = insights.upcoming.length + insights.past.length;
 
   return (
-    <div className="bg-base-100 border-b border-base-content/5 shadow-[0_1px_3px_rgba(0,0,0,0.15)] shrink-0">
+    <div className="bg-base-100 border-b border-hairline shadow-[0_1px_3px_rgba(0,0,0,0.15)] shrink-0">
       <div className="flex items-center gap-2 px-4 sm:px-5 pt-2.5">
-        <p className="flex-1 text-sm font-semibold">In this conversation</p>
+        <p className="flex-1 text-body font-semibold">In this conversation</p>
         <button className="btn btn-ghost btn-xs btn-square" onClick={onClose} title="Close">
           <X className="w-4 h-4" />
         </button>
@@ -73,7 +73,7 @@ export function ConversationPanel({
         >
           <CalendarClock className="w-4 h-4" />
           {t('panel.dates')}
-          <span className="text-xs text-base-content/50">{dateCount}</span>
+          <span className="text-meta text-subtle">{dateCount}</span>
         </button>
         <button
           role="tab"
@@ -82,13 +82,13 @@ export function ConversationPanel({
         >
           <Link2 className="w-4 h-4" />
           {t('panel.links')}
-          <span className="text-xs text-base-content/50">{insights.links.length}</span>
+          <span className="text-meta text-subtle">{insights.links.length}</span>
         </button>
       </div>
 
       <div className="max-h-72 overflow-y-auto px-3 sm:px-4 py-2 space-y-1">
         {insights.loading && insights.scanned === 0 ? (
-          <p className="px-2 py-6 text-center text-sm text-base-content/55">{t('panel.reading')}</p>
+          <p className="px-2 py-6 text-center text-body text-muted">{t('panel.reading')}</p>
         ) : tab === 'dates' ? (
           <DateList
             insights={insights}
@@ -109,7 +109,7 @@ export function ConversationPanel({
       {/* The panel reads plaintext that exists only because this device
           decrypted it. Saying so is the same claim the transparency screen
           makes, in the one place where it would be reasonable to wonder. */}
-      <p className="px-4 sm:px-5 pb-2 text-[0.68rem] leading-snug text-base-content/45">
+      <p className="px-4 sm:px-5 pb-2 text-micro leading-snug text-subtle">
         {t('panel.provenance')}
       </p>
     </div>
@@ -129,7 +129,7 @@ interface ListProps {
 }
 
 function Empty({ text }: { text: string }) {
-  return <p className="px-2 py-6 text-center text-sm text-base-content/55">{text}</p>;
+  return <p className="px-2 py-6 text-center text-body text-muted">{text}</p>;
 }
 
 function DateList({
@@ -146,7 +146,7 @@ function DateList({
         <DateRow key={rowKey(event)} event={event} now={insights.now} who={who} onJump={onJump} />
       ))}
       {insights.past.length > 0 && (
-        <p className="px-2 pt-3 pb-1 text-xs font-medium text-base-content/45">Already passed</p>
+        <p className="px-2 pt-3 pb-1 text-meta font-medium text-subtle">Already passed</p>
       )}
       {insights.past.map((event) => (
         <DateRow
@@ -181,22 +181,22 @@ function DateRow({
   return (
     <button
       onClick={() => onJump(event.messageId, event.at)}
-      className={`w-full text-left px-3 py-2 rounded-lg hover:bg-base-200/70 transition-colors flex gap-2.5 ${
+      className={`w-full text-left px-3 py-2 rounded-field hover:bg-base-200/70 transition-colors flex gap-2.5 ${
         muted ? 'opacity-60' : ''
       }`}
     >
       <CalendarClock className="w-4 h-4 mt-0.5 shrink-0 text-primary" />
       <span className="min-w-0 flex-1">
         <span className="flex items-baseline justify-between gap-2">
-          <span className="text-sm font-medium truncate">{formatWhen(event, now)}</span>
-          <span className="text-xs text-base-content/50 shrink-0">
+          <span className="text-body font-medium truncate">{formatWhen(event, now)}</span>
+          <span className="text-meta text-subtle shrink-0">
             {who(event.userId)} · {formatListTime(event.at)}
           </span>
         </span>
         {/* The message itself, not a paraphrase: the panel's claim is only
             that this line mentioned a day, and the line is right there to
             check it against. */}
-        <span className="block text-xs text-base-content/70 line-clamp-2">{event.text}</span>
+        <span className="block text-meta text-strong line-clamp-2">{event.text}</span>
       </span>
     </button>
   );
@@ -211,7 +211,7 @@ function LinkList({ links, who, onJump, empty }: ListProps & { links: LinkInsigh
       {links.map((link) => (
         <div
           key={link.href}
-          className="flex items-center gap-1 rounded-lg hover:bg-base-200/70 transition-colors"
+          className="flex items-center gap-1 rounded-field hover:bg-base-200/70 transition-colors"
         >
           {/* Same whitelist as the thread's own anchors — `linkify` decided
               this was a link, and these are the attributes it renders one
@@ -225,13 +225,13 @@ function LinkList({ links, who, onJump, empty }: ListProps & { links: LinkInsigh
             <ExternalLink className="w-4 h-4 mt-0.5 shrink-0 text-primary" />
             <span className="min-w-0 flex-1">
               <span className="flex items-baseline justify-between gap-2">
-                <span className="text-sm font-medium truncate">{link.label}</span>
-                <span className="text-xs text-base-content/50 shrink-0">
+                <span className="text-body font-medium truncate">{link.label}</span>
+                <span className="text-meta text-subtle shrink-0">
                   {who(link.userId)} · {formatListTime(link.at)}
                 </span>
               </span>
               {link.count > 1 && (
-                <span className="block text-xs text-base-content/50">
+                <span className="block text-meta text-subtle">
                   {t('panel.sentTimes', { count: link.count })}
                 </span>
               )}

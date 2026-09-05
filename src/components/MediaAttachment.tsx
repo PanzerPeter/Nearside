@@ -78,7 +78,7 @@ export function MediaAttachment({
       // The bubble may be floating its timestamp over the bottom-right corner
       // on the assumption that a picture is there; the extra right pad keeps
       // the words clear of it.
-      <div className="flex items-center gap-2 py-2 pl-3.5 pr-16 text-xs text-base-content/60">
+      <div className="flex items-center gap-2 py-2 pl-3.5 pr-16 text-meta text-muted">
         <FailIcon className="w-4 h-4 shrink-0" />
         {mediaFailureNotice(failure, type)}
       </div>
@@ -90,7 +90,7 @@ export function MediaAttachment({
       <div
         ref={probeRef}
         className={`flex items-center justify-center bg-base-content/5 ${
-          fill ? 'w-full h-40' : 'mx-3.5 w-40 h-40 rounded-lg'
+          fill ? 'w-full h-40' : 'mx-3.5 w-40 h-40 rounded-field'
         }`}
       >
         <span className="loading loading-spinner loading-sm" />
@@ -138,12 +138,12 @@ export function MediaAttachment({
           // the only thing left that can be done with it, and the viewer is
           // where saving lives.
           <div
-            className={`flex flex-col items-center justify-center gap-1.5 bg-base-content/5 text-base-content/60 ${
+            className={`flex flex-col items-center justify-center gap-1.5 bg-base-content/5 text-muted ${
               fill ? 'w-full h-40' : 'w-40 h-40'
             }`}
           >
             <VideoOff className="w-5 h-5" />
-            <span className="px-3 text-center text-[0.7rem] leading-tight">
+            <span className="px-3 text-center text-micro leading-tight">
               {t('media.unplayable')}
             </span>
           </div>

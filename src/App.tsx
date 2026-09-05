@@ -598,7 +598,7 @@ function App() {
             bar is showing, so tearing it down on a tab switch would drop all
             three and pay for a full refetch on the way back. */}
         <aside
-          className={`w-full lg:w-80 xl:w-96 lg:border-r lg:border-base-content/5 shrink-0 transition-all duration-200 ${
+          className={`w-full lg:w-80 xl:w-96 lg:border-r lg:border-hairline shrink-0 transition-all duration-200 ${
             chatOpen || tab === 'settings' ? 'hidden lg:flex lg:flex-col' : 'flex flex-col'
           }`}
         >
@@ -661,13 +661,13 @@ function App() {
           ) : (
             <div className="flex-1 flex items-center justify-center bg-base-200/50">
               <div className="text-center px-4">
-                <div className="motion-float w-20 h-20 rounded-2xl bg-base-content/5 flex items-center justify-center mx-auto mb-4">
-                  <MessageSquare className="w-10 h-10 text-base-content/55" />
+                <div className="motion-float brand-wash w-20 h-20 rounded-box flex items-center justify-center mx-auto mb-4">
+                  <MessageSquare className="w-10 h-10 text-primary/70" />
                 </div>
-                <p className="text-base-content/60 text-base sm:text-lg font-medium">
+                <p className="text-title font-medium text-strong">
                   {t('app.pickAChat')}
                 </p>
-                <p className="text-base-content/55 text-sm mt-1">{t('app.chatsAppearHere')}</p>
+                <p className="text-meta text-muted mt-1.5">{t('app.chatsAppearHere')}</p>
               </div>
             </div>
           )}
@@ -678,8 +678,8 @@ function App() {
             entitlement checks don't run on every launch. */}
         {tab === 'settings' && !chatOpen && (
           <section className="w-full lg:hidden flex flex-col min-w-0 bg-base-100">
-            <div className="px-4 pt-[calc(1rem+var(--safe-top))] pb-4 border-b border-base-content/5 shrink-0">
-              <h2 className="font-semibold text-base-content">{t('settings.title')}</h2>
+            <div className="px-4 pb-3 pt-[calc(1rem+var(--safe-top))] border-b border-hairline shrink-0">
+              <h2 className="text-display font-semibold text-base-content">{t('settings.title')}</h2>
             </div>
             <div className="flex-1 overflow-y-auto p-4">
               {/* The profile row is what every field here edits, so the tab

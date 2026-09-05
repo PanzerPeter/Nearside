@@ -116,25 +116,25 @@ export function CreateRoomModal({ me, identity, onCreated, onClose }: CreateRoom
     >
       <div className="flex flex-col">
         <label className="flex select-none items-center justify-between pb-1" htmlFor="room-title">
-          <span className="text-xs font-medium uppercase tracking-wider text-base-content/60">
+          <span className="text-micro font-medium uppercase tracking-wider text-muted">
             {t('room.name')}
           </span>
         </label>
         <input
           id="room-title"
           type="text"
-          className="input w-full bg-base-200/50 border border-base-content/10 focus:border-primary"
+          className="input w-full bg-base-200/50 border border-hairline focus:border-primary"
           value={title}
           maxLength={TITLE_MAX}
           onChange={(e) => setTitle(e.target.value)}
           placeholder={t('room.namePlaceholder')}
         />
-        <span className="text-xs text-base-content/55 mt-1">{t('room.nameNote')}</span>
+        <span className="text-meta text-muted mt-1">{t('room.nameNote')}</span>
       </div>
 
       <div className="divider my-4" />
 
-      <p className="text-xs font-medium uppercase tracking-wider text-base-content/60 mb-2">
+      <p className="text-micro font-medium uppercase tracking-wider text-muted mb-2">
         Members ({picked.size})
       </p>
 
@@ -143,7 +143,7 @@ export function CreateRoomModal({ me, identity, onCreated, onClose }: CreateRoom
           <span className="loading loading-spinner" />
         </div>
       ) : friends.length === 0 ? (
-        <p className="text-sm text-base-content/60 py-6 text-center">
+        <p className="text-body text-muted py-6 text-center">
           Connect with someone first. A room can only include people you are connected to.
         </p>
       ) : (
@@ -154,22 +154,22 @@ export function CreateRoomModal({ me, identity, onCreated, onClose }: CreateRoom
               <li key={f.id}>
                 <button
                   type="button"
-                  className={`w-full flex items-center gap-2.5 p-2 rounded-lg text-left transition-colors ${
+                  className={`w-full flex items-center gap-2.5 p-2 rounded-field text-left transition-colors ${
                     blocked
                       ? 'opacity-50 cursor-not-allowed'
                       : picked.has(f.id)
                         ? 'bg-primary/10 ring-1 ring-primary/30'
-                        : 'hover:bg-base-content/5'
+                        : 'hover:bg-wash'
                   }`}
                   disabled={blocked}
                   onClick={() => toggle(f.id)}
                 >
                   <Avatar display_name={f.display_name} url={f.avatar_url} size={32} />
-                  <span className="flex-1 min-w-0 truncate text-sm">
+                  <span className="flex-1 min-w-0 truncate text-body">
                     {formatDisplayName(nicknameFor(f.id), f.display_name)}
                   </span>
                   {blocked ? (
-                    <span className="text-[11px] text-base-content/55 shrink-0">
+                    <span className="text-micro text-muted shrink-0">
                       no key published
                     </span>
                   ) : (

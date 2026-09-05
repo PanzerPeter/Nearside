@@ -14,6 +14,45 @@ one of them drifts.
 
 ## [Unreleased]
 
+## [1.6.0] — 2026-09-05
+
+### Changed
+
+- **The app has a proper sense of hierarchy now.** Every screen used to be
+  written in one of two text sizes, which meant nothing on it could announce
+  itself — the word "Chats" at the top of the list was set at exactly the size
+  and weight of the name of the person in the first row underneath it, so the
+  screen had no head and the eye had nowhere to start. Titles are now titles.
+  Names, previews and timestamps in a conversation row are three visibly
+  different things instead of three shades of the same grey.
+- **The greys were doing too many jobs.** Secondary text was being drawn at
+  twelve different strengths, three of them often inside a single row, picked
+  by whoever wrote that line. There are four now, each one meaning something —
+  what you are reading, what is emphasised, what supports it, what is merely
+  present — and that is the difference between an app that looks restrained and
+  one that looks washed out.
+- **The logo's two-tone blue finally appears inside the app.** The mark is one
+  disc cut on the diagonal and pulled apart, a lit half and a half in shadow,
+  and until now you only ever saw it on the app icon and the sign-in screen —
+  everywhere else the accent was a single flat colour. It now marks the
+  conversation you have open, the button that starts a new one, the tab you are
+  on, and your own avatar. Deliberately nowhere else: it is meant to be a
+  signature, and a signature on every surface is wallpaper. Message bubbles in
+  particular keep their flat fill.
+- **Each theme carries its own version of that two-tone**, hand-picked rather
+  than computed from its accent colour. Computing it would have quietly ruined
+  the two packs it matters most to — Graphite has no accent hue to derive from,
+  and Paper's would have come out muddy.
+- **Rounded corners now follow the theme you chose.** Every card, field and
+  message bubble used to be rounded by a fixed amount regardless, which meant
+  Terminal's deliberately sharp corners and Sakura's deliberately soft ones only
+  ever reached about a third of the app. They reach all of it now, so the packs
+  read as more different from each other than they did.
+- **The line under the chat header lost its drop shadow.** It was a black
+  shadow, so on the two light themes it was a grey smudge, and it was the one
+  piece of the app still contradicting the flat surface treatment everything
+  else follows.
+
 ## [1.5.3] — 2026-09-05
 
 ### Changed

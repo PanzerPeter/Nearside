@@ -73,8 +73,8 @@ export function ServerView({ onClose, onOpenLimits }: ServerViewProps) {
         </button>
       }
     >
-      <p className="text-sm text-base-content/70 leading-relaxed">{t('serverView.intro')}</p>
-      <p className="text-sm text-base-content/60 leading-relaxed mt-2">{t('serverView.live')}</p>
+      <p className="text-body text-strong leading-relaxed">{t('serverView.intro')}</p>
+      <p className="text-body text-muted leading-relaxed mt-2">{t('serverView.live')}</p>
 
       <button className="btn btn-outline btn-sm w-full mt-4 gap-2" onClick={onOpenLimits}>
         <AlertTriangle className="w-4 h-4" />
@@ -82,7 +82,7 @@ export function ServerView({ onClose, onOpenLimits }: ServerViewProps) {
       </button>
 
       {failed && (
-        <div className="alert alert-error mt-4 text-sm">
+        <div className="alert alert-error mt-4 text-body">
           <span>{t('serverView.readFailed')}</span>
           <button className="btn btn-sm gap-1.5" onClick={() => void load()}>
             <RefreshCw className="w-3.5 h-3.5" />
@@ -100,11 +100,11 @@ export function ServerView({ onClose, onOpenLimits }: ServerViewProps) {
       {report && (
         <>
           {report.unlisted.length > 0 && (
-            <div className="alert alert-warning mt-4 text-sm items-start">
+            <div className="alert alert-warning mt-4 text-body items-start">
               <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
               <div>
                 <p className="font-medium">{t('serverView.staleTitle')}</p>
-                <p className="text-xs mt-1">
+                <p className="text-meta mt-1">
                   {t('serverView.stalePrefix')}{' '}
                   <span className="font-mono">{report.unlisted.join(', ')}</span>
                   {t('serverView.staleSuffix')}
@@ -114,11 +114,11 @@ export function ServerView({ onClose, onOpenLimits }: ServerViewProps) {
           )}
 
           {report.missing.length > 0 && (
-            <div className="alert alert-warning mt-4 text-sm items-start">
+            <div className="alert alert-warning mt-4 text-body items-start">
               <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
               <div>
                 <p className="font-medium">{t('serverView.missingTitle')}</p>
-                <p className="text-xs mt-1 font-mono">{report.missing.join(', ')}</p>
+                <p className="text-meta mt-1 font-mono">{report.missing.join(', ')}</p>
               </div>
             </div>
           )}
@@ -129,11 +129,11 @@ export function ServerView({ onClose, onOpenLimits }: ServerViewProps) {
               Every "server reads: …" below is a hand-written claim, and this
               is what holds it against the live database. */}
           {report.drift.length > 0 && (
-            <div className="alert alert-warning mt-4 text-sm items-start">
+            <div className="alert alert-warning mt-4 text-body items-start">
               <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
               <div className="min-w-0">
                 <p className="font-medium">{t('serverView.driftTitle')}</p>
-                <ul className="text-xs mt-1 space-y-1">
+                <ul className="text-meta mt-1 space-y-1">
                   {report.drift.map((entry) => (
                     <li key={entry.table} className="wrap-break-word">
                       <span className="font-mono">{entry.table}</span>
@@ -154,7 +154,7 @@ export function ServerView({ onClose, onOpenLimits }: ServerViewProps) {
                     </li>
                   ))}
                 </ul>
-                <p className="text-xs mt-1">{t('serverView.driftSuffix')}</p>
+                <p className="text-meta mt-1">{t('serverView.driftSuffix')}</p>
               </div>
             </div>
           )}
@@ -165,23 +165,23 @@ export function ServerView({ onClose, onOpenLimits }: ServerViewProps) {
               routing metadata the server genuinely reads, and plumbing. */}
           {groupTables(report.tables).map((group) => (
             <section key={group.group} className="mt-5">
-              <h4 className="text-xs font-medium uppercase tracking-wider text-base-content/60">
+              <h4 className="text-micro font-medium uppercase tracking-wider text-muted">
                 {t(group.title)}
               </h4>
-              <p className="text-xs text-base-content/60 leading-relaxed mt-1">{t(group.blurb)}</p>
+              <p className="text-meta text-muted leading-relaxed mt-1">{t(group.blurb)}</p>
 
               <div className="space-y-3 mt-3">
                 {group.tables.map((spec) => (
                   <section
                     key={spec.table}
-                    className="rounded-xl border border-base-content/10 bg-base-200/40 p-3.5"
+                    className="rounded-box border border-hairline bg-base-200/40 p-3.5"
                   >
                     <header className="flex items-baseline justify-between gap-3">
                       <div className="min-w-0">
-                        <h5 className="font-medium text-sm">{t(spec.label)}</h5>
-                        <p className="font-mono text-[11px] text-base-content/60">{spec.table}</p>
+                        <h5 className="font-medium text-body">{t(spec.label)}</h5>
+                        <p className="font-mono text-micro text-muted">{spec.table}</p>
                       </div>
-                      <span className="text-xs text-base-content/60 shrink-0 tabular-nums">
+                      <span className="text-meta text-muted shrink-0 tabular-nums">
                         {spec.rows === null
                           ? spec.infrastructure
                             ? t('serverView.notAboutYou')
@@ -190,40 +190,40 @@ export function ServerView({ onClose, onOpenLimits }: ServerViewProps) {
                       </span>
                     </header>
 
-                    <p className="text-xs text-base-content/70 leading-relaxed mt-2">
+                    <p className="text-meta text-strong leading-relaxed mt-2">
                       {t(spec.note)}
                     </p>
 
                     <dl className="mt-3 space-y-2">
                       {spec.readable.length > 0 && (
                         <div className="flex gap-2">
-                          <dt className="flex items-center gap-1 text-[11px] font-medium uppercase tracking-wider text-warning shrink-0 w-28">
+                          <dt className="flex items-center gap-1 text-micro font-medium uppercase tracking-wider text-warning shrink-0 w-28">
                             <Eye className="w-3 h-3" />
                             {t('serverView.serverReads')}
                           </dt>
-                          <dd className="font-mono text-[11px] text-base-content/60 break-all">
+                          <dd className="font-mono text-micro text-muted break-all">
                             {spec.readable.join(' · ')}
                           </dd>
                         </div>
                       )}
                       {spec.opaque.length > 0 && (
                         <div className="flex gap-2">
-                          <dt className="flex items-center gap-1 text-[11px] font-medium uppercase tracking-wider text-success shrink-0 w-28">
+                          <dt className="flex items-center gap-1 text-micro font-medium uppercase tracking-wider text-success shrink-0 w-28">
                             <EyeOff className="w-3 h-3" />
                             {t('serverView.encrypted')}
                           </dt>
-                          <dd className="font-mono text-[11px] text-base-content/60 break-all">
+                          <dd className="font-mono text-micro text-muted break-all">
                             {spec.opaque.join(' · ')}
                           </dd>
                         </div>
                       )}
                       {spec.opaque.length === 0 && (
                         <div className="flex gap-2">
-                          <dt className="flex items-center gap-1 text-[11px] font-medium uppercase tracking-wider text-base-content/40 shrink-0 w-28">
+                          <dt className="flex items-center gap-1 text-micro font-medium uppercase tracking-wider text-faint shrink-0 w-28">
                             <Lock className="w-3 h-3" />
                             {t('serverView.encrypted')}
                           </dt>
-                          <dd className="text-[11px] text-base-content/60">
+                          <dd className="text-micro text-muted">
                             {t('serverView.nothingEncrypted')}
                           </dd>
                         </div>
@@ -238,13 +238,13 @@ export function ServerView({ onClose, onOpenLimits }: ServerViewProps) {
           {/* Its own heading, under the tables rather than among them: both
               cards below describe things with no row anywhere above, and
               trailing them off the last group made them read as more plumbing. */}
-          <h4 className="text-xs font-medium uppercase tracking-wider text-base-content/60 mt-5">
+          <h4 className="text-micro font-medium uppercase tracking-wider text-muted mt-5">
             {t('serverView.outsideTables')}
           </h4>
 
-          <div className="rounded-xl border border-base-content/10 bg-base-200/40 p-3.5 mt-3">
-            <h5 className="font-medium text-sm">{t('serverView.attachmentsTitle')}</h5>
-            <p className="text-xs text-base-content/70 leading-relaxed mt-2">
+          <div className="rounded-box border border-hairline bg-base-200/40 p-3.5 mt-3">
+            <h5 className="font-medium text-body">{t('serverView.attachmentsTitle')}</h5>
+            <p className="text-meta text-strong leading-relaxed mt-2">
               {t('serverView.attachmentsBodyStart')}{' '}
               <span className="font-mono">application/octet-stream</span>
               {t('serverView.attachmentsBodyEnd')}
@@ -256,9 +256,9 @@ export function ServerView({ onClose, onOpenLimits }: ServerViewProps) {
               is the screen where "and calls leave nothing behind" is a claim
               worth making explicitly, and the only one on it whose evidence is
               that no row exists. */}
-          <div className="rounded-xl border border-base-content/10 bg-base-200/40 p-3.5 mt-3">
-            <h5 className="font-medium text-sm">{t('serverView.callsTitle')}</h5>
-            <p className="text-xs text-base-content/70 leading-relaxed mt-2">
+          <div className="rounded-box border border-hairline bg-base-200/40 p-3.5 mt-3">
+            <h5 className="font-medium text-body">{t('serverView.callsTitle')}</h5>
+            <p className="text-meta text-strong leading-relaxed mt-2">
               {t('serverView.callsBody')}
             </p>
           </div>
@@ -275,7 +275,7 @@ export function ServerView({ onClose, onOpenLimits }: ServerViewProps) {
             )}
             {t('serverView.export')}
           </button>
-          <p className="text-xs text-base-content/55 mt-2 text-center">
+          <p className="text-meta text-muted mt-2 text-center">
             {t('serverView.exportNote')}
           </p>
         </>

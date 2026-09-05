@@ -19,7 +19,7 @@ export function Avatar({ display_name, url, size = 40, className = '' }: AvatarP
   return (
     <div className="avatar placeholder">
       <div
-        className={`rounded-full overflow-hidden bg-base-content/10 text-base-content/70 ${className}`}
+        className={`rounded-full overflow-hidden bg-base-content/10 text-strong ${className}`}
         style={{ width: dimension, height: dimension }}
       >
         {url && !broken ? (

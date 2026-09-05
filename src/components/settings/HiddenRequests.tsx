@@ -57,14 +57,14 @@ export function HiddenRequests({ onBack }: HiddenRequestsProps) {
     <SettingsPage title={t('hidden.title')} onBack={onBack}>
       <Card>
         {loading ? (
-          <p className="px-3 py-3 text-sm text-base-content/60">{t('common.loading')}</p>
+          <p className="px-3 py-3 text-body text-muted">{t('common.loading')}</p>
         ) : profiles.length === 0 ? (
-          <p className="px-3 py-3 text-sm text-base-content/60">{t('hidden.empty')}</p>
+          <p className="px-3 py-3 text-body text-muted">{t('hidden.empty')}</p>
         ) : (
           profiles.map((profile) => (
             <div key={profile.id} className="flex items-center gap-3 px-3 py-2.5">
               <Avatar display_name={profile.display_name} url={profile.avatar_url} size={32} />
-              <span className="flex-1 min-w-0 truncate text-sm">
+              <span className="flex-1 min-w-0 truncate text-body">
                 {profile.display_name ? `@${profile.display_name}` : t('hidden.deletedAccount')}
               </span>
               <button
@@ -85,7 +85,7 @@ export function HiddenRequests({ onBack }: HiddenRequestsProps) {
           "blocked" would be claiming a protection the server does not enforce. */}
       <Note>{t('hidden.note')}</Note>
 
-      <div className="flex items-center gap-2 px-1 pt-1 text-xs text-base-content/50">
+      <div className="flex items-center gap-2 px-1 pt-1 text-meta text-subtle">
         <EyeOff className="w-3.5 h-3.5 shrink-0" />
         <span>{t('hidden.footnote')}</span>
       </div>

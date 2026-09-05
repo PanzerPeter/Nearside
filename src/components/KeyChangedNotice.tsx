@@ -22,8 +22,8 @@ export function KeyChangedNotice({ peerKey, onVerify }: KeyChangedNoticeProps) {
       <div className="flex items-start gap-3">
         <ShieldAlert className="w-5 h-5 text-error shrink-0 mt-0.5" />
         <div className="min-w-0">
-          <p className="text-sm font-semibold text-error">{t('keyChanged.title')}</p>
-          <p className="text-sm text-base-content/70 mt-1">{t('keyChanged.body')}</p>
+          <p className="text-body font-semibold text-error">{t('keyChanged.title')}</p>
+          <p className="text-body text-strong mt-1">{t('keyChanged.body')}</p>
           <button className="btn btn-error btn-sm mt-3 gap-1.5" onClick={onVerify} disabled={!peerKey}>
             <ShieldCheck className="w-4 h-4" />
             {t('keyChanged.compare')}

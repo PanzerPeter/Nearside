@@ -22,7 +22,7 @@ interface TabBarProps {
 export function TabBar({ tab, onSelect, unread }: TabBarProps) {
   const t = useT();
   return (
-    <nav className="lg:hidden shrink-0 bg-base-100 border-t border-base-content/5 pb-(--safe-bottom) z-20">
+    <nav className="lg:hidden shrink-0 bg-base-100 border-t border-hairline pb-(--safe-bottom) z-20">
       <div className="flex">
         <TabButton
           label={t('tabs.chats')}
@@ -61,13 +61,17 @@ function TabButton({
       // not an ARIA tablist, and claiming that role without the keyboard
       // behaviour it implies is worse than not claiming it.
       aria-current={active ? 'page' : undefined}
-      className={`flex-1 flex flex-col items-center gap-0.5 py-2 transition-colors ${
-        active ? 'text-primary' : 'text-base-content/55 hover:text-base-content/80'
+      className={`flex-1 flex flex-col items-center gap-1 py-2 transition-colors ${
+        active ? 'text-primary' : 'text-muted hover:text-strong'
       }`}
     >
       {/* motion-tab-icon is the hook the expressive set animates when
           aria-current above flips to this button — see index.css. */}
-      <span className="motion-tab-icon relative">
+      <span
+        className={`motion-tab-icon relative flex items-center justify-center rounded-full px-4 py-1 transition-colors ${
+          active ? 'brand-gradient text-primary-content' : ''
+        }`}
+      >
         {children}
         {badge > 0 && (
           <span className="absolute -top-1.5 -right-2.5 badge badge-xs badge-primary px-1 font-semibold">
@@ -75,7 +79,7 @@ function TabButton({
           </span>
         )}
       </span>
-      <span className="text-[0.6875rem] font-medium leading-none">{label}</span>
+      <span className="text-micro font-medium leading-none">{label}</span>
     </button>
   );
 }

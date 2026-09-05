@@ -69,14 +69,14 @@ export function AppLockScreen({ onUnlock, onUnlockWithRecoveryPhrase, waitMs, on
       <form onSubmit={submit} className="card bg-base-100 w-full max-w-sm shadow-modal">
         <div className="card-body gap-4 items-center text-center">
           <BrandMark size={32} />
-          <Lock className="w-6 h-6 text-base-content/50" />
-          <h1 className="card-title text-lg">
+          <Lock className="w-6 h-6 text-subtle" />
+          <h1 className="card-title text-title">
             {usingPhrase ? t('identity.enterPhrase') : t('lock.locked')}
           </h1>
 
           {usingPhrase ? (
             <>
-              <p className="text-sm text-base-content/60">{t('lock.phraseBody')}</p>
+              <p className="text-body text-muted">{t('lock.phraseBody')}</p>
               <textarea
                 className={`textarea w-full h-24 text-center ${
                   wrong ? 'textarea-error' : ''
@@ -112,12 +112,12 @@ export function AppLockScreen({ onUnlock, onUnlockWithRecoveryPhrase, waitMs, on
           )}
 
           {wrong && remaining === 0 && (
-            <p className="text-sm text-error">
+            <p className="text-body text-error">
               {usingPhrase ? t('lock.wrongPhrase') : t('lock.wrongPassphrase')}
             </p>
           )}
           {remaining > 0 && (
-            <p className="text-sm text-base-content/60">
+            <p className="text-body text-muted">
               {t('lock.throttled', { seconds: Math.ceil(remaining / 1000) })}
             </p>
           )}
@@ -138,7 +138,7 @@ export function AppLockScreen({ onUnlock, onUnlockWithRecoveryPhrase, waitMs, on
 
           <button
             type="button"
-            className="btn btn-ghost btn-xs text-base-content/50"
+            className="btn btn-ghost btn-xs text-subtle"
             onClick={onSignOut}
           >
             {t('lock.signOutInstead')}

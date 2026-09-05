@@ -32,7 +32,7 @@ export function AboutPage() {
 
       {/* A bug report that names a version is worth several that don't, and an
           app store's build number is not something anyone reads back. */}
-      <p className="px-1 text-xs text-base-content/40">Nearside {APP_VERSION}</p>
+      <p className="px-1 text-meta text-faint">Nearside {APP_VERSION}</p>
 
       {showSupport && <SupportNearside onClose={() => setShowSupport(false)} />}
       {showLicenses && <OpenSourceLicenses onClose={() => setShowLicenses(false)} />}

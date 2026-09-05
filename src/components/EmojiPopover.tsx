@@ -165,7 +165,7 @@ export function EmojiPopover({
         // The height is fixed to the emoji panel's so the popover does not
         // resize under the finger when the tab changes.
         <div
-          className="flex flex-col rounded-lg bg-base-100 border border-base-content/10 shadow-modal overflow-hidden"
+          className="flex flex-col rounded-field bg-base-100 border border-hairline shadow-modal overflow-hidden"
           style={{ height: pos.height }}
         >
           <div role="tablist" className="flex shrink-0 gap-1 p-2 pb-1.5">
@@ -175,10 +175,10 @@ export function EmojiPopover({
                 role="tab"
                 type="button"
                 aria-selected={tab === name}
-                className={`flex-1 h-7 rounded-md text-xs font-medium capitalize transition-colors ${
+                className={`flex-1 h-7 rounded-field text-meta font-medium capitalize transition-colors ${
                   tab === name
                     ? 'bg-base-content/10 text-base-content'
-                    : 'text-base-content/50 hover:text-base-content/80'
+                    : 'text-subtle hover:text-strong'
                 }`}
                 onClick={() => setTab(name)}
               >

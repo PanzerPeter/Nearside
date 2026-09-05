@@ -215,7 +215,7 @@ export function MediaLightbox({
           // the save button, which is the way out.
           <div className="flex max-w-sm flex-col items-center gap-3 px-6 text-center text-white/75">
             <VideoOff className="w-8 h-8" />
-            <p className="text-sm">
+            <p className="text-body">
               This video's format can't be played here. Save it and open it in a video
               player.
             </p>

@@ -104,10 +104,10 @@ export function ProfileCard({
         </button>
 
         <div className="min-w-0">
-          <p className="text-lg font-semibold wrap-break-word">{profile.display_name}</p>
+          <p className="text-title font-semibold wrap-break-word">{profile.display_name}</p>
           {/* Presence, not a second copy of the header's status line: the
               header is behind this card and cannot be read while it is open. */}
-          <p className="mt-0.5 flex items-center justify-center gap-1.5 text-xs text-base-content/60">
+          <p className="mt-0.5 flex items-center justify-center gap-1.5 text-meta text-muted">
             {isSelf ? (
               <span>{t('chat.onlyYou')}</span>
             ) : (
@@ -123,7 +123,7 @@ export function ProfileCard({
 
         {!isSelf && trust !== 'unverified' && (
           <span
-            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
+            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-meta font-medium ${
               trust === 'verified' ? 'bg-success/15 text-success' : 'bg-error/15 text-error'
             }`}
           >
@@ -139,24 +139,24 @@ export function ProfileCard({
 
       <div className="mt-5 space-y-4">
         <section>
-          <h4 className="text-xs font-medium uppercase tracking-wider text-base-content/60">
+          <h4 className="text-micro font-medium uppercase tracking-wider text-muted">
             {t('profileCard.bio')}
           </h4>
           {failed ? (
             <div className="mt-1 flex items-center gap-2">
-              <p className="text-sm text-base-content/60">{t('profileCard.loadFailed')}</p>
+              <p className="text-body text-muted">{t('profileCard.loadFailed')}</p>
               <button className="btn btn-xs btn-ghost" onClick={() => void load()}>
                 {t('rail.tryNow')}
               </button>
             </div>
           ) : loading && bio === undefined ? (
-            <span className="loading loading-dots loading-sm mt-1 text-base-content/40" />
+            <span className="loading loading-dots loading-sm mt-1 text-faint" />
           ) : bio ? (
             // Pre-wrapped: newlines are the one thing a bio keeps that a
             // display name does not, so they have to survive the render too.
-            <p className="mt-1 whitespace-pre-wrap wrap-break-word text-sm">{bio}</p>
+            <p className="mt-1 whitespace-pre-wrap wrap-break-word text-body">{bio}</p>
           ) : (
-            <p className="mt-1 text-sm italic text-base-content/50">
+            <p className="mt-1 text-body italic text-subtle">
               {isSelf ? t('profileCard.bioEmptySelf') : t('profileCard.bioEmpty')}
             </p>
           )}
@@ -164,11 +164,11 @@ export function ProfileCard({
 
         {!isSelf && (
           <section>
-            <h4 className="text-xs font-medium uppercase tracking-wider text-base-content/60">
+            <h4 className="text-micro font-medium uppercase tracking-wider text-muted">
               {t('profileCard.yourNameFor')}
             </h4>
             <div className="mt-1 flex items-center gap-2">
-              <p className={`flex-1 truncate text-sm ${nickname ? '' : 'italic text-base-content/50'}`}>
+              <p className={`flex-1 truncate text-body ${nickname ? '' : 'italic text-subtle'}`}>
                 {nickname ?? t('profileCard.noNickname')}
               </p>
               <button
@@ -184,11 +184,11 @@ export function ProfileCard({
                 {nickname ? t('profileCard.changeNickname') : t('profileCard.setNickname')}
               </button>
             </div>
-            <p className="mt-1 text-xs text-base-content/50">{t('profileCard.nicknameNote')}</p>
+            <p className="mt-1 text-meta text-subtle">{t('profileCard.nicknameNote')}</p>
           </section>
         )}
 
-        {isSelf && <p className="text-xs text-base-content/50">{t('profileCard.selfHint')}</p>}
+        {isSelf && <p className="text-meta text-subtle">{t('profileCard.selfHint')}</p>}
       </div>
 
       {zoomed && profile.avatar_url && (
@@ -199,7 +199,7 @@ export function ProfileCard({
           <img
             src={profile.avatar_url}
             alt=""
-            className="max-h-[80dvh] max-w-full rounded-lg object-contain"
+            className="max-h-[80dvh] max-w-full rounded-field object-contain"
           />
         </div>
       )}

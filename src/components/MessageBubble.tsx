@@ -273,7 +273,7 @@ export function MessageBubble({
           need no label at all — time and status now live in the bubble's
           own footer below. */}
       {!isOwn && showHeader && (
-        <div className="text-xs text-base-content/60 mb-0.5 px-1">{peerLabel}</div>
+        <div className="text-meta text-muted mb-0.5 px-1">{peerLabel}</div>
       )}
 
       {isEditing ? (
@@ -287,7 +287,7 @@ export function MessageBubble({
         // The save and cancel controls live in the composer, not here — see
         // `Composer`'s `editing` prop.
         <div
-          className={`selection-on-fill w-[85%] sm:w-[70%] px-3.5 py-2 rounded-2xl shadow-[0_1px_2px_rgba(0,0,0,0.28)] ring-2 ring-primary/60 ${
+          className={`selection-on-fill w-[85%] sm:w-[70%] px-3.5 py-2 rounded-box shadow-[0_1px_2px_rgba(0,0,0,0.28)] ring-2 ring-primary/60 ${
             isOwn ? 'rounded-br-md bg-primary text-primary-content' : 'rounded-bl-md bg-neutral text-neutral-content'
           }`}
         >
@@ -377,7 +377,7 @@ export function MessageBubble({
                 className={`flex items-center justify-center w-7 h-7 rounded-full transition-colors ${
                   armed
                     ? 'bg-primary text-primary-content'
-                    : 'bg-base-300 text-base-content/60'
+                    : 'bg-base-300 text-muted'
                 }`}
                 style={{
                   opacity: Math.min(1, offset / 40),
@@ -422,7 +422,7 @@ export function MessageBubble({
               transition: swiping ? 'none' : 'transform 0.2s ease-out',
               touchAction: canReply ? 'pan-y' : undefined,
             }}
-            className={`rounded-2xl whitespace-pre-wrap wrap-break-word cursor-default ${
+            className={`rounded-box whitespace-pre-wrap wrap-break-word cursor-default ${
               // A bare sticker keeps the rounding (reaction chips and the menu
               // ring still anchor to this box) and drops everything that would
               // draw a frame around it.
@@ -446,7 +446,7 @@ export function MessageBubble({
                     : 'pb-2'
             } ${
               isDeleted
-                ? 'bg-base-300/60 text-base-content/60 italic'
+                ? 'bg-base-300/60 text-muted italic'
                 : stickerAlone
                   ? // No bubble colour at all. The footer below reads against the
                     // thread background instead, which is why it is given its own
@@ -470,7 +470,7 @@ export function MessageBubble({
                     naming the original sender would disclose a conversation
                     this reader is not part of. See migration 0018. */}
                 {msg.forwarded && (
-                  <p className="flex items-center gap-1 text-xs italic opacity-70">
+                  <p className="flex items-center gap-1 text-meta italic opacity-70">
                     <CornerUpRight className="w-3 h-3 shrink-0" aria-hidden />
                     {t('message.forwarded')}
                   </p>
@@ -488,7 +488,7 @@ export function MessageBubble({
                       e.stopPropagation();
                       if (repliedTo) onJumpToReplied(repliedTo);
                     }}
-                    className="block w-full text-left pl-2 border-l-2 border-primary/50 text-xs opacity-70 rounded-r enabled:hover:opacity-100 enabled:cursor-pointer transition-opacity"
+                    className="block w-full text-left pl-2 border-l-2 border-primary/50 text-meta opacity-70 rounded-r enabled:hover:opacity-100 enabled:cursor-pointer transition-opacity"
                   >
                     {/* Whose message is being quoted — judged against the
                         viewer, not against the author of the reply. */}
@@ -560,7 +560,7 @@ export function MessageBubble({
                     out loud, because an empty bubble would read as a message
                     someone actually sent as empty. */}
                 {msg.decrypt_failed && (
-                  <p className="text-sm italic opacity-70">{t('message.undecryptable')}</p>
+                  <p className="text-body italic opacity-70">{t('message.undecryptable')}</p>
                 )}
               </div>
             )}
@@ -569,10 +569,10 @@ export function MessageBubble({
                 the separate compact status row that used to sit beneath a
                 grouped own-message bubble. No explicit text colour here —
                 it inherits from the bubble (text-primary-content for own,
-                text-neutral-content for the friend's, text-base-content/60
+                text-neutral-content for the friend's, text-muted
                 when deleted), which is what keeps it legible on all three. */}
             {/* opacity-75 would compound with the deleted bubble's inherited
-                text-base-content/60 down to ~0.45 alpha, below the /55 floor —
+                text-muted down to ~0.45 alpha, below the /55 floor —
                 so the dim comes only from the bubble there. It sits on the
                 individual items rather than this row so MessageStatus can opt
                 out of it for a "read" tick; a parent opacity would clamp the
@@ -581,7 +581,7 @@ export function MessageBubble({
                 and rides on its own scrim, because the image underneath it is
                 any colour at all. */}
             <div
-              className={`text-[0.65rem] leading-none flex items-center gap-1 ${
+              className={`text-micro leading-none flex items-center gap-1 ${
                 floatFooter
                   ? 'absolute bottom-1.5 right-1.5 rounded-full bg-black/50 px-1.5 py-1 text-white'
                   : 'justify-end mt-1 -mb-0.5'

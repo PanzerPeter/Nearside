@@ -137,7 +137,7 @@ export function RoomList({
       {settled && !(empty && hideWhenEmpty) && (
         <div className="px-2 sm:px-3 pt-3">
           <div className="flex items-center justify-between px-2 mb-1.5">
-            <p className="text-xs font-semibold uppercase tracking-wider text-base-content/55">
+            <p className="text-micro font-semibold uppercase tracking-wider text-subtle">
               {t('rooms.title')}
             </p>
             <button
@@ -151,7 +151,7 @@ export function RoomList({
           </div>
 
           {empty ? (
-            <p className="px-2 text-xs text-base-content/60 pb-2">{t('rooms.empty')}</p>
+            <p className="px-2 text-meta text-muted pb-2">{t('rooms.empty')}</p>
           ) : (
             <ul className="space-y-1 pb-1">
               {ordered.map((room) => {
@@ -185,33 +185,33 @@ export function RoomList({
                     ]}
                   >
                   <button
-                    className={`w-full flex items-center gap-2.5 px-2 py-2 rounded-xl text-left transition-colors ${
+                    className={`w-full flex items-center gap-2.5 px-2 py-2 rounded-box text-left transition-colors ${
                       selectedRoomId === room.id
                         ? 'bg-primary/10 ring-1 ring-primary/25'
-                        : 'hover:bg-base-content/5'
+                        : 'hover:bg-wash'
                     }`}
                     onClick={() => {
                       setOpenRail(null);
                       onSelectRoom(room);
                     }}
                   >
-                    <span className="w-9 h-9 rounded-xl bg-primary/15 text-primary flex items-center justify-center shrink-0">
+                    <span className="w-9 h-9 rounded-box bg-primary/15 text-primary flex items-center justify-center shrink-0">
                       <Users className="w-4 h-4" />
                     </span>
                     <span className="flex-1 min-w-0">
-                      <span className="block text-sm font-medium truncate">{room.title}</span>
-                      <span className="block text-xs text-base-content/55 truncate">
+                      <span className="block text-body font-medium truncate">{room.title}</span>
+                      <span className="block text-meta text-muted truncate">
                         {room.member_count} {room.member_count === 1 ? 'member' : 'members'}
                       </span>
                     </span>
                     {muted && (
-                      <BellOff className="w-3 h-3 shrink-0 text-base-content/45" aria-label="Muted" />
+                      <BellOff className="w-3 h-3 shrink-0 text-subtle" aria-label="Muted" />
                     )}
                     {pinned && (
-                      <Pin className="w-3 h-3 shrink-0 text-base-content/45" aria-label="Pinned" />
+                      <Pin className="w-3 h-3 shrink-0 text-subtle" aria-label="Pinned" />
                     )}
                     {room.last_at && (
-                      <span className="text-[11px] text-base-content/60 shrink-0">
+                      <span className="text-micro text-muted shrink-0">
                         {formatListTime(room.last_at)}
                       </span>
                     )}

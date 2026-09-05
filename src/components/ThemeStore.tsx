@@ -130,9 +130,9 @@ export function ThemeStore({ onClose }: ThemeStoreProps) {
         </button>
       }
     >
-      <p className="text-sm text-base-content/70 leading-relaxed">{t('themes.intro')}</p>
+      <p className="text-body text-strong leading-relaxed">{t('themes.intro')}</p>
 
-      <h3 className="text-xs font-medium uppercase tracking-wide text-base-content/50 mt-5 mb-2">
+      <h3 className="text-meta font-medium uppercase tracking-wide text-subtle mt-5 mb-2">
         {t('themes.included')}
       </h3>
       <div className="space-y-3">
@@ -152,11 +152,11 @@ export function ThemeStore({ onClose }: ThemeStoreProps) {
         ))}
       </div>
 
-      <h3 className="text-xs font-medium uppercase tracking-wide text-base-content/50 mt-6 mb-2">
+      <h3 className="text-meta font-medium uppercase tracking-wide text-subtle mt-6 mb-2">
         {t('themes.packs')}
       </h3>
       {bySupport && (
-        <p className="text-xs text-base-content/60 mb-2">{t('themes.bySupport')}</p>
+        <p className="text-meta text-muted mb-2">{t('themes.bySupport')}</p>
       )}
       <div className="space-y-3">
         {PACKS.map((pack) => {
@@ -191,7 +191,7 @@ export function ThemeStore({ onClose }: ThemeStoreProps) {
         {t('themes.restore')}
       </button>
       {!native && (
-        <p className="text-xs text-base-content/55 mt-2 text-center">{t('themes.browserOnly')}</p>
+        <p className="text-meta text-muted mt-2 text-center">{t('themes.browserOnly')}</p>
       )}
     </Modal>
   );
@@ -233,16 +233,16 @@ function ThemeCard({
     // preview toggle inside the select button would be invalid markup, and the
     // browser would hand both taps to whichever one it decided owned the event.
     <div
-      className={`w-full rounded-xl border transition-colors ${
+      className={`w-full rounded-box border transition-colors ${
         selected
           ? 'border-primary/50 bg-primary/5'
-          : 'border-base-content/10 bg-base-200/40'
+          : 'border-hairline bg-base-200/40'
       } ${unavailable && !previewOpen ? 'opacity-50' : ''}`}
     >
       <div className="flex items-center gap-1 p-1">
         <button
           type="button"
-          className="flex flex-1 min-w-0 items-center gap-3 rounded-lg p-2 text-left hover:bg-base-content/5 disabled:hover:bg-transparent"
+          className="flex flex-1 min-w-0 items-center gap-3 rounded-field p-2 text-left hover:bg-wash disabled:hover:bg-transparent"
           onClick={onSelect}
           disabled={busy || unavailable}
           aria-pressed={selected}
@@ -258,11 +258,11 @@ function ThemeCard({
           </span>
 
           <span className="flex-1 min-w-0">
-            <span className="block text-sm font-medium truncate">{name}</span>
-            <span className="block text-xs text-base-content/60">{t(description)}</span>
+            <span className="block text-body font-medium truncate">{name}</span>
+            <span className="block text-meta text-muted">{t(description)}</span>
           </span>
 
-          <span className="shrink-0 text-xs">
+          <span className="shrink-0 text-meta">
             {busy ? (
               <span className="loading loading-spinner loading-xs" />
             ) : selected ? (
@@ -271,12 +271,12 @@ function ThemeCard({
                 {t('themes.inUse')}
               </span>
             ) : owned ? (
-              <span className="flex items-center gap-1 text-base-content/60">
+              <span className="flex items-center gap-1 text-muted">
                 <Palette className="w-3.5 h-3.5" />
                 {t('themes.use')}
               </span>
             ) : unavailable ? (
-              <span className="text-base-content/60">{t('common.unavailable')}</span>
+              <span className="text-muted">{t('common.unavailable')}</span>
             ) : (
               <span className="badge badge-primary badge-sm">{price ?? t('common.loading')}</span>
             )}
@@ -322,14 +322,14 @@ function ThemePreview({ theme }: { theme: string }) {
   return (
     <div
       data-theme={theme}
-      className="m-2 mt-0 rounded-lg overflow-hidden border border-base-content/10 text-base-content select-none"
+      className="m-2 mt-0 rounded-field overflow-hidden border border-hairline text-base-content select-none"
       aria-hidden
     >
       <div className="flex items-center gap-2 px-3 py-2 bg-base-200">
         <span className="w-6 h-6 rounded-full bg-neutral shrink-0" />
         <span className="min-w-0">
-          <span className="block text-xs font-medium">Alex</span>
-          <span className="flex items-center gap-1 text-[0.6rem] text-base-content/60">
+          <span className="block text-meta font-medium">Alex</span>
+          <span className="flex items-center gap-1 text-micro text-muted">
             <span className="w-1.5 h-1.5 rounded-full bg-success" />
             {t('themes.sampleOnline')}
           </span>
@@ -338,14 +338,14 @@ function ThemePreview({ theme }: { theme: string }) {
 
       <div className="bg-base-300 px-3 py-3 space-y-2">
         <div className="flex">
-          <span className="max-w-[80%] rounded-2xl rounded-bl-md bg-neutral text-neutral-content px-3 py-1.5 text-xs">
+          <span className="max-w-[80%] rounded-box rounded-bl-md bg-neutral text-neutral-content px-3 py-1.5 text-meta">
             {t('themes.sampleTheirs')}
           </span>
         </div>
         <div className="flex justify-end">
-          <span className="max-w-[80%] rounded-2xl rounded-br-md bg-primary text-primary-content px-3 py-1.5 text-xs">
+          <span className="max-w-[80%] rounded-box rounded-br-md bg-primary text-primary-content px-3 py-1.5 text-meta">
             {t('themes.sampleYours')}
-            <span className="flex items-center justify-end gap-1 text-[0.6rem] leading-none mt-1">
+            <span className="flex items-center justify-end gap-1 text-micro leading-none mt-1">
               <span className="opacity-75">10:42</span>
               {/* The read tick, in the token the real one uses — it is the
                   detail a theme most often gets wrong, so it belongs in
@@ -361,7 +361,7 @@ function ThemePreview({ theme }: { theme: string }) {
       </div>
 
       <div className="flex items-center gap-2 px-3 py-2 bg-base-200">
-        <span className="flex-1 rounded-full bg-base-100 px-3 py-1.5 text-[0.65rem] text-base-content/50">
+        <span className="flex-1 rounded-full bg-base-100 px-3 py-1.5 text-micro text-subtle">
           {t('themes.sampleComposer')}
         </span>
         <span className="flex items-center justify-center w-6 h-6 rounded-full bg-primary text-primary-content shrink-0">

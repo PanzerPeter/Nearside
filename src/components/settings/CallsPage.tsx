@@ -77,7 +77,7 @@ export function CallsPage() {
 
       <Card title={t('calls.leavesBehind')}>
         <div className="px-3 py-2.5">
-          <p className="text-xs text-base-content/70 leading-relaxed">
+          <p className="text-meta text-strong leading-relaxed">
             {t('calls.leavesBehindBody')}
           </p>
         </div>

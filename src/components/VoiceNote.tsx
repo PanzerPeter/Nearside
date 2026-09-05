@@ -87,7 +87,7 @@ export function VoiceNote({ messageId, path, durationMs, mediaKey }: VoiceNotePr
 
   if (failure) {
     return (
-      <div className="flex items-center gap-2 py-2 text-xs opacity-70">
+      <div className="flex items-center gap-2 py-2 text-meta opacity-70">
         <Mic className="h-4 w-4 shrink-0" />
         {mediaFailureNotice(failure, 'audio')}
       </div>
@@ -139,7 +139,7 @@ export function VoiceNote({ messageId, path, durationMs, mediaKey }: VoiceNotePr
           onPointerMove={(e) => e.stopPropagation()}
           onPointerUp={(e) => e.stopPropagation()}
         />
-        <div className="mt-1 flex items-center gap-1 text-[0.65rem] opacity-75">
+        <div className="mt-1 flex items-center gap-1 text-micro opacity-75">
           <Mic className="h-3 w-3" />
           <span>{formatDuration(playing || positionMs > 0 ? positionMs : totalMs)}</span>
         </div>
@@ -152,7 +152,7 @@ export function VoiceNote({ messageId, path, durationMs, mediaKey }: VoiceNotePr
           type="button"
           onClick={cycleRate}
           style={{ backgroundColor: 'color-mix(in srgb, currentColor 12%, transparent)' }}
-          className="shrink-0 rounded-full px-2 py-0.5 text-[0.65rem] font-medium tabular-nums bg-[rgba(127,127,127,0.2)]"
+          className="shrink-0 rounded-full px-2 py-0.5 text-micro font-medium tabular-nums bg-[rgba(127,127,127,0.2)]"
           title={t('voice.speed')}
           aria-label={`Playback speed ${formatPlaybackRate(rate)}, tap to change`}
         >

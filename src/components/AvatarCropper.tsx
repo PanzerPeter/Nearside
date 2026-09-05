@@ -326,7 +326,7 @@ export function AvatarCropper({ file, onCropped, onCancel }: AvatarCropperProps)
         </div>
 
         <label className="flex items-center gap-3">
-          <span className="text-xs text-base-content/60 w-10 shrink-0">Zoom</span>
+          <span className="text-meta text-muted w-10 shrink-0">Zoom</span>
           <input
             type="range"
             className="range range-primary range-sm"
@@ -338,7 +338,7 @@ export function AvatarCropper({ file, onCropped, onCancel }: AvatarCropperProps)
             onChange={(e) => applyZoom(Number(e.target.value), { x: 0, y: 0 })}
           />
         </label>
-        <p className="text-xs text-base-content/60 text-center">{t('cropper.hint')}</p>
+        <p className="text-meta text-muted text-center">{t('cropper.hint')}</p>
       </div>
     </Modal>
   );

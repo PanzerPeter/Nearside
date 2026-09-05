@@ -53,11 +53,11 @@ export function ChatBackgroundModal({
 
   return (
     <Modal title={t('chat.background')} onClose={onClose}>
-      <div className="rounded-xl overflow-hidden border border-base-content/10 bg-base-200 h-40 flex items-center justify-center mb-4">
+      <div className="rounded-box overflow-hidden border border-hairline bg-base-200 h-40 flex items-center justify-center mb-4">
         {url ? (
           <img src={url} alt={t('background.current')} className="w-full h-full object-cover" />
         ) : (
-          <span className="text-sm text-base-content/60">{t('background.none')}</span>
+          <span className="text-body text-muted">{t('background.none')}</span>
         )}
       </div>
 
@@ -96,7 +96,7 @@ export function ChatBackgroundModal({
         )}
       </div>
 
-      <p className="text-xs text-base-content/60 mt-3">{t('background.formats', { mb: maxMb })}</p>
+      <p className="text-meta text-muted mt-3">{t('background.formats', { mb: maxMb })}</p>
     </Modal>
   );
 }

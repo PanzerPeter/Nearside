@@ -24,7 +24,7 @@ export function ProfileUnavailable({ onRetry, onSignOut }: ProfileUnavailablePro
     <div className="flex flex-col items-center gap-3 py-10 text-center">
       {/* Retrying on its own already, but a spinner that has been turning for
           a while needs to say what it is waiting for. */}
-      <p className="text-sm text-base-content/60">{t('rail.retrying')}</p>
+      <p className="text-body text-muted">{t('rail.retrying')}</p>
       <div className="flex items-center gap-2">
         <button className="btn btn-sm btn-outline" onClick={onRetry}>
           {t('rail.tryNow')}
@@ -33,7 +33,7 @@ export function ProfileUnavailable({ onRetry, onSignOut }: ProfileUnavailablePro
           {t('common.signOut')}
         </button>
       </div>
-      <p className="max-w-xs text-xs text-base-content/50">{t('rail.deletedHint')}</p>
+      <p className="max-w-xs text-meta text-subtle">{t('rail.deletedHint')}</p>
     </div>
   );
 }

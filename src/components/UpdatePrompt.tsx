@@ -96,14 +96,14 @@ export function UpdatePrompt() {
       role="status"
       aria-live="polite"
     >
-      <div className="pointer-events-auto w-full max-w-md rounded-2xl bg-base-100/95 backdrop-blur-sm border border-base-content/10 shadow-modal p-4 animate-message-in">
+      <div className="pointer-events-auto w-full max-w-md rounded-box bg-base-100/95 backdrop-blur-sm border border-hairline shadow-modal p-4 animate-message-in">
         <div className="flex items-start gap-3">
           <div className="w-10 h-10 rounded-full bg-primary/10 grid place-items-center shrink-0">
             <Sparkles className="w-5 h-5 text-primary" />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold leading-snug">{t('update.available')}</p>
-            <p className="text-xs opacity-70 leading-snug mt-0.5">{t('update.body')}</p>
+            <p className="text-body font-semibold leading-snug">{t('update.available')}</p>
+            <p className="text-meta opacity-70 leading-snug mt-0.5">{t('update.body')}</p>
           </div>
         </div>
         <div className="mt-3 flex gap-2">

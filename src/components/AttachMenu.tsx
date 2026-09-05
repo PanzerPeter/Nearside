@@ -66,7 +66,7 @@ export function AttachMenu({
           <button
             key={label}
             type="button"
-            className="flex w-full items-center gap-3 rounded-xl px-4 py-3.5 text-left text-sm font-medium transition-colors active:bg-base-content/10"
+            className="flex w-full items-center gap-3 rounded-box px-4 py-3.5 text-left text-body font-medium transition-colors active:bg-base-content/10"
             onClick={() => {
               // Close first: the file input's click has to land while this
               // handler is still inside the user gesture, and iOS drops the

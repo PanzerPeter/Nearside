@@ -90,26 +90,26 @@ function Row({
   return (
     <button
       type="button"
-      className="w-full text-left hover:bg-base-content/5"
+      className="w-full text-left hover:bg-wash"
       onClick={onSelect}
       aria-pressed={selected}
     >
       <span className="flex items-center justify-between gap-3 px-3 py-2.5">
         <span className="flex items-center gap-2.5 min-w-0">
           <Languages
-            className={`w-4 h-4 shrink-0 ${selected ? 'text-primary' : 'text-base-content/60'}`}
+            className={`w-4 h-4 shrink-0 ${selected ? 'text-primary' : 'text-muted'}`}
           />
           <span className="min-w-0">
             {/* `lang` on the name itself: the WebView picks a font and a
                 screen reader picks a voice from it, and a Cyrillic name
                 announced by an English voice is unusable to the person most
                 likely to need this row. */}
-            <span className="block text-sm font-medium truncate" lang={lang}>
+            <span className="block text-body font-medium truncate" lang={lang}>
               {label}
             </span>
-            {hint && <span className="block text-xs text-base-content/60">{hint}</span>}
+            {hint && <span className="block text-meta text-muted">{hint}</span>}
             {inUse && inUseLabel && (
-              <span className="block text-xs text-base-content/50">{inUseLabel}</span>
+              <span className="block text-meta text-subtle">{inUseLabel}</span>
             )}
           </span>
         </span>

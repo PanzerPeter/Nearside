@@ -21,7 +21,7 @@ export function TypingIndicator({ peerLabel }: { peerLabel: string }) {
           text needs — the dots are the content, and a text-sized box around
           them reads as an empty message. */}
       <div
-        className="flex items-center gap-1 px-3.5 py-3 rounded-2xl rounded-bl-md bg-neutral text-neutral-content shadow-[0_1px_2px_rgba(0,0,0,0.28)]"
+        className="flex items-center gap-1 px-3.5 py-3 rounded-box rounded-bl-md bg-neutral text-neutral-content shadow-[0_1px_2px_rgba(0,0,0,0.28)]"
         aria-hidden="true"
       >
         <span className="typing-dot" />

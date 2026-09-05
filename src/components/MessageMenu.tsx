@@ -153,7 +153,7 @@ export function MessageMenu({
       ref={panelRef}
       role="menu"
       aria-label={t('message.actions')}
-      className="fixed z-50 w-max max-w-[calc(100vw-1rem)] rounded-2xl bg-base-100 border border-base-content/10 shadow-overlay overflow-hidden animate-message-in"
+      className="fixed z-50 w-max max-w-[calc(100vw-1rem)] rounded-box bg-base-100 border border-hairline shadow-overlay overflow-hidden animate-message-in"
       style={{
         top: pos?.top ?? 0,
         left: pos?.left ?? 0,
@@ -168,7 +168,7 @@ export function MessageMenu({
         onPickerOpenChange={setPickerOpen}
       />
       {actions.length > 0 && (
-        <ul className="border-t border-base-content/10 py-1">
+        <ul className="border-t border-hairline py-1">
           {actions.map((action) => (
             <li key={action.key}>
               <button
@@ -178,7 +178,7 @@ export function MessageMenu({
                   action.onSelect();
                   onClose();
                 }}
-                className={`flex w-full items-center gap-2.5 px-3.5 py-2.5 text-sm text-left hover:bg-base-content/10 transition-colors ${
+                className={`flex w-full items-center gap-2.5 px-3.5 py-2.5 text-body text-left hover:bg-wash transition-colors ${
                   action.danger ? 'text-error' : ''
                 }`}
               >

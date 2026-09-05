@@ -123,9 +123,9 @@ export function ConversationSearch({
   const showResults = trimmedQuery.length >= MIN_QUERY_LENGTH;
 
   return (
-    <div className="bg-base-100 border-b border-base-content/5 shadow-[0_1px_3px_rgba(0,0,0,0.15)] shrink-0">
+    <div className="bg-base-100 border-b border-hairline shadow-[0_1px_3px_rgba(0,0,0,0.15)] shrink-0">
       <div className="flex items-center gap-2 px-4 sm:px-5 py-2.5">
-        <Search className="w-4 h-4 text-base-content/55 shrink-0" />
+        <Search className="w-4 h-4 text-muted shrink-0" />
         <input
           ref={inputRef}
           type="text"
@@ -134,7 +134,7 @@ export function ConversationSearch({
           placeholder={
             isSelf ? t('search.placeholderSelf') : t('search.placeholder', { name: peerLabel })
           }
-          className="input input-sm flex-1 bg-base-200/50 border border-base-content/10 focus:border-primary"
+          className="input input-sm flex-1 bg-base-200/50 border border-hairline focus:border-primary"
         />
         <button
           className="btn btn-ghost btn-sm btn-square"
@@ -147,7 +147,7 @@ export function ConversationSearch({
 
       {showResults && (
         <div className="px-4 sm:px-5 pb-2.5">
-          <p className="text-xs text-base-content/55 mb-1.5">
+          <p className="text-meta text-muted mb-1.5">
             {searching
               ? t('search.searching')
               : `${results.length} result${results.length === 1 ? '' : 's'}`}
@@ -157,17 +157,17 @@ export function ConversationSearch({
               <button
                 key={hit.id}
                 onClick={() => onJump(hit.id, hit.created_at)}
-                className="w-full text-left px-3 py-2 rounded-lg hover:bg-base-200/70 transition-colors"
+                className="w-full text-left px-3 py-2 rounded-field hover:bg-base-200/70 transition-colors"
               >
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs font-medium text-base-content/70">
+                  <span className="text-meta font-medium text-strong">
                     {hit.user_id === me ? 'You' : peerLabel}
                   </span>
-                  <span className="text-xs text-base-content/55 shrink-0">
+                  <span className="text-meta text-muted shrink-0">
                     {formatListTime(hit.created_at)}
                   </span>
                 </div>
-                <p className="text-sm line-clamp-2 text-base-content/80">
+                <p className="text-body line-clamp-2 text-strong">
                   {highlight(hit.text, trimmedQuery)}
                 </p>
               </button>

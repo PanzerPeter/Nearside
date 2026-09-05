@@ -142,7 +142,7 @@ function ShowCode({ session, identity }: { session: Session; identity: Identity 
   if (failed) {
     return (
       <div className="text-center py-8">
-        <p className="text-sm text-base-content/60 mb-4">{t('connect.noCode')}</p>
+        <p className="text-body text-muted mb-4">{t('connect.noCode')}</p>
         <button className="btn btn-primary btn-sm gap-1.5" onClick={() => void mint()}>
           <RefreshCw className="w-3.5 h-3.5" />
           {t('connect.tryAgain')}
@@ -161,17 +161,17 @@ function ShowCode({ session, identity }: { session: Session; identity: Identity 
 
   return (
     <div className="flex flex-col items-center gap-4">
-      <p className="text-sm text-base-content/60 text-center">{t('connect.showBody')}</p>
+      <p className="text-body text-muted text-center">{t('connect.showBody')}</p>
 
       {/* The white here is cosmetic — the quiet zone a scanner needs lives
           inside the SVG, where a container class cannot forget it. */}
-      <div className={`rounded-2xl bg-white p-2 ${expired ? 'opacity-30' : ''}`}>
+      <div className={`rounded-box bg-white p-2 ${expired ? 'opacity-30' : ''}`}>
         <QrCode text={payload} size={224} />
       </div>
 
       <p
         className={`font-mono text-2xl tracking-[0.3em] pl-[0.3em] ${
-          expired ? 'text-base-content/30 line-through' : ''
+          expired ? 'text-faint line-through' : ''
         }`}
       >
         {code}
@@ -183,7 +183,7 @@ function ShowCode({ session, identity }: { session: Session; identity: Identity 
           {t('connect.newCode')}
         </button>
       ) : (
-        <p className="text-xs text-base-content/55">{t('connect.expiresIn', { time: left ?? '' })}</p>
+        <p className="text-meta text-muted">{t('connect.expiresIn', { time: left ?? '' })}</p>
       )}
     </div>
   );
@@ -326,13 +326,13 @@ function AddSomeone({ me, onConnected, toastError, toastSuccess }: AddSomeonePro
           <Camera className="w-4 h-4" />
           {t('connect.scanTheirs')}
         </button>
-        <p className="text-xs text-base-content/55 mt-2 text-center">{t('connect.scanVerifies')}</p>
+        <p className="text-meta text-muted mt-2 text-center">{t('connect.scanVerifies')}</p>
       </div>
 
-      <div className="divider text-xs text-base-content/55">{t('connect.or')}</div>
+      <div className="divider text-meta text-muted">{t('connect.or')}</div>
 
       <div>
-        <label className="text-sm text-base-content/60" htmlFor="connect-code">
+        <label className="text-body text-muted" htmlFor="connect-code">
           {t('connect.typeCode')}
         </label>
         <div className="join w-full mt-2">
@@ -345,7 +345,7 @@ function AddSomeone({ me, onConnected, toastError, toastSuccess }: AddSomeonePro
             spellCheck={false}
             maxLength={8}
             placeholder="ABCD2345"
-            className="input join-item flex-1 bg-base-200/50 border border-base-content/10 focus:border-primary font-mono tracking-[0.2em] uppercase"
+            className="input join-item flex-1 bg-base-200/50 border border-hairline focus:border-primary font-mono tracking-[0.2em] uppercase"
             value={typed}
             onChange={(e) => setTyped(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && cleaned.length === 8 && void connect(cleaned, null)}

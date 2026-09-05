@@ -116,9 +116,9 @@ export function ChatHeader({
   // has already paid it. The left padding is tighter than the right because on
   // a phone the back arrow's own hit area supplies the rest of the gap.
   return (
-    <header className="flex items-center gap-2 sm:gap-3 pl-2 pr-1.5 lg:pl-5 lg:pr-3 py-2.5 pt-[calc(0.625rem+var(--safe-top))] bg-base-100 border-b border-base-content/5 shadow-[0_1px_3px_rgba(0,0,0,0.25)] z-10 shrink-0">
+    <header className="flex items-center gap-2 sm:gap-3 pl-2 pr-1.5 lg:pl-5 lg:pr-3 py-2.5 pt-[calc(0.625rem+var(--safe-top))] bg-base-100 border-b border-hairline z-10 shrink-0">
       <button
-        className="btn btn-ghost btn-sm btn-square lg:hidden hover:bg-base-content/10 transition-colors"
+        className="btn btn-ghost btn-sm btn-square lg:hidden hover:bg-wash transition-colors"
         onClick={onBack}
       >
         <ArrowLeft className="w-5 h-5" />
@@ -142,20 +142,20 @@ export function ChatHeader({
           thing being renamed, so it needs no icon of its own to explain it. */}
       <button
         type="button"
-        className="min-w-0 flex-1 text-left rounded-lg px-1 -mx-1 hover:bg-base-content/5 transition-colors"
+        className="min-w-0 flex-1 text-left rounded-field px-1 -mx-1 hover:bg-wash transition-colors"
         onClick={onOpenNickname}
         title={
           isSelf ? t('chat.nameThisChat') : nickname ? friend.display_name : t('chat.setNickname')
         }
       >
-        <p className="font-semibold text-sm truncate flex items-center gap-1.5">
+        <p className="font-semibold text-body truncate flex items-center gap-1.5">
           <span className="truncate">{peerLabel}</span>
           {/* Verification as visible state, not as a coloured icon in the
               corner someone has to know to look at. A contact you took the
               trouble to verify should look verified from across the room. */}
           {trust === 'verified' && !isSelf && (
             <span
-              className="shrink-0 inline-flex items-center gap-0.5 rounded-full bg-success/15 px-1.5 py-0.5 text-[0.65rem] font-medium text-success"
+              className="shrink-0 inline-flex items-center gap-0.5 rounded-full bg-success/15 px-1.5 py-0.5 text-micro font-medium text-success"
               title={t('chat.verifiedTitle')}
             >
               <ShieldCheck className="w-3 h-3" />
@@ -164,7 +164,7 @@ export function ChatHeader({
           )}
           {trust === 'changed' && !isSelf && (
             <span
-              className="shrink-0 inline-flex items-center gap-0.5 rounded-full bg-error/15 px-1.5 py-0.5 text-[0.65rem] font-medium text-error"
+              className="shrink-0 inline-flex items-center gap-0.5 rounded-full bg-error/15 px-1.5 py-0.5 text-micro font-medium text-error"
               title={t('chat.keyChangedTitle')}
             >
               <ShieldAlert className="w-3 h-3" />
@@ -172,11 +172,11 @@ export function ChatHeader({
             </span>
           )}
         </p>
-        <p className="text-xs text-base-content/60 flex items-center gap-2 truncate">
+        <p className="text-micro text-muted flex items-center gap-2 truncate">
           {connectionNote ? (
             // No dot beside it: with our own stream down, the peer's last-known
             // status is a guess, and a green dot is not the way to say so.
-            <span className="text-base-content/50">{connectionNote}</span>
+            <span className="text-subtle">{connectionNote}</span>
           ) : isSelf ? (
             // Presence and last-seen would be this device reporting on
             // itself; what is worth saying here is that nobody else can read
@@ -207,7 +207,7 @@ export function ChatHeader({
       {!isSelf && (
         <>
           <button
-            className="btn btn-ghost btn-sm btn-square hover:bg-base-content/10 transition-colors"
+            className="btn btn-ghost btn-sm btn-square hover:bg-wash transition-colors"
             onClick={() => onCall('voice')}
             disabled={!canCall}
             title={canCall ? t('chat.voiceCall') : t('chat.cannotCall')}
@@ -215,7 +215,7 @@ export function ChatHeader({
             <Phone className="w-5 h-5" />
           </button>
           <button
-            className="btn btn-ghost btn-sm btn-square hover:bg-base-content/10 transition-colors"
+            className="btn btn-ghost btn-sm btn-square hover:bg-wash transition-colors"
             onClick={() => onCall('video')}
             disabled={!canCall}
             title={canCall ? t('chat.videoCall') : t('chat.cannotCall')}
@@ -225,7 +225,7 @@ export function ChatHeader({
         </>
       )}
       <button
-        className="btn btn-ghost btn-sm btn-square hover:bg-base-content/10 transition-colors"
+        className="btn btn-ghost btn-sm btn-square hover:bg-wash transition-colors"
         onClick={onToggleSearch}
         title={t('chat.searchMessages')}
         aria-pressed={searchOpen}
@@ -235,7 +235,7 @@ export function ChatHeader({
       <div className="dropdown dropdown-end">
         <button
           tabIndex={0}
-          className="btn btn-ghost btn-sm btn-square relative hover:bg-base-content/10 transition-colors"
+          className="btn btn-ghost btn-sm btn-square relative hover:bg-wash transition-colors"
           aria-label={t('chat.options')}
         >
           <MoreVertical className="w-5 h-5" />
@@ -312,7 +312,7 @@ export function ChatHeader({
               <summary className="whitespace-nowrap">
                 <Timer className={`w-4 h-4 ${timer?.ttlSeconds != null ? 'text-primary' : ''}`} />
                 {t('chat.disappearing')}
-                <span className="ml-auto text-xs text-base-content/50">
+                <span className="ml-auto text-meta text-subtle">
                   {formatTtl(timer?.ttlSeconds ?? null)}
                 </span>
               </summary>

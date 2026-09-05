@@ -35,9 +35,9 @@ const TONE: Record<Tone, { section: string; heading: string; icon: string }> = {
     icon: '',
   },
   plain: {
-    section: 'border-base-content/10 bg-base-200/40',
+    section: 'border-hairline bg-base-200/40',
     heading: '',
-    icon: 'text-base-content/60',
+    icon: 'text-muted',
   },
   stop: {
     section: 'border-error/30 bg-error/5',
@@ -106,15 +106,15 @@ export function SecurityLimits({ onClose }: SecurityLimitsProps) {
     >
       <div className="space-y-4">
         {SECTIONS.map(({ tone, icon: Icon, title, body }) => (
-          <section key={title} className={`rounded-xl border p-3.5 ${TONE[tone].section}`}>
-            <h4 className={`flex items-center gap-2 font-medium text-sm ${TONE[tone].heading}`}>
+          <section key={title} className={`rounded-box border p-3.5 ${TONE[tone].section}`}>
+            <h4 className={`flex items-center gap-2 font-medium text-body ${TONE[tone].heading}`}>
               <Icon className={`w-4 h-4 ${TONE[tone].icon}`} />
               {t(title)}
             </h4>
             {body.map((paragraph) => (
               <p
                 key={paragraph}
-                className="text-sm text-base-content/75 leading-relaxed mt-2"
+                className="text-body text-strong leading-relaxed mt-2"
               >
                 {t(paragraph)}
               </p>

@@ -29,12 +29,12 @@ export function AccountRail({ profile, profileFailed, onOpenSettings }: AccountR
   return (
     // The tab bar is `lg:hidden`, so on a tablet wide enough for this layout
     // the rail is what sits on the bottom edge and has to inset itself.
-    <div className="hidden lg:block shrink-0 border-t border-base-content/5 bg-base-100 p-2 pb-[calc(0.5rem+var(--safe-bottom))]">
+    <div className="hidden lg:block shrink-0 border-t border-hairline bg-base-100 p-2 pb-[calc(0.5rem+var(--safe-bottom))]">
       <button
         type="button"
         onClick={onOpenSettings}
         title={profileFailed ? t('rail.profileFailedTitle') : t('rail.profileSettings')}
-        className="group flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-base-content/5 focus-visible:bg-base-content/5"
+        className="group flex w-full items-center gap-2.5 rounded-field px-2 py-1.5 text-left transition-colors hover:bg-wash focus-visible:bg-wash"
       >
         {profile ? (
           <Avatar display_name={profile.display_name} url={profile.avatar_url} size={32} />
@@ -48,11 +48,11 @@ export function AccountRail({ profile, profileFailed, onOpenSettings }: AccountR
 
         <span className="min-w-0 flex-1">
           {profile ? (
-            <span className="block truncate text-sm font-medium text-base-content">
+            <span className="block truncate text-body font-medium text-base-content">
               {profile.display_name}
             </span>
           ) : profileFailed ? (
-            <span className="block truncate text-sm font-medium text-warning">
+            <span className="block truncate text-body font-medium text-warning">
               {t('rail.profileUnavailable')}
             </span>
           ) : (
@@ -60,7 +60,7 @@ export function AccountRail({ profile, profileFailed, onOpenSettings }: AccountR
           )}
         </span>
 
-        <Settings className="h-4 w-4 shrink-0 text-base-content/50 transition-colors group-hover:text-base-content/80" />
+        <Settings className="h-4 w-4 shrink-0 text-subtle transition-colors group-hover:text-strong" />
       </button>
     </div>
   );

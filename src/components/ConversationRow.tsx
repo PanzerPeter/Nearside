@@ -70,13 +70,13 @@ export function ConversationRow({
 
   return (
     <button
-      className={`relative w-full flex items-center gap-3 px-2 py-2.5 rounded-xl transition-colors ${
-        selected ? 'bg-primary/15 text-primary' : 'hover:bg-base-content/5 text-base-content'
+      className={`relative w-full flex items-center gap-3 px-3 py-2 rounded-field transition-colors ${
+        selected ? 'bg-primary/10 text-base-content' : 'hover:bg-wash text-base-content'
       }`}
       onClick={onSelect}
     >
       {selected && (
-        <span className="absolute left-0 top-1/2 -translate-y-1/2 h-6 w-1 rounded-r-full bg-primary" />
+        <span className="brand-gradient absolute left-0 top-1/2 -translate-y-1/2 h-7 w-1 rounded-r-full" />
       )}
       {/* No presence dot on your own row: it would report your own device back
           to you, and the notebook mark is what makes the row recognisable. */}
@@ -98,31 +98,31 @@ export function ConversationRow({
       <span className="flex-1 min-w-0 text-left">
         <span className="flex items-baseline gap-2">
           <span className="flex-1 min-w-0 flex items-baseline gap-1.5">
-            <span className={`truncate text-sm ${unread > 0 ? 'font-semibold' : 'font-medium'}`}>
+            <span className={`truncate text-body ${unread > 0 ? 'font-semibold' : 'font-medium'}`}>
               {title}
             </span>
             {handle && (
-              <span className="min-w-0 truncate text-[0.7rem] text-base-content/60">{handle}</span>
+              <span className="min-w-0 truncate text-micro text-subtle">{handle}</span>
             )}
           </span>
           {muted && (
             <BellOff
-              className="shrink-0 w-3 h-3 text-base-content/45"
+              className="shrink-0 w-3 h-3 text-subtle"
               aria-label={t('chatList.muted')}
             />
           )}
           {pinned && (
-            <Pin className="shrink-0 w-3 h-3 text-base-content/45" aria-label={t('chatList.pinned')} />
+            <Pin className="shrink-0 w-3 h-3 text-subtle" aria-label={t('chatList.pinned')} />
           )}
           {last_at && (
-            <span className="shrink-0 text-[0.7rem] text-base-content/55">
+            <span className="shrink-0 text-micro text-subtle">
               {formatListTime(last_at)}
             </span>
           )}
         </span>
         <span
-          className={`block truncate text-xs ${
-            unread > 0 ? 'text-base-content/80 font-medium' : 'text-base-content/55'
+          className={`block truncate text-meta ${
+            unread > 0 ? 'text-strong font-medium' : 'text-muted'
           }`}
         >
           {preview}
@@ -130,7 +130,7 @@ export function ConversationRow({
       </span>
       {unread > 0 && (
         <span
-          className="shrink-0 min-w-[1.25rem] h-5 px-1.5 inline-flex items-center justify-center rounded-full bg-primary text-primary-content text-[0.7rem] font-bold leading-none"
+          className="shrink-0 min-w-[1.25rem] h-5 px-1.5 inline-flex items-center justify-center rounded-full bg-primary text-primary-content text-micro font-bold leading-none"
           aria-label={t('chatList.unread', { count: unread })}
         >
           {formatUnread(unread)}

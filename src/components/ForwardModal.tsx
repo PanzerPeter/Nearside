@@ -176,19 +176,19 @@ export function ForwardModal({ me, msg, fromPeerId, identity, onClose }: Forward
       }
     >
       {preview && (
-        <p className="mb-3 px-3 py-2 rounded-lg bg-base-200/70 border-l-2 border-primary text-xs text-base-content/70 line-clamp-2">
+        <p className="mb-3 px-3 py-2 rounded-field bg-base-200/70 border-l-2 border-primary text-meta text-strong line-clamp-2">
           {preview}
         </p>
       )}
 
       <div className="flex items-center gap-2 mb-2">
-        <Search className="w-4 h-4 text-base-content/55 shrink-0" />
+        <Search className="w-4 h-4 text-muted shrink-0" />
         <input
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder={t('forward.searchPlaceholder')}
-          className="input input-sm flex-1 bg-base-200/50 border border-base-content/10 focus:border-primary"
+          className="input input-sm flex-1 bg-base-200/50 border border-hairline focus:border-primary"
           autoFocus
         />
       </div>
@@ -201,7 +201,7 @@ export function ForwardModal({ me, msg, fromPeerId, identity, onClose }: Forward
             <span className="loading loading-spinner loading-sm" />
           </div>
         ) : visible.length === 0 ? (
-          <p className="flex items-center justify-center h-full text-center text-sm text-base-content/55 px-4">
+          <p className="flex items-center justify-center h-full text-center text-body text-muted px-4">
             {targets.length === 0
               ? t('forward.noTargets')
               : t('forward.noMatch')}
@@ -211,8 +211,8 @@ export function ForwardModal({ me, msg, fromPeerId, identity, onClose }: Forward
             {visible.map((target) => (
               <li key={target.peerId}>
                 <label
-                  className={`flex items-center gap-3 px-2 py-2 rounded-xl cursor-pointer transition-colors ${
-                    selected.has(target.peerId) ? 'bg-primary/15' : 'hover:bg-base-content/5'
+                  className={`flex items-center gap-3 px-2 py-2 rounded-box cursor-pointer transition-colors ${
+                    selected.has(target.peerId) ? 'bg-primary/15' : 'hover:bg-wash'
                   }`}
                 >
                   <input
@@ -231,12 +231,12 @@ export function ForwardModal({ me, msg, fromPeerId, identity, onClose }: Forward
                     )}
                   </div>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium">{target.label}</span>
+                    <span className="block truncate text-body font-medium">{target.label}</span>
                     {/* The handle stays visible under a nickname for the same
                         reason it does in the sidebar: two people you renamed
                         have to be tellable apart by something they chose. */}
                     {!target.isSelf && target.label !== target.display_name && (
-                      <span className="block truncate text-[0.7rem] text-base-content/60">
+                      <span className="block truncate text-micro text-muted">
                         {target.display_name}
                       </span>
                     )}

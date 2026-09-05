@@ -371,13 +371,13 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
         e.preventDefault();
         submit();
       }}
-      className="p-3 sm:p-4 pb-[calc(0.75rem+var(--safe-bottom))] sm:pb-[calc(1rem+var(--safe-bottom))] bg-base-100 border-t border-base-content/5 shrink-0"
+      className="p-3 sm:p-4 pb-[calc(0.75rem+var(--safe-bottom))] sm:pb-[calc(1rem+var(--safe-bottom))] bg-base-100 border-t border-hairline shrink-0"
     >
       {replyingTo && (
-        <div className="flex items-center gap-2 mb-2 px-3 py-2 rounded-lg bg-base-200/70 border-l-2 border-primary">
+        <div className="flex items-center gap-2 mb-2 px-3 py-2 rounded-field bg-base-200/70 border-l-2 border-primary">
           <div className="min-w-0 flex-1">
-            <p className="text-xs font-medium text-primary">Replying to {replyingTo.display_name}</p>
-            <p className="text-xs text-base-content/60 truncate">{replyingTo.snippet}</p>
+            <p className="text-meta font-medium text-primary">Replying to {replyingTo.display_name}</p>
+            <p className="text-meta text-muted truncate">{replyingTo.snippet}</p>
           </div>
           <button
             type="button"
@@ -392,11 +392,11 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
       {/* A recording gets the whole width and a player: the one thing worth
           checking before it goes is what it sounds like. */}
       {only && isAudio && (
-        <div className="flex items-center gap-2 mb-2 p-2 pl-3 rounded-lg bg-base-200/70 border border-base-content/10">
+        <div className="flex items-center gap-2 mb-2 p-2 pl-3 rounded-field bg-base-200/70 border border-hairline">
           <div className="min-w-0 flex-1">
             <VoicePreview url={previewUrls[only.id]} durationMs={stagedDurationMs} />
             {silentTake && (
-              <p className="mt-1 text-xs text-warning">
+              <p className="mt-1 text-meta text-warning">
                 No sound came through. Play it back before you send this.
               </p>
             )}
@@ -415,25 +415,25 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
       )}
 
       {only && !isAudio && previewUrls[only.id] && (
-        <div className="flex items-center gap-3 mb-2 p-2 rounded-lg bg-base-200/70 border border-base-content/10">
+        <div className="flex items-center gap-3 mb-2 p-2 rounded-field bg-base-200/70 border border-hairline">
           <div className="relative shrink-0">
             {only.file.type.startsWith('video/') ? (
               <video
                 src={previewUrls[only.id]}
-                className="w-16 h-16 rounded-md object-cover bg-black"
+                className="w-16 h-16 rounded-field object-cover bg-black"
                 muted
               />
             ) : (
               <img
                 src={previewUrls[only.id]}
                 alt={t('composer.attachmentPreview')}
-                className="w-16 h-16 rounded-md object-cover"
+                className="w-16 h-16 rounded-field object-cover"
               />
             )}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-xs font-medium truncate">{only.file.name}</p>
-            <p className="text-xs text-base-content/60">
+            <p className="text-meta font-medium truncate">{only.file.name}</p>
+            <p className="text-meta text-muted">
               {`${stagedKind} · ${(only.file.size / (1024 * 1024)).toFixed(1)} MB`} ·{' '}
               {t('composer.pressSend')}
             </p>
@@ -454,9 +454,9 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
       {/* A batch. Thumbnails only: a column of file names is unreadable at this
           height, and what the sender is checking is which photos are going. */}
       {staged.length > 1 && (
-        <div className="mb-2 p-2 rounded-lg bg-base-200/70 border border-base-content/10">
+        <div className="mb-2 p-2 rounded-field bg-base-200/70 border border-hairline">
           <div className="flex items-center gap-2 mb-2 px-0.5">
-            <p className="text-xs text-base-content/60 flex-1 truncate">
+            <p className="text-meta text-muted flex-1 truncate">
               {uploading
                 ? t('composer.sendingProgress', {
                     index: Math.min(sentCount + 1, staged.length),
@@ -481,20 +481,20 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
                 {item.file.type.startsWith('video/') ? (
                   <video
                     src={previewUrls[item.id]}
-                    className="w-16 h-16 rounded-md object-cover bg-black"
+                    className="w-16 h-16 rounded-field object-cover bg-black"
                     muted
                   />
                 ) : (
                   <img
                     src={previewUrls[item.id]}
                     alt={t('composer.attachmentN', { index: index + 1 })}
-                    className="w-16 h-16 rounded-md object-cover"
+                    className="w-16 h-16 rounded-field object-cover"
                   />
                 )}
                 {/* The order matters — the first one carries the caption — so
                     the strip numbers itself rather than leaving it to be
                     inferred from left-to-right. */}
-                <span className="absolute bottom-0.5 left-0.5 rounded bg-black/60 px-1 text-[0.6rem] text-white">
+                <span className="absolute bottom-0.5 left-0.5 rounded bg-black/60 px-1 text-micro text-white">
                   {index + 1}
                 </span>
                 <button
@@ -600,7 +600,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
                   recorder.paused ? 'bg-base-content/40' : 'bg-error animate-pulse'
                 }`}
               />
-              <span className="font-mono text-sm tabular-nums">
+              <span className="font-mono text-body tabular-nums">
                 {formatDuration(recorder.elapsedMs)}
               </span>
               {/* The one thing on screen that proves the microphone is picking
@@ -622,9 +622,9 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
               {/* The one affordance a hold cannot advertise on its own: nothing
                   on screen otherwise says the finger may leave. */}
               {holdToRecord && !locked && !cancelArmed && (
-                <Lock className="w-3.5 h-3.5 shrink-0 text-base-content/60" aria-hidden />
+                <Lock className="w-3.5 h-3.5 shrink-0 text-muted" aria-hidden />
               )}
-              <span className="text-xs text-base-content/60 truncate">
+              <span className="text-meta text-muted truncate">
                 {cancelArmed
                   ? t('composer.releaseToCancel')
                   : recorder.paused
@@ -642,9 +642,9 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
             {/* The narrowed "typing box". It is a label, not an input: the text
                 is being typed in the bubble, and a second box to type in here
                 would be two carets asking for the same message. */}
-            <div className="flex-1 min-w-0 flex items-center gap-2 h-12 px-4 rounded-2xl bg-base-300 border border-base-content/10">
+            <div className="flex-1 min-w-0 flex items-center gap-2 h-12 px-4 rounded-box bg-base-300 border border-hairline">
               <Pencil className="w-4 h-4 shrink-0 text-primary" aria-hidden />
-              <span className="text-sm truncate text-base-content/70">{t('composer.editing')}</span>
+              <span className="text-body truncate text-strong">{t('composer.editing')}</span>
             </div>
 
             <button
@@ -705,7 +705,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
               // MAX_TEXTAREA_PX, so a long draft still has to scroll. The bar
               // itself is a grey stripe down a rounded pill and the WebView
               // paints it even on the one empty line.
-              className="textarea flex-1 resize-none min-h-0 leading-6 py-2.5 px-4 rounded-2xl bg-base-300 border border-base-content/10 focus:border-primary/60 focus:bg-base-300 focus:outline-hidden transition-colors scrollbar-none [&::-webkit-scrollbar]:hidden"
+              className="textarea flex-1 resize-none min-h-0 leading-6 py-2.5 px-4 rounded-box bg-base-300 border border-hairline focus:border-primary/60 focus:bg-base-300 focus:outline-hidden transition-colors scrollbar-none [&::-webkit-scrollbar]:hidden"
               value={value}
               onChange={(e) => onChange(e.target.value)}
               onKeyDown={handleKeyDown}
@@ -768,7 +768,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
         )}
       </div>
 
-      {hint && <p className="mt-1.5 text-center text-xs text-base-content/60">{hint}</p>}
+      {hint && <p className="mt-1.5 text-center text-meta text-muted">{hint}</p>}
     </form>
   );
 });

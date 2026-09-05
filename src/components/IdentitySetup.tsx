@@ -90,18 +90,18 @@ export function IdentitySetup({
       <div className="card bg-base-100 w-full max-w-md shadow-modal">
         <div className="card-body gap-4">
           {!secureStorage && (
-            <div className="alert alert-warning text-sm">{t('identity.insecureBrowser')}</div>
+            <div className="alert alert-warning text-body">{t('identity.insecureBrowser')}</div>
           )}
 
-          <p className="text-xs text-base-content/60">
+          <p className="text-meta text-muted">
             {t('account.signedInAs')}{' '}
-            <span className="font-medium text-base-content/70">{account}</span>
+            <span className="font-medium text-strong">{account}</span>
           </p>
 
           {stage === 'choose' && (
             <>
               <h1 className="card-title">{t('identity.yourKey')}</h1>
-              <p className="text-sm text-base-content/70">{t('identity.yourKeyBody')}</p>
+              <p className="text-body text-strong">{t('identity.yourKeyBody')}</p>
               <button className="btn btn-primary" onClick={begin}>
                 {t('identity.createKey')}
               </button>
@@ -117,11 +117,11 @@ export function IdentitySetup({
           {stage === 'show' && (
             <>
               <h1 className="card-title">{t('identity.writeDown', { count: 12 })}</h1>
-              <p className="text-sm text-base-content/70">{t('identity.writeDownBody')}</p>
+              <p className="text-body text-strong">{t('identity.writeDownBody')}</p>
 
               <div className="relative">
                 <ol
-                  className={`grid grid-cols-2 gap-1.5 font-mono text-sm bg-base-200 rounded-box p-3 transition-[filter] ${
+                  className={`grid grid-cols-2 gap-1.5 font-mono text-body bg-base-200 rounded-box p-3 transition-[filter] ${
                     revealed ? '' : 'blur-xs select-none'
                   }`}
                   style={{ transitionDuration: 'var(--motion-enter-duration)' }}
@@ -129,7 +129,7 @@ export function IdentitySetup({
                 >
                   {words.map((w, i) => (
                     <li key={i} className="tabular-nums flex gap-1.5">
-                      <span className="text-base-content/40 w-5 text-right">{i + 1}.</span>
+                      <span className="text-faint w-5 text-right">{i + 1}.</span>
                       <span>{w}</span>
                     </li>
                   ))}
@@ -137,7 +137,7 @@ export function IdentitySetup({
 
                 {!revealed && (
                   <button
-                    className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 rounded-box bg-base-100/40 text-sm font-medium"
+                    className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 rounded-box bg-base-100/40 text-body font-medium"
                     onClick={() => setRevealed(true)}
                   >
                     <Eye className="w-5 h-5" />
@@ -146,7 +146,7 @@ export function IdentitySetup({
                 )}
               </div>
 
-              <p className="flex items-start gap-2 text-xs text-base-content/60">
+              <p className="flex items-start gap-2 text-meta text-muted">
                 <ShieldAlert className="w-4 h-4 shrink-0 mt-px" />
                 <span>{t('identity.onlyCopy')}</span>
               </p>
@@ -165,9 +165,9 @@ export function IdentitySetup({
             <>
               <h1 className="card-title">{t('identity.checkCopy')}</h1>
               {secureStorage && (
-                <p className="text-xs text-base-content/50">{t('identity.screenshotsBlocked')}</p>
+                <p className="text-meta text-subtle">{t('identity.screenshotsBlocked')}</p>
               )}
-              <p className="text-sm text-base-content/70">
+              <p className="text-body text-strong">
                 {t('identity.typeWords', { words: checkIndexes.map((i) => i + 1).join(', ') })}
               </p>
               <input
@@ -198,7 +198,7 @@ export function IdentitySetup({
                 autoCapitalize="none"
                 autoCorrect="off"
               />
-              {error && <p className="text-error text-sm">{error}</p>}
+              {error && <p className="text-error text-body">{error}</p>}
               <button className="btn btn-primary" onClick={restore}>
                 {t('identity.restore')}
               </button>

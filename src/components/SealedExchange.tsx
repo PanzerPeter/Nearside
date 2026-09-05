@@ -66,7 +66,7 @@ export function SealedExchange({
   if (msg.deleted_at) {
     return (
       <div className="my-3 flex justify-center">
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-base-300/80 px-3 py-1 text-[0.7rem] font-medium text-base-content/60 ring-1 ring-base-content/5 backdrop-blur-xs">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-base-300/80 px-3 py-1 text-micro font-medium text-muted ring-1 ring-base-content/5 backdrop-blur-xs">
           <Lock className="h-3 w-3 shrink-0" />
           {t('sealed.withdrawn', { name: isOwn ? t('common.you') : peerLabel })}
         </span>
@@ -79,14 +79,14 @@ export function SealedExchange({
   return (
     <div className="my-3 flex justify-center">
       <div
-        className={`relative w-full max-w-md overflow-hidden rounded-2xl bg-base-100 p-4 shadow-xs ring-1 ${
+        className={`relative w-full max-w-md overflow-hidden rounded-box bg-base-100 p-4 shadow-xs ring-1 ${
           state === 'revealed' ? 'ring-primary/30' : 'ring-base-content/10'
         } ${revealing ? 'seal-sweep' : ''}`}
       >
         <div className="mb-2 flex items-center gap-2">
           <span
             className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${
-              state === 'revealed' ? 'bg-primary/15 text-primary' : 'bg-base-300 text-base-content/60'
+              state === 'revealed' ? 'bg-primary/15 text-primary' : 'bg-base-300 text-muted'
             }`}
           >
             {state === 'revealed' ? (
@@ -95,21 +95,21 @@ export function SealedExchange({
               <Lock className="h-[14px] w-[14px]" />
             )}
           </span>
-          <span className="text-xs font-medium text-base-content/60">
+          <span className="text-meta font-medium text-muted">
             {asker} asked, sealed
           </span>
-          <span className="ml-auto text-[0.7rem] text-base-content/40">
+          <span className="ml-auto text-micro text-faint">
             {formatTime(msg.created_at)}
           </span>
         </div>
 
         {msg.decrypt_failed ? (
-          <p className="flex items-center gap-1.5 text-sm text-warning">
+          <p className="flex items-center gap-1.5 text-body text-warning">
             <AlertTriangle className="h-4 w-4 shrink-0" />
             {t('sealed.questionUnreadable')}
           </p>
         ) : (
-          <p className="whitespace-pre-wrap wrap-break-word text-[0.95rem] font-medium leading-6">
+          <p className="whitespace-pre-wrap wrap-break-word text-body font-medium leading-6">
             {msg.text}
           </p>
         )}
@@ -119,7 +119,7 @@ export function SealedExchange({
             <textarea
               rows={2}
               maxLength={MAX_MESSAGE_LENGTH}
-              className="textarea w-full resize-none rounded-2xl border border-base-content/10 bg-base-300 leading-6 focus:border-primary/60 focus:outline-hidden"
+              className="textarea w-full resize-none rounded-box border border-hairline bg-base-300 leading-6 focus:border-primary/60 focus:outline-hidden"
               placeholder={t('sealed.replyPlaceholder')}
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
@@ -129,7 +129,7 @@ export function SealedExchange({
               {/* No hint about whether they have answered yet. The policy will
                   not tell this client, and inventing a guess here would leak
                   the ordering the whole feature exists to remove. */}
-              <p className="flex-1 text-xs text-base-content/50">{t('sealed.noEdits')}</p>
+              <p className="flex-1 text-meta text-subtle">{t('sealed.noEdits')}</p>
               <button
                 type="button"
                 className="btn btn-primary btn-sm gap-1.5"
@@ -154,13 +154,13 @@ export function SealedExchange({
           <div className="mt-3 space-y-2">
             <Answer label={t('sealed.yours')} text={mine?.text ?? null} sealed />
             <div className="flex items-center gap-2">
-              <p className="flex-1 text-xs text-base-content/50">
+              <p className="flex-1 text-meta text-subtle">
                 {t('sealed.waiting', { name: peerLabel })}
               </p>
               {isOwn && (
                 <button
                   type="button"
-                  className="btn btn-ghost btn-xs gap-1.5 text-base-content/60"
+                  className="btn btn-ghost btn-xs gap-1.5 text-muted"
                   onClick={() => onCancel(msg)}
                   disabled={busy}
                 >
@@ -189,20 +189,20 @@ function Answer({ label, text, sealed }: { label: string; text: string | null; s
   const t = useT();
   return (
     <div
-      className={`rounded-xl px-3 py-2 ${
+      className={`rounded-box px-3 py-2 ${
         sealed ? 'bg-base-200/70 ring-1 ring-dashed ring-base-content/15' : 'bg-base-200'
       }`}
     >
-      <p className="mb-0.5 text-[0.7rem] font-medium uppercase tracking-wide text-base-content/50">
+      <p className="mb-0.5 text-micro font-medium uppercase tracking-wide text-subtle">
         {label}
       </p>
       {text === null ? (
-        <p className="flex items-center gap-1.5 text-sm text-warning">
+        <p className="flex items-center gap-1.5 text-body text-warning">
           <AlertTriangle className="h-4 w-4 shrink-0" />
           {t('sealed.answerUnreadable')}
         </p>
       ) : (
-        <p className="whitespace-pre-wrap wrap-break-word text-sm leading-6">{text}</p>
+        <p className="whitespace-pre-wrap wrap-break-word text-body leading-6">{text}</p>
       )}
     </div>
   );

@@ -32,9 +32,9 @@ export function Toast() {
       {toasts.map((toast) => (
         <div
           key={toast.id}
-          className={`motion-toast pointer-events-auto flex items-center gap-2 max-w-sm w-full sm:w-auto rounded-lg border px-3 py-2.5 shadow-overlay backdrop-blur-xs ${KIND_STYLES[toast.kind]}`}
+          className={`motion-toast pointer-events-auto flex items-center gap-2 max-w-sm w-full sm:w-auto rounded-field border px-3 py-2.5 shadow-overlay backdrop-blur-xs ${KIND_STYLES[toast.kind]}`}
         >
-          <p className="text-sm flex-1">{toast.message}</p>
+          <p className="text-body flex-1">{toast.message}</p>
           <button
             type="button"
             onClick={() => dismiss(toast.id)}

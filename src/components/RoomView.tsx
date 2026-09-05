@@ -344,7 +344,7 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
     <div className="flex flex-col h-full bg-base-200/50 min-h-0">
       {/* Same top edge as ChatHeader, and inset the same way — see the comment
           there for why `lg:` puts it back. */}
-      <header className="navbar bg-base-100 px-2 sm:px-4 pt-[calc(0.5rem+var(--safe-top))] shrink-0 border-b border-base-content/5 min-h-[3.5rem] gap-1">
+      <header className="navbar bg-base-100 px-2 sm:px-4 pt-[calc(0.5rem+var(--safe-top))] shrink-0 border-b border-hairline min-h-[3.5rem] gap-1">
         <button
           className="btn btn-ghost btn-sm btn-square lg:hidden"
           onClick={onBack}
@@ -354,12 +354,12 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
         </button>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 min-w-0">
-            <span className="w-8 h-8 rounded-xl bg-primary/15 text-primary flex items-center justify-center shrink-0">
+            <span className="w-8 h-8 rounded-box bg-primary/15 text-primary flex items-center justify-center shrink-0">
               <Users className="w-4 h-4" />
             </span>
             <div className="min-w-0">
-              <p className="font-semibold text-sm truncate">{room.title}</p>
-              <p className="text-xs text-base-content/55 truncate">
+              <p className="font-semibold text-body truncate">{room.title}</p>
+              <p className="text-meta text-muted truncate">
                 {t('room.memberCount', { count: members.length })} · {t('call.e2ee')}
               </p>
             </div>
@@ -382,18 +382,18 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
       </header>
 
       {showMembers && (
-        <div className="bg-base-100 border-b border-base-content/5 px-4 py-3 shrink-0">
+        <div className="bg-base-100 border-b border-hairline px-4 py-3 shrink-0">
           <ul className="flex flex-wrap gap-x-4 gap-y-1.5">
             {members.map((m) => (
               <li
                 key={m.user_id}
-                className={`flex items-center gap-1 text-xs font-medium ${roomColour(m.colour_index)}`}
+                className={`flex items-center gap-1 text-meta font-medium ${roomColour(m.colour_index)}`}
               >
                 {nameFor(m.user_id)}
                 {isOwner && m.user_id !== me && (
                   <button
                     type="button"
-                    className="btn btn-ghost btn-xs btn-circle text-base-content/50 hover:text-error"
+                    className="btn btn-ghost btn-xs btn-circle text-subtle hover:text-error"
                     onClick={() => void handleRemove(m.user_id)}
                     disabled={removing !== null}
                     title={`Remove ${nameFor(m.user_id)} from this room`}
@@ -410,7 +410,7 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
             ))}
           </ul>
           {isOwner && (
-            <p className="text-[11px] text-base-content/55 mt-2">
+            <p className="text-micro text-muted mt-2">
               Removing someone stops them reading anything sent after that. They keep what they
               already downloaded, and nothing can take that back.
             </p>
@@ -419,7 +419,7 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
       )}
 
       {keyMissing && (
-        <div className="alert alert-error rounded-none text-sm">
+        <div className="alert alert-error rounded-none text-body">
           <ShieldAlert className="w-4 h-4 shrink-0" />
           <span>
             This device has no key for this room. You may have been removed, or the key was sealed
@@ -431,11 +431,11 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
       <div className="flex-1 overflow-y-auto px-3 sm:px-4 py-4 min-h-0">
         {messages.length === 0 && !keyMissing && (
           <div className="h-full flex flex-col items-center justify-center text-center px-6">
-            <span className="w-16 h-16 rounded-2xl bg-base-content/5 flex items-center justify-center mb-3">
-              <Lock className="w-7 h-7 text-base-content/60" />
+            <span className="w-16 h-16 rounded-box bg-base-content/5 flex items-center justify-center mb-3">
+              <Lock className="w-7 h-7 text-muted" />
             </span>
-            <p className="text-sm font-medium text-base-content/60">Nothing here yet</p>
-            <p className="text-xs text-base-content/55 mt-1 max-w-xs">
+            <p className="text-body font-medium text-muted">Nothing here yet</p>
+            <p className="text-meta text-muted mt-1 max-w-xs">
               Everyone in this room holds the same key. Messages are signed, so the app can tell you
               who really wrote each one.
             </p>
@@ -582,7 +582,7 @@ function RoomBubble({
             // Both class names written out: Tailwind scans source text, so a
             // class built by interpolation is a class that never gets
             // generated.
-            className={`flex items-center gap-1 rounded-full bg-base-100 border border-base-content/10 shadow-lg ${
+            className={`flex items-center gap-1 rounded-full bg-base-100 border border-hairline shadow-lg ${
               mine ? 'self-end' : 'self-start'
             }`}
           >
@@ -621,18 +621,18 @@ function RoomBubble({
             transform: swipe.offset ? `translateX(${(mine ? -1 : 1) * swipe.offset}px)` : undefined,
           }}
           {...swipe.handlers}
-          className={`selection-on-fill text-left rounded-2xl px-3 py-2 ${
+          className={`selection-on-fill text-left rounded-box px-3 py-2 ${
             m.sender === 'unverified'
               ? 'bg-error/10 border border-error/40'
               : m.sender === 'unknown'
                 ? 'bg-warning/10 border border-warning/40'
                 : mine
                   ? 'bg-primary text-primary-content'
-                  : 'bg-base-100 border border-base-content/5'
+                  : 'bg-base-100 border border-hairline'
           }`}
         >
           {!mine && (
-            <p className={`text-[11px] font-semibold mb-0.5 ${senderColour}`}>{senderName}</p>
+            <p className={`text-micro font-semibold mb-0.5 ${senderColour}`}>{senderName}</p>
           )}
 
           {m.reply_to_id && (
@@ -642,10 +642,10 @@ function RoomBubble({
                 e.stopPropagation();
                 if (repliedTo) onJumpTo(repliedTo.id);
               }}
-              className={`block w-full text-left mb-1 rounded-lg border-l-2 pl-2 py-0.5 text-xs ${
+              className={`block w-full text-left mb-1 rounded-field border-l-2 pl-2 py-0.5 text-meta ${
                 mine
                   ? 'border-primary-content/50 text-primary-content/80'
-                  : 'border-primary/60 text-base-content/70'
+                  : 'border-primary/60 text-strong'
               }`}
             >
               {repliedTo ? (
@@ -660,7 +660,7 @@ function RoomBubble({
           )}
 
           {m.sender === 'unverified' ? (
-            <p className="flex items-start gap-1.5 text-sm text-error">
+            <p className="flex items-start gap-1.5 text-body text-error">
               <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" />
               <span>
                 Unverified sender. This message claims to be from {senderName}, but its signature
@@ -668,7 +668,7 @@ function RoomBubble({
               </span>
             </p>
           ) : m.sender === 'unknown' ? (
-            <p className="flex items-start gap-1.5 text-sm text-warning">
+            <p className="flex items-start gap-1.5 text-body text-warning">
               <ShieldQuestion className="w-4 h-4 shrink-0 mt-0.5" />
               <span>{t('room.unknownSender')}</span>
             </p>
@@ -701,12 +701,12 @@ function RoomBubble({
               ) : null}
 
               {m.text === null && !m.media_path ? (
-                <p className="flex items-start gap-1.5 text-sm italic text-base-content/60">
+                <p className="flex items-start gap-1.5 text-body italic text-muted">
                   <Lock className="w-4 h-4 shrink-0 mt-0.5" />
                   <span>{t('room.beforeYouJoined')}</span>
                 </p>
               ) : m.text ? (
-                <div className="text-sm whitespace-pre-wrap wrap-break-word">
+                <div className="text-body whitespace-pre-wrap wrap-break-word">
                   <MessageText text={m.text} handles={handles} myHandle={myHandle} />
                 </div>
               ) : null}
@@ -714,8 +714,8 @@ function RoomBubble({
           )}
 
           <p
-            className={`text-[10px] mt-1 text-right ${
-              mine && m.sender === 'verified' ? 'text-primary-content/60' : 'text-base-content/60'
+            className={`text-micro mt-1 text-right ${
+              mine && m.sender === 'verified' ? 'text-primary-content/60' : 'text-muted'
             }`}
           >
             {formatTime(m.created_at)}

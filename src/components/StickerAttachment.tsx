@@ -41,7 +41,7 @@ export function StickerAttachment({ messageId, path, mediaKey }: StickerAttachme
 
   if (failure) {
     return (
-      <div className="flex items-center gap-2 py-2 text-xs text-base-content/60">
+      <div className="flex items-center gap-2 py-2 text-meta text-muted">
         <ImageOff className="w-4 h-4 shrink-0" />
         {mediaFailureNotice(failure, 'sticker')}
       </div>
@@ -52,7 +52,7 @@ export function StickerAttachment({ messageId, path, mediaKey }: StickerAttachme
     return (
       <div
         ref={probeRef}
-        className="rounded-lg bg-base-content/5"
+        className="rounded-field bg-base-content/5"
         style={{ width: SIZE, height: SIZE }}
       />
     );

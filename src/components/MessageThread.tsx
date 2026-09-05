@@ -83,7 +83,7 @@ function isGrouped(msg: Message | PendingMessage, prev: Message | PendingMessage
 function TimerNotice({ label }: { label: string }) {
   return (
     <div className="flex justify-center my-4">
-      <span className="inline-flex items-center gap-1.5 text-[0.7rem] font-medium text-base-content/60 bg-base-300/80 px-3 py-1 rounded-full ring-1 ring-base-content/5 backdrop-blur-xs">
+      <span className="inline-flex items-center gap-1.5 text-micro font-medium text-muted bg-base-300/80 px-3 py-1 rounded-full ring-1 ring-base-content/5 backdrop-blur-xs">
         <Timer className="w-3 h-3 shrink-0" />
         {label}
       </span>
@@ -164,7 +164,7 @@ export function MessageThread({
         {hasMore && (
           <div className="flex justify-center mb-3">
             <button
-              className="btn btn-ghost btn-xs text-base-content/60"
+              className="btn btn-ghost btn-xs text-muted"
               onClick={onLoadOlder}
               disabled={loadingOlder}
             >
@@ -186,16 +186,16 @@ export function MessageThread({
             <div className="text-center px-6">
               {isSelf ? (
                 <>
-                  <p className="text-base-content/60 text-sm">{t('thread.selfEmpty')}</p>
+                  <p className="text-muted text-body">{t('thread.selfEmpty')}</p>
                   {/* "Your words", not "everything": the text is sealed with
                       the vault key, but an attachment is still an object in
                       Storage that the server can read. Claiming otherwise
                       here would be the app's first lie about the one
                       property it is selling. */}
-                  <p className="text-base-content/60 text-xs mt-1">{t('thread.selfEmptyNote')}</p>
+                  <p className="text-muted text-meta mt-1">{t('thread.selfEmptyNote')}</p>
                 </>
               ) : (
-                <p className="text-base-content/60 text-sm">
+                <p className="text-muted text-body">
                   {t('thread.startWith', { name: peerLabel })}
                 </p>
               )}
@@ -219,13 +219,13 @@ export function MessageThread({
               <div
                 key={msg.id}
                 id={`msg-${msg.id}`}
-                className={`rounded-xl transition-shadow duration-300 ${
+                className={`rounded-box transition-shadow duration-300 ${
                   groupedWithPrev ? 'mt-0.5' : 'mt-3 first:mt-0'
                 } ${scroll.highlightId === msg.id ? 'ring-2 ring-primary' : ''}`}
               >
                 {showDateDivider && (
                   <div className="flex justify-center my-4">
-                    <span className="text-[0.7rem] font-medium text-base-content/60 bg-base-300/80 px-3 py-1 rounded-full ring-1 ring-base-content/5 backdrop-blur-xs">
+                    <span className="text-micro font-medium text-muted bg-base-300/80 px-3 py-1 rounded-full ring-1 ring-base-content/5 backdrop-blur-xs">
                       {msgDate}
                     </span>
                   </div>

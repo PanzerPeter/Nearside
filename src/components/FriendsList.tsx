@@ -576,38 +576,38 @@ export function FriendsList({
       {/* Header. It carries the notch inset itself: on a phone this list is the
           top of the screen — the shared top bar is desktop-only — while on
           desktop that bar is above it and already paid for the inset. */}
-      <div className="p-4 pt-[calc(1rem+var(--safe-top))] sm:p-5 sm:pt-[calc(1.25rem+var(--safe-top))] border-b border-base-content/5">
+      <div className="px-4 pb-3 pt-[calc(1rem+var(--safe-top))] border-b border-hairline">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <Users className="w-5 h-5 text-primary hidden lg:block" />
-            <h2 className="font-semibold text-base-content">{t('tabs.chats')}</h2>
+            <h2 className="text-display font-semibold text-base-content">{t('tabs.chats')}</h2>
           </div>
           <button
-            className="btn btn-primary btn-sm btn-circle shadow-md shadow-primary/20 hover:shadow-primary/30 transition-shadow"
+            className="brand-gradient btn btn-primary btn-circle border-0 shadow-md shadow-primary/20 hover:shadow-primary/30 transition-shadow"
             onClick={() => setConnectTab('show')}
             title={t('chatList.addContact')}
             aria-label={t('chatList.addContact')}
           >
-            <UserPlus className="w-4 h-4" />
+            <UserPlus className="w-5 h-5" />
           </button>
         </div>
       </div>
 
       {/* Pending Requests */}
       {shownRequests.length > 0 && (
-        <div className="p-3 sm:p-4 border-b border-base-content/5 bg-warning/5">
-          <p className="text-xs font-semibold text-warning mb-2.5 uppercase tracking-wider">
+        <div className="p-3 sm:p-4 border-b border-hairline bg-warning/5">
+          <p className="text-micro font-semibold text-warning mb-2.5 uppercase tracking-wider">
             {t('requests.pending', { count: shownRequests.length })}
           </p>
           <div className="space-y-2">
             {shownRequests.map((req) => (
               <div
                 key={req.id}
-                className="flex items-center justify-between p-2 rounded-lg bg-base-100 border border-base-content/5"
+                className="flex items-center justify-between p-2 rounded-field bg-base-100 border border-hairline"
               >
                 <div className="flex items-center gap-2 min-w-0">
                   <Avatar display_name={req.profiles?.display_name} url={req.profiles?.avatar_url} size={28} />
-                  <span className="text-sm text-base-content truncate">
+                  <span className="text-body text-base-content truncate">
                     {req.profiles?.display_name ?? t('requests.unknown')}
                   </span>
                 </div>
@@ -656,7 +656,7 @@ export function FriendsList({
 
         {showSections && (
           <div className="px-4 sm:px-5 pt-2">
-            <p className="text-xs font-semibold uppercase tracking-wider text-base-content/55">
+            <p className="text-micro font-semibold uppercase tracking-wider text-subtle">
               {t('chatList.direct')}
             </p>
           </div>
@@ -666,7 +666,7 @@ export function FriendsList({
             so the only genuinely empty render is the one before the first fetch
             lands, and a spinner-shaped hole in a list that paints in a moment is
             worse than the space it fills. */}
-        <ul className="motion-stagger p-2 sm:p-3 space-y-1">
+        <ul className="motion-stagger p-2 space-y-0.5">
           {ordered.map((conversation) => {
             const peerId = conversation.peer_id;
             const self = isSelfChat(me, peerId);
@@ -711,7 +711,7 @@ export function FriendsList({
         {loaded && !hasFriendRows && !firstRun && (
           <div className="px-4 pb-4 text-center">
             <button
-              className="btn btn-ghost btn-xs font-normal text-base-content/60"
+              className="btn btn-ghost btn-xs font-normal text-muted"
               onClick={() => setConnectTab('show')}
             >
               {t('chatList.showOrScan')}
@@ -761,7 +761,7 @@ export function FriendsList({
           {/* Says both halves, including the one the app cannot do. A dialog
               that implied their copy went too would be a promise made on
               somebody else's device. */}
-          <p className="text-sm text-base-content/80">{t('chatList.deleteChatBody')}</p>
+          <p className="text-body text-strong">{t('chatList.deleteChatBody')}</p>
         </Modal>
       )}
     </div>

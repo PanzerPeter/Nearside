@@ -61,14 +61,14 @@ export function StickerPicker({ drawer, onSelect, onError }: StickerPickerProps)
   return (
     <div className="flex flex-col h-full">
       <div className="px-2 pb-2 shrink-0">
-        <label className="flex items-center gap-2 rounded-lg bg-base-200/60 px-2.5 h-8">
-          <Search className="w-3.5 h-3.5 text-base-content/40 shrink-0" />
+        <label className="flex items-center gap-2 rounded-field bg-base-200/60 px-2.5 h-8">
+          <Search className="w-3.5 h-3.5 text-faint shrink-0" />
           <input
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={t('stickers.search')}
-            className="w-full bg-transparent text-sm focus:outline-hidden"
+            className="w-full bg-transparent text-body focus:outline-hidden"
             autoCapitalize="none"
             autoCorrect="off"
             spellCheck={false}
@@ -83,11 +83,11 @@ export function StickerPicker({ drawer, onSelect, onError }: StickerPickerProps)
           </div>
         ) : drawer.stickers.length === 0 ? (
           <div className="flex flex-col items-center gap-2 py-10 px-4 text-center">
-            <p className="text-sm text-base-content/60">No stickers yet.</p>
-            <p className="text-xs text-base-content/40">Add a picture to start one.</p>
+            <p className="text-body text-muted">No stickers yet.</p>
+            <p className="text-meta text-faint">Add a picture to start one.</p>
           </div>
         ) : shown.length === 0 ? (
-          <p className="py-10 text-center text-sm text-base-content/50">
+          <p className="py-10 text-center text-body text-subtle">
             Nothing matches &ldquo;{query}&rdquo;.
           </p>
         ) : (
@@ -96,7 +96,7 @@ export function StickerPicker({ drawer, onSelect, onError }: StickerPickerProps)
               <div key={sticker.id} className="relative aspect-square">
                 <button
                   type="button"
-                  className="w-full h-full flex items-center justify-center rounded-lg hover:bg-base-content/5 active:scale-95 transition"
+                  className="w-full h-full flex items-center justify-center rounded-field hover:bg-wash active:scale-95 transition"
                   onClick={() => (armed === sticker.id ? setArmed(null) : onSelect(sticker))}
                   onPointerDown={() => startHold(sticker.id)}
                   onPointerUp={cancelHold}
@@ -117,7 +117,7 @@ export function StickerPicker({ drawer, onSelect, onError }: StickerPickerProps)
                     // Not a spinner per tile: forty spinners at once is a
                     // flickering grid. A quiet placeholder fills in as each
                     // sticker decrypts.
-                    <span className="w-full h-full rounded-lg bg-base-content/5" />
+                    <span className="w-full h-full rounded-field bg-base-content/5" />
                   )}
                 </button>
                 {armed === sticker.id && (
@@ -139,7 +139,7 @@ export function StickerPicker({ drawer, onSelect, onError }: StickerPickerProps)
         )}
       </div>
 
-      <div className="shrink-0 border-t border-base-content/5 p-2">
+      <div className="shrink-0 border-t border-hairline p-2">
         <input
           ref={fileRef}
           type="file"
@@ -157,7 +157,7 @@ export function StickerPicker({ drawer, onSelect, onError }: StickerPickerProps)
           onClick={() => fileRef.current?.click()}
           disabled={drawer.full}
         >
-          <ImagePlus className="w-4 h-4 text-base-content/60" />
+          <ImagePlus className="w-4 h-4 text-muted" />
           {drawer.full ? t('stickers.full') : t('stickers.add')}
         </button>
       </div>

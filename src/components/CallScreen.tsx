@@ -173,14 +173,14 @@ export function CallScreen() {
               <Avatar display_name={state.peerName.replace(/^@/, '')} size={112} />
             </div>
             <div>
-              <p className="text-2xl font-semibold">{state.peerName}</p>
-              <p className="mt-1 text-base-content/60">{status}</p>
+              <p className="text-display font-semibold">{state.peerName}</p>
+              <p className="mt-1 text-muted">{status}</p>
             </div>
             {/* The claim this app is built on, said at the moment it matters
                 most — and true here without qualification: the keys come out
                 of a handshake between the two phones and no server holds one. */}
             {!ended && (
-              <p className="inline-flex items-center gap-1.5 text-xs text-base-content/50">
+              <p className="inline-flex items-center gap-1.5 text-meta text-subtle">
                 <ShieldCheck className="w-3.5 h-3.5" />
                 {t('call.e2ee')}
               </p>
@@ -190,10 +190,10 @@ export function CallScreen() {
 
         {showRemote && (
           <div className="absolute top-4 left-0 right-0 flex flex-col items-center gap-1">
-            <p className="rounded-full bg-base-300/70 px-3 py-1 text-sm font-medium backdrop-blur-sm">
+            <p className="rounded-full bg-base-300/70 px-3 py-1 text-body font-medium backdrop-blur-sm">
               {state.peerName}
             </p>
-            <p className="rounded-full bg-base-300/60 px-2.5 py-0.5 text-xs text-base-content/80 backdrop-blur-sm">
+            <p className="rounded-full bg-base-300/60 px-2.5 py-0.5 text-meta text-strong backdrop-blur-sm">
               {status}
             </p>
           </div>
@@ -213,7 +213,7 @@ export function CallScreen() {
           autoPlay
           playsInline
           muted
-          className={`absolute right-4 w-28 aspect-3/4 rounded-xl object-cover bg-black shadow-overlay${
+          className={`absolute right-4 w-28 aspect-3/4 rounded-box object-cover bg-black shadow-overlay${
             state.facing === 'user' ? ' -scale-x-100' : ''
           }${state.cameraOff ? ' hidden' : ''}`}
           style={{ top: 'calc(1rem + var(--safe-top))' }}

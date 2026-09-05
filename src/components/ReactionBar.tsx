@@ -32,12 +32,12 @@ export function ReactionBar({ onReact, onPickerOpenChange }: ReactionBarProps) {
           onClick={() => onReact(e)}
           aria-label={t('reactions.reactWith', { emoji: e })}
           // 40px square on touch, 34px from lg up. The old size was a 20px
-          // box around a `text-sm` glyph — under half the 44px minimum, six
+          // box around a `text-body` glyph — under half the 44px minimum, six
           // of them in a row, so picking the intended emoji was a coin flip
           // on a phone and fiddly with a mouse. The hit area grows; the
           // emoji itself grows with it so the bar doesn't read as mostly
           // empty padding.
-          className="flex items-center justify-center w-10 h-10 lg:w-[2.125rem] lg:h-[2.125rem] rounded-full text-xl lg:text-lg leading-none hover:bg-base-content/10 hover:scale-110 active:scale-95 transition-transform"
+          className="flex items-center justify-center w-10 h-10 lg:w-[2.125rem] lg:h-[2.125rem] rounded-full text-xl lg:text-title leading-none hover:bg-wash hover:scale-110 active:scale-95 transition-transform"
         >
           {e}
         </button>
@@ -45,7 +45,7 @@ export function ReactionBar({ onReact, onPickerOpenChange }: ReactionBarProps) {
       <button
         ref={moreRef}
         onClick={() => setPickerOpen((o) => !o)}
-        className="flex items-center justify-center w-10 h-10 lg:w-[2.125rem] lg:h-[2.125rem] rounded-full hover:bg-base-content/10 transition-colors"
+        className="flex items-center justify-center w-10 h-10 lg:w-[2.125rem] lg:h-[2.125rem] rounded-full hover:bg-wash transition-colors"
         title={t('reactions.more')}
         aria-label={t('reactions.moreLabel')}
       >

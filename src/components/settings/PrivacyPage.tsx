@@ -63,7 +63,7 @@ export function PrivacyPage({ appLock }: PrivacyPageProps) {
 
         {lockSetup && appLock.state === 'off' && (
           <div className="p-3 space-y-2.5 bg-base-200/60">
-            <p className="text-xs text-base-content/70">{t('privacy.appLockIntro')}</p>
+            <p className="text-meta text-strong">{t('privacy.appLockIntro')}</p>
             <input
               type="password"
               className="input input-sm w-full"
@@ -88,7 +88,7 @@ export function PrivacyPage({ appLock }: PrivacyPageProps) {
               autoCapitalize="none"
               autoCorrect="off"
             />
-            {lockError && <p className="text-xs text-error">{lockError}</p>}
+            {lockError && <p className="text-meta text-error">{lockError}</p>}
             <div className="flex gap-2">
               <button
                 className="btn btn-primary btn-sm flex-1"
@@ -114,7 +114,7 @@ export function PrivacyPage({ appLock }: PrivacyPageProps) {
 
         {lockOn && (
           <label className="flex items-center justify-between gap-3 px-3 py-2.5">
-            <span className="text-sm">{t('privacy.lockAfter')}</span>
+            <span className="text-body">{t('privacy.lockAfter')}</span>
             <select
               className="select select-sm"
               value={appLock.relock}

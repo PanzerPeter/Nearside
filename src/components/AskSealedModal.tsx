@@ -51,12 +51,12 @@ export function AskSealedModal({ peerLabel, busy, onAsk, onClose }: AskSealedMod
       }
     >
       <div className="space-y-4">
-        <p className="text-sm text-base-content/70">
+        <p className="text-body text-strong">
           {t('sealed.intro', { name: peerLabel })}
         </p>
 
         <label className="block">
-          <span className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-base-content/60">
+          <span className="mb-1.5 block text-meta font-medium uppercase tracking-wide text-muted">
             {t('sealed.theQuestion')}
           </span>
           <textarea
@@ -64,7 +64,7 @@ export function AskSealedModal({ peerLabel, busy, onAsk, onClose }: AskSealedMod
             autoFocus
             rows={2}
             maxLength={MAX_MESSAGE_LENGTH}
-            className="textarea w-full resize-none rounded-2xl border border-base-content/10 bg-base-300 leading-6 focus:border-primary/60 focus:outline-hidden"
+            className="textarea w-full resize-none rounded-box border border-hairline bg-base-300 leading-6 focus:border-primary/60 focus:outline-hidden"
             placeholder={t('sealed.questionPlaceholder')}
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
@@ -72,14 +72,14 @@ export function AskSealedModal({ peerLabel, busy, onAsk, onClose }: AskSealedMod
         </label>
 
         <label className="block">
-          <span className="mb-1.5 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-base-content/60">
+          <span className="mb-1.5 flex items-center gap-1.5 text-meta font-medium uppercase tracking-wide text-muted">
             <Lock className="h-3 w-3" />
             {t('sealed.yourAnswer')}
           </span>
           <textarea
             rows={3}
             maxLength={MAX_MESSAGE_LENGTH}
-            className="textarea w-full resize-none rounded-2xl border border-base-content/10 bg-base-300 leading-6 focus:border-primary/60 focus:outline-hidden"
+            className="textarea w-full resize-none rounded-box border border-hairline bg-base-300 leading-6 focus:border-primary/60 focus:outline-hidden"
             placeholder={t('sealed.answerPlaceholder')}
             value={answer}
             onChange={(e) => setAnswer(e.target.value)}
@@ -88,7 +88,7 @@ export function AskSealedModal({ peerLabel, busy, onAsk, onClose }: AskSealedMod
 
         {/* The one thing about this feature a user cannot undo, said before
             they do it rather than in a toast afterwards. */}
-        <p className="text-xs text-base-content/50">{t('sealed.warning')}</p>
+        <p className="text-meta text-subtle">{t('sealed.warning')}</p>
       </div>
     </Modal>
   );

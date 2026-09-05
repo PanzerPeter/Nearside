@@ -81,7 +81,7 @@ export function SwipeRow({ actions, open, onOpenChange, children }: SwipeRowProp
   return (
     <div
       ref={wrapRef}
-      className="relative overflow-hidden rounded-xl"
+      className="relative overflow-hidden rounded-box"
       onContextMenu={(e) => {
         if (actions.length === 0) return;
         e.preventDefault();
@@ -100,10 +100,10 @@ export function SwipeRow({ actions, open, onOpenChange, children }: SwipeRowProp
             tabIndex={open ? 0 : -1}
             onClick={() => run(action)}
             style={{ width: ACTION_PX }}
-            className={`flex flex-col items-center justify-center gap-1 text-[0.65rem] font-medium ${
+            className={`flex flex-col items-center justify-center gap-1 text-micro font-medium ${
               action.destructive
                 ? 'bg-error/15 text-error'
-                : 'bg-base-300 text-base-content/80'
+                : 'bg-base-300 text-strong'
             }`}
           >
             {action.icon}
@@ -151,13 +151,13 @@ export function SwipeRow({ actions, open, onOpenChange, children }: SwipeRowProp
       )}
 
       {menuOpen && (
-        <div className="absolute right-2 top-1/2 z-20 -translate-y-1/2 rounded-lg border border-base-content/10 bg-base-100 py-1 shadow-lg">
+        <div className="absolute right-2 top-1/2 z-20 -translate-y-1/2 rounded-field border border-hairline bg-base-100 py-1 shadow-lg">
           {actions.map((action) => (
             <button
               key={action.key}
               type="button"
               onClick={() => run(action)}
-              className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-base-200 ${
+              className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-meta hover:bg-base-200 ${
                 action.destructive ? 'text-error' : ''
               }`}
             >

@@ -173,7 +173,7 @@ export function ProfilePage({ session, profile, onUpdated }: ProfilePageProps) {
           title={t('profile.changeAvatar')}
         >
           <div className="avatar placeholder">
-            <div className="w-24 h-24 rounded-full bg-base-content/10 text-base-content/70 overflow-hidden ring-3 ring-base-content/5">
+            <div className="brand-gradient w-24 h-24 rounded-full text-primary-content overflow-hidden ring-3 ring-base-content/5">
               {avatarUrl ? (
                 <img src={avatarUrl} alt="avatar" className="w-full h-full object-cover" />
               ) : (
@@ -202,19 +202,19 @@ export function ProfilePage({ session, profile, onUpdated }: ProfilePageProps) {
           className="hidden"
           onChange={handleAvatar}
         />
-        <p className="text-xs text-base-content/60">{t('profile.tapPhoto')}</p>
+        <p className="text-meta text-muted">{t('profile.tapPhoto')}</p>
       </div>
 
       <div className="flex flex-col">
         <label className="flex select-none items-center justify-between pb-1">
-          <span className="text-xs font-medium uppercase tracking-wider text-base-content/60">
+          <span className="text-micro font-medium uppercase tracking-wider text-muted">
             {t('profile.displayName')}
           </span>
         </label>
         <div className="flex items-center gap-2">
           <input
             type="text"
-            className="input flex-1 min-w-0 bg-base-200/50 border border-base-content/10 focus:border-primary"
+            className="input flex-1 min-w-0 bg-base-200/50 border border-hairline focus:border-primary"
             value={display_name}
             onChange={(e) => setUsername(e.target.value)}
             maxLength={DISPLAY_NAME_MAX}
@@ -227,17 +227,17 @@ export function ProfilePage({ session, profile, onUpdated }: ProfilePageProps) {
             {saving ? <span className="loading loading-spinner loading-sm" /> : t('common.save')}
           </button>
         </div>
-        <span className="text-xs text-base-content/60 mt-1">{t('profile.displayNameNote')}</span>
+        <span className="text-meta text-muted mt-1">{t('profile.displayNameNote')}</span>
       </div>
 
       <div className="flex flex-col mt-4">
         <label className="flex select-none items-center justify-between pb-1">
-          <span className="text-xs font-medium uppercase tracking-wider text-base-content/60">
+          <span className="text-micro font-medium uppercase tracking-wider text-muted">
             {t('profile.bio')}
           </span>
         </label>
         <textarea
-          className="textarea min-h-24 w-full bg-base-200/50 border border-base-content/10 focus:border-primary"
+          className="textarea min-h-24 w-full bg-base-200/50 border border-hairline focus:border-primary"
           value={bio}
           onChange={(e) => setBio(e.target.value)}
           placeholder={t('profile.bioPlaceholder')}
@@ -246,8 +246,8 @@ export function ProfilePage({ session, profile, onUpdated }: ProfilePageProps) {
           maxLength={MAX_BIO_LENGTH}
         />
         <div className="mt-1 flex items-start gap-2">
-          <span className="flex-1 text-xs text-base-content/60">{t('profile.bioNote')}</span>
-          <span className="shrink-0 text-xs tabular-nums text-base-content/50">
+          <span className="flex-1 text-meta text-muted">{t('profile.bioNote')}</span>
+          <span className="shrink-0 text-meta tabular-nums text-subtle">
             {bioLength(bio)}/{MAX_BIO_LENGTH}
           </span>
         </div>

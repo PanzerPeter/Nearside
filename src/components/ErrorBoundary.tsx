@@ -36,7 +36,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
       return (
         <div className="h-dvh flex flex-col items-center justify-center gap-4 bg-base-300 px-6 text-center py-safe">
           <p className="text-base-content font-semibold">{t('error.title')}</p>
-          <p className="text-base-content/55 text-sm max-w-xs">{t('error.body')}</p>
+          <p className="text-muted text-body max-w-xs">{t('error.body')}</p>
           <button
             type="button"
             className="btn btn-primary"

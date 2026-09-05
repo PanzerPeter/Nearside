@@ -178,8 +178,8 @@ export function VerifyContact({
           >
             <section className="w-full shrink-0 snap-center flex flex-col items-center justify-center gap-3 px-1">
               {art && <SafetySigil art={art} size={132} />}
-              <p className="font-mono text-sm tracking-wide">{art?.words.join(' · ')}</p>
-              <p className="text-xs text-base-content/60 text-center max-w-xs">
+              <p className="font-mono text-body tracking-wide">{art?.words.join(' · ')}</p>
+              <p className="text-meta text-muted text-center max-w-xs">
                 {t('verify.pictureBody')}
               </p>
             </section>
@@ -187,16 +187,16 @@ export function VerifyContact({
             <section className="w-full shrink-0 snap-center flex flex-col justify-center gap-3 px-1">
               <div className="grid grid-cols-3 gap-1.5 font-mono text-center">
                 {groups.map((group, i) => (
-                  <span key={i} className="rounded-lg bg-base-200/60 py-1.5 text-sm tracking-wider">
+                  <span key={i} className="rounded-field bg-base-200/60 py-1.5 text-body tracking-wider">
                     {group}
                   </span>
                 ))}
               </div>
-              <p className="text-xs text-base-content/60 text-center">{t('verify.digitsBody')}</p>
+              <p className="text-meta text-muted text-center">{t('verify.digitsBody')}</p>
             </section>
 
             <section className="w-full shrink-0 snap-center flex flex-col items-center justify-center gap-3 px-1">
-              <div className="rounded-2xl bg-white p-2">
+              <div className="rounded-box bg-white p-2">
                 <QrCode text={safetyPayload(number)} size={168} />
               </div>
               <button
@@ -207,7 +207,7 @@ export function VerifyContact({
                 <Camera className="w-4 h-4" />
                 {t('verify.scanTheirs')}
               </button>
-              <p className="text-xs text-base-content/60 text-center max-w-xs">
+              <p className="text-meta text-muted text-center max-w-xs">
                 {t('verify.qrBody')}
               </p>
             </section>
@@ -231,12 +231,12 @@ export function VerifyContact({
           {/* Below the pager, so the thing that records the claim never scrolls
               out from under the thing being claimed. */}
           {scanMatched ? (
-            <p className="text-sm text-success flex items-center gap-1.5">
+            <p className="text-body text-success flex items-center gap-1.5">
               <ShieldCheck className="w-4 h-4" />
               {t('verify.scanMatched')}
             </p>
           ) : scanMismatched ? (
-            <p className="text-sm text-error">{t('verify.mismatch', { name: peerLabel })}</p>
+            <p className="text-body text-error">{t('verify.mismatch', { name: peerLabel })}</p>
           ) : (
             <label className="flex items-start gap-2.5 cursor-pointer">
               <input
@@ -245,7 +245,7 @@ export function VerifyContact({
                 checked={compared}
                 onChange={(e) => setCompared(e.target.checked)}
               />
-              <span className="text-sm text-base-content/70">
+              <span className="text-body text-strong">
                 {t('verify.compared', { name: peerLabel })}
               </span>
             </label>

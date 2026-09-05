@@ -28,14 +28,14 @@ export function ReactionChips({ reactions, me, onToggle }: ReactionChipsProps) {
           // *undoing* a reaction, so it can't be meaningfully harder to hit
           // than the one that added it. min-h-7 keeps a one-emoji chip from
           // collapsing below a thumb-sized target.
-          className={`motion-chip inline-flex items-center gap-1 rounded-full px-2.5 py-1 min-h-7 text-sm leading-none border transition-colors ${
+          className={`motion-chip inline-flex items-center gap-1 rounded-full px-2.5 py-1 min-h-7 text-body leading-none border transition-colors ${
             mine
               ? 'bg-primary/20 border-primary/40'
-              : 'bg-base-100 border-base-content/10 hover:border-base-content/20'
+              : 'bg-base-100 border-hairline hover:border-hairline-strong'
           }`}
         >
           <span>{emoji}</span>
-          <span className="text-xs text-base-content/60">{count}</span>
+          <span className="text-meta text-muted">{count}</span>
         </button>
       ))}
     </div>

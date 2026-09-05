@@ -25,7 +25,18 @@
 
    Every theme below repeats the shape and status tokens. A theme that omits
    `--surface-ring` or `--receipt-read` does not inherit them from `nearside`,
-   it renders them as the literal string.
+   it renders them as the literal string. `src/lib/theme-tokens.test.ts` reads
+   this file and fails when a block is missing one, because that failure is
+   invisible to the type checker and to the linter and shows up only as a
+   broken paid pack on somebody's phone.
+
+   `--brand-lit` / `--brand-dim` are the two halves of the mark in
+   `BrandMark.tsx` — the lit near half and the far half with the light taken
+   off it — and they are declared per theme rather than derived from
+   `--color-primary` with `color-mix`. Derivation collapses on exactly the
+   packs that were paid for: `graphite`'s primary is near-achromatic, so a
+   computed pair is grey on grey, and `paper`'s brown computes to mud. Both
+   are hand-tuned here instead.
 
    `--depth` and `--noise` are daisyUI 5 additions with no v4 equivalent, and
    they are pinned to 0 in every theme on purpose: left at their default of 1,
@@ -64,6 +75,8 @@
   --surface-ring: #2a2c31;
   --receipt-read: #86efac;
   --presence-offline: #4b4d52;
+  --brand-lit: #4f8ffa;
+  --brand-dim: #1d4ed8;
   --depth: 0;
   --noise: 0;
 }
@@ -108,6 +121,8 @@
   --surface-ring: #ffffff;
   --receipt-read: #a7f3d0;
   --presence-offline: #b6bfcc;
+  --brand-lit: #3b78f0;
+  --brand-dim: #1739a6;
   --depth: 0;
   --noise: 0;
 }
@@ -145,6 +160,8 @@
   --surface-ring: #0c0c0e;
   --receipt-read: #86efac;
   --presence-offline: #3a3d44;
+  --brand-lit: #6ba3ff;
+  --brand-dim: #2159c9;
   --depth: 0;
   --noise: 0;
 }
@@ -181,6 +198,8 @@
   --surface-ring: #141c31;
   --receipt-read: #a7f3d0;
   --presence-offline: #3a4560;
+  --brand-lit: #8dbcff;
+  --brand-dim: #3d6fc0;
   --depth: 0;
   --noise: 0;
 }
@@ -217,6 +236,8 @@
   --surface-ring: #fffdf7;
   --receipt-read: #d7f0c8;
   --presence-offline: #c4bba6;
+  --brand-lit: #a3824a;
+  --brand-dim: #5b4722;
   --depth: 0;
   --noise: 0;
 }
@@ -251,6 +272,8 @@
   --surface-ring: #0e1a11;
   --receipt-read: #bbf7d0;
   --presence-offline: #2a4531;
+  --brand-lit: #6ee79b;
+  --brand-dim: #16a34a;
   --depth: 0;
   --noise: 0;
 }
@@ -288,6 +311,8 @@
   --surface-ring: #2b1a3c;
   --receipt-read: #ffd479;
   --presence-offline: #4d3a63;
+  --brand-lit: #ef7058;
+  --brand-dim: #a2341f;
   --depth: 0;
   --noise: 0;
 }
@@ -325,6 +350,8 @@
   --surface-ring: #fffafc;
   --receipt-read: #ffd166;
   --presence-offline: #d9c3cd;
+  --brand-lit: #e8517f;
+  --brand-dim: #99204c;
   --depth: 0;
   --noise: 0;
 }
@@ -365,6 +392,8 @@
   --surface-ring: #1d2024;
   --receipt-read: #1f5c3a;
   --presence-offline: #4a4f56;
+  --brand-lit: #cdd3db;
+  --brand-dim: #6b7482;
   --depth: 0;
   --noise: 0;
 }
@@ -381,6 +410,63 @@
   --font-sans:
     Inter, 'SF Pro Display', -apple-system, system-ui, 'Segoe UI', Roboto,
     sans-serif;
+
+  /* The type scale.
+     -----------------------------------------------------------------------
+     Before this existed the app had two sizes doing every job — `text-sm` and
+     `text-xs` covered 246 of ~258 declarations — plus a dozen one-off
+     `text-[0.6875rem]` values for what was one role. Nothing could announce
+     itself: a screen title rendered at the same size and weight as a contact
+     name one row below it, so no screen had a head.
+
+     Five rungs, and a component picks the one that matches the ROLE rather
+     than a size that looks about right. Line heights are paired here so a
+     rung carries its own leading and call sites stop guessing. */
+  --text-display: 1.5rem;
+  --text-display--line-height: 1.85rem;
+  --text-display--letter-spacing: -0.02em;
+  --text-title: 1.125rem;
+  --text-title--line-height: 1.5rem;
+  --text-title--letter-spacing: -0.01em;
+  --text-body: 0.9375rem;
+  --text-body--line-height: 1.375rem;
+  --text-meta: 0.8125rem;
+  --text-meta--line-height: 1.125rem;
+  --text-micro: 0.6875rem;
+  --text-micro--line-height: 1rem;
+}
+
+/* The text ladder, and why `inline`.
+   --------------------------------------------------------------------------
+   These resolve `var(--color-base-content)`, which every theme block above
+   re-declares on the same element. Without `inline` Tailwind emits
+   `--color-muted: color-mix(...)` on `:root` and points the utility at that —
+   the same indirection that broke the shadow tokens below, and the reason
+   those carry `inline` too. Inlining puts the `color-mix()` straight into the
+   utility, so it resolves against whichever theme is live.
+
+   Four named rungs replace twelve ad-hoc opacities. `/60`, `/55` and `/50`
+   were being used interchangeably for the same rank — often three of them
+   inside one row — which is what made the app read as grey mush rather than
+   as restraint. A component now names the rank it means:
+
+     text-base-content  the thing you are reading
+     text-strong        emphasis a shade off it (an unread preview)
+     text-muted         secondary — the line under the line
+     text-subtle        supporting — timestamps, counts
+     text-faint         present but not addressed to you — decorative glyphs */
+@theme inline {
+  --color-strong: color-mix(in oklab, var(--color-base-content) 78%, transparent);
+  --color-muted: color-mix(in oklab, var(--color-base-content) 60%, transparent);
+  --color-subtle: color-mix(in oklab, var(--color-base-content) 48%, transparent);
+  --color-faint: color-mix(in oklab, var(--color-base-content) 36%, transparent);
+  /* One hairline, where there were three (`/5` x18, `/10` x37, `/20` x1) for
+     the same divider. `-strong` is the hover partner, not a fourth rung. */
+  --color-hairline: color-mix(in oklab, var(--color-base-content) 8%, transparent);
+  --color-hairline-strong: color-mix(in oklab, var(--color-base-content) 18%, transparent);
+  /* The generic "this row is under the pointer" wash, replacing the `/5` vs
+     `/10` coin-flip. */
+  --color-wash: color-mix(in oklab, var(--color-base-content) 7%, transparent);
 }
 
 @theme inline {
@@ -555,6 +641,51 @@
   .selection-on-fill ::selection,
   .selection-on-fill::selection {
     background: color-mix(in oklch, currentColor 30%, transparent);
+  }
+
+  /* The near gap, in the chrome.
+     -----------------------------------------------------------------------
+     `BrandMark.tsx` draws one disc cut on the diagonal and slid apart: a lit
+     near half and a far half with the light taken off it. That two-tone was
+     the whole brand idea and it lived only in the app icon and the sign-in
+     screen — everywhere else the accent was one flat blue, which is why the
+     app looked its best on the screen you see once and then went flat.
+
+     135deg is the mark's own axis (`x1=0.15 y1=0` to `x2=0.85 y2=1` in the
+     gradient defs), so the chrome and the logo are one gesture rather than
+     two different blues.
+
+     Deliberately small-area only — the selected-row bar, the compose button,
+     your own avatar, the active tab's pill. Two reasons, and the second is
+     the load-bearing one:
+
+     - A gradient repeated down a thread of message bubbles reads as cheap,
+       and repaints per bubble.
+     - The banding that `--depth: 0` and the hard-edged elevation model exist
+       to avoid is a property of LARGE, SOFT, low-alpha gradients on a dark
+       surface: they cross fewer 8-bit levels than they cover pixels, and the
+       three channels cross at different radii. A short, saturated, two-stop
+       ramp across 20-80px crosses its levels in far less than a pixel each
+       and has no room to contour. Keep it that way — a `.brand-gradient`
+       stretched across a panel would bring the fringing back.
+
+     The unread badge is excluded on purpose. It is 11px bold text on a filled
+     pill, its contrast is already the tightest in the app, and lightening one
+     end of it to buy a gradient spends legibility on decoration. */
+  .brand-gradient {
+    background-image: linear-gradient(135deg, var(--brand-lit), var(--brand-dim));
+  }
+
+  /* The same ramp as a tint, for the one surface big enough to want it: the
+     desktop "pick a conversation" tile, which was flat `base-content/5`. Low
+     alpha over a large area is exactly the case the note above warns about,
+     so this stays a tint the icon sits on rather than a fill. */
+  .brand-wash {
+    background-image: linear-gradient(
+      135deg,
+      color-mix(in oklab, var(--brand-lit) 22%, transparent),
+      color-mix(in oklab, var(--brand-dim) 22%, transparent)
+    );
   }
 
   /* Notch inset added on top of the shared top bar's own height. */

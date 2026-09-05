@@ -69,29 +69,29 @@ export function SupportNearside({ onClose }: SupportNearsideProps) {
         </button>
       }
     >
-      <p className="text-sm text-base-content/70 leading-relaxed">{t('support.intro')}</p>
+      <p className="text-body text-strong leading-relaxed">{t('support.intro')}</p>
 
-      <h3 className="text-xs font-medium uppercase tracking-wide text-base-content/50 mt-5 mb-2">
+      <h3 className="text-meta font-medium uppercase tracking-wide text-subtle mt-5 mb-2">
         {t('support.paysFor')}
       </h3>
-      <ul className="space-y-2 text-sm text-base-content/70">
+      <ul className="space-y-2 text-body text-strong">
         <li className="flex items-start gap-2.5">
-          <Database className="w-4 h-4 mt-0.5 shrink-0 text-base-content/50" />
+          <Database className="w-4 h-4 mt-0.5 shrink-0 text-subtle" />
           <span>
-            <span className="font-medium text-base-content/85">Supabase Pro.</span>{' '}
+            <span className="font-medium text-strong">Supabase Pro.</span>{' '}
             {t('support.supabase')}
           </span>
         </li>
         <li className="flex items-start gap-2.5">
-          <Bell className="w-4 h-4 mt-0.5 shrink-0 text-base-content/50" />
+          <Bell className="w-4 h-4 mt-0.5 shrink-0 text-subtle" />
           <span>
-            <span className="font-medium text-base-content/85">OneSignal.</span>{' '}
+            <span className="font-medium text-strong">OneSignal.</span>{' '}
             {t('support.onesignal')}
           </span>
         </li>
       </ul>
 
-      <h3 className="text-xs font-medium uppercase tracking-wide text-base-content/50 mt-6 mb-2">
+      <h3 className="text-meta font-medium uppercase tracking-wide text-subtle mt-6 mb-2">
         {t('support.tiers')}
       </h3>
       <div className="space-y-3">
@@ -102,15 +102,15 @@ export function SupportNearside({ onClose }: SupportNearsideProps) {
             <button
               key={tier.id}
               type="button"
-              className={`w-full flex items-center gap-3 rounded-xl border p-3 text-left transition-colors hover:bg-base-content/5 disabled:hover:bg-transparent ${
+              className={`w-full flex items-center gap-3 rounded-box border p-3 text-left transition-colors hover:bg-wash disabled:hover:bg-transparent ${
                 tier.unlocksPacks
                   ? 'border-primary/40 bg-primary/5'
-                  : 'border-base-content/10 bg-base-200/40'
+                  : 'border-hairline bg-base-200/40'
               } ${unavailable ? 'opacity-50' : ''}`}
               onClick={() => void give(tier.id)}
               disabled={busy !== null || unavailable}
             >
-              <span className="shrink-0 text-base-content/50">
+              <span className="shrink-0 text-subtle">
                 {tier.unlocksPacks ? (
                   <Palette className="w-4 h-4" />
                 ) : (
@@ -119,15 +119,15 @@ export function SupportNearside({ onClose }: SupportNearsideProps) {
               </span>
 
               <span className="flex-1 min-w-0">
-                <span className="block text-sm font-medium">{tier.name}</span>
-                <span className="block text-xs text-base-content/60">{t(tier.blurb)}</span>
+                <span className="block text-body font-medium">{tier.name}</span>
+                <span className="block text-meta text-muted">{t(tier.blurb)}</span>
               </span>
 
-              <span className="shrink-0 text-xs">
+              <span className="shrink-0 text-meta">
                 {busy === tier.id ? (
                   <span className="loading loading-spinner loading-xs" />
                 ) : unavailable ? (
-                  <span className="text-base-content/60">{t('common.unavailable')}</span>
+                  <span className="text-muted">{t('common.unavailable')}</span>
                 ) : (
                   <span
                     className={`badge badge-sm ${tier.unlocksPacks ? 'badge-primary' : 'badge-ghost'}`}
@@ -141,9 +141,9 @@ export function SupportNearside({ onClose }: SupportNearsideProps) {
         })}
       </div>
 
-      <p className="text-xs text-base-content/55 mt-4 leading-relaxed">{t('support.note')}</p>
+      <p className="text-meta text-muted mt-4 leading-relaxed">{t('support.note')}</p>
       {!native && (
-        <p className="text-xs text-base-content/55 mt-2 text-center">{t('support.browserOnly')}</p>
+        <p className="text-meta text-muted mt-2 text-center">{t('support.browserOnly')}</p>
       )}
     </Modal>
   );

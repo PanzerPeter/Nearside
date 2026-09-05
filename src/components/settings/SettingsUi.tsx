@@ -25,19 +25,19 @@ interface RowShellProps {
 }
 
 const TONE = {
-  default: 'text-base-content/60',
+  default: 'text-muted',
   warning: 'text-warning',
   error: 'text-error',
 } as const;
 
 function RowShell({ icon: Icon, label, hint, tone = 'default', children }: RowShellProps) {
   return (
-    <div className="flex items-center justify-between gap-3 px-3 py-2.5">
+    <div className="flex items-center justify-between gap-3 px-4 py-3">
       <div className="flex items-center gap-2.5 min-w-0">
         {Icon && <Icon className={`w-4 h-4 shrink-0 ${TONE[tone]}`} />}
         <div className="min-w-0 text-left">
-          <p className={`text-sm font-medium ${tone === 'error' ? 'text-error' : ''}`}>{label}</p>
-          {hint && <p className="text-xs text-base-content/60">{hint}</p>}
+          <p className={`text-body font-medium ${tone === 'error' ? 'text-error' : ''}`}>{label}</p>
+          {hint && <p className="text-meta text-muted">{hint}</p>}
         </div>
       </div>
       {children}
@@ -54,11 +54,11 @@ interface NavRowProps extends RowShellProps {
 
 export function NavRow({ onClick, value, ...shell }: NavRowProps) {
   return (
-    <button type="button" className="w-full text-left hover:bg-base-content/5" onClick={onClick}>
+    <button type="button" className="w-full text-left hover:bg-wash" onClick={onClick}>
       <RowShell {...shell}>
         <span className="flex items-center gap-1.5 shrink-0">
-          {value && <span className="text-xs text-base-content/50">{value}</span>}
-          <ChevronRight className="w-4 h-4 text-base-content/40" />
+          {value && <span className="text-meta text-subtle">{value}</span>}
+          <ChevronRight className="w-4 h-4 text-faint" />
         </span>
       </RowShell>
     </button>
@@ -120,7 +120,7 @@ export function InfoRow({ status, ...shell }: RowShellProps & { status?: string 
   return (
     <RowShell {...shell}>
       {status && (
-        <span className="text-xs text-base-content/60 shrink-0 tabular-nums">{status}</span>
+        <span className="text-meta text-muted shrink-0 tabular-nums">{status}</span>
       )}
     </RowShell>
   );
@@ -132,11 +132,11 @@ export function Card({ title, children }: { title?: string; children: ReactNode 
   return (
     <div className="mb-4">
       {title && (
-        <p className="text-xs font-medium uppercase tracking-wider text-base-content/60 px-1 mb-1.5">
+        <p className="text-micro font-semibold uppercase tracking-wider text-subtle px-1 mb-2">
           {title}
         </p>
       )}
-      <div className="rounded-box border border-base-content/10 bg-base-200/40 divide-y divide-base-content/5 overflow-hidden">
+      <div className="rounded-box border border-hairline bg-base-200/40 divide-y divide-hairline overflow-hidden">
         {children}
       </div>
     </div>
@@ -146,7 +146,7 @@ export function Card({ title, children }: { title?: string; children: ReactNode 
 /** Prose between cards — the sentence that explains what a group of switches
  *  will and will not do. */
 export function Note({ children }: { children: ReactNode }) {
-  return <p className="text-xs text-base-content/60 leading-relaxed px-1 -mt-2 mb-4">{children}</p>;
+  return <p className="text-meta text-muted leading-relaxed px-1 -mt-2 mb-4">{children}</p>;
 }
 
 /**
@@ -182,7 +182,7 @@ export function SettingsPage({
         >
           <ChevronLeft className="w-5 h-5" />
         </button>
-        <h3 className="font-semibold">{title}</h3>
+        <h3 className="text-title font-semibold">{title}</h3>
       </div>
       {children}
     </div>

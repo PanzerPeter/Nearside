@@ -52,7 +52,7 @@ export function StoragePage() {
 
   if (failed) {
     return (
-      <div className="alert alert-error text-sm">
+      <div className="alert alert-error text-body">
         <span>{t('storage.measureFailed')}</span>
         <button className="btn btn-sm gap-1.5" onClick={() => void reload()}>
           <RefreshCw className="w-3.5 h-3.5" />
@@ -181,8 +181,8 @@ function Confirm({
   const t = useT();
   return (
     <div className="p-3 bg-base-200/60 space-y-2.5">
-      <p className="text-sm font-medium">{label}?</p>
-      <p className="text-xs text-base-content/70 leading-relaxed">{children}</p>
+      <p className="text-body font-medium">{label}?</p>
+      <p className="text-meta text-strong leading-relaxed">{children}</p>
       <div className="flex items-center gap-2">
         <button className="btn btn-ghost btn-sm" onClick={onCancel} disabled={working}>
           {t('common.cancel')}

@@ -39,10 +39,10 @@ export function AccountSwitcher({
     <div className="space-y-1">
       {targets.map((account) =>
         confirmingForget === account.userId ? (
-          <div key={account.userId} className="rounded-lg bg-base-200/50 p-2 space-y-2">
-            <p className="text-xs text-base-content/60">
+          <div key={account.userId} className="rounded-field bg-base-200/50 p-2 space-y-2">
+            <p className="text-meta text-muted">
               Removes{' '}
-              <span className="font-medium text-base-content/80">
+              <span className="font-medium text-strong">
                 {account.display_name || 'this account'}
               </span>{' '}
               from this device: its recovery phrase, offline search index and app lock. The account
@@ -86,7 +86,7 @@ export function AccountSwitcher({
               })}
               title={t('accounts.removeTitle')}
             >
-              <UserRoundX className="w-4 h-4 text-base-content/40" />
+              <UserRoundX className="w-4 h-4 text-faint" />
             </button>
           </div>
         )
@@ -95,7 +95,7 @@ export function AccountSwitcher({
       {full ? (
         // A cap on how many resumable sessions one stolen device yields. Saying
         // so beats a button that silently drops somebody else's account.
-        <p className="px-2 text-xs text-base-content/50">
+        <p className="px-2 text-meta text-subtle">
           {MAX_ACCOUNTS} accounts is the limit on one device. Remove one to add another.
         </p>
       ) : (
@@ -103,7 +103,7 @@ export function AccountSwitcher({
           className="btn btn-ghost btn-sm w-full justify-start gap-2.5 px-2"
           onClick={onAddAccount}
         >
-          <Plus className="w-4 h-4 text-base-content/60 shrink-0" />
+          <Plus className="w-4 h-4 text-muted shrink-0" />
           <span className="flex-1 text-left">Add another account</span>
         </button>
       )}

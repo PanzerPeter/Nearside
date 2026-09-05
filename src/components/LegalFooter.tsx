@@ -25,7 +25,7 @@ export function LegalFooter({ className = '' }: { className?: string }) {
   return (
     <>
       <footer
-        className={`flex items-center justify-center gap-3 text-xs text-base-content/60 ${className}`}
+        className={`flex items-center justify-center gap-3 text-meta text-muted ${className}`}
       >
         <button type="button" className="link link-hover" onClick={() => setOpen('terms')}>
           {t('legal.terms')}
@@ -90,23 +90,23 @@ export function LegalDocModal({ doc, onClose }: { doc: LegalDoc; onClose: () => 
     >
       <div
         ref={scroller}
-        className="max-h-[60vh] overflow-y-auto pr-1 text-sm text-base-content/70 leading-relaxed"
+        className="max-h-[60vh] overflow-y-auto pr-1 text-body text-strong leading-relaxed"
       >
-        <p className="text-xs text-base-content/60">{t('legal.lastUpdated', { date: LAST_UPDATED })}</p>
+        <p className="text-meta text-muted">{t('legal.lastUpdated', { date: LAST_UPDATED })}</p>
 
         {/* Loud on purpose, and it removes itself. A policy that describes
             rights while printing an address nobody reads is worse than one
             that admits the address is not set up yet. */}
         {CONTACT_EMAIL_IS_PLACEHOLDER && (
-          <p className="mt-3 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-base-content/80">
+          <p className="mt-3 rounded-field border border-warning/40 bg-warning/10 px-3 py-2 text-meta text-strong">
             {t('legal.placeholderContact')}
           </p>
         )}
 
         <div className="space-y-3 mt-3">{terms ? termsLead : privacyLead}</div>
 
-        <nav aria-label="Sections" className="mt-4 rounded-lg bg-base-200/50 px-3 py-2.5">
-          <p className="text-[0.7rem] font-medium uppercase tracking-wide text-base-content/50 mb-1.5">
+        <nav aria-label="Sections" className="mt-4 rounded-field bg-base-200/50 px-3 py-2.5">
+          <p className="text-micro font-medium uppercase tracking-wide text-subtle mb-1.5">
             {t('legal.inThisDocument')}
           </p>
           <ul className="space-y-0.5">
@@ -114,7 +114,7 @@ export function LegalDocModal({ doc, onClose }: { doc: LegalDoc; onClose: () => 
               <li key={section.id}>
                 <button
                   type="button"
-                  className="link link-hover text-left text-xs text-base-content/75"
+                  className="link link-hover text-left text-meta text-strong"
                   onClick={() => jump(section.id)}
                 >
                   {section.title}
@@ -130,7 +130,7 @@ export function LegalDocModal({ doc, onClose }: { doc: LegalDoc; onClose: () => 
 
         <button
           type="button"
-          className="btn btn-ghost btn-xs gap-1.5 mt-5 text-base-content/60"
+          className="btn btn-ghost btn-xs gap-1.5 mt-5 text-muted"
           onClick={toTop}
         >
           <ArrowUp className="w-3 h-3" />
@@ -151,7 +151,7 @@ export function LegalDocModal({ doc, onClose }: { doc: LegalDoc; onClose: () => 
 function Section({ section }: { section: LegalSection }) {
   return (
     <section className="mt-5 space-y-3 scroll-mt-2">
-      <h4 id={section.id} className="font-semibold text-base-content/90 scroll-mt-2">
+      <h4 id={section.id} className="font-semibold text-strong scroll-mt-2">
         {section.title}
       </h4>
       {section.body}

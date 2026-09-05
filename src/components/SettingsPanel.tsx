@@ -139,23 +139,23 @@ export function SettingsPanel({
           avatar uploaded. */}
       <button
         type="button"
-        className="w-full flex items-center gap-3 p-3 mb-4 rounded-box border border-base-content/10 bg-base-200/40 hover:bg-base-content/5 text-left"
+        className="w-full flex items-center gap-3 p-3 mb-4 rounded-box border border-hairline bg-base-200/40 hover:bg-wash text-left"
         onClick={() => setSection('profile')}
       >
         <div className="avatar placeholder shrink-0">
-          <div className="w-12 h-12 rounded-full bg-base-content/10 text-base-content/70 overflow-hidden ring-3 ring-base-content/5">
+          <div className="brand-gradient w-12 h-12 rounded-full text-primary-content overflow-hidden ring-3 ring-base-content/5">
             {profile.avatar_url ? (
               <img src={profile.avatar_url} alt="" className="w-full h-full object-cover" />
             ) : (
-              <span className="text-lg font-semibold">{initial(profile.display_name)}</span>
+              <span className="text-title font-semibold">{initial(profile.display_name)}</span>
             )}
           </div>
         </div>
         <div className="min-w-0 flex-1">
-          <p className="font-medium truncate">{profile.display_name}</p>
-          <p className="text-xs text-base-content/60">{t('settings.profileHint')}</p>
+          <p className="text-body font-medium truncate">{profile.display_name}</p>
+          <p className="text-meta text-muted">{t('settings.profileHint')}</p>
         </div>
-        <ChevronRight className="w-4 h-4 text-base-content/40 shrink-0" />
+        <ChevronRight className="w-4 h-4 text-faint shrink-0" />
       </button>
 
       <Card>

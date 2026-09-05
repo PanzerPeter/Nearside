@@ -149,7 +149,7 @@ export function OpenSourceLicenses({ onClose }: OpenSourceLicensesProps) {
         </button>
       }
     >
-      <p className="text-sm text-base-content/70 leading-relaxed">
+      <p className="text-body text-strong leading-relaxed">
         Nearside is built on other people&rsquo;s work. The cryptography in particular is standard
         and borrowed on purpose. A messenger that rolled its own would be a worse one.
       </p>
@@ -158,21 +158,21 @@ export function OpenSourceLicenses({ onClose }: OpenSourceLicensesProps) {
         {DEPENDENCIES.map((dep) => (
           <li
             key={dep.name}
-            className="rounded-xl border border-base-content/10 bg-base-200/40 p-3"
+            className="rounded-box border border-hairline bg-base-200/40 p-3"
           >
             <div className="flex items-baseline justify-between gap-3">
               <a
                 href={dep.url}
                 target="_blank"
                 rel="noreferrer noopener"
-                className="font-medium text-sm inline-flex items-center gap-1 hover:text-primary"
+                className="font-medium text-body inline-flex items-center gap-1 hover:text-primary"
               >
                 {dep.name}
                 <ExternalLink className="w-3 h-3 opacity-60" />
               </a>
-              <span className="text-[11px] text-base-content/55 shrink-0">{dep.license}</span>
+              <span className="text-micro text-muted shrink-0">{dep.license}</span>
             </div>
-            <p className="text-xs text-base-content/65 leading-relaxed mt-1">{dep.what}</p>
+            <p className="text-meta text-muted leading-relaxed mt-1">{dep.what}</p>
           </li>
         ))}
       </ul>

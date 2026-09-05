@@ -108,9 +108,9 @@ export function AccountPage({
           on the grounds that its name is a few rows up — which was true of the
           old single-page settings and is not true of a page reached from a
           list. So the page says it. */}
-      <p className="text-xs text-base-content/60 px-1 mb-2">
+      <p className="text-meta text-muted px-1 mb-2">
         {t('account.signedInAs')}{' '}
-        <span className="font-medium text-base-content/80">{profile.display_name}</span>
+        <span className="font-medium text-strong">{profile.display_name}</span>
       </p>
 
       {/* Above sign-out rather than below it: switching is the everyday action
@@ -132,7 +132,7 @@ export function AccountPage({
                 bar: signing out drops queued-but-unsent messages and this
                 account's decrypted mirror, so search and previews are rebuilt
                 from scratch afterwards. Nothing sent is lost. */}
-            <p className="text-xs text-base-content/70">{t('account.signOutBody')}</p>
+            <p className="text-meta text-strong">{t('account.signOutBody')}</p>
             <div className="flex items-center gap-2">
               <button className="btn btn-ghost btn-sm" onClick={() => setConfirmingSignOut(false)}>
                 {t('common.cancel')}
@@ -144,31 +144,31 @@ export function AccountPage({
           </div>
         ) : (
           <button
-            className="w-full text-left hover:bg-base-content/5"
+            className="w-full text-left hover:bg-wash"
             onClick={() => setConfirmingSignOut(true)}
           >
             <span className="flex items-center gap-2.5 px-3 py-2.5">
-              <LogOut className="w-4 h-4 text-base-content/60 shrink-0" />
-              <span className="text-sm font-medium">{t('common.signOut')}</span>
+              <LogOut className="w-4 h-4 text-muted shrink-0" />
+              <span className="text-body font-medium">{t('common.signOut')}</span>
             </span>
           </button>
         )}
       </Card>
 
       <div className="space-y-2">
-        <p className="text-xs font-medium uppercase tracking-wider text-error px-1">
+        <p className="text-micro font-medium uppercase tracking-wider text-error px-1">
           {t('account.dangerZone')}
         </p>
         {confirmingDelete ? (
           <>
-            <p className="text-xs text-base-content/60 px-1">
+            <p className="text-meta text-muted px-1">
               {t('account.deleteConfirmPrefix')}{' '}
-              <span className="font-medium text-base-content/80">{profile.display_name}</span>{' '}
+              <span className="font-medium text-strong">{profile.display_name}</span>{' '}
               {t('account.deleteConfirmSuffix')}
             </p>
             <input
               type="text"
-              className="input input-sm w-full bg-base-200/50 border border-base-content/10 focus:border-error"
+              className="input input-sm w-full bg-base-200/50 border border-hairline focus:border-error"
               value={deleteText}
               onChange={(e) => setDeleteText(e.target.value)}
               // Mobile keyboards capitalise and autocorrect by default, which
@@ -204,7 +204,7 @@ export function AccountPage({
           </>
         ) : (
           <>
-            <p className="text-xs text-base-content/60 px-1">{t('account.deleteIntro')}</p>
+            <p className="text-meta text-muted px-1">{t('account.deleteIntro')}</p>
             <button
               className="btn btn-error btn-outline btn-sm"
               onClick={() => setConfirmingDelete(true)}

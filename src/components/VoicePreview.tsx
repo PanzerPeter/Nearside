@@ -86,7 +86,7 @@ export function VoicePreview({ url, durationMs }: VoicePreviewProps) {
           className="h-1 w-full cursor-pointer accent-primary"
           aria-label={t('voice.seekRecording')}
         />
-        <p className="mt-1 flex items-center gap-1 text-xs text-base-content/60">
+        <p className="mt-1 flex items-center gap-1 text-meta text-muted">
           <Mic className="h-3 w-3 shrink-0" />
           <span className="tabular-nums">
             {formatDuration(playing || positionMs > 0 ? positionMs : totalMs)}

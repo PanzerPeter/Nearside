@@ -117,7 +117,7 @@ export function NicknameModal({
         />
       </form>
 
-      <p className="text-xs text-base-content/55 mt-3">
+      <p className="text-meta text-muted mt-3">
         {isSelf ? t('nickname.selfNote') : t('nickname.note', { name: display_name })}
       </p>
     </Modal>

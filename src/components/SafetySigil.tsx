@@ -21,7 +21,7 @@ export function SafetySigil({ art, size = 120 }: { art: SafetyArt; size?: number
       viewBox={`0 0 ${size} ${size}`}
       role="img"
       aria-label={t('verify.sigilLabel', { words: art.words.join(', ') })}
-      className="rounded-xl bg-base-200/60"
+      className="rounded-box bg-base-200/60"
     >
       {art.cells.map((on, i) => {
         if (!on) return null;

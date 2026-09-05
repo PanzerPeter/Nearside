@@ -17,10 +17,10 @@ const DISPLAY_NAME_MAX = 32;
 // Shared field styling — one source of truth for the four inputs so the focus
 // treatment (blue border + soft ring, no default outline) stays consistent.
 const INPUT_CLASS =
-  'input w-full bg-base-200/50 border border-base-content/10 focus:border-primary focus:bg-base-200 focus:outline-hidden focus:ring-2 focus:ring-primary/25 transition-all';
+  'input w-full bg-base-200/50 border border-hairline focus:border-primary focus:bg-base-200 focus:outline-hidden focus:ring-2 focus:ring-primary/25 transition-all';
 
 const LABEL_CLASS =
-  'text-xs font-medium uppercase tracking-wider text-base-content/60';
+  'text-micro font-medium uppercase tracking-wider text-muted';
 
 interface AuthFormProps {
   /**
@@ -142,7 +142,7 @@ export function AuthForm({ onCancel }: AuthFormProps = {}) {
             'radial-gradient(60rem 40rem at 50% -10%, rgba(59,130,246,0.10), transparent 70%)',
         }}
       />
-      <div className="relative card w-full max-w-sm bg-base-100 shadow-modal border border-base-content/5">
+      <div className="relative card w-full max-w-sm bg-base-100 shadow-modal border border-hairline">
         <div className="card-body p-6 sm:p-8">
           <div className="flex flex-col items-center gap-2.5 mb-1">
             <div className="relative">
@@ -153,19 +153,19 @@ export function AuthForm({ onCancel }: AuthFormProps = {}) {
               />
               <BrandMark size={44} />
             </div>
-            <h1 className="text-2xl font-bold tracking-tight text-base-content">Nearside</h1>
+            <h1 className="text-display font-bold text-base-content">Nearside</h1>
           </div>
           {onCancel && (
             <button
               type="button"
-              className="btn btn-ghost btn-xs self-center -mt-1 mb-1 gap-1.5 text-base-content/60"
+              className="btn btn-ghost btn-xs self-center -mt-1 mb-1 gap-1.5 text-muted"
               onClick={onCancel}
             >
               <ArrowLeft className="w-3.5 h-3.5" />
               {t('auth.backToAccount')}
             </button>
           )}
-          <p className="text-center text-base-content/60 text-sm mb-6">
+          <p className="text-center text-muted text-body mb-6">
             {isSignUp ? t('auth.createYourAccount') : t('auth.welcomeBack')}
           </p>
 
@@ -227,7 +227,7 @@ export function AuthForm({ onCancel }: AuthFormProps = {}) {
               <button
                 type="button"
                 onClick={handleForgotPassword}
-                className="link link-hover text-xs text-base-content/60 hover:text-primary self-start"
+                className="link link-hover text-meta text-muted hover:text-primary self-start"
               >
                 {t('auth.forgotPassword')}
               </button>
@@ -241,7 +241,7 @@ export function AuthForm({ onCancel }: AuthFormProps = {}) {
                   checked={agreedToLegal}
                   onChange={(e) => setAgreedToLegal(e.target.checked)}
                 />
-                <span className="text-xs leading-relaxed text-base-content/70">
+                <span className="text-meta leading-relaxed text-strong">
                   {t('auth.agreePrefix')}{' '}
                   {/* type="button": a bare button inside a form submits it, so
                       reading the terms would have attempted the sign-up. */}
@@ -266,13 +266,13 @@ export function AuthForm({ onCancel }: AuthFormProps = {}) {
             )}
 
             {error && (
-              <div className="rounded-lg bg-error/10 border border-error/20 px-3 py-2.5">
-                <p className="text-error text-sm">{error}</p>
+              <div className="rounded-field bg-error/10 border border-error/20 px-3 py-2.5">
+                <p className="text-error text-body">{error}</p>
               </div>
             )}
             {notice && (
-              <div className="rounded-lg bg-success/10 border border-success/20 px-3 py-2.5">
-                <p className="text-success text-sm">{notice}</p>
+              <div className="rounded-field bg-success/10 border border-success/20 px-3 py-2.5">
+                <p className="text-success text-body">{notice}</p>
               </div>
             )}
 
@@ -297,7 +297,7 @@ export function AuthForm({ onCancel }: AuthFormProps = {}) {
             </button>
           </form>
 
-          <div className="mt-5 pt-4 border-t border-base-content/5 text-center text-sm text-base-content/55">
+          <div className="mt-5 pt-4 border-t border-hairline text-center text-body text-muted">
             {isSignUp ? t('auth.haveAccount') : t('auth.noAccount')}{' '}
             <button
               type="button"
