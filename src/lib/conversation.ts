@@ -172,6 +172,10 @@ export function tombstonePatch(now: string = new Date().toISOString()) {
     nonce: null,
     media_path: null,
     media_type: null,
+    // The preview goes with the attachment. The body guard added in 0044
+    // refuses a tombstone that still names one, so leaving it here would make
+    // every delete of a picture fail at the server.
+    media_thumb_path: null,
     media_key_ciphertext: null,
     media_key_nonce: null,
     // A length describing a file the row no longer names. The media trim nulls

@@ -11,6 +11,7 @@ import { FirstRunInvite } from './FirstRunInvite';
 import { RoomList } from './RoomList';
 import { advanceRead, fetchUnreadCounts } from '../lib/receipts';
 import { useConversationPreviews } from '../hooks/useConversationPreviews';
+import { useThreadPrefetch } from '../hooks/useThreadPrefetch';
 import { useConnection, reportChannelStatus, forgetChannel } from '../lib/connection';
 import { BellOff, Bell, Pin, PinOff, Trash2, UserPlus, Check, X, Users } from 'lucide-react';
 import {
@@ -24,6 +25,7 @@ import {
   visibleRequests,
   type ChatFlags,
 } from '../lib/chat-flags';
+import { cachedConversationList, putConversationList } from '../lib/localdb';
 import { removeContact } from '../lib/remove-contact';
 import { syncMutedIds } from '../lib/mute';
 import { SwipeRow } from './SwipeRow';
@@ -125,6 +127,36 @@ export function FriendsList({
     const rows = sortConversations((data ?? []) as ConversationSummary[], me);
     setConversations(rows);
     setLoaded(true);
+    // Sorted, so the cached copy is the list in the order it was shown in and
+    // the offline paint does not reshuffle itself when the RPC lands.
+    void putConversationList(rows);
+  }, [me]);
+
+  /**
+   * Paint the sidebar from the last list this device saw.
+   *
+   * The RPC is one round trip and there is nothing on screen until it lands —
+   * no names, no ordering, not even the self-chat it always returns. That is a
+   * blank app for the length of a slow round trip, and a permanently blank app
+   * with no network at all, on a device whose mirror holds the conversations.
+   *
+   * `setLoaded` is deliberately not set here. It is what tells the list the
+   * server has answered, and the empty-state and first-run cards are written
+   * for that answer, not for a guess off disk.
+   */
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      const cached = await cachedConversationList();
+      // Only if the RPC has not already answered: it is authoritative, and a
+      // slow disk read must never repaint a fresher list with an older one.
+      if (alive && cached.length > 0) {
+        setConversations((prev) => (prev.length > 0 ? prev : sortConversations(cached, me)));
+      }
+    })();
+    return () => {
+      alive = false;
+    };
   }, [me]);
 
   const refreshFlags = useCallback(async () => {
@@ -148,6 +180,11 @@ export function FriendsList({
   // server — and from a one-row fetch for whatever the mirror has never opened.
   // See `useConversationPreviews`.
   const previews = useConversationPreviews(me, identity, conversations);
+
+  // …and the newest page of the few most likely to be opened, so the first tap
+  // after a cold start paints from disk like every one after it. See
+  // `hooks/useThreadPrefetch.ts` for the three gates that keep it cheap.
+  useThreadPrefetch(me, identity, conversations);
 
   /**
    * Coalesce a burst of realtime events into one list refresh.

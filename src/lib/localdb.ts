@@ -12,7 +12,8 @@ import {
   type SQLiteDBConnection,
 } from '@capacitor-community/sqlite';
 import { isMobileNative } from './platform';
-import type { MediaType } from './types';
+import { parseSealedRow, sealedOnly, type SealedRow } from './sealed-row';
+import type { ConversationSummary, MediaType, Message } from './types';
 
 export interface CachedMessage {
   id: string;
@@ -87,6 +88,17 @@ const NEWEST_FIRST = (a: CachedMessage, b: CachedMessage) =>
 const SEARCH_LIMIT = 100;
 const CONVERSATION_LIMIT = 1000;
 
+/**
+ * How many sealed rows one conversation keeps on this device.
+ *
+ * Two pages. One is what opening the chat paints; the second is what the first
+ * flick back finds already there, which is the whole difference between a
+ * thread that scrolls and a thread that stops to load. Beyond that the network
+ * is doing the work anyway, and this store is not an archive — the plaintext
+ * mirror is what search reads, and it keeps everything.
+ */
+export const SEALED_KEEP = 60;
+
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS messages_cache (
   id         TEXT PRIMARY KEY,
@@ -121,6 +133,22 @@ CREATE TABLE IF NOT EXISTS chat_flags (
   muted_at     TEXT,
   dismissed_at TEXT
 );
+
+CREATE TABLE IF NOT EXISTS messages_sealed (
+  id         TEXT PRIMARY KEY,
+  peer_id    TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  expires_at TEXT,
+  row        TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS messages_sealed_peer_time
+  ON messages_sealed (peer_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS conversation_cache (
+  peer_id   TEXT PRIMARY KEY,
+  position  INTEGER NOT NULL,
+  row       TEXT NOT NULL
+);
 `;
 
 let db: SQLiteDBConnection | null = null;
@@ -133,6 +161,17 @@ const memory = new Map<string, Map<string, CachedMessage>>();
 const contactMemory = new Map<string, Map<string, CachedContact>>();
 const pinMemory = new Map<string, Map<string, PinnedMedia>>();
 const flagMemory = new Map<string, Map<string, ChatFlagsRow>>();
+const sealedMemory = new Map<string, Map<string, SealedEntry>>();
+const listMemory = new Map<string, Map<string, ConversationSummary>>();
+
+/** A sealed row plus the two columns the store indexes and prunes on, so
+ *  neither has to be parsed back out of the JSON to answer a query. */
+interface SealedEntry {
+  peer_id: string;
+  created_at: string;
+  expires_at: string | null;
+  row: SealedRow;
+}
 
 function native(): boolean {
   return isMobileNative();
@@ -162,6 +201,14 @@ function pinStore(): Map<string, PinnedMedia> | null {
 
 function flagStore(): Map<string, ChatFlagsRow> | null {
   return scoped(flagMemory);
+}
+
+function sealedStore(): Map<string, SealedEntry> | null {
+  return scoped(sealedMemory);
+}
+
+function listStore(): Map<string, ConversationSummary> | null {
+  return scoped(listMemory);
 }
 
 /** Opens the store belonging to `userId`, closing whichever one was open. */
@@ -299,6 +346,190 @@ export async function cachedConversation(
   return (res?.values as CachedMessage[]) ?? [];
 }
 
+// ---- The sealed page --------------------------------------------------------
+//
+// `messages_cache` above holds decrypted *text*, which is what search and the
+// sidebar preview read. It cannot paint a thread: it has no attachment, no
+// reply pointer, no edit or delete stamp, and deliberately no file key.
+//
+// This store holds the rows as the server sent them — still sealed — so a
+// conversation opened with no network goes through exactly the same `open()`
+// the network path does and comes out the same shape. Nothing here is a
+// second rendering path that can drift from the first.
+
+/**
+ * Write a page of server rows for one conversation, newest kept.
+ *
+ * Every row goes through `sealedOnly`: by the time the thread has a row it is
+ * carrying an opened body and an opened attachment key, and neither belongs on
+ * disk. See `lib/sealed-row.ts`.
+ */
+export async function putSealedRows(peerId: string, rows: readonly Message[]): Promise<void> {
+  if (rows.length === 0) return;
+
+  if (!native()) {
+    const store = sealedStore();
+    if (!store) return;
+    for (const row of rows) {
+      store.set(row.id, {
+        peer_id: peerId,
+        created_at: row.created_at,
+        expires_at: row.expires_at,
+        row: sealedOnly(row),
+      });
+    }
+    trimSealedMemory(store, peerId);
+    return;
+  }
+
+  for (const row of rows) {
+    await db?.run(
+      `INSERT INTO messages_sealed (id, peer_id, created_at, expires_at, row)
+       VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET
+         peer_id    = excluded.peer_id,
+         created_at = excluded.created_at,
+         expires_at = excluded.expires_at,
+         row        = excluded.row`,
+      [row.id, peerId, row.created_at, row.expires_at, JSON.stringify(sealedOnly(row))]
+    );
+  }
+
+  // Bounded per conversation rather than globally: a global cap would let one
+  // busy chat evict every other conversation's opening page, which is the one
+  // thing this store exists to guarantee.
+  await db?.run(
+    `DELETE FROM messages_sealed
+      WHERE peer_id = ?
+        AND id NOT IN (
+          SELECT id FROM messages_sealed WHERE peer_id = ?
+           ORDER BY created_at DESC, id DESC LIMIT ?
+        )`,
+    [peerId, peerId, SEALED_KEEP]
+  );
+}
+
+function trimSealedMemory(store: Map<string, SealedEntry>, peerId: string): void {
+  const mine = [...store]
+    .filter(([, entry]) => entry.peer_id === peerId)
+    .sort(([aId, a], [bId, b]) =>
+      a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : bId.localeCompare(aId)
+    );
+  for (const [id] of mine.slice(SEALED_KEEP)) store.delete(id);
+}
+
+/** The newest cached rows for a conversation, newest first — the same order
+ *  and shape `fetchLatestPage` returns. */
+export async function cachedSealedRows(peerId: string, limit = SEALED_KEEP): Promise<SealedRow[]> {
+  if (!native()) {
+    return [...(sealedStore()?.values() ?? [])]
+      .filter((e) => e.peer_id === peerId)
+      .sort((a, b) => (a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : 0))
+      .slice(0, limit)
+      .map((e) => e.row);
+  }
+  const res = await db?.query(
+    `SELECT row FROM messages_sealed WHERE peer_id = ?
+      ORDER BY created_at DESC, id DESC LIMIT ?`,
+    [peerId, limit]
+  );
+  const rows = (res?.values as { row: string }[]) ?? [];
+  // A row that will not parse is dropped rather than rendered — the network
+  // refills the page, and half a message is not a message.
+  return rows.map((r) => parseSealedRow(r.row)).filter((r): r is SealedRow => r !== null);
+}
+
+/**
+ * The newest cached message per conversation, in one read.
+ *
+ * What the prefetch compares against `conversation_list`'s `last_at` to decide
+ * a conversation is already warm. One grouped query rather than a query per
+ * conversation: the caller is deciding about the whole sidebar, and asking
+ * forty times to skip thirty-eight of them is the cost the decision exists to
+ * avoid.
+ */
+export async function sealedNewestByPeer(): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  if (!native()) {
+    for (const entry of sealedStore()?.values() ?? []) {
+      const held = out.get(entry.peer_id);
+      if (!held || entry.created_at > held) out.set(entry.peer_id, entry.created_at);
+    }
+    return out;
+  }
+  const res = await db?.query(
+    'SELECT peer_id, MAX(created_at) AS newest FROM messages_sealed GROUP BY peer_id'
+  );
+  for (const row of (res?.values as { peer_id: string; newest: string }[]) ?? []) {
+    if (row.peer_id && row.newest) out.set(row.peer_id, row.newest);
+  }
+  return out;
+}
+
+/** Drop one row: a delete, or a message whose expiry has passed. */
+export async function forgetSealedRow(id: string): Promise<void> {
+  if (!native()) {
+    sealedStore()?.delete(id);
+    return;
+  }
+  await db?.run('DELETE FROM messages_sealed WHERE id = ?', [id]);
+}
+
+// ---- The conversation list --------------------------------------------------
+
+/**
+ * Remember the sidebar exactly as `conversation_list()` answered it.
+ *
+ * The list is one RPC, and until it lands there is nothing on screen — no
+ * names, no ordering, not even the self-chat the RPC always returns. On a slow
+ * link that is a blank app for as long as the round trip takes, and with no
+ * link at all it is a blank app until there is one, over a mirror that already
+ * holds the conversations.
+ *
+ * `position` is stored because the ordering is the server's answer, not
+ * something this device can recompute: `sortConversations` needs the pinned
+ * flags and timestamps the row carries, and a cache that came back in
+ * insertion order would repaint the list in a different order than the one
+ * that replaces it a second later.
+ */
+export async function putConversationList(rows: readonly ConversationSummary[]): Promise<void> {
+  if (!native()) {
+    const store = listStore();
+    if (!store) return;
+    store.clear();
+    for (const row of rows) store.set(row.peer_id, row);
+    return;
+  }
+  // Replaced wholesale: a conversation removed on another device must not
+  // survive here as a row nothing will ever overwrite.
+  await db?.execute('DELETE FROM conversation_cache');
+  for (const [index, row] of rows.entries()) {
+    await db?.run('INSERT INTO conversation_cache (peer_id, position, row) VALUES (?, ?, ?)', [
+      row.peer_id,
+      index,
+      JSON.stringify(row),
+    ]);
+  }
+}
+
+/** The sidebar as this device last saw it, in the order it was last shown. */
+export async function cachedConversationList(): Promise<ConversationSummary[]> {
+  if (!native()) return [...(listStore()?.values() ?? [])];
+  const res = await db?.query('SELECT row FROM conversation_cache ORDER BY position ASC');
+  const rows = (res?.values as { row: string }[]) ?? [];
+  const out: ConversationSummary[] = [];
+  for (const r of rows) {
+    try {
+      const parsed = JSON.parse(r.row) as ConversationSummary;
+      if (parsed && typeof parsed.peer_id === 'string') out.push(parsed);
+    } catch {
+      // Same reasoning as the sealed page: an unreadable row is skipped, and
+      // the RPC behind it repaints the list a moment later.
+    }
+  }
+  return out;
+}
+
 /** The contact as this device last recorded it, or null if never seen. */
 export async function cachedContact(peerId: string): Promise<CachedContact | null> {
   if (!native()) return contactStore()?.get(peerId) ?? null;
@@ -420,9 +651,14 @@ export async function clearConversation(peerId: string): Promise<void> {
     const store = memoryStore();
     if (!store) return;
     for (const [id, row] of store) if (row.peer_id === peerId) store.delete(id);
+    const sealed = sealedStore();
+    if (sealed) for (const [id, e] of sealed) if (e.peer_id === peerId) sealed.delete(id);
+    listStore()?.delete(peerId);
     return;
   }
   await db?.run('DELETE FROM messages_cache WHERE peer_id = ?', [peerId]);
+  await db?.run('DELETE FROM messages_sealed WHERE peer_id = ?', [peerId]);
+  await db?.run('DELETE FROM conversation_cache WHERE peer_id = ?', [peerId]);
 }
 
 /** Every pinned message id. The prune pass needs the whole set, and there are
@@ -500,9 +736,16 @@ export async function removePin(messageId: string): Promise<void> {
 export async function clearCachedMessages(): Promise<void> {
   if (!native()) {
     memoryStore()?.clear();
+    sealedStore()?.clear();
     return;
   }
   await db?.execute('DELETE FROM messages_cache');
+  // The sealed page goes with it. It is the same messages in their unopened
+  // form, and a "clear the offline copy" that left the thread painting from
+  // disk would be the button not doing what it says. The conversation list
+  // stays: it is names and timestamps, not bodies, and losing it would empty
+  // the sidebar of somebody who only asked to free space.
+  await db?.execute('DELETE FROM messages_sealed');
 }
 
 /** Empties the open account's stores. Signing out must not take the other
@@ -514,12 +757,16 @@ export async function clearLocalDb(): Promise<void> {
     contactStore()?.clear();
     pinStore()?.clear();
     flagStore()?.clear();
+    sealedStore()?.clear();
+    listStore()?.clear();
     return;
   }
   await db?.execute('DELETE FROM messages_cache');
   await db?.execute('DELETE FROM contacts');
   await db?.execute('DELETE FROM pins');
   await db?.execute('DELETE FROM chat_flags');
+  await db?.execute('DELETE FROM messages_sealed');
+  await db?.execute('DELETE FROM conversation_cache');
 }
 
 /**
@@ -567,6 +814,8 @@ export async function purgeExpired(nowMs: number): Promise<string[]> {
         removed.push(id);
       }
     }
+    const sealed = sealedStore();
+    if (sealed) for (const [id, e] of sealed) if (hasExpired(e.expires_at, nowMs)) sealed.delete(id);
     return removed;
   }
 
@@ -576,6 +825,13 @@ export async function purgeExpired(nowMs: number): Promise<string[]> {
     [at]
   );
   const ids = (found?.values ?? []).map((row) => (row as { id: string }).id);
+  // The sealed page is swept whether or not the mirror had anything to remove:
+  // a row can reach this store and expire before it was ever opened, and a
+  // disappearing message the thread paints from disk after the server deleted
+  // it is the one failure this sweep exists to prevent.
+  await db?.run('DELETE FROM messages_sealed WHERE expires_at IS NOT NULL AND expires_at <= ?', [
+    at,
+  ]);
   if (ids.length === 0) return [];
   await db?.run('DELETE FROM messages_cache WHERE expires_at IS NOT NULL AND expires_at <= ?', [
     at,

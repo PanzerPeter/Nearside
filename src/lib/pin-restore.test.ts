@@ -12,6 +12,7 @@ function message(over: Partial<Message> = {}): Message {
     text: null,
     media_path: null,
     media_type: null,
+    media_thumb_path: null,
     media_key_ciphertext: null,
     media_key_nonce: null,
     media_duration_ms: null,

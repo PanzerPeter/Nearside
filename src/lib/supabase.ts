@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { retryDelayMs, withReadSlot, worthAttempting } from './net-queue';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -57,32 +58,49 @@ const resilientFetch: typeof fetch = async (input, init) => {
   // anyway. The timeout is sized for a query, and the bucket takes files up to
   // 50 MB: a download that is merely slow would be aborted at 25 seconds and
   // then started again from zero, twice, spending three times the bytes to
-  // fail. The same reasoning the upload path is exempted for.
+  // fail. The same reasoning the upload path is exempted for — and the same
+  // reasoning keeps it out of the concurrency queue below, where one video
+  // would hold a slot for a minute with every query in the app behind it.
   if (isStorageObject(input)) return fetch(input, init);
 
   const external = init?.signal ?? undefined;
   let lastError: unknown;
 
-  for (let attempt = 0; attempt <= READ_RETRIES; attempt++) {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), READ_TIMEOUT_MS);
-    const forward = () => controller.abort();
-    external?.addEventListener('abort', forward);
-    try {
-      return await fetch(input, { ...init, signal: controller.signal });
-    } catch (error) {
-      lastError = error;
-      // A caller-initiated abort is a decision, not a failure to paper over.
-      if (external?.aborted) throw error;
-      if (attempt === READ_RETRIES) throw error;
-      await sleep(300 * 2 ** attempt);
-    } finally {
-      clearTimeout(timer);
-      external?.removeEventListener('abort', forward);
+  // Queued rather than issued immediately. Every subscriber in the app refetches
+  // on the wake generation at once, and on a weak link they compete, all crawl,
+  // and hit the timeout together — see `lib/net-queue.ts`.
+  return withReadSlot(async () => {
+    for (let attempt = 0; attempt <= READ_RETRIES; attempt++) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), READ_TIMEOUT_MS);
+      const forward = () => controller.abort();
+      external?.addEventListener('abort', forward);
+      try {
+        return await fetch(input, { ...init, signal: controller.signal });
+      } catch (error) {
+        lastError = error;
+        // A caller-initiated abort is a decision, not a failure to paper over.
+        if (external?.aborted) throw error;
+        if (attempt === READ_RETRIES) throw error;
+        // A device with no network fails in microseconds and spends an attempt
+        // doing it. Three of those inside a second is the whole budget gone
+        // before the phone is out of the tunnel; the wake generation, the poll
+        // and the outbox's `online` listener are what try again when there is
+        // something to try against.
+        // `typeof` rather than an optional chain: an undeclared `navigator`
+        // throws a ReferenceError on access, which would turn a retry decision
+        // into a crash on any platform that has no such global.
+        const online = typeof navigator === 'undefined' ? undefined : navigator.onLine;
+        if (!worthAttempting(online)) throw error;
+        await sleep(retryDelayMs(attempt, Math.random()));
+      } finally {
+        clearTimeout(timer);
+        external?.removeEventListener('abort', forward);
+      }
     }
-  }
 
-  throw lastError;
+    throw lastError;
+  });
 };
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {

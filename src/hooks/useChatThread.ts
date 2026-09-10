@@ -31,7 +31,7 @@ import {
   saveConversationTimer,
   type ConversationTimer,
 } from '../lib/disappearing';
-import { purgeExpired } from '../lib/localdb';
+import { cachedSealedRows, purgeExpired, putSealedRows } from '../lib/localdb';
 import { unpinMedia } from '../lib/pins';
 
 /** Bounds how many pages a search jump will fetch looking for an old message,
@@ -299,8 +299,40 @@ export function useChatThread({
     setMessages((prev) => mergeMessages(prev, [row]));
   }
 
+  /**
+   * Paint whatever this device already holds for the conversation.
+   *
+   * Awaited before the fetch rather than raced with it. A SQLite read of sixty
+   * rows lands in a millisecond or two, and letting the two paints race meant
+   * the cached copy could land *after* the server's and merge a stale row back
+   * over an edit. Ordering them costs nothing and removes the whole class.
+   *
+   * `hasMore` is not set here: whether there is history behind this page is the
+   * server's answer, and claiming it from a cache that is capped at two pages
+   * would offer a "load older" that the network has to be there to satisfy.
+   */
+  async function paintCached(forFriend: string) {
+    try {
+      const cached = await cachedSealedRows(forFriend);
+      if (cached.length === 0 || loadedFor.current !== forFriend) return;
+      const rows = await open(cached as Message[]);
+      markSeen(rows.map((m) => m.id));
+      setMessages((prev) => mergeMessages(prev, rows));
+    } catch {
+      // The disk copy is an optimisation, never a requirement. A store that
+      // cannot be read leaves the conversation exactly as it was before there
+      // was one: waiting on the network.
+    }
+  }
+
   async function loadLatest() {
     const forFriend = peerId;
+
+    // Opening a chat used to show nothing at all until a round trip came back
+    // — a spinner on a slow link, and an empty thread with no link, over
+    // messages this device had already decrypted once.
+    await paintCached(forFriend);
+
     const data = await fetchLatestPage(me, forFriend);
 
     if (loadedFor.current !== forFriend) return;
@@ -310,6 +342,9 @@ export function useChatThread({
     markSeen(rows.map((m) => m.id));
     setMessages((prev) => mergeMessages(prev, rows));
     setHasMore(data.length === PAGE_SIZE);
+    // Sealed, not opened: what goes to disk is what the server sent. See
+    // `lib/sealed-row.ts` for why the opened row must not.
+    void putSealedRows(forFriend, data);
 
     // Messages that arrived while the app was closed count as delivered on
     // this fetch, not only over the live INSERT path. `data` is newest-first.
@@ -342,6 +377,11 @@ export function useChatThread({
 
     setMessages((prev) => mergeMessages(prev, relevant));
     outbox.dropPending(...retired);
+    // Everything that reaches the thread live goes to disk too — an arrival, an
+    // edit, a soft delete. Without this the cached page would be whatever the
+    // conversation looked like when it was last opened, and a chat left open
+    // all evening would paint yesterday on the next cold start.
+    void putSealedRows(peerId, relevant);
 
     // In the self-chat every row is your own: no delivery to acknowledge, and
     // no arrival you did not just cause.

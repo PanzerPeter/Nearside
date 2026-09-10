@@ -525,6 +525,14 @@ CREATE TABLE IF NOT EXISTS public.messages (
   media_duration_ms    integer,
   media_key_ciphertext text,
   media_key_nonce      text,
+
+  -- A small sealed copy of the attachment — the same picture at a 360px long
+  -- edge, or one frame of the video — under the SAME per-file key as the
+  -- object above. It is what the bubble in the thread draws, so scrolling a
+  -- conversation of photographs stops costing the full-size ones. Null on
+  -- every row written before 0044, and null still means "draw the full
+  -- object"; there is nothing to backfill.
+  media_thumb_path     text,
   forwarded            boolean NOT NULL DEFAULT false,
   -- This row is a sealed exchange's question (section 5c). Immutable in both
   -- directions: a row flipped into a prompt after the fact, or out of one,
@@ -553,6 +561,13 @@ CREATE TABLE IF NOT EXISTS public.messages (
   CONSTRAINT sealed_pair    CHECK ((ciphertext IS NULL) = (nonce IS NULL)),
   CONSTRAINT media_pair     CHECK ((media_path IS NULL) = (media_type IS NULL)),
   CONSTRAINT media_key_pair CHECK ((media_key_ciphertext IS NULL) = (media_key_nonce IS NULL)),
+
+  -- A thumbnail of nothing is a dangling object: the bucket would hold bytes
+  -- no attachment points at, and the trim that collects them walks media_path.
+  CONSTRAINT media_thumb_needs_media
+    CHECK (media_thumb_path IS NULL OR media_path IS NOT NULL),
+  CONSTRAINT media_thumb_path_length
+    CHECK (media_thumb_path IS NULL OR char_length(media_thumb_path) BETWEEN 1 AND 512),
 
   -- Only a voice note carries a duration, and only one inside the recording
   -- cap. Bound matches MAX_VOICE_MS in src/lib/audio.ts: the client refuses to
@@ -715,14 +730,17 @@ BEGIN
     IF NEW.deleted_at IS NULL THEN
       RAISE EXCEPTION 'a deleted message cannot be restored';
     END IF;
-    IF NEW.ciphertext IS NOT NULL OR NEW.media_path IS NOT NULL THEN
+    IF NEW.ciphertext IS NOT NULL
+       OR NEW.media_path IS NOT NULL
+       OR NEW.media_thumb_path IS NOT NULL THEN
       RAISE EXCEPTION 'a deleted message cannot be given a new body';
     END IF;
   END IF;
 
   IF NEW.deleted_at IS NULL
      AND (NEW.ciphertext IS DISTINCT FROM OLD.ciphertext
-          OR NEW.media_path IS DISTINCT FROM OLD.media_path) THEN
+          OR NEW.media_path IS DISTINCT FROM OLD.media_path
+          OR NEW.media_thumb_path IS DISTINCT FROM OLD.media_thumb_path) THEN
     NEW.edited_at := now();
   END IF;
 
@@ -1487,6 +1505,11 @@ CREATE TABLE IF NOT EXISTS public.room_messages (
   media_key_ciphertext text,
   media_key_nonce      text,
 
+  -- The small sealed copy the bubble draws; see `messages.media_thumb_path`.
+  -- It is inside the signature (version 3) because a media column outside it
+  -- is one the server can repoint on somebody else's message.
+  media_thumb_path     text,
+
   reply_to_id uuid REFERENCES public.room_messages(id) ON DELETE SET NULL,
   edited_at   timestamptz,
   deleted_at  timestamptz,
@@ -1524,6 +1547,10 @@ CREATE TABLE IF NOT EXISTS public.room_messages (
 
   CONSTRAINT room_messages_sealed_pair    CHECK ((ciphertext IS NULL) = (nonce IS NULL)),
   CONSTRAINT room_messages_media_pair     CHECK ((media_path IS NULL) = (media_type IS NULL)),
+  CONSTRAINT room_messages_media_thumb_needs_media
+    CHECK (media_thumb_path IS NULL OR media_path IS NOT NULL),
+  CONSTRAINT room_messages_media_thumb_path_length
+    CHECK (media_thumb_path IS NULL OR char_length(media_thumb_path) BETWEEN 1 AND 512),
   CONSTRAINT room_messages_media_key_pair
     CHECK ((media_key_ciphertext IS NULL) = (media_key_nonce IS NULL)),
 

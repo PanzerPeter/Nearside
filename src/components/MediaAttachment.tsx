@@ -11,6 +11,11 @@ interface MediaAttachmentProps {
    *  fall back to the pinned copy. */
   messageId: string;
   path: string;
+  /** The small sealed copy, when the sender's build made one. This is what the
+   *  bubble draws; `path` is reserved for the viewer. Null on every message
+   *  sent before 0044, on animations and on stickers, and null simply means the
+   *  bubble draws the full object as it always did. */
+  thumbPath?: string | null;
   /** The opened file key, from `openRows`. Without it the object is opaque. */
   mediaKey?: Uint8Array | null;
   /** Voice notes are not routed here — see `VoiceNote`. */
@@ -42,6 +47,7 @@ interface MediaAttachmentProps {
 export function MediaAttachment({
   messageId,
   path,
+  thumbPath,
   type,
   mediaKey,
   caption,
@@ -49,11 +55,15 @@ export function MediaAttachment({
   fill,
 }: MediaAttachmentProps) {
   const t = useT();
+  // The thumbnail when there is one, the full object when there is not. A
+  // pinned copy is exempt: `restored` means the server object is gone and the
+  // kept bytes are the only source, and this device pinned the full file.
+  const drawPath = !restored && thumbPath ? thumbPath : path;
   // Deferred: the placeholder below reserves the slot at the right size, so
   // nothing jumps when the picture lands, and a page of thirty messages stops
   // downloading the twenty-five attachments that are nowhere near the screen.
   const { url, failure, reload, probeRef } = useSignedMediaUrl(
-    path,
+    drawPath,
     mediaKey,
     type,
     messageId,
@@ -176,12 +186,13 @@ export function MediaAttachment({
       </button>
 
       {viewing && (
-        <MediaLightbox
+        <FullSizeViewer
           messageId={messageId}
-          url={url}
           path={path}
+          mediaKey={mediaKey}
           type={type}
           caption={caption}
+          restored={restored}
           // What the thumbnail already learned, so the viewer does not mount a
           // player that would start the soundtrack before finding out for
           // itself.
@@ -190,5 +201,79 @@ export function MediaAttachment({
         />
       )}
     </>
+  );
+}
+
+/**
+ * Fetches the full-size object and hands it to the viewer.
+ *
+ * A separate component because it is a separate download, and it must not
+ * start until somebody taps. The bubble above may be drawing a thumbnail — a
+ * thirtieth of the pixels — and the whole point of that is that the file it
+ * stands in for was never fetched. A hook here, mounted only while the viewer
+ * is open, is what keeps "spend the bytes" tied to "asked to see it".
+ *
+ * When there is no thumbnail this costs nothing: the bubble already downloaded
+ * and decrypted the same path, and `lib/media-cache.ts` hands back the blob it
+ * is holding rather than signing a second URL for it.
+ */
+function FullSizeViewer({
+  messageId,
+  path,
+  mediaKey,
+  type,
+  caption,
+  restored,
+  noPicture,
+  onClose,
+}: {
+  messageId: string;
+  path: string;
+  mediaKey?: Uint8Array | null;
+  type: VisualMediaType;
+  caption?: string | null;
+  restored?: boolean;
+  noPicture: boolean;
+  onClose: () => void;
+}) {
+  const t = useT();
+  // Not deferred: it is on screen by definition — the viewer only mounts
+  // because somebody opened it.
+  const { url, failure } = useSignedMediaUrl(path, mediaKey, type, messageId, false, restored);
+
+  if (failure) {
+    return (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center gap-2 bg-black/90 p-6 text-center text-body text-white/80"
+        onClick={onClose}
+      >
+        <ImageOff className="h-5 w-5 shrink-0" />
+        {mediaFailureNotice(failure, type)}
+      </div>
+    );
+  }
+
+  if (!url) {
+    return (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/90"
+        onClick={onClose}
+        aria-label={t('common.loading')}
+      >
+        <span className="loading loading-spinner text-white" />
+      </div>
+    );
+  }
+
+  return (
+    <MediaLightbox
+      messageId={messageId}
+      url={url}
+      path={path}
+      type={type}
+      caption={caption}
+      noPicture={noPicture}
+      onClose={onClose}
+    />
   );
 }

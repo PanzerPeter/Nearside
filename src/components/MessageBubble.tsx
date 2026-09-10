@@ -321,6 +321,7 @@ export function MessageBubble({
                 <MediaAttachment
                   messageId={msg.id}
                   path={msg.media_path}
+                  thumbPath={msg.media_thumb_path}
                   type={msg.media_type}
                   mediaKey={msg.media_key}
                   caption={msg.text}
@@ -539,6 +540,7 @@ export function MessageBubble({
                       <MediaAttachment
                         messageId={msg.id}
                         path={msg.media_path}
+                        thumbPath={msg.media_thumb_path}
                         type={msg.media_type}
                         mediaKey={msg.media_key}
                         // Recorded with a pin, so the words under a picture

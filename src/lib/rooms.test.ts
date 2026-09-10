@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import sodium from 'libsodium-wrappers';
 import { generateMnemonic, seedFromMnemonic } from './crypto/mnemonic';
 import { identityFromSeed, toBase64, type Identity } from './crypto/keys';
-import { signBytes, signedPayload } from './crypto/seal';
+import { signBytes, signedPayload, signedPayloadV2 } from './crypto/seal';
 import {
   ROOM_COLOURS,
   openRoomFileKey,
@@ -39,6 +39,40 @@ async function aRow(
     sender_id: senderId,
     created_at: '2026-08-07T00:00:00.000Z',
     ...sealed,
+  };
+}
+
+/** A row as it was written between 0036 and 0044: signed over the v2 payload,
+ *  which had no thumbnail column in it. */
+async function aV2Row(
+  roomKey: Uint8Array,
+  sender: Identity,
+  senderId: string,
+  text: string
+): Promise<RoomMessage> {
+  await sodium.ready;
+  const nonce = sodium.randombytes_buf(sodium.crypto_secretbox_NONCEBYTES);
+  const row = {
+    ciphertext: sodium.to_base64(
+      sodium.crypto_secretbox_easy(sodium.from_string(text), nonce, roomKey),
+      sodium.base64_variants.ORIGINAL
+    ),
+    nonce: sodium.to_base64(nonce, sodium.base64_variants.ORIGINAL),
+    media_path: null,
+    media_type: null,
+    media_duration_ms: null,
+    media_key_ciphertext: null,
+    media_key_nonce: null,
+    reply_to_id: null,
+  };
+  return {
+    id: 'm2',
+    room_id: 'r1',
+    sender_id: senderId,
+    created_at: '2026-08-07T00:00:00.000Z',
+    ...row,
+    signature: await signBytes(sender.signPrivate, signedPayloadV2(row)),
+    sig_v: 2,
   };
 }
 
@@ -265,11 +299,59 @@ describe('room signature v2', () => {
 
   // A per-row choice of payload version is a downgrade an attacker gets to
   // make: strip the media columns, claim v1, and the old payload still checks.
-  it('always writes sig_v 2 on send, text-only included', async () => {
+  it('always writes the current sig_v on send, text-only included', async () => {
     const roomKey = await aRoomKey();
     const alice = await anIdentity();
-    expect((await sealRoomMessage(roomKey, alice, 'plain')).sig_v).toBe(2);
-    expect((await sealRoomMessage(roomKey, alice, null, { media })).sig_v).toBe(2);
+    expect((await sealRoomMessage(roomKey, alice, 'plain')).sig_v).toBe(3);
+    expect((await sealRoomMessage(roomKey, alice, null, { media })).sig_v).toBe(3);
+  });
+
+  // The thumbnail is the picture a reader actually looks at, so it is the one
+  // a repointed column would substitute most effectively. v3 exists for this.
+  it('covers the thumbnail, so the picture in the bubble cannot be swapped', async () => {
+    const roomKey = await aRoomKey();
+    const alice = await anIdentity();
+    const signing = new Map([['alice', await toBase64(alice.signPublic)]]);
+    const row = await aRow(roomKey, alice, 'alice', 'here', {
+      media: { ...media, thumbPath: 'r1/a1-thumb.bin' },
+    });
+
+    const [opened] = await openRoomRows(
+      [{ ...row, media_thumb_path: 'r1/somebody-elses-thumb.bin' }],
+      roomKey,
+      signing
+    );
+    expect(opened.sender).toBe('unverified');
+    expect(opened.text).toBeNull();
+  });
+
+  // Rooms that were live before 0044 keep working, and their signatures keep
+  // meaning what they meant: v3 appends rather than reorders.
+  it('still verifies a v2 row under the v2 payload', async () => {
+    const roomKey = await aRoomKey();
+    const alice = await anIdentity();
+    const v2 = await aV2Row(roomKey, alice, 'alice', 'sent last week');
+
+    const [opened] = await openRoomRows(
+      [v2],
+      roomKey,
+      new Map([['alice', await toBase64(alice.signPublic)]])
+    );
+    expect(opened.text).toBe('sent last week');
+    expect(opened.sender).toBe('verified');
+  });
+
+  it('refuses a v3 row that was signed as v2', async () => {
+    const roomKey = await aRoomKey();
+    const alice = await anIdentity();
+    const v2 = await aV2Row(roomKey, alice, 'alice', 'sent last week');
+
+    const [opened] = await openRoomRows(
+      [{ ...v2, sig_v: 3 }],
+      roomKey,
+      new Map([['alice', await toBase64(alice.signPublic)]])
+    );
+    expect(opened.sender).toBe('unverified');
   });
 
   it('refuses a v2 row that was signed as v1', async () => {

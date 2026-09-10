@@ -53,3 +53,4 @@
 0041_sealed_nicknames.sql
 0042_token_hygiene.sql
 0043_table_columns.sql
+0044_media_thumbnails.sql

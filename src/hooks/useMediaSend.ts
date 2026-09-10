@@ -25,12 +25,18 @@ import { stageFiles, type StagedMedia } from '../lib/staging';
 import { sealBody, sealMediaKey, type BodyColumns } from '../lib/sealed-body';
 import { describeMediaError } from '../lib/media-errors';
 import { t } from '../lib/i18n';
-import { sealFile } from '../lib/media-crypto';
+import { sealFile, sealFileWith } from '../lib/media-crypto';
 import { peerPublicKey } from '../lib/peer-keys';
 import { fileExtension, MEDIA_SCAN_LIMIT, selectStaleMedia, type MediaRow } from '../lib/media';
 import { forgetMedia } from '../lib/media-cache';
 import { pinnedIds } from '../lib/pins';
 import { CHAT_IMAGE_MAX_EDGE, compressImageResult } from '../lib/compress';
+import {
+  imageThumbnail,
+  shouldMakeThumbnail,
+  videoPoster,
+  worthUploading,
+} from '../lib/thumbnail';
 import { notifyReceiver, notifyRoom } from '../lib/push';
 import { roomMediaPath, sealRoomFileKey, sendRoomMessage } from '../lib/rooms';
 import { stickerFile, type Sticker } from '../lib/stickers';
@@ -341,6 +347,33 @@ export function useMediaSend({
     const filename = `${crypto.randomUUID()}.${fileExtension(body)}`;
 
     /**
+     * The small copy the conversation will actually draw, sealed under the same
+     * key as the object it belongs to — see `lib/thumbnail.ts`.
+     *
+     * Every step of this is allowed to come back empty, and the send carries on
+     * without one: the column stays null, and null is what every row written
+     * before 0044 says. A preview is not worth failing a message over, and the
+     * fallback it lands on is the behaviour this whole feature replaced.
+     */
+    let sealedThumb: Blob | null = null;
+    if (shouldMakeThumbnail(kind, bytes.byteLength, false)) {
+      try {
+        const raw = kind === 'video' ? await videoPoster(body) : await imageThumbnail(body, bytes);
+        // Checked against the *compressed* source, which is what the reader
+        // would otherwise have downloaded.
+        if (raw && worthUploading(bytes.byteLength, raw.size)) {
+          sealedThumb = await sealFileWith(new Uint8Array(await raw.arrayBuffer()), fileKey);
+        }
+      } catch {
+        // A codec this device does not have, a canvas that would not draw, a
+        // video that never seeks. All of them mean "no preview", never "no
+        // message".
+        sealedThumb = null;
+      }
+    }
+    const thumbFilename = sealedThumb ? `${crypto.randomUUID()}.webp` : null;
+
+    /**
      * Everything the row needs, sealed while nothing has been uploaded yet.
      *
      * A union rather than a bag of nullable fields, for the reason `MediaTarget`
@@ -349,8 +382,22 @@ export function useMediaSend({
      * be wrong.
      */
     type Prepared =
-      | { kind: 'peer'; peerId: string; path: string; body: BodyColumns | NoBody; key: KeyColumns }
-      | { kind: 'room'; roomId: string; roomKey: Uint8Array; path: string; key: SealedFileKey };
+      | {
+          kind: 'peer';
+          peerId: string;
+          path: string;
+          thumbPath: string | null;
+          body: BodyColumns | NoBody;
+          key: KeyColumns;
+        }
+      | {
+          kind: 'room';
+          roomId: string;
+          roomKey: Uint8Array;
+          path: string;
+          thumbPath: string | null;
+          key: SealedFileKey;
+        };
 
     let prepared: Prepared;
     try {
@@ -360,6 +407,9 @@ export function useMediaSend({
           kind: 'peer',
           peerId: peer.peerId,
           path,
+          // The same folder as the attachment, so one policy covers both and a
+          // conversation's objects stay together for the trim to walk.
+          thumbPath: thumbFilename ? mediaPath(me, peer.peerId, thumbFilename) : null,
           // A caption is body text like any other and is sealed like any other.
           body: caption
             ? await sealBody(identity, peerKey, me, peer.peerId, caption)
@@ -375,6 +425,7 @@ export function useMediaSend({
           roomId: room.roomId,
           roomKey,
           path: roomMediaPath(room.roomId, filename),
+          thumbPath: thumbFilename ? roomMediaPath(room.roomId, thumbFilename) : null,
           // `sendRoomMessage` seals the caption itself, under the room key.
           key: await sealRoomFileKey(roomKey, fileKey),
         };
@@ -390,10 +441,27 @@ export function useMediaSend({
 
     if (uploadError) return fail(describeMediaError(uploadError), uploadError);
 
-    /** Undo the upload when the row it belongs to never landed. Without it the
-     *  bucket keeps bytes no row points at, and nothing ever collects them. */
+    // The preview goes up second, and its failure is survivable in a way the
+    // attachment's is not: a thumbnail that did not upload leaves a message
+    // whose bubble draws the full object, which is the pre-0044 behaviour and
+    // is correct. Failing the whole send over it would trade the message for
+    // the optimisation.
+    let thumbPath: string | null = null;
+    if (sealedThumb && prepared.thumbPath) {
+      const { error: thumbError } = await supabase.storage
+        .from('chat-media')
+        .upload(prepared.thumbPath, sealedThumb, { contentType: sealedThumb.type });
+      if (thumbError) console.error('thumbnail upload failed', thumbError);
+      else thumbPath = prepared.thumbPath;
+    }
+
+    /** Undo the uploads when the row they belong to never landed. Without it
+     *  the bucket keeps bytes no row points at, and nothing ever collects them.
+     *  Both objects, because by here there may be two. */
     const abandonUpload = async () => {
-      await supabase.storage.from('chat-media').remove([path]);
+      await supabase.storage
+        .from('chat-media')
+        .remove(thumbPath ? [path, thumbPath] : [path]);
     };
 
     if (prepared.kind === 'room') {
@@ -413,6 +481,7 @@ export function useMediaSend({
               type: kind,
               durationMs: kind === 'audio' ? durationMs : null,
               key: prepared.key,
+              thumbPath,
             },
             replyToId,
           }
@@ -437,6 +506,7 @@ export function useMediaSend({
           ...prepared.key,
           media_path: path,
           media_type: kind,
+          media_thumb_path: thumbPath,
           media_duration_ms: kind === 'audio' ? durationMs : null,
           reply_to_id: replyToId,
         })
@@ -515,7 +585,7 @@ export function useMediaSend({
     const peerId = target.peerId;
     const { data } = await supabase
       .from('messages')
-      .select('id, media_path, user_id, media_type')
+      .select('id, media_path, media_thumb_path, user_id, media_type')
       .or(conversationFilter(me, peerId))
       .not('media_path', 'is', null)
       .is('deleted_at', null)
@@ -591,6 +661,7 @@ export function useMediaSend({
         .update({
           media_path: null,
           media_type: null,
+          media_thumb_path: null,
           media_duration_ms: null,
           // The file is gone, so the key that opened it describes nothing.
           media_key_ciphertext: null,
@@ -602,9 +673,11 @@ export function useMediaSend({
       else for (const id of ids) relabelled.add(id);
     }
 
+    // Both objects per row. A thumbnail whose attachment was collected is
+    // bytes in the bucket that nothing points at and nothing will ever collect.
     const paths = myStale
       .filter((row) => relabelled.has(row.id))
-      .map((row) => row.media_path)
+      .flatMap((row) => [row.media_path, row.media_thumb_path])
       .filter((path): path is string => !!path);
     if (!paths.length) return;
 

@@ -690,6 +690,7 @@ function RoomBubble({
                   <MediaAttachment
                     messageId={m.id}
                     path={m.media_path}
+                    thumbPath={m.media_thumb_path}
                     type={m.media_type === 'video' ? 'video' : 'image'}
                     mediaKey={m.mediaKey}
                     // Recorded with a pin, so the words under the picture are

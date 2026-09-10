@@ -46,6 +46,11 @@ export interface Message {
   decrypt_failed?: boolean;
   media_path: string | null;
   media_type: MediaType | null;
+  /** A small sealed copy of the attachment, under the SAME per-file key, which
+   *  is what the bubble in the thread draws. Null on rows written before 0044,
+   *  on animations, on stickers and on voice notes — and null means "draw the
+   *  full object", the behaviour this replaced. */
+  media_thumb_path: string | null;
   /** The attachment's own key, sealed to whoever can read this message. Both
    *  null for a text-only row. */
   media_key_ciphertext: string | null;

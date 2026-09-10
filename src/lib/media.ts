@@ -227,6 +227,10 @@ export interface MediaRow {
   user_id: string;
   media_path: string | null;
   media_type: MediaType | null;
+  /** The small copy beside it, when the sender's build made one. Carried so
+   *  the trim collects both objects — a thumbnail left behind is bytes in the
+   *  bucket that nothing will ever point at again. */
+  media_thumb_path?: string | null;
 }
 
 /**

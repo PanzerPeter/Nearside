@@ -70,7 +70,11 @@ export function forwardPayload(
   msg: Pick<Message, 'text' | 'media_type' | 'media_duration_ms'>,
   me: string,
   targetId: string,
-  mediaPath: string | null
+  mediaPath: string | null,
+  /** The copied thumbnail, or null. Its own argument rather than something
+   *  read off `msg`, for the same reason `mediaPath` is: what goes on the row
+   *  is the destination path this forward created, never the source's. */
+  thumbPath: string | null = null
 ) {
   return {
     user_id: me,
@@ -78,6 +82,9 @@ export function forwardPayload(
     text: msg.text || null,
     media_path: mediaPath,
     media_type: mediaPath ? msg.media_type : null,
+    // Never without the attachment it previews: the 0044 CHECK refuses that
+    // row, and a thumbnail alone is a picture with nothing behind the tap.
+    media_thumb_path: mediaPath ? thumbPath : null,
     // Only meaningful alongside a voice note; a forward that lost its media
     // must not keep a length describing a file it no longer carries.
     media_duration_ms: mediaPath && msg.media_type === 'audio' ? msg.media_duration_ms : null,
@@ -159,6 +166,7 @@ export async function forwardMessage(
   if (msg.media_path && !msg.media_key) return { ok: false, reason: 'media-missing' };
 
   let copiedPath: string | null = null;
+  let copiedThumbPath: string | null = null;
   if (msg.media_path) {
     const destination = forwardMediaPath(me, targetId, msg.media_path);
     const { error: copyError } = await supabase.storage
@@ -170,6 +178,18 @@ export async function forwardMessage(
     // policy for a bucket they demonstrably participate in.
     if (copyError) return { ok: false, reason: 'media-missing' };
     copiedPath = destination;
+
+    // The preview is copied too, and its failure is survivable: a forward that
+    // arrives without one draws the full object, which is what every message
+    // sent before 0044 does. Losing the message over a missing preview would
+    // not be.
+    if (msg.media_thumb_path) {
+      const thumbDestination = forwardMediaPath(me, targetId, msg.media_thumb_path);
+      const { error: thumbError } = await supabase.storage
+        .from('chat-media')
+        .copy(msg.media_thumb_path, thumbDestination);
+      if (!thumbError) copiedThumbPath = thumbDestination;
+    }
   }
 
   // Sealing is layered over the pure payload, because a message forwarded into
@@ -177,7 +197,7 @@ export async function forwardMessage(
   // destructured out rather than spread: it is the one payload field with no
   // column behind it, and reaching `.insert()` it would fail today and put a
   // plaintext body back on the server if it ever stopped failing.
-  const { text, ...columns } = forwardPayload(msg, me, targetId, copiedPath);
+  const { text, ...columns } = forwardPayload(msg, me, targetId, copiedPath, copiedThumbPath);
   const targetKey = await peerPublicKey(targetId);
   const body = text
     ? await sealBody(identity, targetKey, me, targetId, text)
@@ -199,7 +219,8 @@ export async function forwardMessage(
     .single();
 
   if (error || !data) {
-    if (copiedPath) await supabase.storage.from('chat-media').remove([copiedPath]);
+    const orphans = [copiedPath, copiedThumbPath].filter((p): p is string => !!p);
+    if (orphans.length) await supabase.storage.from('chat-media').remove(orphans);
     return { ok: false, reason: classifyForwardError(error) };
   }
 

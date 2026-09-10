@@ -25,6 +25,7 @@ function message(overrides: Partial<Message> = {}): Message {
     nonce: null,
     media_path: null,
     media_type: null,
+    media_thumb_path: null,
     media_key_ciphertext: null,
     media_key_nonce: null,
     media_duration_ms: null,
@@ -99,6 +100,38 @@ describe('forwardPayload', () => {
     const row = forwardPayload(original, ME, BOB, 'c_d/new.jpg');
     expect(row.media_path).toBe('c_d/new.jpg');
     expect(row.media_type).toBe('image');
+  });
+
+  it('points at the copied thumbnail, not the original', () => {
+    const original = message({
+      media_path: 'a_b/old.jpg',
+      media_type: 'image',
+      media_thumb_path: 'a_b/old-thumb.webp',
+    });
+    const row = forwardPayload(original, ME, BOB, 'c_d/new.jpg', 'c_d/new-thumb.webp');
+    expect(row.media_thumb_path).toBe('c_d/new-thumb.webp');
+  });
+
+  it('forwards without a thumbnail when the preview could not be copied', () => {
+    const original = message({
+      media_path: 'a_b/old.jpg',
+      media_type: 'image',
+      media_thumb_path: 'a_b/old-thumb.webp',
+    });
+    // The bubble falls back to the full object, which is what a pre-0044
+    // message does. Losing the message over a missing preview would be worse.
+    expect(forwardPayload(original, ME, BOB, 'c_d/new.jpg', null).media_thumb_path).toBeNull();
+  });
+
+  it('never keeps a thumbnail when the attachment itself did not come across', () => {
+    // The 0044 CHECK refuses that row, and a preview with nothing behind the
+    // tap is a picture that cannot be opened.
+    const original = message({
+      media_path: 'a_b/old.jpg',
+      media_type: 'image',
+      media_thumb_path: 'a_b/old-thumb.webp',
+    });
+    expect(forwardPayload(original, ME, BOB, null, 'c_d/new-thumb.webp').media_thumb_path).toBeNull();
   });
 
   it('carries a voice note length across with its file', () => {

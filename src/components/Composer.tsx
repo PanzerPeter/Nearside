@@ -8,15 +8,14 @@ import {
   useRef,
   useState,
 } from 'react';
-import { Check, Lock, Mic, Pause, Play, Send, Paperclip, Pencil, Smile, Trash2, X } from 'lucide-react';
+import { Check, Mic, Pause, Play, Send, Paperclip, Pencil, Smile, Square, Trash2, X } from 'lucide-react';
 import { EmojiPopover } from './EmojiPopover';
 import { VoicePreview } from './VoicePreview';
 import { AttachMenu } from './AttachMenu';
 import { MAX_MESSAGE_LENGTH } from '../lib/conversation';
 import { stagedIsRecording, type StagedMedia } from '../lib/staging';
 import { formatDuration, MAX_VOICE_MS, voiceRecordingSupported } from '../lib/audio';
-import { isCoarsePointer, permissionSettingsLocation, supportsCameraCapture } from '../lib/device';
-import { holdOutcome } from '../lib/hold-record';
+import { permissionSettingsLocation, supportsCameraCapture } from '../lib/device';
 import { useVoiceRecorder, type VoiceRecording } from '../hooks/useVoiceRecorder';
 import { useT } from '../hooks/useT';
 
@@ -69,7 +68,7 @@ interface ComposerProps {
 // grow-to-fit algorithm rather than inventing a second one.
 export const MAX_TEXTAREA_PX = 160; // ~6 lines
 
-/** How long the "hold to record" nudge stays up after a too-short tap. */
+/** How long the nudge after a too-short recording stays up. */
 const HINT_MS = 1800;
 
 export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Composer(
@@ -111,7 +110,6 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   // re-running matchMedia on every render would be noise.
   const [cameraCapable] = useState(supportsCameraCapture);
   const [voiceCapable] = useState(voiceRecordingSupported);
-  const [holdToRecord] = useState(isCoarsePointer);
 
   useImperativeHandle(ref, () => ({
     focus: () => textareaRef.current?.focus(),
@@ -147,7 +145,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
     (recording: VoiceRecording | null) => {
       // Null means the recording was too short to be anything but a mis-tap.
       if (!recording) {
-        setHint(t('composer.holdToRecord'));
+        setHint(t('composer.tooShort'));
         return;
       }
       // A microphone that is muted, or held by another app, still yields a
@@ -164,47 +162,30 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 
   const recorder = useVoiceRecorder(handleRecorded);
 
-  // Where a press-and-hold started, and whether the finger has slid far enough
-  // to mean "throw this away". The ref is what the release handler reads —
-  // the state exists only to render the warning.
-  const holdOriginRef = useRef<{ x: number; y: number } | null>(null);
-  const cancelArmedRef = useRef(false);
-  const [cancelArmed, setCancelArmed] = useState(false);
-  // Whether the recording has been handed over to the UI by a slide up, so the
-  // finger can leave. Tap-to-record devices are locked from the first tap:
-  // there is no finger holding anything there.
-  const [locked, setLocked] = useState(false);
-  // A release that lands before `start` has resolved. Without this, a quick
-  // tap would leave the recorder running with nothing left to stop it.
-  const pendingReleaseRef = useRef<'none' | 'stop' | 'cancel'>('none');
+  // Whether `start` is still awaiting the microphone, and what the tap that
+  // landed during that wait asked for. A phone takes a visible moment to open
+  // the mic — long enough for a second tap — and until `start` resolves there
+  // is no recorder to stop: without this the tap meant to end a recording
+  // started a second one behind it, and neither could be reached again.
+  const startingRef = useRef(false);
+  const pendingStopRef = useRef<'none' | 'stop' | 'cancel'>('none');
 
   const busy = sending || uploading;
   const canSend = !busy && (!!value.trim() || staged.length > 0);
   // While recording the button has to stay the mic, whatever else is in the
-  // composer — it is the element the finger is still holding. An edit in
-  // progress otherwise claims the slot for its checkmark: recording a voice
-  // note is not one of the things you can do to a message you are rewriting.
+  // composer. An edit in progress otherwise claims the slot for its checkmark:
+  // recording a voice note is not one of the things you can do to a message
+  // you are rewriting.
   const showMic = recorder.recording || (!editing && !canSend && voiceCapable && !busy);
-  // Recording outranks editing in the row below for the same reason: the mic
-  // may already be live and holding a pointer capture.
+  // Recording outranks editing in the row below for the same reason.
   const editBar = editing && !recorder.recording ? editing : null;
 
-  /** Reset the gesture bookkeeping, then start. Callers own the reset because
-   *  the release that `beginRecording` reads back may land while `start` is
-   *  still awaiting permission. */
-  function armRecording() {
-    pendingReleaseRef.current = 'none';
-    cancelArmedRef.current = false;
-    setCancelArmed(false);
-    setLocked(!holdToRecord);
-    void beginRecording();
-  }
-
   async function beginRecording() {
+    startingRef.current = true;
     const failure = await recorder.start();
+    startingRef.current = false;
     if (failure) {
-      holdOriginRef.current = null;
-      pendingReleaseRef.current = 'none';
+      pendingStopRef.current = 'none';
       onError(
         failure === 'denied'
           ? t('composer.micDenied', { location: permissionSettingsLocation() })
@@ -215,77 +196,42 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
       return;
     }
 
-    if (pendingReleaseRef.current === 'cancel') recorder.cancel();
-    else if (pendingReleaseRef.current === 'stop') recorder.stop();
-    pendingReleaseRef.current = 'none';
+    if (pendingStopRef.current === 'cancel') recorder.cancel();
+    else if (pendingStopRef.current === 'stop') recorder.stop();
+    pendingStopRef.current = 'none';
   }
 
   function finishRecording(discard: boolean) {
-    pendingReleaseRef.current = discard ? 'cancel' : 'stop';
-    if (discard) recorder.cancel();
-    else recorder.stop();
-    holdOriginRef.current = null;
-    cancelArmedRef.current = false;
-    setCancelArmed(false);
-    setLocked(false);
-  }
-
-  function handleMicPointerDown(e: React.PointerEvent<HTMLButtonElement>) {
-    // A press on the button of a locked recording is the tap that finishes it,
-    // handled in `handleMicClick`. Arming a second recording here would reset
-    // the gesture bookkeeping under the one already running.
-    if (!holdToRecord || busy || recorder.recording) return;
-    // Capture so the slide-to-cancel still reports moves once the finger has
-    // left the button, and so the release always comes back here.
-    e.currentTarget.setPointerCapture(e.pointerId);
-    holdOriginRef.current = { x: e.clientX, y: e.clientY };
-    armRecording();
-  }
-
-  function handleMicPointerMove(e: React.PointerEvent<HTMLButtonElement>) {
-    const origin = holdOriginRef.current;
-    if (!origin) return;
-    const outcome = holdOutcome(e.clientX - origin.x, e.clientY - origin.y);
-
-    if (outcome === 'locked') {
-      // The gesture is over even though the finger is still down: forget the
-      // origin so the release that follows is not read as "send", and hand the
-      // capture back so the release lands wherever the finger actually is.
-      holdOriginRef.current = null;
-      cancelArmedRef.current = false;
-      setCancelArmed(false);
-      setLocked(true);
-      if (e.currentTarget.hasPointerCapture(e.pointerId)) {
-        e.currentTarget.releasePointerCapture(e.pointerId);
-      }
+    if (startingRef.current) {
+      // The microphone is still opening. `beginRecording` closes it the moment
+      // it arrives, rather than this call landing on a recorder that is not
+      // there yet and being lost.
+      pendingStopRef.current = discard ? 'cancel' : 'stop';
       return;
     }
-
-    const armed = outcome === 'cancel-armed';
-    if (armed !== cancelArmedRef.current) {
-      cancelArmedRef.current = armed;
-      setCancelArmed(armed);
-    }
+    if (discard) recorder.cancel();
+    else recorder.stop();
   }
 
-  function handleMicPointerUp() {
-    if (!holdOriginRef.current) return;
-    finishRecording(cancelArmedRef.current);
-  }
-
-  /** The gesture was taken away (a system scroll, a call arriving). Nothing
-   *  about that says "send", so the recording is dropped. */
-  function handleMicPointerCancel() {
-    if (!holdOriginRef.current) return;
-    finishRecording(true);
-  }
-
+  /**
+   * One button, two meanings: start, then stop.
+   *
+   * Press-and-hold was the touch gesture here, with a slide up to hand the
+   * recording over so the finger could leave. It asked somebody to keep a
+   * thumb still for the length of what they were saying, and the escape from
+   * that was a 60px slide nobody found. A tap that starts and a tap that stops
+   * is the same two decisions with nothing to hold and nothing to discover,
+   * and it is what leaves the recording staged in the preview above, where it
+   * can be played back before it goes anywhere.
+   */
   function handleMicClick() {
-    // A locked recording is ended by tapping the same button, on touch as well:
-    // the finger that started it has already left.
-    if (holdToRecord && !locked) return;
-    if (recorder.recording) finishRecording(false);
-    else armRecording();
+    if (busy) return;
+    if (recorder.recording || startingRef.current) {
+      finishRecording(false);
+      return;
+    }
+    pendingStopRef.current = 'none';
+    void beginRecording();
   }
 
   function insertEmoji(emoji: string) {
@@ -564,7 +510,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
           <>
             <button
               type="button"
-              className={`btn btn-ghost btn-square ${cancelArmed ? 'text-error' : ''}`}
+              className="btn btn-ghost btn-square"
               onClick={() => finishRecording(true)}
               title={t('composer.discardRecording')}
               aria-label={t('composer.discardRecording')}
@@ -572,23 +518,22 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
               <Trash2 className="w-5 h-5" />
             </button>
 
-            {/* Pause is only reachable once the recording has been locked: a
-                finger holding the mic button has nothing to press it with. */}
-            {locked && (
-              <button
-                type="button"
-                className="btn btn-ghost btn-square"
-                onClick={() => (recorder.paused ? recorder.resume() : recorder.pause())}
-                title={recorder.paused ? t('composer.resume') : t('composer.pause')}
-                aria-label={recorder.paused ? t('composer.resume') : t('composer.pause')}
-              >
-                {recorder.paused ? (
-                  <Play className="w-5 h-5 fill-current" />
-                ) : (
-                  <Pause className="w-5 h-5 fill-current" />
-                )}
-              </button>
-            )}
+            {/* Unconditional now. Pause used to be gated on the recording having
+                been locked, because a finger holding the mic button had nothing
+                left to press it with; nothing is being held any more. */}
+            <button
+              type="button"
+              className="btn btn-ghost btn-square"
+              onClick={() => (recorder.paused ? recorder.resume() : recorder.pause())}
+              title={recorder.paused ? t('composer.resume') : t('composer.pause')}
+              aria-label={recorder.paused ? t('composer.resume') : t('composer.pause')}
+            >
+              {recorder.paused ? (
+                <Play className="w-5 h-5 fill-current" />
+              ) : (
+                <Pause className="w-5 h-5 fill-current" />
+              )}
+            </button>
 
             <div className="flex-1 flex items-center gap-2 min-w-0 h-12" aria-live="polite">
               {/* motion-recording swaps the flat opacity pulse for emitted
@@ -619,21 +564,10 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
                   style={{ width: `${Math.max(2, recorder.level * 100)}%` }}
                 />
               </span>
-              {/* The one affordance a hold cannot advertise on its own: nothing
-                  on screen otherwise says the finger may leave. */}
-              {holdToRecord && !locked && !cancelArmed && (
-                <Lock className="w-3.5 h-3.5 shrink-0 text-muted" aria-hidden />
-              )}
               <span className="text-meta text-muted truncate">
-                {cancelArmed
-                  ? t('composer.releaseToCancel')
-                  : recorder.paused
-                    ? t('composer.paused')
-                    : locked
-                      ? t('composer.handsFree', { max: formatDuration(MAX_VOICE_MS) })
-                      : holdToRecord
-                        ? t('composer.slideToLock')
-                        : t('composer.recording', { max: formatDuration(MAX_VOICE_MS) })}
+                {recorder.paused
+                  ? t('composer.paused')
+                  : t('composer.recording', { max: formatDuration(MAX_VOICE_MS) })}
               </span>
             </div>
           </>
@@ -720,30 +654,25 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
         {showMic ? (
           <button
             type="button"
-            className={`btn btn-circle touch-none select-none ${
+            className={`btn btn-circle select-none ${
               recorder.recording ? 'btn-error' : 'btn-primary'
             }`}
-            onPointerDown={handleMicPointerDown}
-            onPointerMove={handleMicPointerMove}
-            onPointerUp={handleMicPointerUp}
-            onPointerCancel={handleMicPointerCancel}
             onClick={handleMicClick}
+            // A long press on a button in a WebView otherwise raises the text
+            // selection menu over the one control the recording is ended with.
             onContextMenu={(e) => e.preventDefault()}
             title={
-              recorder.recording
-                ? holdToRecord
-                  ? t('composer.releaseToSend')
-                  : t('composer.finishRecording')
-                : holdToRecord
-                  ? t('composer.holdToRecordVoice')
-                  : t('composer.recordVoice')
+              recorder.recording ? t('composer.finishRecording') : t('composer.recordVoice')
             }
             aria-label={
               recorder.recording ? t('composer.finishRecording') : t('composer.recordVoice')
             }
           >
+            {/* A stop square, not a paper plane. This tap ends the recording
+                and stages it for playback; the send is the separate press
+                afterwards, and an arrow here promised otherwise. */}
             {recorder.recording ? (
-              <Send className="w-[18px] h-[18px]" />
+              <Square className="w-[15px] h-[15px] fill-current" />
             ) : (
               <Mic className="w-[18px] h-[18px]" />
             )}

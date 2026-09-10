@@ -141,6 +141,8 @@ export interface RoomSignedFields {
   media_key_nonce?: string | null;
   media_key_ciphertext?: string | null;
   reply_to_id?: string | null;
+  /** Version 3 and later. Absent on every row signed before 0044. */
+  media_thumb_path?: string | null;
 }
 
 /**
@@ -159,17 +161,52 @@ export interface RoomSignedFields {
  * break in what every past signature meant.
  */
 export function signedPayloadV2(f: RoomSignedFields): Uint8Array {
-  const part = (v: string | number | null | undefined) => (v === null || v === undefined ? '' : String(v));
-  return new TextEncoder().encode(
-    [
-      part(f.nonce),
-      part(f.ciphertext),
-      part(f.media_path),
-      part(f.media_type),
-      part(f.media_duration_ms),
-      part(f.media_key_nonce),
-      part(f.media_key_ciphertext),
-      part(f.reply_to_id),
-    ].join('.')
-  );
+  return encodeFields([
+    f.nonce,
+    f.ciphertext,
+    f.media_path,
+    f.media_type,
+    f.media_duration_ms,
+    f.media_key_nonce,
+    f.media_key_ciphertext,
+    f.reply_to_id,
+  ]);
+}
+
+/**
+ * What a room message's signature covers, version 3.
+ *
+ * Version 2 with `media_thumb_path` appended, and appended is the whole point.
+ * The thumbnail is a second object the bubble draws instead of the full
+ * attachment, so it is a picture shown under somebody's name — exactly the
+ * thing version 2 was introduced to stop the server repointing. Leaving it
+ * outside the payload would have handed back the swap the signature exists to
+ * refuse, on the column a reader is now most likely to be looking at.
+ *
+ * Appending keeps every version 2 signature meaning what it meant: a v2 row is
+ * verified with `signedPayloadV2`, forever, and this is only ever built for
+ * rows that say `sig_v = 3`. Re-ordering, or slotting the new field in beside
+ * the other media columns where it belongs conceptually, would silently change
+ * what a past signature covered — which is why the order is the format.
+ */
+export function signedPayloadV3(f: RoomSignedFields): Uint8Array {
+  return encodeFields([
+    f.nonce,
+    f.ciphertext,
+    f.media_path,
+    f.media_type,
+    f.media_duration_ms,
+    f.media_key_nonce,
+    f.media_key_ciphertext,
+    f.reply_to_id,
+    f.media_thumb_path,
+  ]);
+}
+
+/** Fixed order, absent fields as empty strings, `.` as the separator because it
+ *  cannot occur in base64 (ORIGINAL variant), in a uuid, or in an integer. */
+function encodeFields(fields: readonly (string | number | null | undefined)[]): Uint8Array {
+  const part = (v: string | number | null | undefined) =>
+    v === null || v === undefined ? '' : String(v);
+  return new TextEncoder().encode(fields.map(part).join('.'));
 }

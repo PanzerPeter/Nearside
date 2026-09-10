@@ -19,6 +19,25 @@ export const SEAL_OVERHEAD_BYTES = 24 + 16;
 export async function sealFile(bytes: Uint8Array): Promise<{ blob: Blob; key: Uint8Array }> {
   await sodium.ready;
   const key = sodium.crypto_secretbox_keygen();
+  return { blob: await sealFileWith(bytes, key), key };
+}
+
+/**
+ * Seal under a key the caller already has.
+ *
+ * For the thumbnail (`lib/thumbnail.ts`), which is a second object belonging to
+ * an attachment that has already been sealed. It reuses that attachment's key
+ * deliberately: the people who may open the picture are exactly the people who
+ * may open its preview, so a second key would be a second thing to seal into
+ * the row, a second way for a message to be half-readable, and no additional
+ * secrecy at all.
+ *
+ * A fresh nonce every call, which is the part that must not be shared. Two
+ * different plaintexts sealed under one key AND one nonce is the failure mode
+ * `crypto_secretbox` cannot survive, and it is why this takes only the key.
+ */
+export async function sealFileWith(bytes: Uint8Array, key: Uint8Array): Promise<Blob> {
+  await sodium.ready;
   const nonce = sodium.randombytes_buf(sodium.crypto_secretbox_NONCEBYTES);
   const sealed = sodium.crypto_secretbox_easy(bytes, nonce, key);
 
@@ -38,7 +57,7 @@ export async function sealFile(bytes: Uint8Array): Promise<{ blob: Blob; key: Ui
   // here, and satisfying the checker honestly would mean copying the whole
   // ciphertext to change nothing but its type — the copy this is avoiding.
   const parts = [nonce, sealed] as unknown as BlobPart[];
-  return { blob: new Blob(parts, { type: 'application/octet-stream' }), key };
+  return new Blob(parts, { type: 'application/octet-stream' });
 }
 
 export async function openFile(bytes: Uint8Array, key: Uint8Array): Promise<Uint8Array> {

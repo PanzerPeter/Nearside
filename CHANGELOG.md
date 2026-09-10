@@ -14,6 +14,57 @@ one of them drifts.
 
 ## [Unreleased]
 
+## [1.7.0] — 2026-09-10
+
+### Added
+
+- **Conversations open from the phone instead of from the server.** The chat
+  list and the messages in it are painted from what this device already holds,
+  and the server's answer replaces them a moment later. Opening the app on a
+  bad connection used to mean a spinner over an empty sidebar; with no
+  connection at all it meant an empty app, over messages the phone had already
+  decrypted and was still storing. Nothing extra is downloaded to make this
+  work — it is the copy that was always there, finally being read.
+- **The few conversations you are most likely to open are fetched while you are
+  looking at the list**, so the first one you tap is already there. It is
+  capped at a handful, only runs when the connection looks healthy, stops the
+  moment you put the app away, and skips any conversation whose newest message
+  the phone already has.
+
+### Changed
+
+- **Voice messages are recorded with two taps instead of a held finger.** Tap
+  the microphone to start, tap the stop button to finish — the recording then
+  waits in the composer with a player, so you can hear it back, scrub through
+  it, throw it away or send it. Holding the button down was the old way, with a
+  slide upwards to lock so your finger could leave; on a phone that asked you
+  to keep a thumb perfectly still for as long as you were talking, and the way
+  out of it was a gesture nothing on screen mentioned. Pausing mid-recording
+  works at any point now, for the same reason: there is no longer a finger on
+  the button that would have to press it.
+
+- **A picture in a conversation no longer costs the whole picture.** Sending a
+  photo or a video now also sends a much smaller preview, and that is what the
+  thread draws — around a thirtieth of the pixels. The full file is fetched
+  when you tap it open, save it or forward it, and not before. Scrolling
+  through a conversation full of photographs used to download every one of them
+  at full size to fill a thumbnail two hundred pixels wide, and a video bubble
+  had to fetch the entire video to show you its first frame. Animations,
+  stickers and voice notes are left alone, and anything sent before this update
+  keeps working exactly as it did.
+- **Everything the app asks for after waking up now queues instead of racing.**
+  Coming back from sleep, or from a tunnel, used to fire every request in the
+  app at the same instant — your profile, the chat list, the open conversation,
+  its receipts, its reactions — which on a weak signal meant they all crawled
+  and then all timed out together. They go through a few at a time now, so the
+  conversation you are actually looking at arrives while the rest wait their
+  turn.
+- **A request that failed is retried at a slightly different moment each
+  time**, rather than every failed request retrying in the same instant and
+  rebuilding the pile that caused the failure. And a phone that knows it has no
+  signal stops spending its retries proving it — they are saved for when there
+  is something to reach.
+
 ## [1.6.0] — 2026-09-05
 
 ### Changed
