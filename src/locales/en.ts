@@ -142,6 +142,7 @@ export const en = {
   'composer.attach': 'Attach a photo or video',
   'composer.emoji': 'Emoji',
   'composer.insertEmoji': 'Insert emoji',
+  'composer.messageFull': 'The message is full.',
   'composer.editing': 'Editing message',
   'composer.cancelEdit': 'Cancel edit',
   'composer.saveChanges': 'Save changes',

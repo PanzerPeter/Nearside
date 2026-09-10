@@ -131,6 +131,7 @@ export const es: Catalog = {
   'composer.attach': 'Adjuntar una foto o un vídeo',
   'composer.emoji': 'Emoji',
   'composer.insertEmoji': 'Insertar emoji',
+  'composer.messageFull': 'El mensaje está lleno.',
   'composer.editing': 'Editando el mensaje',
   'composer.cancelEdit': 'Cancelar la edición',
   'composer.saveChanges': 'Guardar los cambios',

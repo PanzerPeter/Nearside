@@ -135,6 +135,7 @@ export const ru: Catalog = {
   'composer.attach': 'Прикрепить фото или видео',
   'composer.emoji': 'Эмодзи',
   'composer.insertEmoji': 'Вставить эмодзи',
+  'composer.messageFull': 'Сообщение заполнено.',
   'composer.editing': 'Изменение сообщения',
   'composer.cancelEdit': 'Отменить изменение',
   'composer.saveChanges': 'Сохранить изменения',

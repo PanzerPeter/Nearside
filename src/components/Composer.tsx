@@ -15,7 +15,7 @@ import { AttachMenu } from './AttachMenu';
 import { MAX_MESSAGE_LENGTH } from '../lib/conversation';
 import { stagedIsRecording, type StagedMedia } from '../lib/staging';
 import { formatDuration, MAX_VOICE_MS, voiceRecordingSupported } from '../lib/audio';
-import { permissionSettingsLocation, supportsCameraCapture } from '../lib/device';
+import { isCoarsePointer, permissionSettingsLocation, supportsCameraCapture } from '../lib/device';
 import { useVoiceRecorder, type VoiceRecording } from '../hooks/useVoiceRecorder';
 import { useT } from '../hooks/useT';
 
@@ -110,6 +110,11 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   // re-running matchMedia on every render would be noise.
   const [cameraCapable] = useState(supportsCameraCapture);
   const [voiceCapable] = useState(voiceRecordingSupported);
+  // With a mouse the picker is a small panel beside the box, and closing it on
+  // the first emoji makes a three-emoji message three round trips through the
+  // button. Touch keeps the old behaviour: there the picker covers the thread
+  // and the message under it, so leaving it up hides what is being written.
+  const [stickyEmoji] = useState(() => !isCoarsePointer());
 
   useImperativeHandle(ref, () => ({
     focus: () => textareaRef.current?.focus(),
@@ -245,17 +250,24 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
       // Refuse rather than truncate: silently clipping would split the emoji's
       // surrogate pair and leave a broken character in the box.
       if (next.length > MAX_MESSAGE_LENGTH) {
-        setEmojiOpen(false);
+        // Say why nothing happened. The picker closing used to be the whole
+        // signal, and a sticky one does not close.
+        setHint(t('composer.messageFull'));
+        if (!stickyEmoji) setEmojiOpen(false);
         return;
       }
       onChange(next);
       requestAnimationFrame(() => {
-        el.focus();
+        // Don't pull focus out of the picker's search box while it stays open:
+        // somebody who searched for one emoji is likely to search for the next,
+        // and the caret survives an unfocused textarea anyway.
+        const searching = document.activeElement?.tagName === 'INPUT';
+        if (!searching) el.focus();
         const caret = start + emoji.length;
         el.setSelectionRange(caret, caret);
       });
     }
-    setEmojiOpen(false);
+    if (!stickyEmoji) setEmojiOpen(false);
   }
 
   // Auto-grow: reset then grow to scrollHeight, capped.
@@ -268,6 +280,8 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 
   function submit() {
     if (!canSend) return;
+    // A sticky picker outlives one emoji, not the message it was open for.
+    setEmojiOpen(false);
     onSend();
   }
 

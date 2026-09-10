@@ -14,6 +14,17 @@ one of them drifts.
 
 ## [Unreleased]
 
+## [1.8.1] — 2026-09-10
+
+### Changed
+
+- With a mouse and keyboard, the emoji picker now stays open after you pick an
+  emoji, so a row of them is one trip to the picker instead of one trip each. It
+  closes when you click away, press Escape, or send. On a phone it still closes
+  on the first pick — there the picker covers the message you are writing.
+- Picking an emoji that would push the message past its length limit now says
+  the message is full, instead of the picker just disappearing.
+
 ## [1.8.0] — 2026-09-10
 
 ### Added
