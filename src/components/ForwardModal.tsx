@@ -3,53 +3,85 @@ import { supabase } from '../lib/supabase';
 import { Modal } from './Modal';
 import { Avatar } from './Avatar';
 import { useToast } from '../hooks/useToast';
-import { isSelfChat, messageSnippet, sortConversations } from '../lib/conversation';
+import { isSelfChat, sortConversations } from '../lib/conversation';
 import { formatDisplayName, useNicknameMap } from '../lib/nicknames';
 import {
   describeForwardFailure,
   forwardMessage,
   matchesTarget,
   type ForwardFailure,
+  type ForwardSource,
+  type ForwardTarget,
 } from '../lib/forward';
+import { listRooms, type RoomSummary } from '../lib/rooms';
 import type { Identity } from '../lib/crypto/keys';
-import type { ConversationSummary, Message } from '../lib/types';
-import { NotebookPen, Search } from 'lucide-react';
+import type { ConversationSummary } from '../lib/types';
+import { NotebookPen, Search, Users } from 'lucide-react';
 import { useT } from '../hooks/useT';
 
 interface ForwardModalProps {
   me: string;
-  /** The message being passed along. */
-  msg: Message;
-  /** The conversation it is being forwarded *from* — offered as a target it
-   *  would only ever mean "post this again where it already is". */
-  fromPeerId: string;
+  /** What is being passed along, already narrowed to what travels — see
+   *  `peerSource` and `roomSource`. The modal never sees the row it came off,
+   *  which is what keeps a group signature from following it. */
+  source: ForwardSource;
+  /** A one-line preview of the message, drawn at the top of the sheet. */
+  preview: string;
+  /** The conversation it is being forwarded *from*, by peer id or room id.
+   *  Offered as a target it would only ever mean "post this again where it
+   *  already is". */
+  fromKey: string;
   /** Needed to seal a forward that lands in the vault. */
   identity: Identity;
   onClose: () => void;
 }
 
-/** A row of the picker, with its name already resolved. */
+/** A row of the picker, with its name already resolved. Peers and groups share
+ *  one shape so they can share one ordering rule — see `sortConversations`. */
 interface Target {
-  peerId: string;
+  /** Unique across both kinds: a peer id or a room id. */
+  key: string;
+  target: ForwardTarget;
   display_name: string;
   avatarUrl: string | null;
   label: string;
   isSelf: boolean;
+  /** Groups only. Drawn under the title where a peer shows its handle. */
+  memberCount: number | null;
+  /** Sort keys, in the shape `sortConversations` reads. */
+  peer_id: string;
+  last_at: string | null;
 }
 
 /**
  * Choose where a message goes next.
  *
- * Reads the same `conversation_list()` RPC the sidebar does, so the picker can
- * never offer somebody you are not allowed to message — the RPC returns
- * accepted friends and your own notes, which is exactly the set
- * `messages_insert_sender` permits. Ordering comes from `sortConversations`
- * too, so your notes are pinned to the top here for the same reason they are
- * there: it is the most common forward destination and it should not move.
+ * Reads the same `conversation_list()` RPC the sidebar does and the same
+ * `rooms_for_me()` the group list does, so the picker can never offer somebody
+ * you are not allowed to message — between them they return accepted friends,
+ * your own notes and the groups you are a member of, which is exactly the set
+ * the two insert policies permit.
+ *
+ * Peers and groups are one list under one ordering rule rather than two
+ * sections. `sortConversations` already pins your notes to the top and orders
+ * the rest by last activity; a group is a conversation by that measure too, and
+ * a separate section would put the group you were talking in five minutes ago
+ * below a friend you last messaged in spring.
+ *
+ * A group's key is resolved at send time, not here: drawing this list would
+ * otherwise cost one request per group, for a key most of them will not need.
  */
-export function ForwardModal({ me, msg, fromPeerId, identity, onClose }: ForwardModalProps) {
+export function ForwardModal({
+  me,
+  source,
+  preview,
+  fromKey,
+  identity,
+  onClose,
+}: ForwardModalProps) {
   const t = useT();
   const [rows, setRows] = useState<ConversationSummary[] | null>(null);
+  const [rooms, setRooms] = useState<RoomSummary[]>([]);
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [sending, setSending] = useState(false);
@@ -65,8 +97,16 @@ export function ForwardModal({ me, msg, fromPeerId, identity, onClose }: Forward
         setRows([]);
         return;
       }
-      setRows(sortConversations((data ?? []) as ConversationSummary[], me));
+      setRows((data ?? []) as ConversationSummary[]);
     });
+    // Groups load beside the friends rather than after them, and a failure here
+    // is silent: a picker with no groups in it is still a usable picker, and a
+    // second red toast for the same open would say the sheet is broken.
+    listRooms()
+      .then((list) => {
+        if (active) setRooms(list);
+      })
+      .catch(() => {});
     return () => {
       active = false;
     };
@@ -75,31 +115,52 @@ export function ForwardModal({ me, msg, fromPeerId, identity, onClose }: Forward
   }, [me]);
 
   const targets: Target[] = useMemo(() => {
-    return (rows ?? [])
-      // The conversation this message is already in is not a destination.
-      .filter((row) => row.peer_id !== fromPeerId)
-      .map((row) => {
-        const isSelf = isSelfChat(me, row.peer_id);
-        return {
-          peerId: row.peer_id,
-          display_name: row.display_name,
-          avatarUrl: row.avatar_url,
-          label: formatDisplayName(nicknames.get(row.peer_id), row.display_name, isSelf),
-          isSelf,
-        };
-      });
-  }, [rows, fromPeerId, me, nicknames]);
+    const peers: Target[] = (rows ?? []).map((row) => {
+      const isSelf = isSelfChat(me, row.peer_id);
+      return {
+        key: row.peer_id,
+        target: { kind: 'peer' as const, peerId: row.peer_id },
+        display_name: row.display_name,
+        avatarUrl: row.avatar_url,
+        label: formatDisplayName(nicknames.get(row.peer_id), row.display_name, isSelf),
+        isSelf,
+        memberCount: null,
+        peer_id: row.peer_id,
+        last_at: row.last_at,
+      };
+    });
+
+    const groups: Target[] = rooms.map((room) => ({
+      key: room.id,
+      target: { kind: 'room' as const, roomId: room.id },
+      // A group has no handle behind its title, so both fields carry it: the
+      // filter searches display_name, and the row draws label.
+      display_name: room.title,
+      avatarUrl: null,
+      label: room.title,
+      isSelf: false,
+      memberCount: room.member_count,
+      peer_id: room.id,
+      last_at: room.last_at,
+    }));
+
+    return (
+      sortConversations([...peers, ...groups], me)
+        // The conversation this message is already in is not a destination.
+        .filter((row) => row.key !== fromKey)
+    );
+  }, [rows, rooms, fromKey, me, nicknames]);
 
   const visible = useMemo(
     () => targets.filter((t) => matchesTarget(t.label, t.display_name, query)),
     [targets, query]
   );
 
-  function toggle(peerId: string) {
+  function toggle(key: string) {
     setSelected((prev) => {
       const next = new Set(prev);
-      if (next.has(peerId)) next.delete(peerId);
-      else next.add(peerId);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
   }
@@ -116,12 +177,12 @@ export function ForwardModal({ me, msg, fromPeerId, identity, onClose }: Forward
     if (selected.size === 0 || sending) return;
     setSending(true);
 
-    const chosen = targets.filter((t) => selected.has(t.peerId));
+    const chosen = targets.filter((t) => selected.has(t.key));
     const delivered: string[] = [];
     const failures: Array<{ label: string; reason: ForwardFailure }> = [];
 
     for (const target of chosen) {
-      const result = await forwardMessage(me, msg, target.peerId, identity);
+      const result = await forwardMessage(me, source, target.target, identity);
       if (result.ok) delivered.push(target.label);
       else failures.push({ label: target.label, reason: result.reason });
     }
@@ -146,8 +207,6 @@ export function ForwardModal({ me, msg, fromPeerId, identity, onClose }: Forward
 
     if (delivered.length > 0) onClose();
   }
-
-  const preview = messageSnippet(msg);
 
   return (
     <Modal
@@ -209,21 +268,30 @@ export function ForwardModal({ me, msg, fromPeerId, identity, onClose }: Forward
         ) : (
           <ul className="space-y-1">
             {visible.map((target) => (
-              <li key={target.peerId}>
+              <li key={target.key}>
                 <label
                   className={`flex items-center gap-3 px-2 py-2 rounded-box cursor-pointer transition-colors ${
-                    selected.has(target.peerId) ? 'bg-primary/15' : 'hover:bg-wash'
+                    selected.has(target.key) ? 'bg-primary/15' : 'hover:bg-wash'
                   }`}
                 >
                   <input
                     type="checkbox"
                     className="checkbox checkbox-sm checkbox-primary shrink-0"
-                    checked={selected.has(target.peerId)}
-                    onChange={() => toggle(target.peerId)}
+                    checked={selected.has(target.key)}
+                    onChange={() => toggle(target.key)}
                     disabled={sending}
                   />
                   <div className="relative shrink-0" style={{ width: 32, height: 32 }}>
-                    <Avatar display_name={target.display_name} url={target.avatarUrl} size={32} />
+                    {target.memberCount === null ? (
+                      <Avatar display_name={target.display_name} url={target.avatarUrl} size={32} />
+                    ) : (
+                      /* A group has no picture to show, and an initial drawn
+                         from its title reads as a person. The icon is what says
+                         this row is several people. */
+                      <span className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/15">
+                        <Users className="w-4 h-4 text-primary" />
+                      </span>
+                    )}
                     {target.isSelf && (
                       <span className="absolute -bottom-0.5 -right-0.5 rounded-full bg-base-100 p-0.5">
                         <NotebookPen className="w-2.5 h-2.5 text-primary" />
@@ -234,11 +302,20 @@ export function ForwardModal({ me, msg, fromPeerId, identity, onClose }: Forward
                     <span className="block truncate text-body font-medium">{target.label}</span>
                     {/* The handle stays visible under a nickname for the same
                         reason it does in the sidebar: two people you renamed
-                        have to be tellable apart by something they chose. */}
-                    {!target.isSelf && target.label !== target.display_name && (
+                        have to be tellable apart by something they chose. A
+                        group says how many people are in it instead — the one
+                        thing worth knowing before you post into it. */}
+                    {target.memberCount !== null ? (
                       <span className="block truncate text-micro text-muted">
-                        {target.display_name}
+                        {t('room.memberCount', { count: target.memberCount })}
                       </span>
+                    ) : (
+                      !target.isSelf &&
+                      target.label !== target.display_name && (
+                        <span className="block truncate text-micro text-muted">
+                          {target.display_name}
+                        </span>
+                      )
                     )}
                   </span>
                 </label>

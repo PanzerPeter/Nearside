@@ -431,7 +431,7 @@ export const en = {
   'room.skippedMembers#other':
     '{count} of them could not be added. They have no published key yet.',
   'forward.title': 'Forward to',
-  'forward.searchPlaceholder': 'Search conversations...',
+  'forward.searchPlaceholder': 'Search chats and groups...',
   'forward.noTargets': 'No other conversations to forward to.',
   'forward.noMatch': 'No conversation matches that.',
   'forward.loadFailed': 'Could not load your conversations.',
@@ -439,7 +439,11 @@ export const en = {
   'forward.doneMany': 'Forwarded to {count} chats.',
   'forward.mediaMissing': 'That attachment is no longer available to forward.',
   'forward.notSetUp': 'Forwarding is not set up on the server yet.',
+  'forward.noRoomKey': 'This device has no key for {name}.',
   'forward.failed': 'Could not forward to {name}.',
+
+  'reactions.title': 'Reactions',
+  'reactions.none': 'Nobody has reacted to this yet.',
   'lightbox.saveFailed': 'Could not save that file.',
   'lightbox.pinned': 'Pinned to this phone. It stays even after the server copy goes.',
   'lightbox.unpinned': 'Unpinned. The server copy will prune on the usual schedule.',

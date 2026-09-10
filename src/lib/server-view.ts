@@ -215,6 +215,7 @@ export const TABLE_REPORTS: TableSpec[] = [
       'media_type',
       'media_duration_ms',
       'media_thumb_path',
+      'forwarded',
       'sig_v',
       'expires_at',
     ],

@@ -55,3 +55,4 @@
 0043_table_columns.sql
 0044_media_thumbnails.sql
 0045_receipt_privacy.sql
+0046_room_forwarded.sql

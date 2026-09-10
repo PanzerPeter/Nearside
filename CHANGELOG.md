@@ -14,6 +14,40 @@ one of them drifts.
 
 ## [Unreleased]
 
+## [1.11.0] — 2026-09-10
+
+### Added
+
+- **Groups can be forwarded into, and forwarded out of.** Passing a message
+  along used to work between one-to-one chats only, which was backwards: a group
+  is usually where a photo or a link needs to go next. Groups now appear in the
+  same picker as your friends, ordered by when you last spoke in them rather
+  than in a section of their own, and a group message has a Forward button like
+  any other. As before, a forward says only that it was forwarded — never who
+  wrote it first, or where it came from.
+- **Who reacted, not just how many.** The chips above a message say three
+  people liked it; the new Reactions entry in a message's menu says which three.
+  In a group of eight that is the half of the question the chips could never
+  answer. It shows on one-to-one messages too, and appears only on messages that
+  actually have reactions.
+
+### Changed
+
+- A message forwarded into a group is signed as a forward, the same way its
+  words are signed. A group has no trusted middleman — everyone holds the same
+  key, so the signature is the only thing that says who wrote what — and a
+  "Forwarded" label outside it would be a label the server could remove.
+- A group message that failed its signature check can no longer be forwarded.
+  Passing one on would re-sign it as yours, so it would arrive somewhere else
+  looking trustworthy with the warning stripped off.
+
+### Note
+
+- Older installs will show messages sent by an updated app as unverified until
+  they update, because they do not yet know how to check the new signature. It
+  is the same one-way step the app took when attachments were brought inside
+  the signature, and it resolves as soon as both sides are current.
+
 ## [1.10.0] — 2026-09-10
 
 ### Added

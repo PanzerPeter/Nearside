@@ -1588,12 +1588,19 @@ CREATE TABLE IF NOT EXISTS public.room_messages (
   edited_at   timestamptz,
   deleted_at  timestamptz,
 
+  -- Passed along from somewhere else rather than written here. Inside the
+  -- signature (version 4) because it is an attribution claim, and a claim
+  -- outside the payload is one the server gets to make on anybody's message.
+  forwarded  boolean NOT NULL DEFAULT false,
+
   /*
     Which payload the signature covers (see `signedPayloadV2` in
     src/lib/crypto/seal.ts):
 
       1  nonce.ciphertext                      — every row written before 0036
       2  the same, plus the media and reply columns
+      3  the same, plus media_thumb_path           — 0044
+      4  the same, plus forwarded                  — 0046
 
     The signature is the only thing in a room that establishes authorship to a
     *client*. RLS says only the sender may UPDATE a row, but RLS is enforced by
@@ -1601,8 +1608,10 @@ CREATE TABLE IF NOT EXISTS public.room_messages (
     content — so a column outside the signature is a column the server can
     repoint on anybody's message and have every client still draw it as theirs.
 
-    New rows are always 2, text-only ones included: a version chosen per row by
-    what the row contains is a downgrade an attacker gets to pick.
+    New rows are always the current version, text-only ones included: a version
+    chosen per row by what the row contains is a downgrade an attacker gets to
+    pick. Each version APPENDS, so every past signature keeps meaning what it
+    meant and a row is always verified under the version it names.
   */
   sig_v      smallint NOT NULL DEFAULT 1,
 
@@ -1637,7 +1646,7 @@ CREATE TABLE IF NOT EXISTS public.room_messages (
 
   -- A row claiming a version no builder exists for would verify against
   -- nothing at all.
-  CONSTRAINT room_messages_sig_v_known CHECK (sig_v IN (1, 2))
+  CONSTRAINT room_messages_sig_v_known CHECK (sig_v IN (1, 2, 3, 4))
 );
 CREATE INDEX IF NOT EXISTS room_messages_room_time
   ON public.room_messages (room_id, created_at DESC);
@@ -1807,6 +1816,12 @@ BEGIN
   END IF;
   IF NEW.reply_to_id IS DISTINCT FROM OLD.reply_to_id THEN
     RAISE EXCEPTION 'room_messages.reply_to_id is immutable';
+  END IF;
+  -- Frozen for the same reason: an editable flag would let the sender of a
+  -- forward strip the notice off it after the fact, and it would move under
+  -- the edit and delete paths, which both re-sign the whole row shape.
+  IF NEW.forwarded IS DISTINCT FROM OLD.forwarded THEN
+    RAISE EXCEPTION 'room_messages.forwarded is immutable';
   END IF;
   RETURN NEW;
 END;

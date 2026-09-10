@@ -4,7 +4,12 @@ import {
   describeForwardFailure,
   forwardMediaPath,
   forwardPayload,
+  forwardRoomDraft,
+  forwardRoomMediaPath,
   isForwardable,
+  isRoomForwardable,
+  peerSource,
+  roomSource,
   matchesTarget,
   pathExtension,
 } from './forward';
@@ -81,23 +86,23 @@ describe('forwardMediaPath', () => {
 
 describe('forwardPayload', () => {
   it('addresses the message from the forwarder to the target', () => {
-    const row = forwardPayload(message({ text: 'hi' }), ME, BOB, null);
+    const row = forwardPayload(peerSource(message({ text: 'hi' })), ME, BOB, null);
     expect(row.user_id).toBe(ME);
     expect(row.receiver_id).toBe(BOB);
   });
 
   it('marks the row as forwarded', () => {
-    expect(forwardPayload(message({ text: 'hi' }), ME, BOB, null).forwarded).toBe(true);
+    expect(forwardPayload(peerSource(message({ text: 'hi' })), ME, BOB, null).forwarded).toBe(true);
   });
 
   it('drops the reply, which names a message in the other conversation', () => {
-    const row = forwardPayload(message({ text: 'hi', reply_to_id: 'somewhere-else' }), ME, BOB, null);
+    const row = forwardPayload(peerSource(message({ text: 'hi', reply_to_id: 'somewhere-else' })), ME, BOB, null);
     expect(row.reply_to_id).toBeNull();
   });
 
   it('points at the copied object, not the original', () => {
     const original = message({ media_path: 'a_b/old.jpg', media_type: 'image' });
-    const row = forwardPayload(original, ME, BOB, 'c_d/new.jpg');
+    const row = forwardPayload(peerSource(original), ME, BOB, 'c_d/new.jpg');
     expect(row.media_path).toBe('c_d/new.jpg');
     expect(row.media_type).toBe('image');
   });
@@ -108,7 +113,7 @@ describe('forwardPayload', () => {
       media_type: 'image',
       media_thumb_path: 'a_b/old-thumb.webp',
     });
-    const row = forwardPayload(original, ME, BOB, 'c_d/new.jpg', 'c_d/new-thumb.webp');
+    const row = forwardPayload(peerSource(original), ME, BOB, 'c_d/new.jpg', 'c_d/new-thumb.webp');
     expect(row.media_thumb_path).toBe('c_d/new-thumb.webp');
   });
 
@@ -120,7 +125,7 @@ describe('forwardPayload', () => {
     });
     // The bubble falls back to the full object, which is what a pre-0044
     // message does. Losing the message over a missing preview would be worse.
-    expect(forwardPayload(original, ME, BOB, 'c_d/new.jpg', null).media_thumb_path).toBeNull();
+    expect(forwardPayload(peerSource(original), ME, BOB, 'c_d/new.jpg', null).media_thumb_path).toBeNull();
   });
 
   it('never keeps a thumbnail when the attachment itself did not come across', () => {
@@ -131,23 +136,23 @@ describe('forwardPayload', () => {
       media_type: 'image',
       media_thumb_path: 'a_b/old-thumb.webp',
     });
-    expect(forwardPayload(original, ME, BOB, null, 'c_d/new-thumb.webp').media_thumb_path).toBeNull();
+    expect(forwardPayload(peerSource(original), ME, BOB, null, 'c_d/new-thumb.webp').media_thumb_path).toBeNull();
   });
 
   it('carries a voice note length across with its file', () => {
     const original = message({ media_path: 'a_b/v.webm', media_type: 'audio', media_duration_ms: 4200 });
-    expect(forwardPayload(original, ME, BOB, 'c_d/v.webm').media_duration_ms).toBe(4200);
+    expect(forwardPayload(peerSource(original), ME, BOB, 'c_d/v.webm').media_duration_ms).toBe(4200);
   });
 
   it('keeps no duration for a voice note whose file was not copied', () => {
     const original = message({ text: '🎤 voice message removed', media_duration_ms: 4200 });
-    const row = forwardPayload(original, ME, BOB, null);
+    const row = forwardPayload(peerSource(original), ME, BOB, null);
     expect(row.media_duration_ms).toBeNull();
     expect(row.media_type).toBeNull();
   });
 
   it('normalises an empty caption to null rather than an empty body', () => {
-    expect(forwardPayload(message({ text: '' }), ME, BOB, 'c_d/p.jpg').text).toBeNull();
+    expect(forwardPayload(peerSource(message({ text: '' })), ME, BOB, 'c_d/p.jpg').text).toBeNull();
   });
 });
 
@@ -168,6 +173,138 @@ describe('isForwardable', () => {
 
   it('refuses a body that is only whitespace', () => {
     expect(isForwardable(message({ text: '   ' }))).toBe(false);
+  });
+});
+
+describe('reading a source off either kind of message', () => {
+  it('narrows a one-to-one message to what travels', () => {
+    const source = peerSource(
+      message({
+        text: 'hello',
+        media_path: 'a_b/p.jpg',
+        media_type: 'image',
+        media_thumb_path: 'a_b/p-thumb.webp',
+        media_key: new Uint8Array([1, 2, 3]),
+      })
+    );
+    expect(source.text).toBe('hello');
+    expect(source.mediaPath).toBe('a_b/p.jpg');
+    expect(source.mediaThumbPath).toBe('a_b/p-thumb.webp');
+    expect(source.fileKey).toEqual(new Uint8Array([1, 2, 3]));
+  });
+
+  it('narrows a group message to the same shape', () => {
+    const source = roomSource({
+      id: 'rm1',
+      room_id: 'r1',
+      sender_id: SOURCE,
+      ciphertext: 'ct',
+      nonce: 'nn',
+      signature: 'sig',
+      created_at: new Date().toISOString(),
+      text: 'hello',
+      media_path: 'r1/p.jpg',
+      media_type: 'image',
+      media_thumb_path: 'r1/p-thumb.webp',
+      mediaKey: new Uint8Array([4, 5, 6]),
+      sender: 'verified',
+    });
+    expect(source.text).toBe('hello');
+    expect(source.mediaPath).toBe('r1/p.jpg');
+    expect(source.fileKey).toEqual(new Uint8Array([4, 5, 6]));
+  });
+
+  // The signature describes the row it is on. Copied onto a new row it would
+  // verify against nothing, so it must not be part of what travels.
+  it('leaves the group signature behind', () => {
+    const source = roomSource({
+      id: 'rm1',
+      room_id: 'r1',
+      sender_id: SOURCE,
+      ciphertext: 'ct',
+      nonce: 'nn',
+      signature: 'a-signature-over-the-old-row',
+      created_at: new Date().toISOString(),
+      text: 'hello',
+      sender: 'verified',
+    });
+    expect(JSON.stringify(source)).not.toContain('a-signature-over-the-old-row');
+  });
+});
+
+describe('forwardRoomMediaPath', () => {
+  it('lands in the destination room folder with a fresh name', () => {
+    expect(forwardRoomMediaPath('r-9', 'a_b/old.jpg', 'fresh')).toBe('r-9/fresh.jpg');
+  });
+
+  it('keeps a path with no extension usable', () => {
+    expect(forwardRoomMediaPath('r-9', 'a_b/old', 'fresh')).toBe('r-9/fresh');
+  });
+
+  // The `chat-media` policies key access off the folder name, so a forward that
+  // kept the source path would arrive unreadable to the group.
+  it('never reuses the source folder', () => {
+    expect(forwardRoomMediaPath('r-9', 'a_b/old.jpg', 'fresh').startsWith('a_b/')).toBe(false);
+  });
+});
+
+describe('forwardRoomDraft', () => {
+  const source = { mediaType: 'image' as const, mediaDurationMs: null };
+  const key = { ciphertext: 'ct', nonce: 'nn' };
+
+  it('is null when there is nothing to attach', () => {
+    expect(forwardRoomDraft(source, null, null, null)).toBeNull();
+  });
+
+  it('is null when the file key could not be sealed for the room', () => {
+    expect(forwardRoomDraft(source, 'r-9/f.jpg', null, null)).toBeNull();
+  });
+
+  it('carries the destination paths, never the source ones', () => {
+    const draft = forwardRoomDraft(source, 'r-9/f.jpg', 'r-9/f-thumb.webp', key);
+    expect(draft?.path).toBe('r-9/f.jpg');
+    expect(draft?.thumbPath).toBe('r-9/f-thumb.webp');
+    expect(draft?.key).toEqual(key);
+  });
+
+  // A length describing a file the row no longer carries, or one that was
+  // never a voice note, is a bubble claiming a duration for a photo.
+  it('keeps a duration only on a voice note', () => {
+    expect(
+      forwardRoomDraft({ mediaType: 'audio', mediaDurationMs: 4200 }, 'r-9/v.webm', null, key)
+        ?.durationMs
+    ).toBe(4200);
+    expect(
+      forwardRoomDraft({ mediaType: 'image', mediaDurationMs: 4200 }, 'r-9/p.jpg', null, key)
+        ?.durationMs
+    ).toBeNull();
+  });
+});
+
+describe('isRoomForwardable', () => {
+  const verified = { text: 'hi', media_path: null, deleted_at: null, sender: 'verified' as const };
+
+  it('accepts a verified message with a body', () => {
+    expect(isRoomForwardable(verified)).toBe(true);
+  });
+
+  // Forwarding a forgery would re-seal and re-sign it as yours: it arrives in
+  // the destination verified, with the warning the source showed removed.
+  it('refuses a message whose signature did not check out', () => {
+    expect(isRoomForwardable({ ...verified, sender: 'unverified' })).toBe(false);
+  });
+
+  // The same bet with no warning at all — this device could not check.
+  it('refuses a message from a sender with no published signing key', () => {
+    expect(isRoomForwardable({ ...verified, sender: 'unknown' })).toBe(false);
+  });
+
+  it('refuses a tombstone', () => {
+    expect(isRoomForwardable({ ...verified, deleted_at: new Date().toISOString() })).toBe(false);
+  });
+
+  it('accepts a verified attachment with no caption', () => {
+    expect(isRoomForwardable({ ...verified, text: null, media_path: 'r1/p.jpg' })).toBe(true);
   });
 });
 

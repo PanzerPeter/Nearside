@@ -2,7 +2,12 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import sodium from 'libsodium-wrappers';
 import { generateMnemonic, seedFromMnemonic } from './crypto/mnemonic';
 import { identityFromSeed, toBase64, type Identity } from './crypto/keys';
-import { signBytes, signedPayload, signedPayloadV2, signedPayloadV3 } from './crypto/seal';
+import {
+  signBytes,
+  signedPayload,
+  signedPayloadV2,
+  signedPayloadV3,
+} from './crypto/seal';
 import {
   ROOM_COLOURS,
   openRoomFileKey,
@@ -74,6 +79,41 @@ async function aV2Row(
     ...row,
     signature: await signBytes(sender.signPrivate, signedPayloadV2(row)),
     sig_v: 2,
+  };
+}
+
+/** A row as it was written between 0044 and 0046: signed over the v3 payload,
+ *  which had no `forwarded` column in it. */
+async function aV3Row(
+  roomKey: Uint8Array,
+  sender: Identity,
+  senderId: string,
+  text: string
+): Promise<RoomMessage> {
+  await sodium.ready;
+  const nonce = sodium.randombytes_buf(sodium.crypto_secretbox_NONCEBYTES);
+  const row = {
+    ciphertext: sodium.to_base64(
+      sodium.crypto_secretbox_easy(sodium.from_string(text), nonce, roomKey),
+      sodium.base64_variants.ORIGINAL
+    ),
+    nonce: sodium.to_base64(nonce, sodium.base64_variants.ORIGINAL),
+    media_path: null,
+    media_type: null,
+    media_duration_ms: null,
+    media_key_ciphertext: null,
+    media_key_nonce: null,
+    media_thumb_path: null,
+    reply_to_id: null,
+  };
+  return {
+    id: 'm3',
+    room_id: 'r1',
+    sender_id: senderId,
+    created_at: '2026-09-01T00:00:00.000Z',
+    ...row,
+    signature: await signBytes(sender.signPrivate, signedPayloadV3(row)),
+    sig_v: 3,
   };
 }
 
@@ -303,8 +343,8 @@ describe('room signature v2', () => {
   it('always writes the current sig_v on send, text-only included', async () => {
     const roomKey = await aRoomKey();
     const alice = await anIdentity();
-    expect((await sealRoomMessage(roomKey, alice, 'plain')).sig_v).toBe(3);
-    expect((await sealRoomMessage(roomKey, alice, null, { media })).sig_v).toBe(3);
+    expect((await sealRoomMessage(roomKey, alice, 'plain')).sig_v).toBe(4);
+    expect((await sealRoomMessage(roomKey, alice, null, { media })).sig_v).toBe(4);
   });
 
   // The thumbnail is the picture a reader actually looks at, so it is the one
@@ -400,6 +440,116 @@ describe('room signature v2', () => {
     );
     expect(opened.sender).toBe('verified');
     expect(opened.text).toBeNull();
+  });
+});
+
+describe('room signature v4', () => {
+  // The flag is the difference between somebody's own words and somebody
+  // passing along another conversation's. Outside the payload it is a claim
+  // the server gets to make on anybody's message.
+  it('covers forwarded, so the notice cannot be added to somebody else', async () => {
+    const roomKey = await aRoomKey();
+    const alice = await anIdentity();
+    const signing = new Map([['alice', await toBase64(alice.signPublic)]]);
+    const row = await aRow(roomKey, alice, 'alice', 'my own words');
+
+    const [opened] = await openRoomRows([{ ...row, forwarded: true }], roomKey, signing);
+    expect(opened.sender).toBe('unverified');
+    expect(opened.text).toBeNull();
+  });
+
+  it('covers forwarded, so the notice cannot be stripped off a forward', async () => {
+    const roomKey = await aRoomKey();
+    const alice = await anIdentity();
+    const signing = new Map([['alice', await toBase64(alice.signPublic)]]);
+    const row = await aRow(roomKey, alice, 'alice', 'passed along', { forwarded: true });
+
+    const [opened] = await openRoomRows([{ ...row, forwarded: false }], roomKey, signing);
+    expect(opened.sender).toBe('unverified');
+  });
+
+  it('carries the flag onto the row and opens it', async () => {
+    const roomKey = await aRoomKey();
+    const alice = await anIdentity();
+    const row = await aRow(roomKey, alice, 'alice', 'passed along', { forwarded: true });
+    expect(row.forwarded).toBe(true);
+
+    const [opened] = await openRoomRows(
+      [row],
+      roomKey,
+      new Map([['alice', await toBase64(alice.signPublic)]])
+    );
+    expect(opened.sender).toBe('verified');
+    expect(opened.text).toBe('passed along');
+  });
+
+  it('defaults to false, and an ordinary message is not marked', async () => {
+    const roomKey = await aRoomKey();
+    const alice = await anIdentity();
+    expect((await sealRoomMessage(roomKey, alice, 'plain')).forwarded).toBe(false);
+  });
+
+  // The column is NOT NULL DEFAULT false, so a select that omitted it and a row
+  // carrying false are the same fact — and a signature made over one has to
+  // verify against the other.
+  it('treats an absent forwarded as false', async () => {
+    const roomKey = await aRoomKey();
+    const alice = await anIdentity();
+    const row = await aRow(roomKey, alice, 'alice', 'plain');
+    const stripped = { ...row };
+    delete stripped.forwarded;
+
+    const [opened] = await openRoomRows(
+      [stripped],
+      roomKey,
+      new Map([['alice', await toBase64(alice.signPublic)]])
+    );
+    expect(opened.sender).toBe('verified');
+    expect(opened.text).toBe('plain');
+  });
+
+  // Groups that were live before 0046 keep working, and their signatures keep
+  // meaning what they meant: v4 appends rather than reorders.
+  it('still verifies a v3 row under the v3 payload', async () => {
+    const roomKey = await aRoomKey();
+    const alice = await anIdentity();
+    const v3 = await aV3Row(roomKey, alice, 'alice', 'sent before the flag existed');
+
+    const [opened] = await openRoomRows(
+      [v3],
+      roomKey,
+      new Map([['alice', await toBase64(alice.signPublic)]])
+    );
+    expect(opened.text).toBe('sent before the flag existed');
+    expect(opened.sender).toBe('verified');
+  });
+
+  it('refuses a v4 row that was signed as v3', async () => {
+    const roomKey = await aRoomKey();
+    const alice = await anIdentity();
+    const v3 = await aV3Row(roomKey, alice, 'alice', 'sent before the flag existed');
+
+    const [opened] = await openRoomRows(
+      [{ ...v3, sig_v: 4 }],
+      roomKey,
+      new Map([['alice', await toBase64(alice.signPublic)]])
+    );
+    expect(opened.sender).toBe('unverified');
+  });
+
+  // Guessing at a shorter payload is exactly the downgrade the version column
+  // exists to refuse, so an unknown version is refused rather than tried.
+  it('refuses a version this build has no builder for', async () => {
+    const roomKey = await aRoomKey();
+    const alice = await anIdentity();
+    const row = await aRow(roomKey, alice, 'alice', 'from the future');
+
+    const [opened] = await openRoomRows(
+      [{ ...row, sig_v: 5 }],
+      roomKey,
+      new Map([['alice', await toBase64(alice.signPublic)]])
+    );
+    expect(opened.sender).toBe('unverified');
   });
 });
 

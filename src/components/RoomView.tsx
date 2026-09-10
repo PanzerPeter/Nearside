@@ -2,6 +2,7 @@ import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, use
 import type { RealtimeChannel, Session } from '@supabase/supabase-js';
 import {
   ArrowLeft,
+  CornerUpRight,
   Lock,
   LogOut,
   Pencil,
@@ -9,6 +10,7 @@ import {
   Reply,
   ShieldAlert,
   ShieldQuestion,
+  SmilePlus,
   Trash2,
   UserMinus,
   Users,
@@ -55,6 +57,9 @@ import { MessageText } from './MessageText';
 import { jumboEmojiCount } from '../lib/emoji-only';
 import { ReactionBar } from './ReactionBar';
 import { ReactionChips } from './ReactionChips';
+import { ForwardModal } from './ForwardModal';
+import { ReactionSheet } from './ReactionSheet';
+import { isRoomForwardable, roomSource } from '../lib/forward';
 import { StickerAttachment } from './StickerAttachment';
 import { ConversationSearch } from './ConversationSearch';
 import { StickerPicker } from './StickerPicker';
@@ -111,6 +116,10 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
    *  below knows not to chase the bottom on that particular update. */
   const skipAutoScroll = useRef(false);
   const [members, setMembers] = useState<RoomParticipant[]>([]);
+  const [forwarding, setForwarding] = useState<RoomMessage | null>(null);
+  /** Whose reactions the sheet is showing, by message id: the rows are rebuilt
+   *  on every wake, so a captured row would leave the open sheet frozen. */
+  const [showingReactions, setShowingReactions] = useState<string | null>(null);
   const [profiles, setProfiles] = useState<Map<string, Profile>>(new Map());
   const [roomKey, setRoomKey] = useState<Uint8Array | null>(null);
   const [keyMissing, setKeyMissing] = useState(false);
@@ -760,6 +769,26 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
         />
       )}
 
+      {showingReactions && (
+        <ReactionSheet
+          reactions={reactions.byMessage.get(showingReactions) ?? []}
+          me={me}
+          nameFor={nameFor}
+          onClose={() => setShowingReactions(null)}
+        />
+      )}
+
+      {forwarding && (
+        <ForwardModal
+          me={me}
+          source={roomSource(forwarding)}
+          preview={roomSnippet(forwarding)}
+          fromKey={room.id}
+          identity={identity}
+          onClose={() => setForwarding(null)}
+        />
+      )}
+
       {showMembers && (
         <div className="bg-base-100 border-b border-hairline px-4 py-3 shrink-0">
           <ul className="flex flex-wrap gap-x-4 gap-y-1.5">
@@ -862,6 +891,8 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
               onSaveEdit={() => void saveEdit(m.id)}
               onCancelEdit={cancelEdit}
               onDelete={() => void handleDelete(m)}
+              onForward={() => setForwarding(m)}
+              onShowReactions={() => setShowingReactions(m.id)}
             />
             </Fragment>
           ))}
@@ -985,6 +1016,12 @@ interface RoomBubbleProps {
   onSaveEdit: () => void;
   onCancelEdit: () => void;
   onDelete: () => void;
+  /** Pass this message on to another conversation. Only offered for a row this
+   *  device can vouch for — see `isRoomForwardable`. */
+  onForward: () => void;
+  /** Show who reacted. The chips say how many; in a group of eight that is not
+   *  the useful half. */
+  onShowReactions: () => void;
 }
 
 /**
@@ -1013,6 +1050,8 @@ function RoomBubble({
   onSaveEdit,
   onCancelEdit,
   onDelete,
+  onForward,
+  onShowReactions,
 }: RoomBubbleProps) {
   const t = useT();
   const mine = m.sender_id === me;
@@ -1097,6 +1136,41 @@ function RoomBubble({
             >
               <Reply className="w-4 h-4" />
             </button>
+            {/* Either side's messages can be passed on — but only ones this
+                device could verify. Forwarding re-seals and re-signs the body
+                as yours, so an unverified row would arrive somewhere else with
+                the warning stripped off it. */}
+            {isRoomForwardable(m) && (
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm btn-circle"
+                title={t('message.forward')}
+                aria-label={t('message.forward')}
+                onClick={() => {
+                  onForward();
+                  setMenuOpen(false);
+                }}
+              >
+                <CornerUpRight className="w-4 h-4" />
+              </button>
+            )}
+            {/* A chip's tap already means "add or remove mine", so who-reacted
+                gets its own control rather than a second meaning on the chip.
+                Absent when nobody has reacted. */}
+            {reactions.length > 0 && (
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm btn-circle"
+                title={t('reactions.title')}
+                aria-label={t('reactions.title')}
+                onClick={() => {
+                  onShowReactions();
+                  setMenuOpen(false);
+                }}
+              >
+                <SmilePlus className="w-4 h-4" />
+              </button>
+            )}
             {/* Own rows only: you cannot rewrite a message you did not sign.
                 A caption sits in the same two sealed columns as a body, so the
                 words under a picture are editable exactly as text is. */}
@@ -1171,6 +1245,17 @@ function RoomBubble({
         >
           {!mine && (
             <p className={`text-micro font-semibold mb-0.5 ${senderColour}`}>{senderName}</p>
+          )}
+
+          {/* Says how the message got here, not where it came from — naming the
+              original sender would disclose a conversation the rest of this
+              group is not part of. See migration 0018, and 0046 for why the
+              flag is inside the signature. */}
+          {m.forwarded && !isDeleted && (
+            <p className="flex items-center gap-1 mb-1 text-meta italic opacity-70">
+              <CornerUpRight className="w-3 h-3 shrink-0" aria-hidden />
+              {t('message.forwarded')}
+            </p>
           )}
 
           {m.reply_to_id && (

@@ -61,6 +61,8 @@ interface MessageThreadProps {
   onToggleReaction: (messageId: string, emoji: string) => void;
   onReply: (msg: Message) => void;
   onForward: (msg: Message) => void;
+  /** Open the sheet listing who reacted to this message. */
+  onShowReactions: (msg: Message) => void;
   onJumpToReplied: (target: Message) => void;
   onEditingTextChange: (v: string) => void;
   onSaveEdit: (id: string) => void;
@@ -125,6 +127,7 @@ export function MessageThread({
   onToggleReaction,
   onReply,
   onForward,
+  onShowReactions,
   onJumpToReplied,
   onEditingTextChange,
   onSaveEdit,
@@ -284,6 +287,7 @@ export function MessageThread({
                     msg.reply_to_id ? replyTargets.isLoading(msg.reply_to_id) : false
                   }
                   onForward={onForward}
+                  onShowReactions={() => onShowReactions(msg)}
                   onJumpToReplied={onJumpToReplied}
                   status={
                     // No ticks in the self-chat: delivered-to-whom, read-by-whom.

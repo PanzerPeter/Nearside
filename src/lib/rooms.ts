@@ -18,6 +18,7 @@ import {
   signedPayload,
   signedPayloadV2,
   signedPayloadV3,
+  signedPayloadV4,
   verifyBytes,
   type Sealed,
 } from './crypto/seal';
@@ -63,6 +64,9 @@ export interface RoomMessage {
    *  the renderer to fall back to the full object. */
   media_thumb_path?: string | null;
   reply_to_id?: string | null;
+  /** Passed along from another conversation rather than written here. Inside
+   *  the signature (v4) — see `signedPayloadV4`. */
+  forwarded?: boolean | null;
   edited_at?: string | null;
   deleted_at?: string | null;
   /** Stamped by trigger from the group's disappearing timer. Read by the
@@ -92,7 +96,7 @@ export interface RoomMessage {
 export const ROOM_MESSAGE_COLUMNS =
   'id, room_id, sender_id, ciphertext, nonce, signature, media_path, media_type, ' +
   'media_duration_ms, media_key_ciphertext, media_key_nonce, media_thumb_path, ' +
-  'reply_to_id, edited_at, deleted_at, sig_v, created_at';
+  'reply_to_id, forwarded, edited_at, deleted_at, sig_v, created_at';
 
 /** Stable per-speaker colours, by index rather than a hash of the user id. A
  *  hash collides silently and two members share a colour mid-conversation. */
@@ -350,6 +354,9 @@ export interface RoomMediaDraft {
 export interface RoomDraft {
   media?: RoomMediaDraft | null;
   replyToId?: string | null;
+  /** Set only by the forward path. It goes on the row *and* into the payload;
+   *  see `signedPayloadV4` for why it cannot sit outside the signature. */
+  forwarded?: boolean;
 }
 
 /** Everything the sender writes to a row, signature included. Spread straight
@@ -364,8 +371,9 @@ export interface SealedRoomRow {
   media_key_nonce: string | null;
   media_thumb_path: string | null;
   reply_to_id: string | null;
+  forwarded: boolean;
   signature: string;
-  sig_v: 3;
+  sig_v: 4;
 }
 
 /**
@@ -374,9 +382,10 @@ export interface SealedRoomRow {
  * `text` may be null: an attachment with no caption has no body, and sealing
  * an empty string instead would put a known plaintext under every one of them.
  *
- * Always signs v3, text-only messages included. A version picked per row from
- * what the row happens to contain would be a version an attacker gets to pick
- * — strip the media columns, claim v1, and the shorter payload still checks.
+ * Always signs the current version, text-only messages included. A version
+ * picked per row from what the row happens to contain would be a version an
+ * attacker gets to pick — strip the media columns, claim v1, and the shorter
+ * payload still checks.
  *
  * Exported for the test suite, which has no database to send to.
  */
@@ -411,12 +420,13 @@ export async function sealRoomMessage(
     media_key_nonce: media?.key.nonce ?? null,
     media_thumb_path: media?.thumbPath ?? null,
     reply_to_id: draft.replyToId ?? null,
+    forwarded: draft.forwarded ?? false,
   };
 
   return {
     ...row,
-    signature: await signBytes(identity.signPrivate, signedPayloadV3(row)),
-    sig_v: 3,
+    signature: await signBytes(identity.signPrivate, signedPayloadV4(row)),
+    sig_v: 4,
   };
 }
 
@@ -480,6 +490,7 @@ export async function editRoomMessage(
     | 'media_key_nonce'
     | 'media_thumb_path'
     | 'reply_to_id'
+    | 'forwarded'
   >
 ): Promise<void> {
   await sodium.ready;
@@ -497,6 +508,10 @@ export async function editRoomMessage(
     media_key_nonce: existing.media_key_nonce ?? null,
     media_thumb_path: existing.media_thumb_path ?? null,
     reply_to_id: existing.reply_to_id ?? null,
+    // Frozen by `room_messages_prevent_reassign`, like `reply_to_id`: the
+    // payload has to describe the row the server will actually hold, and an
+    // edit that re-signed a forward as original would strip its notice.
+    forwarded: existing.forwarded ?? false,
   };
 
   const { error } = await supabase
@@ -504,8 +519,8 @@ export async function editRoomMessage(
     .update({
       ciphertext: row.ciphertext,
       nonce: row.nonce,
-      signature: await signBytes(identity.signPrivate, signedPayloadV3(row)),
-      sig_v: 3,
+      signature: await signBytes(identity.signPrivate, signedPayloadV4(row)),
+      sig_v: 4,
     })
     .eq('id', id);
   if (error) throw error;
@@ -538,18 +553,21 @@ export async function deleteRoomMessage(id: string, identity: Identity): Promise
     media_key_ciphertext: null,
     media_key_nonce: null,
     media_thumb_path: null,
-    // Frozen by `room_messages_prevent_reassign`, so it must go into the
-    // payload as it is rather than as null — the signature has to describe the
-    // row the server will actually hold.
+    // Frozen by `room_messages_prevent_reassign`, so both must go into the
+    // payload as they are rather than as null — the signature has to describe
+    // the row the server will actually hold.
     reply_to_id: undefined as string | null | undefined,
+    forwarded: undefined as boolean | undefined,
   };
 
   const { data: current } = await supabase
     .from('room_messages')
-    .select('reply_to_id')
+    .select('reply_to_id, forwarded')
     .eq('id', id)
     .single();
-  emptied.reply_to_id = (current as { reply_to_id: string | null } | null)?.reply_to_id ?? null;
+  const frozen = current as { reply_to_id: string | null; forwarded: boolean | null } | null;
+  emptied.reply_to_id = frozen?.reply_to_id ?? null;
+  emptied.forwarded = frozen?.forwarded ?? false;
 
   const { error } = await supabase
     .from('room_messages')
@@ -562,8 +580,8 @@ export async function deleteRoomMessage(id: string, identity: Identity): Promise
       media_key_ciphertext: null,
       media_key_nonce: null,
       media_thumb_path: null,
-      signature: await signBytes(identity.signPrivate, signedPayloadV3(emptied)),
-      sig_v: 3,
+      signature: await signBytes(identity.signPrivate, signedPayloadV4(emptied)),
+      sig_v: 4,
     })
     .eq('id', id);
   if (error) throw error;
@@ -599,7 +617,7 @@ export async function openRoomRows(
       // mean trying the shorter payload, which is the downgrade the version
       // exists to prevent.
       const version = row.sig_v ?? 1;
-      if (version !== 1 && version !== 2 && version !== 3) {
+      if (version !== 1 && version !== 2 && version !== 3 && version !== 4) {
         return { ...row, text: null, sender: 'unverified' };
       }
       const payload =
@@ -607,7 +625,9 @@ export async function openRoomRows(
           ? signedPayload({ nonce: row.nonce ?? '', ciphertext: row.ciphertext ?? '' })
           : version === 2
             ? signedPayloadV2(row)
-            : signedPayloadV3(row);
+            : version === 3
+              ? signedPayloadV3(row)
+              : signedPayloadV4(row);
 
       const ok = await verifyBytes(await fromBase64(signing), row.signature, payload);
       if (!ok) return { ...row, text: null, sender: 'unverified' };

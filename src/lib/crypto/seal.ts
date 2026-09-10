@@ -143,6 +143,9 @@ export interface RoomSignedFields {
   reply_to_id?: string | null;
   /** Version 3 and later. Absent on every row signed before 0044. */
   media_thumb_path?: string | null;
+  /** Version 4 and later. The column is NOT NULL DEFAULT false, so absent and
+   *  false are the same fact and must encode identically — see below. */
+  forwarded?: boolean | null;
 }
 
 /**
@@ -200,6 +203,41 @@ export function signedPayloadV3(f: RoomSignedFields): Uint8Array {
     f.media_key_ciphertext,
     f.reply_to_id,
     f.media_thumb_path,
+  ]);
+}
+
+/**
+ * What a room message's signature covers, version 4.
+ *
+ * Version 3 with `forwarded` appended. The flag is an attribution claim: it is
+ * the difference between somebody's own words and somebody passing along
+ * another conversation's. Outside the payload it is a claim the server gets to
+ * make — clear it and a forward reads as the sender's own, set it and their own
+ * words read as borrowed — and in a room the signature is the only thing a
+ * client has to establish authorship at all.
+ *
+ * Appended, never slotted in beside the other body columns, for the reason v3
+ * was: the order IS the format, and re-ordering silently changes what every
+ * past signature meant.
+ *
+ * `false` and absent encode identically, as the empty string. The column is
+ * `NOT NULL DEFAULT false`, so a draft that omits the field and a row that
+ * carries false are the same fact, and a signature made over one has to verify
+ * against the other. Only `true` has a representation of its own, which is
+ * what makes flipping the flag in either direction break the signature.
+ */
+export function signedPayloadV4(f: RoomSignedFields): Uint8Array {
+  return encodeFields([
+    f.nonce,
+    f.ciphertext,
+    f.media_path,
+    f.media_type,
+    f.media_duration_ms,
+    f.media_key_nonce,
+    f.media_key_ciphertext,
+    f.reply_to_id,
+    f.media_thumb_path,
+    f.forwarded ? '1' : '',
   ]);
 }
 

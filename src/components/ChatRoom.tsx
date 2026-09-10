@@ -15,6 +15,8 @@ import { ChatBackgroundModal } from './ChatBackgroundModal';
 import { NicknameModal } from './NicknameModal';
 import { ProfileCard } from './ProfileCard';
 import { ForwardModal } from './ForwardModal';
+import { ReactionSheet } from './ReactionSheet';
+import { peerSource } from '../lib/forward';
 import { AskSealedModal } from './AskSealedModal';
 import { VerifyContact } from './VerifyContact';
 import { ChatHeader } from './ChatHeader';
@@ -90,6 +92,10 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
   // The message whose "Forward" was chosen, and so the one the picker will
   // copy. Null when the picker is closed.
   const [forwarding, setForwarding] = useState<Message | null>(null);
+  /** The message whose reactions the sheet is showing, by id rather than by
+   *  row: the rows are re-fetched and re-created on every wake, and a captured
+   *  one would leave the open sheet showing a frozen list. */
+  const [showingReactions, setShowingReactions] = useState<string | null>(null);
   /** The failed queued message whose Discard is awaiting confirmation. */
   const [discarding, setDiscarding] = useState<string | null>(null);
   const composerRef = useRef<ComposerHandle>(null);
@@ -265,11 +271,23 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
         />
       )}
 
+      {showingReactions && (
+        <ReactionSheet
+          reactions={byMessage.get(showingReactions) ?? []}
+          me={me}
+          // Two people, so the resolver is a comparison rather than a lookup.
+          // `ReactionSheet` renders your own as "You" before it ever asks.
+          nameFor={() => peerLabel}
+          onClose={() => setShowingReactions(null)}
+        />
+      )}
+
       {forwarding && (
         <ForwardModal
           me={me}
-          msg={forwarding}
-          fromPeerId={friend.id}
+          source={peerSource(forwarding)}
+          preview={messageSnippet(forwarding)}
+          fromKey={friend.id}
           identity={identity}
           onClose={() => setForwarding(null)}
         />
@@ -373,6 +391,7 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
         onToggleReaction={toggle}
         onReply={setReplyingTo}
         onForward={setForwarding}
+        onShowReactions={(msg) => setShowingReactions(msg.id)}
         onJumpToReplied={thread.jumpToRepliedMessage}
         onEditingTextChange={editing.setEditingText}
         onSaveEdit={(id) => void editing.saveEdit(id)}

@@ -17,7 +17,15 @@ import { isCoarsePointer } from '../lib/device';
 import { motionDuration } from '../lib/motion';
 import type { MessageStatusKind } from '../lib/receipts';
 import { MessageStatus } from './MessageStatus';
-import { Copy, CornerUpRight, MoreVertical, Pencil, Trash2, Reply } from 'lucide-react';
+import {
+  Copy,
+  CornerUpRight,
+  MoreVertical,
+  Pencil,
+  SmilePlus,
+  Trash2,
+  Reply,
+} from 'lucide-react';
 
 interface MessageBubbleProps {
   msg: Message;
@@ -48,6 +56,9 @@ interface MessageBubbleProps {
    *  Omitted where forwarding cannot apply — a queued message has no server
    *  row to copy from. */
   onForward?: (msg: Message) => void;
+  /** Show who reacted. Only reached from the menu, and only on a message that
+   *  has reactions — a chip's tap already means "add or remove mine". */
+  onShowReactions?: () => void;
   /** Follow this reply's quote back to the message it answers. */
   onJumpToReplied: (target: Message) => void;
   onEditingTextChange: (v: string) => void;
@@ -74,6 +85,7 @@ export function MessageBubble({
   onToggleReaction,
   onReply,
   onForward,
+  onShowReactions,
   onJumpToReplied,
   onEditingTextChange,
   onSaveEdit,
@@ -209,6 +221,18 @@ export function MessageBubble({
             label: t('common.copy'),
             icon: <Copy className="w-4 h-4" />,
             onSelect: () => void copyContent(),
+          },
+        ]
+      : []),
+    // A chip says how many; this says who. Absent on a message nobody has
+    // reacted to, so the menu does not grow a row that opens an empty sheet.
+    ...(onShowReactions && hasReactions
+      ? [
+          {
+            key: 'reactions',
+            label: t('reactions.title'),
+            icon: <SmilePlus className="w-4 h-4" />,
+            onSelect: onShowReactions,
           },
         ]
       : []),

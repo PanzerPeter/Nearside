@@ -418,7 +418,7 @@ export const de: Catalog = {
   'room.skippedMembers#other':
     '{count} davon konnten nicht hinzugefügt werden. Es gibt noch keinen veröffentlichten Schlüssel.',
   'forward.title': 'Weiterleiten an',
-  'forward.searchPlaceholder': 'Unterhaltungen durchsuchen...',
+  'forward.searchPlaceholder': 'Chats und Gruppen durchsuchen...',
   'forward.noTargets': 'Es gibt keine andere Unterhaltung zum Weiterleiten.',
   'forward.noMatch': 'Keine Unterhaltung passt dazu.',
   'forward.loadFailed': 'Deine Unterhaltungen ließen sich nicht laden.',
@@ -426,7 +426,11 @@ export const de: Catalog = {
   'forward.doneMany': 'An {count} Chats weitergeleitet.',
   'forward.mediaMissing': 'Dieser Anhang lässt sich nicht mehr weiterleiten.',
   'forward.notSetUp': 'Weiterleiten ist auf dem Server noch nicht eingerichtet.',
+  'forward.noRoomKey': 'Dieses Gerät hat keinen Schlüssel für {name}.',
   'forward.failed': 'Weiterleiten an {name} nicht möglich.',
+
+  'reactions.title': 'Reaktionen',
+  'reactions.none': 'Darauf hat noch niemand reagiert.',
   'lightbox.saveFailed': 'Die Datei ließ sich nicht speichern.',
   'lightbox.pinned':
     'Auf diesem Telefon angeheftet. Sie bleibt, auch wenn die Serverkopie verschwindet.',
