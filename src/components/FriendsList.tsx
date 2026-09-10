@@ -612,8 +612,10 @@ export function FriendsList({
     <div className="flex flex-col h-full bg-base-100">
       {/* Header. It carries the notch inset itself: on a phone this list is the
           top of the screen — the shared top bar is desktop-only — while on
-          desktop that bar is above it and already paid for the inset. */}
-      <div className="px-4 pb-3 pt-[calc(1rem+var(--safe-top))] border-b border-hairline">
+          desktop that bar is above it and already paid for the inset.
+          Past `lg` it also stands in the `--chrome-top` band, so the rule under
+          it meets the conversation header's rule rather than sitting below it. */}
+      <div className="px-4 pb-3 pt-[calc(1rem+var(--safe-top))] lg:flex lg:flex-col lg:justify-center lg:min-h-[var(--chrome-top)] lg:py-2 border-b border-hairline">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <Users className="w-5 h-5 text-primary hidden lg:block" />

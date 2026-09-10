@@ -44,6 +44,7 @@ import type { Profile, Reaction } from '../lib/types';
 import { Composer, type ComposerHandle } from './Composer';
 import { MediaAttachment } from './MediaAttachment';
 import { MessageText } from './MessageText';
+import { jumboEmojiCount } from '../lib/emoji-only';
 import { ReactionBar } from './ReactionBar';
 import { ReactionChips } from './ReactionChips';
 import { StickerAttachment } from './StickerAttachment';
@@ -344,7 +345,7 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
     <div className="flex flex-col h-full bg-base-200/50 min-h-0">
       {/* Same top edge as ChatHeader, and inset the same way — see the comment
           there for why `lg:` puts it back. */}
-      <header className="navbar bg-base-100 px-2 sm:px-4 pt-[calc(0.5rem+var(--safe-top))] shrink-0 border-b border-hairline min-h-[3.5rem] gap-1">
+      <header className="navbar bg-base-100 px-2 sm:px-4 pt-[calc(0.5rem+var(--safe-top))] shrink-0 border-b border-hairline min-h-[3.5rem] lg:min-h-[var(--chrome-top)] gap-1">
         <button
           className="btn btn-ghost btn-sm btn-square lg:hidden"
           onClick={onBack}
@@ -562,6 +563,13 @@ function RoomBubble({
   const mine = m.sender_id === me;
   const [menuOpen, setMenuOpen] = useState(false);
   const readable = m.sender !== 'unverified' && m.sender !== 'unknown';
+  // A body of nothing but one to three emoji, drawn large and without the
+  // bubble — the same treatment `MessageBubble` gives it in a 1:1 thread, so a
+  // reaction sent as a message looks the same in both places. The sender's name
+  // stays: it reads on the thread background in its own colour, and a group
+  // message that doesn't say who sent it is worse than one in a box.
+  const jumboEmoji =
+    readable && m.text && !m.media_path && !m.reply_to_id ? jumboEmojiCount(m.text) : 0;
 
   const swipe = useSwipeToReply({
     enabled: readable,
@@ -621,14 +629,18 @@ function RoomBubble({
             transform: swipe.offset ? `translateX(${(mine ? -1 : 1) * swipe.offset}px)` : undefined,
           }}
           {...swipe.handlers}
-          className={`selection-on-fill text-left rounded-box px-3 py-2 ${
+          className={`selection-on-fill text-left rounded-box ${
+            jumboEmoji > 0 ? 'px-0 py-0' : 'px-3 py-2'
+          } ${
             m.sender === 'unverified'
               ? 'bg-error/10 border border-error/40'
               : m.sender === 'unknown'
                 ? 'bg-warning/10 border border-warning/40'
-                : mine
-                  ? 'bg-primary text-primary-content'
-                  : 'bg-base-100 border border-hairline'
+                : jumboEmoji > 0
+                  ? 'text-base-content'
+                  : mine
+                    ? 'bg-primary text-primary-content'
+                    : 'bg-base-100 border border-hairline'
           }`}
         >
           {!mine && (
@@ -706,6 +718,20 @@ function RoomBubble({
                   <Lock className="w-4 h-4 shrink-0 mt-0.5" />
                   <span>{t('room.beforeYouJoined')}</span>
                 </p>
+              ) : jumboEmoji > 0 && m.text ? (
+                // Straight through, no linkify and no mention pass: a body that
+                // reached here is emoji and nothing else.
+                <div
+                  className={
+                    jumboEmoji === 1
+                      ? 'text-jumbo-1'
+                      : jumboEmoji === 2
+                        ? 'text-jumbo-2'
+                        : 'text-jumbo-3'
+                  }
+                >
+                  {m.text.trim()}
+                </div>
               ) : m.text ? (
                 <div className="text-body whitespace-pre-wrap wrap-break-word">
                   <MessageText text={m.text} handles={handles} myHandle={myHandle} />
@@ -716,7 +742,9 @@ function RoomBubble({
 
           <p
             className={`text-micro mt-1 text-right ${
-              mine && m.sender === 'verified' ? 'text-primary-content/60' : 'text-muted'
+              mine && m.sender === 'verified' && jumboEmoji === 0
+                ? 'text-primary-content/60'
+                : 'text-muted'
             }`}
           >
             {formatTime(m.created_at)}

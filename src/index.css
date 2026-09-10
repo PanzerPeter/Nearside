@@ -434,6 +434,28 @@
   --text-meta--line-height: 1.125rem;
   --text-micro: 0.6875rem;
   --text-micro--line-height: 1rem;
+
+  /* Off the ladder on purpose: these are not a text role, they are the size an
+     emoji sent on its own is drawn at (`lib/emoji-only.ts`). Three rungs rather
+     than one because three glyphs at the size of one run past the bubble's
+     width on a phone, and the count is known before the size is picked. */
+  --text-jumbo-1: 3.25rem;
+  --text-jumbo-1--line-height: 1.1;
+  --text-jumbo-2: 2.5rem;
+  --text-jumbo-2--line-height: 1.1;
+  --text-jumbo-3: 2rem;
+  --text-jumbo-3--line-height: 1.1;
+
+  /* The desktop chrome bands.
+     -----------------------------------------------------------------------
+     Two panes sit side by side past `lg`, and each brought its own padding:
+     the list header stood 76px tall, the conversation header 60px and the room
+     header 64px, so the rule under them landed at three different heights and
+     the eye read the seam between the panes as crooked. Same story at the
+     foot, where the account rail sat 20px above the composer's resting height.
+     Both bands are held here so the two sides cannot drift apart again. */
+  --chrome-top: 4rem;
+  --chrome-bottom: 5rem;
 }
 
 /* The text ladder, and why `inline`.

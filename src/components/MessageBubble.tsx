@@ -12,6 +12,7 @@ import { useToast } from '../hooks/useToast';
 import { useT } from '../hooks/useT';
 import { MAX_MESSAGE_LENGTH, canEditBody, messageSnippet } from '../lib/conversation';
 import { isForwardable } from '../lib/forward';
+import { jumboEmojiCount } from '../lib/emoji-only';
 import { isCoarsePointer } from '../lib/device';
 import { motionDuration } from '../lib/motion';
 import type { MessageStatusKind } from '../lib/receipts';
@@ -110,6 +111,26 @@ export function MessageBubble({
     !msg.forwarded &&
     !msg.reply_to_id &&
     !msg.decrypt_failed;
+  /**
+   * A body of nothing but one to three emoji, which is somebody reacting in a
+   * message rather than writing one. Drawn large, and — like a bare sticker —
+   * with the bubble taken away: at this size the emoji is the whole message and
+   * a coloured rectangle behind it only crowds the glyph.
+   *
+   * The same disqualifiers as a bare sticker apply. A forward notice, a reply
+   * quote or an undecryptable warning is other content that needs a surface.
+   */
+  const jumboEmoji =
+    !isDeleted &&
+    !!msg.text &&
+    !msg.media_path &&
+    !msg.forwarded &&
+    !msg.reply_to_id &&
+    !msg.decrypt_failed
+      ? jumboEmojiCount(msg.text)
+      : 0;
+  /** Both forms that drop the bubble and sit straight on the thread. */
+  const bareGlyph = stickerAlone || jumboEmoji > 0;
   // Nothing above or below the picture inside the bubble. Then it is the whole
   // bubble, and the footer has no line of its own to sit on: rather than leave
   // a bare band of bubble colour under the image, it floats over the corner.
@@ -424,10 +445,10 @@ export function MessageBubble({
               touchAction: canReply ? 'pan-y' : undefined,
             }}
             className={`rounded-box whitespace-pre-wrap wrap-break-word cursor-default ${
-              // A bare sticker keeps the rounding (reaction chips and the menu
-              // ring still anchor to this box) and drops everything that would
-              // draw a frame around it.
-              stickerAlone ? 'p-0' : 'px-3.5 pt-2 shadow-[0_1px_2px_rgba(0,0,0,0.28)]'
+              // A bare sticker or a jumbo emoji keeps the rounding (reaction
+              // chips and the menu ring still anchor to this box) and drops
+              // everything that would draw a frame around it.
+              bareGlyph ? 'p-0' : 'px-3.5 pt-2 shadow-[0_1px_2px_rgba(0,0,0,0.28)]'
             } ${
               isOwn ? 'rounded-br-md' : 'rounded-bl-md'
             } ${
@@ -436,7 +457,7 @@ export function MessageBubble({
               // right-aligned footer; the pad keeps them over dead space
               // rather than over the timestamp. A bare picture keeps no bottom
               // padding at all — its footer floats over the image instead.
-              stickerAlone
+              bareGlyph
                 ? hasReactions
                   ? 'pb-3'
                   : 'pb-0'
@@ -448,7 +469,7 @@ export function MessageBubble({
             } ${
               isDeleted
                 ? 'bg-base-300/60 text-muted italic'
-                : stickerAlone
+                : bareGlyph
                   ? // No bubble colour at all. The footer below reads against the
                     // thread background instead, which is why it is given its own
                     // treatment there rather than inheriting `text-*-content`.
@@ -556,7 +577,25 @@ export function MessageBubble({
                       />
                     </div>
                   ))}
-                {msg.text && <MessageText text={msg.text} />}
+                {msg.text &&
+                  (jumboEmoji > 0 ? (
+                    // Straight through, no linkify and no mention pass: a body
+                    // that reached here is emoji and nothing else, so there is
+                    // nothing in it for either matcher to find.
+                    <div
+                      className={
+                        jumboEmoji === 1
+                          ? 'text-jumbo-1'
+                          : jumboEmoji === 2
+                            ? 'text-jumbo-2'
+                            : 'text-jumbo-3'
+                      }
+                    >
+                      {msg.text.trim()}
+                    </div>
+                  ) : (
+                    <MessageText text={msg.text} />
+                  ))}
                 {/* Sealed, and this device could not open it — most likely a
                     vault written under a key this phone was never given. Said
                     out loud, because an empty bubble would read as a message

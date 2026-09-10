@@ -14,6 +14,25 @@ one of them drifts.
 
 ## [Unreleased]
 
+## [1.8.0] — 2026-09-10
+
+### Added
+
+- **Emoji sent on their own are drawn large.** One to three emoji with nothing
+  else in the message is somebody reacting rather than writing, and it now looks
+  like it: the glyphs come up to the size every other messenger gives them and
+  the coloured bubble behind them goes away, the same way it does for a sticker.
+  A fourth emoji, or a single word beside them, is a message again and stays the
+  size it was.
+
+### Changed
+
+- **The two panes line up on a desktop window.** The chat list, the conversation
+  header and the room header each set their own height, so the rule under them
+  landed in three different places and the seam between the panes read as
+  crooked; the account row at the foot of the list sat above the message box
+  beside it for the same reason. Both edges are now one height each.
+
 ## [1.7.1] — 2026-09-10
 
 ### Changed

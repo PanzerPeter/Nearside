@@ -29,7 +29,9 @@ export function AccountRail({ profile, profileFailed, onOpenSettings }: AccountR
   return (
     // The tab bar is `lg:hidden`, so on a tablet wide enough for this layout
     // the rail is what sits on the bottom edge and has to inset itself.
-    <div className="hidden lg:block shrink-0 border-t border-hairline bg-base-100 p-2 pb-[calc(0.5rem+var(--safe-bottom))]">
+    // The band is `--chrome-bottom` tall so the rail's rule lines up with the
+    // composer's across the seam, and the row centres in whatever is left.
+    <div className="hidden lg:flex lg:flex-col lg:justify-center shrink-0 border-t border-hairline bg-base-100 p-2 pb-[calc(0.5rem+var(--safe-bottom))] min-h-[calc(var(--chrome-bottom)+var(--safe-bottom))]">
       <button
         type="button"
         onClick={onOpenSettings}
