@@ -14,6 +14,17 @@ one of them drifts.
 
 ## [Unreleased]
 
+## [1.7.1] — 2026-09-10
+
+### Changed
+
+- **The libraries the app is built on were brought up to date**, this time only
+  within their current major versions, so nothing was meant to look or behave
+  differently. What comes with them is other people's fixes: the notification
+  SDK reads an Android payload back correctly, the QR scanner returns a result
+  the system interrupted, and the component library corrects menus and toasts
+  in right-to-left layouts. React itself moved a minor version.
+
 ## [1.7.0] — 2026-09-10
 
 ### Added

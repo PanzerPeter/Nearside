@@ -61,8 +61,8 @@ export default tseslint.config(
       // `set-state-in-effect` fires 51 times, and it is describing this app's
       // architecture rather than a defect: every realtime subscriber keys its
       // effect on `connection.ts`'s `generation` counter and sets state when
-      // the refetch beside it lands (see CLAUDE.md, "Wake, generation, and the
-      // polling fallback"). `useDegraded` is the shape in miniature — an
+      // the refetch beside it lands (`src/lib/connection.ts` has the whole
+      // story). `useDegraded` is the shape in miniature — an
       // effect that syncs a timer to external socket health. The rule's advice
       // is to derive instead, which for a value that arrives from a socket is
       // not available.

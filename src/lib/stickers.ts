@@ -378,9 +378,9 @@ export function forgetSticker(id: string): void {
  * Drop every cached sticker.
  *
  * Belongs in the sign-out and account-switch teardown: these are decrypted
- * images held in memory under the previous account's vault key, and CLAUDE.md's
- * rule is that a new per-account cache is added to that chain or it leaks into
- * the next account on the device.
+ * images held in memory under the previous account's vault key, and every new
+ * per-account cache joins that chain or it leaks into the next account on the
+ * device.
  */
 export function forgetStickers(): void {
   for (const url of objectUrls.values()) URL.revokeObjectURL(url);

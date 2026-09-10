@@ -76,7 +76,7 @@ export function AttachMenu({
             }}
           >
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary">
-              <Icon className="h-[18px] w-[18px]" />
+              <Icon className="h-4.5 w-4.5" />
             </span>
             {label}
           </button>

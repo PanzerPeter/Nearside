@@ -18,8 +18,8 @@
 // That module is the *message* boundary: it branches on the self-chat and
 // writes opened text through to the local mirror, neither of which applies to a
 // signal that must never be persisted anywhere. The single-seal-boundary rule
-// in CLAUDE.md is about message bodies; this is a different payload with a
-// different lifetime.
+// is about message bodies; this is a different payload with a different
+// lifetime.
 //
 // No Ed25519 signature, unlike `lib/rooms.ts`. Rooms need one because every
 // member holds the same symmetric key, so decryption proves membership and not

@@ -90,9 +90,9 @@ export function SealedExchange({
             }`}
           >
             {state === 'revealed' ? (
-              <Unlock className="h-[14px] w-[14px]" />
+              <Unlock className="h-3.5 w-3.5" />
             ) : (
-              <Lock className="h-[14px] w-[14px]" />
+              <Lock className="h-3.5 w-3.5" />
             )}
           </span>
           <span className="text-meta font-medium text-muted">

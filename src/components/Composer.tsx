@@ -672,9 +672,9 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
                 and stages it for playback; the send is the separate press
                 afterwards, and an arrow here promised otherwise. */}
             {recorder.recording ? (
-              <Square className="w-[15px] h-[15px] fill-current" />
+              <Square className="w-3.75 h-3.75 fill-current" />
             ) : (
-              <Mic className="w-[18px] h-[18px]" />
+              <Mic className="w-4.5 h-4.5" />
             )}
           </button>
         ) : (
@@ -689,9 +689,9 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
             {busy || editBar?.saving ? (
               <span className="loading loading-spinner loading-sm" />
             ) : editBar ? (
-              <Check className="w-[18px] h-[18px]" />
+              <Check className="w-4.5 h-4.5" />
             ) : (
-              <Send className="w-[18px] h-[18px]" />
+              <Send className="w-4.5 h-4.5" />
             )}
           </button>
         )}
