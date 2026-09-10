@@ -78,3 +78,24 @@ export function changedPositions<T extends { id: string; sort: number }>(
 export function renumber<T extends { sort: number }>(ordered: readonly T[]): T[] {
   return ordered.map((item, index) => (item.sort === index ? item : { ...item, sort: index }));
 }
+
+/**
+ * One drag, as both halves of the answer: the order to show, and the rows to
+ * write.
+ *
+ * The two are computed in this order for a reason that cost a working feature.
+ * `changedPositions` finds a row that has moved by comparing its *stored*
+ * `sort` against its new index, so it has to see the list before it is
+ * renumbered — renumber first and every row already agrees with its own
+ * index, the diff is empty, and the drag is never written down. The grid moved
+ * under the finger, the round trip never happened, and the old order came back
+ * on the next open.
+ */
+export function planReorder<T extends { id: string; sort: number }>(
+  list: readonly T[],
+  from: number,
+  to: number
+): { next: T[]; positions: { id: string; sort: number }[] } {
+  const moved = moveItem(list, from, to);
+  return { next: renumber(moved), positions: changedPositions(moved) };
+}

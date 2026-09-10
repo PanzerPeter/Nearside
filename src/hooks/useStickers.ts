@@ -4,8 +4,9 @@
 // that holds an identity, so this is where it is opened — the same split
 // `useSealedExchange` and `ChatRoom.open` use.
 
-import { useCallback, useEffect, useState } from 'react';
-import { changedPositions, moveItem, renumber } from '../lib/reorder';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { mapWithLimit } from '../lib/pool';
+import { planReorder } from '../lib/reorder';
 import {
   deleteSticker,
   forgetSticker,
@@ -17,6 +18,7 @@ import {
   stickerRejection,
   stickerUrl,
   uploadSticker,
+  STICKER_FETCH_CONCURRENCY,
   STICKER_LIMIT,
   type Sticker,
 } from '../lib/stickers';
@@ -74,20 +76,54 @@ export function useStickers(userId: string | null, identity: Identity | null): S
     void reload();
   }, [active, reload]);
 
+  /**
+   * Stickers whose bytes have already been asked for.
+   *
+   * This effect re-runs on every change to the list, and a drag changes the
+   * list on every tile the finger crosses — without this, one reorder gesture
+   * re-walks the whole library a dozen times, allocating a fetch per sticker
+   * per frame to discover they are all cached. A ref rather than state because
+   * nothing renders from it.
+   */
+  const requested = useRef(new Set<string>());
+
   // Bytes are fetched per sticker rather than as one batch: the cache in
   // `lib/stickers.ts` is module-level, so a second open of the drawer resolves
   // every one of these immediately and nothing is refetched.
+  //
+  // A few at a time, not all of them. Storage downloads sit outside the read
+  // queue by design (`net-queue.ts`), so a hundred-sticker library opened at
+  // the same moment as the emoji panel is a hundred GETs competing with it —
+  // and the first row of tiles, the only one on screen, arrives last.
   useEffect(() => {
+    const asked = requested.current;
+    const pending = stickers.filter((s) => s.key && !asked.has(s.id));
+    if (pending.length === 0) return;
+    for (const sticker of pending) asked.add(sticker.id);
+
     let cancelled = false;
-    for (const sticker of stickers) {
-      if (!sticker.key) continue;
-      void stickerUrl(sticker).then((url) => {
+    const arrived = new Set<string>();
+    void mapWithLimit(
+      pending,
+      STICKER_FETCH_CONCURRENCY,
+      async (sticker) => {
+        const url = await stickerUrl(sticker);
         if (cancelled || !url) return;
-        setUrls((current) => (current[sticker.id] === url ? current : { ...current, [sticker.id]: url }));
-      });
-    }
+        arrived.add(sticker.id);
+        setUrls((current) =>
+          current[sticker.id] === url ? current : { ...current, [sticker.id]: url }
+        );
+      },
+      () => cancelled
+    );
     return () => {
       cancelled = true;
+      // Whatever the cancel caught has to be askable again, or a picker closed
+      // during the first load leaves those tiles blank for the rest of the
+      // session — the ref would still be claiming they were fetched.
+      for (const sticker of pending) {
+        if (!arrived.has(sticker.id)) asked.delete(sticker.id);
+      }
     };
   }, [stickers]);
 
@@ -118,6 +154,7 @@ export function useStickers(userId: string | null, identity: Identity | null): S
       delete next[sticker.id];
       return next;
     });
+    requested.current.delete(sticker.id);
     forgetSticker(sticker.id);
     await deleteSticker(sticker.id, sticker.path);
   }, []);
@@ -127,11 +164,10 @@ export function useStickers(userId: string | null, identity: Identity | null): S
       const from = current.findIndex((s) => s.id === fromId);
       const to = current.findIndex((s) => s.id === toId);
       if (from < 0 || to < 0 || from === to) return current;
-      const next = renumber(moveItem(current, from, to));
       // Written against the order the user just made, not against `current`
       // read back later: another drag can land before this settles, and the
       // second write is then the one that wins — which is the right one.
-      const positions = changedPositions(next);
+      const { next, positions } = planReorder(current, from, to);
       if (positions.length > 0) void saveStickerOrder(positions);
       return next;
     });

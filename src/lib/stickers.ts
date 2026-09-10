@@ -40,6 +40,19 @@ export const STICKER_MAX_BYTES = 1_048_576;
 
 export const STICKER_LABEL_MAX = 32;
 
+/**
+ * How many stickers are fetched and decrypted at once when the drawer opens.
+ *
+ * Storage downloads are outside the read queue in `net-queue.ts` on purpose —
+ * a 50 MB video must not hold one of six slots with every query in the app
+ * behind it — so nothing else bounds this. A full library is a hundred objects,
+ * and asking for all hundred at the moment the picker opens is a hundred GETs
+ * competing with each other and with the emoji panel's own half a megabyte:
+ * the four tiles actually on screen then arrive last. Four at a time fills the
+ * visible row first and keeps the rest arriving steadily behind it.
+ */
+export const STICKER_FETCH_CONCURRENCY = 4;
+
 /** Ceiling on the library. A grid this size already needs scrolling, and every
  *  entry is a row plus an object that sign-out has to clean up. */
 export const STICKER_LIMIT = 100;

@@ -970,6 +970,7 @@ export const de: Catalog = {
   'stickers.noMatch': 'Nichts passt zu „{query}“.',
   'stickers.deleteOne': '{label} löschen',
   'stickers.reorderHint': 'Zum Umsortieren einen Sticker ziehen',
+  'stickers.reorderHintTouch': 'Sticker halten und dann ziehen, um umzusortieren',
   'preview.draftLabel': 'Entwurf:',
   'chatList.archive': 'Archivieren',
   'chatList.unarchive': 'Aus dem Archiv holen',

@@ -10,9 +10,10 @@ import {
   useState,
 } from 'react';
 import { createPortal } from 'react-dom';
+import { loadEmojiPanel } from '../lib/emoji-panel';
 import { dismissesOnScroll } from '../lib/popover-dismiss';
 
-const EmojiPicker = lazy(() => import('./EmojiPicker'));
+const EmojiPicker = lazy(loadEmojiPanel);
 
 interface EmojiPopoverProps {
   open: boolean;
@@ -66,6 +67,16 @@ export function EmojiPopover({
 }: EmojiPopoverProps) {
   const [pos, setPos] = useState<Pos | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+  /**
+   * The current `onClose`, without it being a dependency.
+   *
+   * Both callers pass a fresh arrow on every render, and the composer
+   * re-renders on every keystroke — so an effect that depended on this one
+   * re-measured the trigger and swapped a capture-phase scroll listener for an
+   * identical one on every character typed with the picker open.
+   */
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
   // Reset on every open rather than remembered across them. The emoji half is
   // what the button promises, and reopening into a sticker grid because that is
   // where you were ten minutes ago reads as the wrong panel.
@@ -112,7 +123,7 @@ export function EmojiPopover({
           anchor: anchorRef.current,
         })
       ) {
-        onClose();
+        closeRef.current();
       }
     }
 
@@ -123,7 +134,7 @@ export function EmojiPopover({
       window.removeEventListener('resize', place);
       window.removeEventListener('scroll', onScroll, true);
     };
-  }, [open, anchorRef, onClose]);
+  }, [open, anchorRef]);
 
   // emoji-mart fires this for any click it considers "outside" its root. Ignore
   // clicks on the trigger button — otherwise the click that opens the picker
@@ -133,19 +144,19 @@ export function EmojiPopover({
     (e: MouseEvent) => {
       const t = e.target as Node;
       if (panelRef.current?.contains(t) || anchorRef.current?.contains(t)) return;
-      onClose();
+      closeRef.current();
     },
-    [anchorRef, onClose]
+    [anchorRef]
   );
 
   useEffect(() => {
     if (!open) return;
     function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') closeRef.current();
     }
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open || !pos) return null;
 

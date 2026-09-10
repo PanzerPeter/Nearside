@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ImagePlus, Search, Trash2 } from 'lucide-react';
+import { isCoarsePointer } from '../lib/device';
 import { indexAtPoint, movedBeyond } from '../lib/reorder';
 import { matchesLabel, STICKER_SOURCE_TYPES, type Sticker } from '../lib/stickers';
 import type { StickerDrawer } from '../hooks/useStickers';
@@ -27,15 +28,37 @@ export function StickerPicker({ drawer, onSelect, onError }: StickerPickerProps)
   const [armed, setArmed] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const holdTimer = useRef<number | null>(null);
-  /** The sticker being dragged, once the pointer has travelled far enough to
-   *  mean it. Null while a press is still just a press. */
+  /** The sticker being dragged — or, on a touchscreen, picked up and about to
+   *  be. Null while a press is still just a press; drives the lifted look. */
   const [dragging, setDragging] = useState<string | null>(null);
   const gridRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const pressOrigin = useRef<{ x: number; y: number; id: string } | null>(null);
-  /** Suppresses the click that ends a drag: a pointerup after reordering is
-   *  still a click on the tile, and without this every drag also sent the
-   *  sticker it had just moved. */
-  const draggedRef = useRef(false);
+  /**
+   * The tile being dragged, as a ref.
+   *
+   * The same thing `dragging` renders, kept beside it because the pointer
+   * handlers have to know whether a drag is live *within* the event that
+   * starts one, and state set a moment ago in a timer is not readable there.
+   */
+  const dragIdRef = useRef<string | null>(null);
+  /**
+   * Whether a touch has picked its tile up.
+   *
+   * On a touchscreen a press and a drag begin identically to a scroll, and the
+   * browser decides which it is at the first movement. So the pick-up is the
+   * long press: while it holds, the finger has not moved, no scroll has
+   * started, and the touchmove listener below can still refuse one.
+   */
+  const lifted = useRef(false);
+  /** Whether this device is a touchscreen, decided once — a drag begins on
+   *  travel with a mouse and on the long press without one. */
+  const [coarse] = useState(isCoarsePointer);
+  /** Suppresses the click that ends a gesture: a pointerup after a drag or a
+   *  long press is still an ordinary click on the tile. Without it a drag also
+   *  sent the sticker it had just moved, and a long press armed the delete
+   *  button and then dismissed it in the same gesture. */
+  const swallowClick = useRef(false);
 
   // The drawer is owned by ChatRoom and loads nothing until something asks. The
   // popover mounts this component the moment it opens, tab selected or not, so
@@ -60,13 +83,50 @@ export function StickerPicker({ drawer, onSelect, onError }: StickerPickerProps)
   }
 
   function startHold(id: string) {
-    holdTimer.current = window.setTimeout(() => setArmed(id), 500);
+    holdTimer.current = window.setTimeout(() => {
+      holdTimer.current = null;
+      setArmed(id);
+      // The click that follows the release would otherwise dismiss what this
+      // just armed, so the delete button never appeared on a phone at all.
+      swallowClick.current = true;
+      // On a touchscreen the same press is the pick-up. Only when the finger
+      // is still on the tile it started on: a press that has already wandered
+      // is a scroll.
+      if (pressOrigin.current?.id === id) {
+        lifted.current = true;
+        setDragging(id);
+      }
+    }, 500);
   }
 
   function cancelHold() {
     if (holdTimer.current !== null) window.clearTimeout(holdTimer.current);
     holdTimer.current = null;
   }
+
+  /**
+   * Refuse the scroll a lifted tile's movement would otherwise be.
+   *
+   * Registered natively and non-passive, which is the whole point: React
+   * attaches `touchmove` at the root as a passive listener, where
+   * `preventDefault` does nothing at all. Without this the first movement
+   * after the pick-up scrolls the grid instead, the browser takes the gesture
+   * over, the pointer stream is cancelled — and no sticker can be dragged
+   * anywhere on a touchscreen, which is every phone the app ships to.
+   *
+   * `touch-action` cannot do this job: its value is read when the gesture
+   * begins, so a tile that only becomes undraggable-by-scroll once a drag is
+   * under way has already lost.
+   */
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const onTouchMove = (e: TouchEvent) => {
+      if (lifted.current && e.cancelable) e.preventDefault();
+    };
+    el.addEventListener('touchmove', onTouchMove, { passive: false });
+    return () => el.removeEventListener('touchmove', onTouchMove);
+  }, []);
 
   /**
    * Reordering is off while a search is filtering the grid.
@@ -79,25 +139,41 @@ export function StickerPicker({ drawer, onSelect, onError }: StickerPickerProps)
   const canReorder = query.trim() === '';
 
   function onTilePointerDown(e: React.PointerEvent, id: string) {
+    swallowClick.current = false;
+    // Set before the hold timer can read it: the pick-up checks that the press
+    // is still on the tile it started on.
+    if (canReorder) pressOrigin.current = { x: e.clientX, y: e.clientY, id };
     startHold(id);
-    if (!canReorder) return;
-    pressOrigin.current = { x: e.clientX, y: e.clientY, id };
-    draggedRef.current = false;
   }
 
   function onTilePointerMove(e: React.PointerEvent) {
     const origin = pressOrigin.current;
     if (!origin) return;
+    const travelled = movedBeyond(origin, { x: e.clientX, y: e.clientY }, 6);
 
-    if (!dragging) {
-      // A tap wobbles, so a drag only begins once the pointer has really
-      // travelled. Crossing that line also cancels the long-press: the two
-      // gestures start identically and only one of them can win.
-      if (!movedBeyond(origin, { x: e.clientX, y: e.clientY }, 6)) return;
-      cancelHold();
-      setArmed(null);
+    if (!dragIdRef.current) {
+      if (coarse) {
+        // Until the tile has been picked up, movement is the grid being
+        // scrolled — the browser is welcome to it, and the long press the
+        // finger has walked away from is over.
+        if (!lifted.current) {
+          if (travelled) {
+            cancelHold();
+            pressOrigin.current = null;
+          }
+          return;
+        }
+      } else {
+        // A tap wobbles, so with a mouse a drag begins once the pointer has
+        // really travelled. Crossing that line also cancels the long press:
+        // the two gestures start identically and only one can win.
+        if (!travelled) return;
+        cancelHold();
+        setArmed(null);
+      }
+      dragIdRef.current = origin.id;
+      swallowClick.current = true;
       setDragging(origin.id);
-      draggedRef.current = true;
       // Captured so the drag survives the pointer leaving the tile it started
       // on — which it does immediately, that being the point.
       (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
@@ -113,13 +189,15 @@ export function StickerPicker({ drawer, onSelect, onError }: StickerPickerProps)
     );
     if (over === null) return;
     const targetId = shown[over]?.id;
-    const heldId = dragging ?? origin.id;
-    if (targetId && targetId !== heldId) drawer.reorder(heldId, targetId);
+    const heldId = dragIdRef.current;
+    if (targetId && heldId && targetId !== heldId) drawer.reorder(heldId, targetId);
   }
 
   function endDrag() {
     cancelHold();
     pressOrigin.current = null;
+    dragIdRef.current = null;
+    lifted.current = false;
     setDragging(null);
   }
 
@@ -141,7 +219,11 @@ export function StickerPicker({ drawer, onSelect, onError }: StickerPickerProps)
         </label>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto px-2 pb-2" onScroll={() => setArmed(null)}>
+      <div
+        ref={scrollRef}
+        className="flex-1 min-h-0 overflow-y-auto px-2 pb-2"
+        onScroll={() => setArmed(null)}
+      >
         {drawer.loading ? (
           <div className="flex justify-center py-10">
             <span className="loading loading-spinner loading-sm" />
@@ -166,10 +248,12 @@ export function StickerPicker({ drawer, onSelect, onError }: StickerPickerProps)
               >
                 <button
                   type="button"
-                  className="w-full h-full flex items-center justify-center rounded-field hover:bg-wash active:scale-95 transition"
+                  // `select-none` and the callout suppression are what keep the
+                  // long press a gesture this app handles: see the image below.
+                  className="w-full h-full flex items-center justify-center rounded-field hover:bg-wash active:scale-95 transition select-none [-webkit-touch-callout:none]"
                   onClick={() => {
-                    if (draggedRef.current) {
-                      draggedRef.current = false;
+                    if (swallowClick.current) {
+                      swallowClick.current = false;
                       return;
                     }
                     if (armed === sticker.id) setArmed(null);
@@ -180,9 +264,11 @@ export function StickerPicker({ drawer, onSelect, onError }: StickerPickerProps)
                   onPointerUp={endDrag}
                   onPointerCancel={endDrag}
                   onPointerLeave={cancelHold}
-                  // Only while a drag is live: set unconditionally it would
-                  // take scrolling the grid away from the finger.
-                  style={dragging ? { touchAction: 'none' } : undefined}
+                  // Only while a tile is held: set unconditionally it would
+                  // take scrolling the grid away from the finger. The touchmove
+                  // listener is what actually holds the scroll off mid-gesture
+                  // — this keeps the pinch and the fling off the tile as well.
+                  style={dragging === sticker.id ? { touchAction: 'none' } : undefined}
                   onContextMenu={(e) => {
                     e.preventDefault();
                     setArmed(sticker.id);
@@ -193,7 +279,19 @@ export function StickerPicker({ drawer, onSelect, onError }: StickerPickerProps)
                     <img
                       src={drawer.urls[sticker.id]}
                       alt={sticker.label || t('preview.sticker')}
-                      className="max-w-full max-h-full object-contain"
+                      // Not a target for anything.
+                      //
+                      // A long press on an *image* is a gesture Android Chrome
+                      // claims for itself: it fires `contextmenu` and then a
+                      // `pointercancel` that is not cancelable, so the touch
+                      // sequence is dead before the tile can be dragged
+                      // anywhere — which is why reordering never worked on a
+                      // phone. Preventing the context menu does not give the
+                      // gesture back. With the image out of the hit test the
+                      // press lands on the button, which has nothing to save
+                      // and nothing to select, and the events keep coming.
+                      draggable={false}
+                      className="max-w-full max-h-full object-contain pointer-events-none select-none"
                     />
                   ) : (
                     // Not a spinner per tile: forty spinners at once is a
@@ -248,7 +346,9 @@ export function StickerPicker({ drawer, onSelect, onError }: StickerPickerProps)
             gesture they were never told about. Shown only when there is
             something to reorder and nothing filtering the grid. */}
         {canReorder && drawer.stickers.length > 1 && (
-          <p className="px-2 pt-1 text-micro text-faint">{t('stickers.reorderHint')}</p>
+          <p className="px-2 pt-1 text-micro text-faint">
+            {t(coarse ? 'stickers.reorderHintTouch' : 'stickers.reorderHint')}
+          </p>
         )}
       </div>
     </div>

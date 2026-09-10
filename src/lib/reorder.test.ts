@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { changedPositions, indexAtPoint, moveItem, movedBeyond, renumber } from './reorder';
+import {
+  changedPositions,
+  indexAtPoint,
+  moveItem,
+  movedBeyond,
+  planReorder,
+  renumber,
+} from './reorder';
 
 describe('moveItem', () => {
   it('moves an entry forwards', () => {
@@ -98,5 +105,54 @@ describe('renumber', () => {
     const out = renumber(rows);
     expect(out[0]).toBe(rows[0]);
     expect(out[1]).not.toBe(rows[1]);
+  });
+});
+
+describe('planReorder', () => {
+  const library = () => [
+    { id: 'a', sort: 0 },
+    { id: 'b', sort: 1 },
+    { id: 'c', sort: 2 },
+  ];
+
+  it('writes the rows a neighbour swap moved', () => {
+    // The bug this exists for: renumbering the list *before* diffing it makes
+    // every `sort` equal its own index, so the diff is empty, so nothing is
+    // ever written and the grid snaps back on the next load.
+    const { positions } = planReorder(library(), 0, 1);
+    expect(positions).toEqual([
+      { id: 'b', sort: 0 },
+      { id: 'a', sort: 1 },
+    ]);
+  });
+
+  it('hands back the order to show, renumbered', () => {
+    const { next } = planReorder(library(), 2, 0);
+    expect(next).toEqual([
+      { id: 'c', sort: 0 },
+      { id: 'a', sort: 1 },
+      { id: 'b', sort: 2 },
+    ]);
+  });
+
+  it('writes nothing when the drag ended where it started', () => {
+    expect(planReorder(library(), 1, 1)).toEqual({ next: library(), positions: [] });
+  });
+
+  it('renumbers a library whose stored sorts never started at zero', () => {
+    // Uploads number from 1 (`nextSort`), so a library that has never been
+    // dragged is numbered from 1 and the first drag is also the first time it
+    // is numbered from 0. Only the rows that actually disagree are written —
+    // 'a' lands on index 1 and was already stored as 1.
+    const rows = [
+      { id: 'a', sort: 1 },
+      { id: 'b', sort: 2 },
+    ];
+    const { next, positions } = planReorder(rows, 0, 1);
+    expect(positions).toEqual([{ id: 'b', sort: 0 }]);
+    expect(next).toEqual([
+      { id: 'b', sort: 0 },
+      { id: 'a', sort: 1 },
+    ]);
   });
 });

@@ -14,6 +14,35 @@ one of them drifts.
 
 ## [Unreleased]
 
+## [1.11.1] — 2026-09-10
+
+### Fixed
+
+- **Reordering your stickers now sticks.** Dragging a sticker rearranged the
+  grid and then quietly threw the new order away — the drawer came back in its
+  old order the next time you opened it. The new positions are written down now.
+- **Stickers can be dragged on a phone at all.** Two things were in the way. A
+  quick drag was read as the grid being scrolled, and a slow one was taken over
+  by Android's own press-and-hold-a-picture gesture, which cancelled the touch
+  before anything could move. Hold a sticker until it lifts, then drag it where
+  you want it; the hint under the grid says so. With a mouse it is still just a
+  drag.
+- **Holding a sticker keeps the delete button up.** The press armed the little
+  X and the release dismissed it again in the same gesture, so on a phone it
+  flashed and vanished.
+
+### Changed
+
+- **The emoji panel opens without the wait.** It is the largest thing the app
+  loads that is not the app, and all of it used to happen on the tap that opened
+  it. It is now fetched and prepared quietly in the background beforehand, so
+  the panel is there when the button is pressed.
+- **A large sticker library no longer arrives all at once.** Opening the drawer
+  asked for every sticker in the same instant — on a phone that meant the four
+  tiles you can actually see arrived last. They are fetched a few at a time now,
+  visible ones first, and a drag no longer re-asks for the whole library on
+  every tile the finger crosses.
+
 ## [1.11.0] — 2026-09-10
 
 ### Added

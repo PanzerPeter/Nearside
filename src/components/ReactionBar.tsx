@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { SmilePlus } from 'lucide-react';
 import { EmojiPopover } from './EmojiPopover';
+import { warmEmojiPanel } from '../lib/emoji-panel';
 import { useT } from '../hooks/useT';
 
 const QUICK = ['❤️', '😂', '👍', '😮', '😢', '🙏'];
@@ -45,6 +46,9 @@ export function ReactionBar({ onReact, onPickerOpenChange }: ReactionBarProps) {
       <button
         ref={moreRef}
         onClick={() => setPickerOpen((o) => !o)}
+        // Starts the panel's chunk on the press rather than the click. The
+        // composer warms it on an idle callback too; both are one load.
+        onPointerDown={warmEmojiPanel}
         className="flex items-center justify-center w-10 h-10 lg:w-[2.125rem] lg:h-[2.125rem] rounded-full hover:bg-wash transition-colors"
         title={t('reactions.more')}
         aria-label={t('reactions.moreLabel')}

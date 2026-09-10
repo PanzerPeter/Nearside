@@ -10,6 +10,7 @@ import {
 } from 'react';
 import { Check, Mic, Pause, Play, Send, Paperclip, Pencil, Smile, Square, Trash2, X } from 'lucide-react';
 import { EmojiPopover } from './EmojiPopover';
+import { warmEmojiPanel } from '../lib/emoji-panel';
 import { VoicePreview } from './VoicePreview';
 import { AttachMenu } from './AttachMenu';
 import { MAX_MESSAGE_LENGTH } from '../lib/conversation';
@@ -115,6 +116,25 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   // button. Touch keeps the old behaviour: there the picker covers the thread
   // and the message under it, so leaving it up hides what is being written.
   const [stickyEmoji] = useState(() => !isCoarsePointer());
+
+  /**
+   * Fetch the emoji panel before it is asked for.
+   *
+   * It is half a megabyte of code and data in a chunk of its own, and
+   * emoji-mart indexes the whole set before it can draw a single row — on the
+   * tap that opens it, that is the entire wait. Done while the app is idle it
+   * is invisible, and it is done once per session however many conversations
+   * are opened. Idle rather than on mount so it never competes with the
+   * conversation painting behind it.
+   */
+  useEffect(() => {
+    if (typeof window.requestIdleCallback === 'function') {
+      const handle = window.requestIdleCallback(() => warmEmojiPanel(), { timeout: 4000 });
+      return () => window.cancelIdleCallback?.(handle);
+    }
+    const timer = window.setTimeout(warmEmojiPanel, 1500);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   useImperativeHandle(ref, () => ({
     focus: () => textareaRef.current?.focus(),
@@ -624,6 +644,10 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
               type="button"
               className="btn btn-ghost btn-square"
               onClick={() => setEmojiOpen((o) => !o)}
+              // The backstop for the idle prefetch above: a phone that never
+              // went idle still gets the fetch started a moment before the
+              // click it is about to become.
+              onPointerDown={warmEmojiPanel}
               title={t('composer.emoji')}
               aria-label={t('composer.insertEmoji')}
               aria-expanded={emojiOpen}

@@ -955,6 +955,7 @@ export const ru: Catalog = {
   'stickers.noMatch': 'Ничего не найдено по «{query}».',
   'stickers.deleteOne': 'Удалить {label}',
   'stickers.reorderHint': 'Перетащи стикер, чтобы изменить порядок',
+  'stickers.reorderHintTouch': 'Задержи палец на стикере и перетащи его',
   'preview.draftLabel': 'Черновик:',
   'chatList.archive': 'В архив',
   'chatList.unarchive': 'Из архива',

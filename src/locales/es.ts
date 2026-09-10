@@ -956,6 +956,7 @@ export const es: Catalog = {
   'stickers.noMatch': 'Nada coincide con «{query}».',
   'stickers.deleteOne': 'Borrar {label}',
   'stickers.reorderHint': 'Arrastra un sticker para reordenar',
+  'stickers.reorderHintTouch': 'Mantén pulsado un sticker y arrástralo para reordenar',
   'preview.draftLabel': 'Borrador:',
   'chatList.archive': 'Archivar',
   'chatList.unarchive': 'Desarchivar',

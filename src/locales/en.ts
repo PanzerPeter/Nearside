@@ -984,6 +984,7 @@ export const en = {
   'stickers.noMatch': 'Nothing matches “{query}”.',
   'stickers.deleteOne': 'Delete {label}',
   'stickers.reorderHint': 'Drag a sticker to reorder',
+  'stickers.reorderHintTouch': 'Hold a sticker, then drag to reorder',
   'preview.draftLabel': 'Draft:',
   'chatList.archive': 'Archive',
   'chatList.unarchive': 'Unarchive',
