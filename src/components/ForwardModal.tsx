@@ -167,7 +167,7 @@ export function ForwardModal({ me, msg, fromPeerId, identity, onClose }: Forward
             {sending ? (
               <span className="loading loading-spinner loading-xs" />
             ) : selected.size > 1 ? (
-              `Send to ${selected.size}`
+              t('forward.sendToCount', { count: selected.size })
             ) : (
               'Send'
             )}

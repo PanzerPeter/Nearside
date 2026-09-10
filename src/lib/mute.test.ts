@@ -6,7 +6,15 @@ const flags = (entries: [string, string | null][]) =>
   new Map<string, ChatFlags>(
     entries.map(([id, mutedAt]) => [
       id,
-      { id, kind: 'peer', pinnedAt: null, mutedAt, dismissedAt: null },
+      {
+        id,
+        kind: 'peer',
+        pinnedAt: null,
+        mutedAt,
+        dismissedAt: null,
+        archivedAt: null,
+        unreadAt: null,
+      },
     ])
   );
 

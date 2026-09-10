@@ -198,11 +198,51 @@ export async function bumpAttempts(id: string): Promise<PendingMessage | null> {
         resolve(null);
         return;
       }
-      const updated: PendingMessage = { ...existing, attempts: existing.attempts + 1 };
+      const attempts = existing.attempts + 1;
+      // The row that runs out of attempts is marked, not deleted. `flush`
+      // reads the mark and leaves it alone; the bubble reads it and offers a
+      // retry. This is the whole of the fix for a message that used to be
+      // erased at the end of its backoff, with a toast the sender only saw if
+      // they happened to still be looking at that conversation.
+      const updated: PendingMessage = {
+        ...existing,
+        attempts,
+        failed: attempts >= MAX_ATTEMPTS,
+      };
       const putReq = store.put(updated);
       putReq.onsuccess = () => resolve(updated);
       putReq.onerror = () => resolve(null);
     };
     getReq.onerror = () => resolve(null);
   });
+}
+
+/**
+ * Put a failed message back in the queue for another go: attempts reset, mark
+ * cleared. Returns the revived row, or null if it is no longer there — which
+ * is what a message that arrived over realtime in the meantime looks like.
+ */
+export async function reviveQueued(id: string): Promise<PendingMessage | null> {
+  return withStore<PendingMessage | null>('readwrite', null, (store, resolve) => {
+    const getReq = store.get(id);
+    getReq.onsuccess = () => {
+      const existing = getReq.result as PendingMessage | undefined;
+      if (!existing) {
+        resolve(null);
+        return;
+      }
+      const updated: PendingMessage = { ...existing, attempts: 0, failed: false };
+      const putReq = store.put(updated);
+      putReq.onsuccess = () => resolve(updated);
+      putReq.onerror = () => resolve(null);
+    };
+    getReq.onerror = () => resolve(null);
+  });
+}
+
+/** Whether the flush loop should attempt this row. A failed message waits for
+ *  the user, so that a queue holding one does not spin against whatever is
+ *  refusing it every time the app wakes. */
+export function isAttemptable(msg: PendingMessage): boolean {
+  return !msg.failed;
 }

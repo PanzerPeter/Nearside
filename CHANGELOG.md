@@ -14,6 +14,55 @@ one of them drifts.
 
 ## [Unreleased]
 
+## [1.9.0] — 2026-09-10
+
+### Added
+
+- **Groups can be read all the way back.** A group used to show only its newest
+  fifty messages, with no way to reach the fifty-first; older messages now load
+  a page at a time without the view jumping under you.
+- **Groups show what you have not read.** The group list carries an unread count
+  per group, and opening one clears it on every device you are signed in on.
+- **You can edit and delete your own group messages.** A deleted one leaves the
+  note every other conversation leaves, in its place in the thread, and the
+  correction reaches everybody else's phone as it happens rather than the next
+  time they open the group.
+- **A group tells you who is typing, by name.** Three dots in a group of six say
+  nothing about who is about to speak.
+- **Attachments can be kept on this device after the server lets them go.** The
+  server trims old files; Settings › Storage now decides what this phone holds
+  on to anyway — nothing, photos and voice notes, or those plus video. Only what
+  you actually opened is kept, so it costs storage and never data. A
+  disappearing message is never kept, whatever the setting says: it was sent on
+  the understanding that it would go.
+- **Conversations can be archived, and marked unread.** The shelf keeps the
+  everyday list short without ending anything, and a conversation you read on
+  the bus but cannot answer yet stops looking answered.
+- **The chat list says when you left something half-written**, so an unsent
+  reply is not something you have to remember.
+- **Stickers can be dragged into the order you want them in.**
+
+### Changed
+
+- **Rooms are called groups** throughout the app, which is what everybody
+  already called them.
+- A message that fails to send is now kept, with Retry and Discard beside it.
+  Before, the app gave up after a few attempts and threw the text away — and if
+  you had moved to another conversation, without telling you.
+- The Terms and the Privacy Policy now give the same minimum age. They
+  disagreed, which is worse than either answer.
+- The emoji picker follows the theme you chose in the app rather than always
+  drawing itself dark, and it offers skin tones.
+
+### Fixed
+
+- **The menu on a row in the friend list is no longer clipped** to a sliver by
+  the row it belongs to. It also works from the keyboard now — arrows, Home,
+  End, Escape, and focus back where it started.
+- Parts of the app that were still in English regardless of the language you
+  chose are translated. A test now fails the build when new English is typed
+  straight into the interface.
+
 ## [1.8.1] — 2026-09-10
 
 ### Changed

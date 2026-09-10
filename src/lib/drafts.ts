@@ -18,6 +18,47 @@
 
 const drafts = new Map<string, string>();
 
+/**
+ * Listeners for the chat list, which shows a `Draft:` mark on a conversation
+ * holding unsent text.
+ *
+ * A plain module Map has nothing to subscribe to, so the list had no way of
+ * knowing a draft existed and half-typed messages were invisible the moment you
+ * left the conversation — which for an in-memory store is exactly when they are
+ * easiest to forget about. Same shape as `subscribeChatFlags`.
+ */
+const listeners = new Set<() => void>();
+
+/** Bumped on every change worth repainting for. `useSyncExternalStore` needs a
+ *  snapshot that is `Object.is`-stable between notifications, and a counter is
+ *  the cheapest thing that is. */
+let version = 0;
+
+function notify(): void {
+  version++;
+  for (const listener of listeners) listener();
+}
+
+export function draftsVersion(): number {
+  return version;
+}
+
+export function subscribeDrafts(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+/** Whether a conversation is holding unsent text, without handing it out. The
+ *  list needs to know that there is a draft, never what it says. */
+export function hasDraft(kind: 'peer' | 'room', id: string): boolean {
+  return drafts.has(draftKey(kind, id));
+}
+
+/** The draft itself, for the one caller that shows a preview of it. */
+export function peekDraft(kind: 'peer' | 'room', id: string): string {
+  return drafts.get(draftKey(kind, id)) ?? '';
+}
+
 /** Namespaced so a room id can never collide with a peer id. */
 export function draftKey(kind: 'peer' | 'room', id: string): string {
   return `${kind}:${id}`;
@@ -29,16 +70,21 @@ export function getDraft(key: string): string {
 
 /** Store `text`, or forget the conversation when it holds nothing typed. */
 export function putDraft(key: string, text: string): void {
+  const had = drafts.has(key);
   if (!text.trim()) drafts.delete(key);
   else drafts.set(key, text);
+  // Only when the row's mark would actually change. Notifying on every
+  // keystroke would re-render the whole chat list per character typed.
+  if (had !== drafts.has(key)) notify();
 }
 
 export function clearDraft(key: string): void {
-  drafts.delete(key);
+  if (drafts.delete(key)) notify();
 }
 
 /** Sign-out and the account switcher: drafts belong to the account that typed
  *  them. See `releaseAccount` in `App.tsx`. */
 export function forgetAllDrafts(): void {
   drafts.clear();
+  notify();
 }

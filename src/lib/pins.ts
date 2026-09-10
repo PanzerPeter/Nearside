@@ -13,6 +13,7 @@
 import { Directory, Filesystem } from '@capacitor/filesystem';
 import {
   allPins,
+  autoKeptPins,
   cachedPin,
   openLocalDb,
   pinnedIds,
@@ -147,7 +148,11 @@ export async function pinMedia(
   messageId: string,
   objectPath: string,
   bytes: Uint8Array,
-  from: PinnedFrom
+  from: PinnedFrom,
+  /** True when the retention setting kept this rather than a person choosing
+   *  to. Only ever downgrades to a hand pin, never the other way — see the
+   *  `auto` CASE in `putPin`. */
+  auto = false
 ): Promise<void> {
   const path = pinPath(messageId, objectPath);
 
@@ -169,9 +174,50 @@ export async function pinMedia(
     media_path: objectPath,
     media_type: from.mediaType,
     caption: from.caption,
+    auto,
   };
   await putPin(row);
   withPin(row);
+}
+
+/**
+ * Keep an attachment because the retention setting says so.
+ *
+ * Separate from `pinMedia` only to make the call sites read as what they are,
+ * and to hold the one rule that matters: a file already kept is left alone.
+ * Rewriting it would restamp `pinned_at` on every scroll past the same photo,
+ * and — worse — the auto pass would keep touching files somebody pinned by
+ * hand, for no reason.
+ */
+export async function keepMedia(
+  messageId: string,
+  objectPath: string,
+  bytes: Uint8Array,
+  from: PinnedFrom
+): Promise<void> {
+  if (snapshot.has(messageId)) return;
+  await pinMedia(messageId, objectPath, bytes, from, true);
+}
+
+/**
+ * Throw away everything the retention setting kept, leaving hand-made pins
+ * exactly where they are.
+ *
+ * The distinction is the whole reason the `auto` column exists: "free up space"
+ * must never be a button that silently deletes the photograph somebody
+ * deliberately kept two years ago.
+ */
+export async function clearAutoKeptMedia(): Promise<void> {
+  const kept = await autoKeptPins();
+  for (const pin of kept) {
+    if (isMobileNative()) {
+      await Filesystem.deleteFile({ path: pin.file_path, directory: Directory.Data }).catch(
+        () => {}
+      );
+    }
+    await removePin(pin.message_id);
+    withoutPin(pin.message_id);
+  }
 }
 
 /**

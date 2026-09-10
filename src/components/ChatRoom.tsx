@@ -20,11 +20,13 @@ import { VerifyContact } from './VerifyContact';
 import { ChatHeader } from './ChatHeader';
 import { MessageThread } from './MessageThread';
 import { KeyChangedNotice } from './KeyChangedNotice';
+import { Modal } from './Modal';
 import { useReactions } from '../hooks/useReactions';
 import { useReplyTargets } from '../hooks/useReplyTargets';
 import { useChatBackground } from '../hooks/useChatBackground';
 import { usePresenceStatus } from '../hooks/usePresence';
 import { useToast } from '../hooks/useToast';
+import { useT } from '../hooks/useT';
 import { useChatThread } from '../hooks/useChatThread';
 import { usePeerTrust } from '../hooks/usePeerTrust';
 import { useMediaSend } from '../hooks/useMediaSend';
@@ -67,6 +69,7 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
   const peerLabel = formatDisplayName(nickname, friend.display_name, isSelf);
   const friendStatus = usePresenceStatus(friend.id);
   const toast = useToast();
+  const t = useT();
   const background = useChatBackground(me, friend.id, identity);
   const { peerKey, trust, refresh: refreshTrust } = usePeerTrust(friend.id, isSelf);
 
@@ -87,6 +90,8 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
   // The message whose "Forward" was chosen, and so the one the picker will
   // copy. Null when the picker is closed.
   const [forwarding, setForwarding] = useState<Message | null>(null);
+  /** The failed queued message whose Discard is awaiting confirmation. */
+  const [discarding, setDiscarding] = useState<string | null>(null);
   const composerRef = useRef<ComposerHandle>(null);
 
   /**
@@ -373,7 +378,37 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
         onCancelEdit={editing.cancelEdit}
         onStartEdit={editing.startEdit}
         onDelete={(msg) => void editing.deleteMessage(msg)}
+        onRetryQueued={(id) => void thread.outbox.retry(id)}
+        onDiscardQueued={setDiscarding}
       />
+
+      {/* Confirmed, unlike every other pending-message transition: this is the
+          only path in the app that destroys an unsent body, and the text on
+          screen is the sole copy of it. */}
+      {discarding && (
+        <Modal
+          title={t('outbox.discardTitle')}
+          onClose={() => setDiscarding(null)}
+          actions={
+            <>
+              <button className="btn btn-ghost btn-sm" onClick={() => setDiscarding(null)}>
+                {t('chatList.keep')}
+              </button>
+              <button
+                className="btn btn-error btn-sm"
+                onClick={() => {
+                  void thread.outbox.discard(discarding);
+                  setDiscarding(null);
+                }}
+              >
+                {t('outbox.discard')}
+              </button>
+            </>
+          }
+        >
+          <p className="text-body text-muted">{t('outbox.discardBody')}</p>
+        </Modal>
+      )}
 
       {/* Input, unless the peer's key has changed under us. */}
       {trust === 'changed' ? (

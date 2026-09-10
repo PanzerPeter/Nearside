@@ -22,14 +22,31 @@ import {
   MEDIA_MAX_BYTES,
 } from '../lib/conversation';
 import { stageFiles, type StagedMedia } from '../lib/staging';
-import { sealBody, sealMediaKey, type BodyColumns } from '../lib/sealed-body';
+import { openRows, sealBody, sealMediaKey, type BodyColumns } from '../lib/sealed-body';
 import { describeMediaError } from '../lib/media-errors';
 import { t } from '../lib/i18n';
 import { sealFile, sealFileWith } from '../lib/media-crypto';
 import { peerPublicKey } from '../lib/peer-keys';
 import { fileExtension, MEDIA_SCAN_LIMIT, selectStaleMedia, type MediaRow } from '../lib/media';
+import { keepableFromTrim, keepPolicy } from '../lib/media-retention';
+import { openFile } from '../lib/media-crypto';
+
+/**
+ * A row as the trim reads it: what `selectStaleMedia` needs to decide, plus
+ * what `keepBeforeTrim` needs to rescue the file before the trim destroys it.
+ */
+type TrimRow = MediaRow & {
+  receiver_id: string;
+  created_at: string;
+  expires_at?: string | null;
+  deleted_at?: string | null;
+  ciphertext: string | null;
+  nonce: string | null;
+  media_key_ciphertext: string | null;
+  media_key_nonce: string | null;
+};
 import { forgetMedia } from '../lib/media-cache';
-import { pinnedIds } from '../lib/pins';
+import { keepMedia, pinnedIds } from '../lib/pins';
 import { CHAT_IMAGE_MAX_EDGE, compressImageResult } from '../lib/compress';
 import {
   imageThumbnail,
@@ -568,6 +585,49 @@ export function useMediaSend({
    * make. Room media is bounded by the room's disappearing timer instead, which
    * everyone agreed to.
    */
+  /**
+   * Download, open and keep the attachments a trim is about to destroy.
+   *
+   * Failures are swallowed per row: this is a rescue running beside
+   * housekeeping, and a file that cannot be fetched must not stop the trim it
+   * is standing in front of — the trim is what keeps the bucket inside its
+   * limits.
+   */
+  async function keepBeforeTrim(rows: readonly TrimRow[], peerId: string): Promise<void> {
+    const policy = keepPolicy();
+    if (policy === 'off') return;
+    const kept = await pinnedIds();
+    const wanted = keepableFromTrim(rows, policy).filter((row) => !kept.has(row.id));
+    if (!wanted.length) return;
+
+    // Opened as a batch through the ordinary boundary, so the caption and the
+    // file key come from the one code path that knows how to unseal either.
+    // `peerId` is the conversation, and `peerKey` is fetched once here rather
+    // than per row: `openRows` needs it to open a body sealed to us.
+    const opened = await openRows(identity, await peerPublicKey(peerId), peerId, [...wanted]);
+
+    for (const row of opened) {
+      if (!row.media_path || !row.media_type || !row.media_key) continue;
+      try {
+        const { data } = await supabase.storage
+          .from('chat-media')
+          .createSignedUrl(row.media_path, 3600);
+        if (!data) continue;
+        const response = await fetch(data.signedUrl);
+        if (!response.ok) continue;
+        const bytes = await openFile(new Uint8Array(await response.arrayBuffer()), row.media_key);
+        await keepMedia(row.id, row.media_path, bytes, {
+          mediaType: row.media_type,
+          caption: row.text ?? '',
+        });
+      } catch {
+        // One file that could not be rescued. The trim carries on: it is what
+        // keeps the bucket inside its limits, and it must not be blockable by
+        // a single unreachable object.
+      }
+    }
+  }
+
   async function cleanupOldMedia() {
     // Housekeeping nobody asked for, running beside a conversation that opened
     // fine. It reports to the console and never to the user, and — since both
@@ -585,7 +645,15 @@ export function useMediaSend({
     const peerId = target.peerId;
     const { data } = await supabase
       .from('messages')
-      .select('id, media_path, media_thumb_path, user_id, media_type')
+      // Wider than the trim itself needs: `keepBeforeTrim` runs off these rows
+      // and needs the file key to open the object, the body to keep the caption
+      // that is about to be replaced by a placeholder, and `expires_at` to
+      // refuse anything the pair agreed would disappear.
+      .select(
+        'id, media_path, media_thumb_path, user_id, receiver_id, media_type, ' +
+          'created_at, expires_at, ciphertext, nonce, ' +
+          'media_key_ciphertext, media_key_nonce'
+      )
       .or(conversationFilter(me, peerId))
       .not('media_path', 'is', null)
       .is('deleted_at', null)
@@ -599,7 +667,7 @@ export function useMediaSend({
     // copy here would prune the very file someone just chose to keep.
     // Both sides' rows are counted — the keep limit is the conversation's, not
     // one person's — but only our own are acted on.
-    const stale = selectStaleMedia(data as MediaRow[], await pinnedIds());
+    const stale = selectStaleMedia(data as unknown as TrimRow[], await pinnedIds());
     if (!stale.length) return;
 
     // Deleting the friend's objects too is what this used to do, and the
@@ -616,6 +684,24 @@ export function useMediaSend({
     // until they do, which is storage — cheap, and recoverable.
     const myStale = stale.filter((m) => m.user_id === me);
     if (!myStale.length) return;
+
+    /*
+      Last chance to keep any of this.
+
+      From here the objects are deleted and the rows relabelled, on the one
+      device that can still reach both — the sender's. Nothing else in the app
+      gets another look at these files: the recipient never learns a trim is
+      coming, and once it lands the row names nothing.
+
+      Unlike the view path this does spend a download, because the bytes are not
+      on screen and have not been for a long time. That is the trade the setting
+      is offering, and it is bounded: a trim batch is twenty rows, and only the
+      kinds the setting asks for are fetched.
+
+      Anything with a disappearing timer is refused inside `shouldKeep`, before
+      the setting is consulted.
+    */
+    await keepBeforeTrim(myStale, peerId);
 
     // The placeholder names what was trimmed, so a cleared voice note doesn't
     // read as a lost photo.

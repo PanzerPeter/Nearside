@@ -143,9 +143,7 @@ export function CreateRoomModal({ me, identity, onCreated, onClose }: CreateRoom
           <span className="loading loading-spinner" />
         </div>
       ) : friends.length === 0 ? (
-        <p className="text-body text-muted py-6 text-center">
-          Connect with someone first. A room can only include people you are connected to.
-        </p>
+        <p className="text-body text-muted py-6 text-center">{t('rooms.connectFirst')}</p>
       ) : (
         <ul className="space-y-1 max-h-64 overflow-y-auto">
           {friends.map((f) => {

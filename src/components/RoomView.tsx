@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { Session } from '@supabase/supabase-js';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import type { RealtimeChannel, Session } from '@supabase/supabase-js';
 import {
   ArrowLeft,
   Lock,
   LogOut,
+  Pencil,
   Reply,
   ShieldAlert,
   ShieldQuestion,
@@ -15,11 +16,14 @@ import { supabase } from '../lib/supabase';
 import {
   ROOM_MESSAGE_COLUMNS,
   deleteRoom,
+  deleteRoomMessage,
+  editRoomMessage,
   leaveRoom,
   openRoomRows,
   roomColour,
   roomKeyFor,
   removeMember,
+  markRoomRead,
   roomMembers,
   roomSigningKeys,
   sendRoomMessage,
@@ -28,6 +32,7 @@ import {
   type RoomSummary,
 } from '../lib/rooms';
 import { formatDisplayName, nicknameFor } from '../lib/nicknames';
+import { MAX_MESSAGE_LENGTH, canEditBody, isBodyOptional } from '../lib/conversation';
 import { formatTime } from '../lib/time';
 import { prefersReducedMotion } from '../lib/motion';
 import { tapSend } from '../lib/haptics';
@@ -41,7 +46,7 @@ import { useSwipeToReply } from '../hooks/useSwipeToReply';
 import { useDraft } from '../hooks/useDraft';
 import { draftKey } from '../lib/drafts';
 import type { Profile, Reaction } from '../lib/types';
-import { Composer, type ComposerHandle } from './Composer';
+import { Composer, MAX_TEXTAREA_PX, type ComposerHandle } from './Composer';
 import { MediaAttachment } from './MediaAttachment';
 import { MessageText } from './MessageText';
 import { jumboEmojiCount } from '../lib/emoji-only';
@@ -64,6 +69,11 @@ interface RoomViewProps {
 }
 
 const PAGE_SIZE = 50;
+/** How long a typing mark survives without another broadcast. Matches the 1:1
+ *  thread's, so the indicator behaves the same in both places. */
+const TYPING_LINGER_MS = 3_000;
+/** Minimum gap between typing broadcasts. */
+const TYPING_THROTTLE_MS = 2_000;
 /** Polling cadence while realtime is down, matching ChatRoom's fallback. */
 const POLL_DEGRADED_MS = 5_000;
 
@@ -79,6 +89,19 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
   const t = useT();
   const me = session.user.id;
   const [messages, setMessages] = useState<RoomMessage[]>([]);
+  /** Whether the server has anything older than the oldest row on screen. A
+   *  group used to be a hard window of the newest fifty with no way back:
+   *  message fifty-one existed and could not be reached from the UI. */
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  /** Who is typing, and when they last said so. */
+  const [typingBy, setTypingBy] = useState<Map<string, number>>(new Map());
+  const channelRef = useRef<RealtimeChannel | null>(null);
+  const lastTypingSent = useRef(0);
+  const listRef = useRef<HTMLDivElement>(null);
+  /** Set immediately before older messages are prepended, so the scroll effect
+   *  below knows not to chase the bottom on that particular update. */
+  const skipAutoScroll = useRef(false);
   const [members, setMembers] = useState<RoomParticipant[]>([]);
   const [profiles, setProfiles] = useState<Map<string, Profile>>(new Map());
   const [roomKey, setRoomKey] = useState<Uint8Array | null>(null);
@@ -88,6 +111,16 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
   const draft = useDraft(draftKey('room', room.id));
   const [replyingTo, setReplyingTo] = useState<RoomMessage | null>(null);
   const [sending, setSending] = useState(false);
+  /** The message being rewritten, and the text so far. Held here rather than in
+   *  the bubble: the composer owns Save and Cancel, so both ends of the edit
+   *  have to read the same string. */
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingText, setEditingText] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
+  /** What the message said when the editor opened, so saving the same words
+   *  back can be recognised as the no-op it is — writing it anyway would stamp
+   *  `edited_at` and hang "(edited)" on a message nobody changed. */
+  const editingOriginal = useRef('');
   const [showMembers, setShowMembers] = useState(false);
   /** Who is mid-removal, so their row can show it and not be tapped twice. */
   const [removing, setRemoving] = useState<string | null>(null);
@@ -152,11 +185,18 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
 
   const nameFor = useCallback(
     (userId: string) => {
-      if (userId === me) return 'You';
+      if (userId === me) return t('common.you');
       const profile = profiles.get(userId);
       return formatDisplayName(nicknameFor(userId), profile?.display_name);
     },
-    [me, profiles]
+    [me, profiles, t]
+  );
+
+  /** Who is typing right now, by name. A group needs the names: three dots in
+   *  a room of six say nothing about who is about to speak. */
+  const typingNames = useMemo(
+    () => [...typingBy.keys()].filter((id) => id !== me).map((id) => nameFor(id)),
+    [typingBy, me, nameFor]
   );
 
   // The key first: every other fetch is useless without it, and a null key is
@@ -184,20 +224,78 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
     setProfiles(new Map(((data as Profile[] | null) ?? []).map((p) => [p.id, p])));
   }, [room.id]);
 
+  /** Open a page of rows: verify every signature, then decrypt. Shared by the
+   *  newest-page load and the older-page load so the two cannot drift in what
+   *  they check. */
+  const openPage = useCallback(
+    async (rows: RoomMessage[], key: Uint8Array) => {
+      const signing = await roomSigningKeys([...new Set(rows.map((r) => r.sender_id))]);
+      return openRoomRows(rows, key, signing);
+    },
+    []
+  );
+
   const loadMessages = useCallback(async () => {
     if (!roomKey) return;
+    // One more than the page, purely to answer "is there anything older?"
+    // without a second round trip or a count.
     const { data, error } = await supabase
       .from('room_messages')
       .select(ROOM_MESSAGE_COLUMNS)
       .eq('room_id', room.id)
       .order('created_at', { ascending: false })
-      .limit(PAGE_SIZE);
+      .limit(PAGE_SIZE + 1);
     if (error) return;
 
-    const rows = ((data as unknown as RoomMessage[] | null) ?? []).slice().reverse();
-    const signing = await roomSigningKeys([...new Set(rows.map((r) => r.sender_id))]);
-    setMessages(await openRoomRows(rows, roomKey, signing));
-  }, [room.id, roomKey]);
+    const page = (data as unknown as RoomMessage[] | null) ?? [];
+    setHasMore(page.length > PAGE_SIZE);
+    const rows = page.slice(0, PAGE_SIZE).reverse();
+    setMessages(await openPage(rows, roomKey));
+  }, [room.id, roomKey, openPage]);
+
+  /**
+   * Another page, older than what is on screen.
+   *
+   * Keyed on the oldest loaded `created_at` rather than an offset: rows arrive
+   * while somebody is reading, and an offset would skip or repeat around them.
+   */
+  const loadOlder = useCallback(async () => {
+    if (!roomKey || loadingOlder || messages.length === 0) return;
+    setLoadingOlder(true);
+    try {
+      const { data, error } = await supabase
+        .from('room_messages')
+        .select(ROOM_MESSAGE_COLUMNS)
+        .eq('room_id', room.id)
+        .lt('created_at', messages[0].created_at)
+        .order('created_at', { ascending: false })
+        .limit(PAGE_SIZE + 1);
+      if (error) return;
+
+      const page = (data as unknown as RoomMessage[] | null) ?? [];
+      setHasMore(page.length > PAGE_SIZE);
+      const older = await openPage(page.slice(0, PAGE_SIZE).reverse(), roomKey);
+      if (older.length === 0) return;
+
+      // The browser keeps the scroll offset, not the content under it, so
+      // prepending would silently carry the reader up the thread. Measured
+      // before the commit and restored after it, which is what makes paging
+      // look like the list simply got longer above.
+      const list = listRef.current;
+      const before = list?.scrollHeight ?? 0;
+      skipAutoScroll.current = true;
+      setMessages((current) => {
+        const known = new Set(current.map((m) => m.id));
+        return [...older.filter((m) => !known.has(m.id)), ...current];
+      });
+      requestAnimationFrame(() => {
+        if (!list) return;
+        list.scrollTop += list.scrollHeight - before;
+      });
+    } finally {
+      setLoadingOlder(false);
+    }
+  }, [room.id, roomKey, messages, loadingOlder, openPage]);
 
   /**
    * Verify, open and append one row that arrived over the socket.
@@ -226,6 +324,34 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
     [roomKey]
   );
 
+  /**
+   * Verify, open and fold in one row that changed under us — an edit or a
+   * tombstone.
+   *
+   * Verification runs first here exactly as it does on an insert: a deletion is
+   * re-signed over the emptied row (see `deleteRoomMessage`), so a tombstone
+   * that arrives with the old signature still on it is not a deletion this
+   * group should trust.
+   *
+   * A row that is not on screen is dropped rather than appended: an edit to a
+   * message older than the loaded window belongs where that message is, and
+   * appending it would drop a lone out-of-order bubble at the bottom of the
+   * thread.
+   */
+  const replaceMessage = useCallback(
+    async (row: RoomMessage) => {
+      if (!roomKey) return;
+      const signing = await roomSigningKeys([row.sender_id]);
+      const [opened] = await openRoomRows([row], roomKey, signing);
+      setMessages((prev) =>
+        prev.some((m) => m.id === opened.id)
+          ? prev.map((m) => (m.id === opened.id ? opened : m))
+          : prev
+      );
+    },
+    [roomKey]
+  );
+
   useEffect(() => {
     void loadMembers();
   }, [loadMembers, generation]);
@@ -241,12 +367,29 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
     if (!roomKey) return;
     const channelKey = `room:${room.id}:${generation}`;
     const channel = supabase
-      .channel(channelKey)
+      .channel(channelKey, { config: { broadcast: { self: false } } })
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'room_messages', filter: `room_id=eq.${room.id}` },
         (payload) => void appendMessage(payload.new as RoomMessage)
       )
+      // Edits and deletions. Without this an edit made on somebody else's
+      // phone never reached this one: the row changed, no INSERT fired, and the
+      // group went on showing the text its author had already corrected until
+      // the view was reopened.
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'room_messages', filter: `room_id=eq.${room.id}` },
+        (payload) => void replaceMessage(payload.new as RoomMessage)
+      )
+      // Who is typing, by id. A group needs the id — "someone is typing" in a
+      // room of six is not worth showing, and the name is what makes it worth
+      // showing.
+      .on('broadcast', { event: 'typing' }, ({ payload }) => {
+        const who = payload?.userId as string | undefined;
+        if (!who || who === me) return;
+        setTypingBy((current) => new Map(current).set(who, Date.now()));
+      })
       .on(
         'postgres_changes',
         {
@@ -259,11 +402,28 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
       )
       .subscribe((status) => reportChannelStatus(channelKey, status));
 
+    channelRef.current = channel;
     return () => {
+      channelRef.current = null;
       forgetChannel(channelKey);
       void supabase.removeChannel(channel);
     };
-  }, [room.id, roomKey, generation, appendMessage, loadMembers]);
+  }, [room.id, roomKey, generation, me, appendMessage, replaceMessage, loadMembers]);
+
+  // Typing marks expire on a timer rather than on a "stopped" broadcast: a
+  // sender who closes the app sends nothing, and a mark waiting for a message
+  // that never comes stays up for good.
+  useEffect(() => {
+    if (typingBy.size === 0) return;
+    const id = setInterval(() => {
+      setTypingBy((current) => {
+        const now = Date.now();
+        const next = new Map([...current].filter(([, at]) => now - at < TYPING_LINGER_MS));
+        return next.size === current.size ? current : next;
+      });
+    }, 1000);
+    return () => clearInterval(id);
+  }, [typingBy]);
 
   // Polling fallback for networks that stall `wss://` while ordinary HTTPS
   // keeps working — the banner already says so; this is what keeps the room
@@ -274,12 +434,100 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
     return () => clearInterval(id);
   }, [live, roomKey, loadMessages]);
 
+  /**
+   * Mark the group read up to its newest message.
+   *
+   * Keyed on the newest `created_at` rather than firing per render: re-marking
+   * the same instant is a wasted write on every reaction, every typing frame
+   * and every re-render the room does while somebody sits in it.
+   */
   useEffect(() => {
+    const newest = messages[messages.length - 1]?.created_at;
+    if (!newest) return;
+    // The list hears about this through `subscribeRoomReads`, not through a
+    // prop threaded up to App and back down.
+    void markRoomRead(room.id, me, newest);
+  }, [room.id, me, messages]);
+
+  useEffect(() => {
+    // A page of older messages is the one update that must not move the view:
+    // it is the reader's own scroll that asked for it.
+    if (skipAutoScroll.current) {
+      skipAutoScroll.current = false;
+      return;
+    }
     bottomRef.current?.scrollIntoView({
       behavior: prefersReducedMotion() ? 'auto' : 'smooth',
       block: 'end',
     });
   }, [messages.length]);
+
+  /**
+   * Tell the group this device is typing.
+   *
+   * Throttled rather than debounced: the mark expires on the receiving side, so
+   * a steady one every two seconds is all it takes to hold the indicator up,
+   * and a broadcast per keystroke would be a message per character.
+   */
+  function notifyTyping() {
+    const now = Date.now();
+    if (now - lastTypingSent.current < TYPING_THROTTLE_MS) return;
+    lastTypingSent.current = now;
+    channelRef.current?.send({
+      type: 'broadcast',
+      event: 'typing',
+      payload: { userId: me },
+    });
+  }
+
+  function startEdit(m: RoomMessage) {
+    setEditingId(m.id);
+    setEditingText(m.text ?? '');
+    editingOriginal.current = m.text ?? '';
+    setReplyingTo(null);
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setEditingText('');
+  }
+
+  /**
+   * Commit an edit.
+   *
+   * Nothing is written back into `messages` here: the update comes home over
+   * the socket through `replaceMessage`, which verifies the new signature — so
+   * this device sees its own edit the same way every other member does, and a
+   * re-signing bug cannot hide behind an optimistic local copy.
+   */
+  async function saveEdit(id: string) {
+    const target = byId.get(id);
+    if (!target || !roomKey || savingEdit) return;
+    const trimmed = editingText.trim();
+    if (!trimmed && !isBodyOptional({ media_path: target.media_path ?? null })) return;
+    if (trimmed === editingOriginal.current.trim()) {
+      cancelEdit();
+      return;
+    }
+    setSavingEdit(true);
+    try {
+      await editRoomMessage(id, identity, roomKey, trimmed, target);
+      cancelEdit();
+    } catch {
+      toast.error(t('room.editFailed'));
+    } finally {
+      setSavingEdit(false);
+    }
+  }
+
+  async function handleDelete(m: RoomMessage) {
+    if (editingId === m.id) cancelEdit();
+    try {
+      await deleteRoomMessage(m.id, identity);
+    } catch {
+      toast.error(t('room.deleteMessageFailed'));
+    }
+  }
 
   async function send() {
     // Anything staged makes this a media send, and the typed line becomes its
@@ -411,10 +659,7 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
             ))}
           </ul>
           {isOwner && (
-            <p className="text-micro text-muted mt-2">
-              Removing someone stops them reading anything sent after that. They keep what they
-              already downloaded, and nothing can take that back.
-            </p>
+            <p className="text-micro text-muted mt-2">{t('room.removeNote')}</p>
           )}
         </div>
       )}
@@ -422,24 +667,34 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
       {keyMissing && (
         <div className="alert alert-error rounded-none text-body">
           <ShieldAlert className="w-4 h-4 shrink-0" />
-          <span>
-            This device has no key for this room. You may have been removed, or the key was sealed
-            to an identity this phone no longer holds.
-          </span>
+          <span>{t('room.noKey')}</span>
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto px-3 sm:px-4 py-4 min-h-0">
+      <div ref={listRef} className="flex-1 overflow-y-auto px-3 sm:px-4 py-4 min-h-0">
+        {hasMore && (
+          <div className="flex justify-center pb-3">
+            <button
+              type="button"
+              className="btn btn-ghost btn-xs"
+              onClick={() => void loadOlder()}
+              disabled={loadingOlder}
+            >
+              {loadingOlder ? (
+                <span className="loading loading-spinner loading-xs" />
+              ) : (
+                t('thread.loadOlder')
+              )}
+            </button>
+          </div>
+        )}
         {messages.length === 0 && !keyMissing && (
           <div className="h-full flex flex-col items-center justify-center text-center px-6">
             <span className="w-16 h-16 rounded-box bg-base-content/5 flex items-center justify-center mb-3">
               <Lock className="w-7 h-7 text-muted" />
             </span>
-            <p className="text-body font-medium text-muted">Nothing here yet</p>
-            <p className="text-meta text-muted mt-1 max-w-xs">
-              Everyone in this room holds the same key. Messages are signed, so the app can tell you
-              who really wrote each one.
-            </p>
+            <p className="text-body font-medium text-muted">{t('room.emptyTitle')}</p>
+            <p className="text-meta text-muted mt-1 max-w-xs">{t('room.emptyBody')}</p>
           </div>
         )}
 
@@ -458,12 +713,39 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
               repliedToName={
                 m.reply_to_id ? nameFor(byId.get(m.reply_to_id)?.sender_id ?? '') : ''
               }
+              isEditing={editingId === m.id}
+              editingText={editingText}
               onToggleReaction={(emoji) => void reactions.toggle(m.id, emoji)}
               onReply={() => setReplyingTo(m)}
               onJumpTo={jumpTo}
+              onStartEdit={() => startEdit(m)}
+              onEditingTextChange={setEditingText}
+              onSaveEdit={() => void saveEdit(m.id)}
+              onCancelEdit={cancelEdit}
+              onDelete={() => void handleDelete(m)}
             />
           ))}
         </ul>
+        {typingNames.length > 0 && (
+          <div className="flex items-center gap-2 mt-3" aria-live="polite" aria-atomic="true">
+            {/* The incoming bubble's fill, minus the padding a line of text
+                needs — the dots are the content. */}
+            <div
+              className="flex items-center gap-1 px-3 py-2.5 rounded-box rounded-bl-md bg-base-100 border border-hairline"
+              aria-hidden="true"
+            >
+              <span className="typing-dot" />
+              <span className="typing-dot" />
+              <span className="typing-dot" />
+            </div>
+            <span className="text-meta text-muted truncate">
+              {typingNames.length === 1
+                ? t('thread.typing', { name: typingNames[0] })
+                : t('room.typingMany', { names: typingNames.join(', ') })}
+            </span>
+          </div>
+        )}
+
         <div ref={bottomRef} />
       </div>
 
@@ -473,7 +755,12 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
       <Composer
         ref={composerRef}
         value={draft.value}
-        onChange={draft.setValue}
+        // While an edit is open the composer shows its edit bar instead of the
+        // input — the text is being typed up in the bubble. See `Composer`.
+        onChange={(v) => {
+          draft.setValue(v);
+          notifyTyping();
+        }}
         onSend={() => void send()}
         onStageFile={media.stage}
         staged={media.staged}
@@ -491,7 +778,18 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
             : null
         }
         onCancelReply={() => setReplyingTo(null)}
-        editing={null}
+        editing={
+          editingId
+            ? {
+                canSave:
+                  !!editingText.trim() ||
+                  isBodyOptional({ media_path: byId.get(editingId)?.media_path ?? null }),
+                saving: savingEdit,
+                onSave: () => void saveEdit(editingId),
+                onCancel: cancelEdit,
+              }
+            : null
+        }
         onError={toast.error}
         stickers={
           <StickerPicker
@@ -511,6 +809,7 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
 /** What a quoted room message reads as in the composer and in the quote block.
  *  A caption-less attachment has no text to show, so it is named by kind. */
 function roomSnippet(m: RoomMessage): string {
+  if (m.deleted_at) return translate('message.deleted');
   if (m.text) return m.text;
   if (m.media_type === 'audio') return `🎤 ${translate('preview.voice')}`;
   if (m.media_type === 'sticker') return translate('preview.sticker');
@@ -534,9 +833,18 @@ interface RoomBubbleProps {
    *  nothing must say so. */
   repliedTo: RoomMessage | null;
   repliedToName: string;
+  /** True while this row is the one being rewritten. The text lives in
+   *  `RoomView`, because the composer holds Save and Cancel. */
+  isEditing: boolean;
+  editingText: string;
   onToggleReaction: (emoji: string) => void;
   onReply: () => void;
   onJumpTo: (id: string) => void;
+  onStartEdit: () => void;
+  onEditingTextChange: (v: string) => void;
+  onSaveEdit: () => void;
+  onCancelEdit: () => void;
+  onDelete: () => void;
 }
 
 /**
@@ -555,24 +863,61 @@ function RoomBubble({
   myHandle,
   repliedTo,
   repliedToName,
+  isEditing,
+  editingText,
   onToggleReaction,
   onReply,
   onJumpTo,
+  onStartEdit,
+  onEditingTextChange,
+  onSaveEdit,
+  onCancelEdit,
+  onDelete,
 }: RoomBubbleProps) {
   const t = useT();
   const mine = m.sender_id === me;
   const [menuOpen, setMenuOpen] = useState(false);
   const readable = m.sender !== 'unverified' && m.sender !== 'unknown';
+  const isDeleted = !!m.deleted_at;
+  const editRef = useRef<HTMLTextAreaElement>(null);
+
+  // Auto-grow the editor, the same reset-then-measure the composer does. The
+  // ref is null while this row is not being edited, so it is a no-op then.
+  useLayoutEffect(() => {
+    const el = editRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, MAX_TEXTAREA_PX)}px`;
+  }, [editingText, isEditing]);
+
+  // Caret after the last character, not in front of it: `autoFocus` alone puts
+  // it at index 0, which types the edit backwards into the sentence.
+  useEffect(() => {
+    if (!isEditing) return;
+    const el = editRef.current;
+    if (!el) return;
+    el.focus();
+    const end = el.value.length;
+    el.setSelectionRange(end, end);
+  }, [isEditing]);
+
+  // A row being edited, or one that has just become a tombstone, has no menu
+  // left to show.
+  useEffect(() => {
+    if (isEditing || isDeleted) setMenuOpen(false);
+  }, [isEditing, isDeleted]);
   // A body of nothing but one to three emoji, drawn large and without the
   // bubble — the same treatment `MessageBubble` gives it in a 1:1 thread, so a
   // reaction sent as a message looks the same in both places. The sender's name
   // stays: it reads on the thread background in its own colour, and a group
   // message that doesn't say who sent it is worse than one in a box.
   const jumboEmoji =
-    readable && m.text && !m.media_path && !m.reply_to_id ? jumboEmojiCount(m.text) : 0;
+    readable && !isDeleted && m.text && !m.media_path && !m.reply_to_id
+      ? jumboEmojiCount(m.text)
+      : 0;
 
   const swipe = useSwipeToReply({
-    enabled: readable,
+    enabled: readable && !isDeleted && !isEditing,
     onReply,
     direction: mine ? -1 : 1,
   });
@@ -585,7 +930,7 @@ function RoomBubble({
       className={`flex ${mine ? 'justify-end' : 'justify-start'} animate-message-in`}
     >
       <div className="max-w-[85%] sm:max-w-[70%] flex flex-col gap-1">
-        {menuOpen && readable && (
+        {menuOpen && readable && !isDeleted && (
           <div
             // Both class names written out: Tailwind scans source text, so a
             // class built by interpolation is a class that never gets
@@ -602,7 +947,7 @@ function RoomBubble({
             />
             <button
               type="button"
-              className="btn btn-ghost btn-sm btn-circle mr-1"
+              className="btn btn-ghost btn-sm btn-circle"
               title={t('message.reply')}
               aria-label={t('message.reply')}
               onClick={() => {
@@ -612,14 +957,55 @@ function RoomBubble({
             >
               <Reply className="w-4 h-4" />
             </button>
+            {/* Own rows only: you cannot rewrite a message you did not sign.
+                A caption sits in the same two sealed columns as a body, so the
+                words under a picture are editable exactly as text is. */}
+            {mine &&
+              canEditBody({
+                text: m.text ?? null,
+                media_path: m.media_path ?? null,
+                media_type: m.media_type ?? null,
+                deleted_at: m.deleted_at ?? null,
+              }) && (
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm btn-circle"
+                  title={m.media_path ? t('message.editCaption') : t('message.edit')}
+                  aria-label={m.media_path ? t('message.editCaption') : t('message.edit')}
+                  onClick={() => {
+                    onStartEdit();
+                    setMenuOpen(false);
+                  }}
+                >
+                  <Pencil className="w-4 h-4" />
+                </button>
+              )}
+            {mine && (
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm btn-circle mr-1 text-error"
+                title={t('common.delete')}
+                aria-label={t('common.delete')}
+                onClick={() => {
+                  onDelete();
+                  setMenuOpen(false);
+                }}
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            )}
           </div>
         )}
 
         <div
           role="button"
           tabIndex={0}
-          onClick={() => setMenuOpen((v) => !v)}
+          onClick={() => {
+            // Not while the editor is open: the tap belongs to the caret.
+            if (!isEditing) setMenuOpen((v) => !v);
+          }}
           onKeyDown={(e) => {
+            if (isEditing) return;
             if (e.key === 'Enter' || e.key === ' ') {
               e.preventDefault();
               setMenuOpen((v) => !v);
@@ -630,8 +1016,8 @@ function RoomBubble({
           }}
           {...swipe.handlers}
           className={`selection-on-fill text-left rounded-box ${
-            jumboEmoji > 0 ? 'px-0 py-0' : 'px-3 py-2'
-          } ${
+            isEditing ? 'w-[85vw] max-w-md ring-2 ring-primary/60 ' : ''
+          }${jumboEmoji > 0 ? 'px-0 py-0' : 'px-3 py-2'} ${
             m.sender === 'unverified'
               ? 'bg-error/10 border border-error/40'
               : m.sender === 'unknown'
@@ -666,12 +1052,18 @@ function RoomBubble({
                   <span className="block truncate">{roomSnippet(repliedTo)}</span>
                 </>
               ) : (
-                <span className="italic">Message unavailable</span>
+                <span className="italic">{translate('message.unavailable')}</span>
               )}
             </button>
           )}
 
-          {m.sender === 'unverified' ? (
+          {isDeleted ? (
+            // A tombstone, not a removal: the row keeps its place in the thread
+            // and says what happened to it.
+            <p className={`text-body italic ${mine ? 'text-primary-content/70' : 'text-muted'}`}>
+              {t('message.deleted')}
+            </p>
+          ) : m.sender === 'unverified' ? (
             <p className="flex items-start gap-1.5 text-body text-error">
               <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" />
               <span>
@@ -692,6 +1084,8 @@ function RoomBubble({
                 <VoiceNote
                   messageId={m.id}
                   path={m.media_path}
+                  expiresAt={m.expires_at}
+                  caption={m.text}
                   mediaKey={m.mediaKey}
                   durationMs={m.media_duration_ms ?? null}
                 />
@@ -702,6 +1096,7 @@ function RoomBubble({
                   <MediaAttachment
                     messageId={m.id}
                     path={m.media_path}
+                    expiresAt={m.expires_at}
                     thumbPath={m.media_thumb_path}
                     type={m.media_type === 'video' ? 'video' : 'image'}
                     mediaKey={m.mediaKey}
@@ -713,7 +1108,29 @@ function RoomBubble({
                 </div>
               ) : null}
 
-              {m.text === null && !m.media_path ? (
+              {isEditing ? (
+                <textarea
+                  ref={editRef}
+                  rows={1}
+                  placeholder={m.media_path ? t('message.captionPlaceholder') : undefined}
+                  // Transparent and borderless: the bubble around it is the
+                  // box, and the caret takes the bubble's own text colour,
+                  // which is the only thing keeping it visible on the fill.
+                  className="block w-full bg-transparent border-0 outline-hidden resize-none p-0 text-base leading-6 caret-current placeholder:opacity-60 scrollbar-none [&::-webkit-scrollbar]:hidden"
+                  value={editingText}
+                  onClick={(e) => e.stopPropagation()}
+                  onChange={(e) => onEditingTextChange(e.target.value)}
+                  onKeyDown={(e) => {
+                    e.stopPropagation();
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      onSaveEdit();
+                    }
+                    if (e.key === 'Escape') onCancelEdit();
+                  }}
+                  maxLength={MAX_MESSAGE_LENGTH}
+                />
+              ) : m.text === null && !m.media_path ? (
                 <p className="flex items-start gap-1.5 text-body italic text-muted">
                   <Lock className="w-4 h-4 shrink-0 mt-0.5" />
                   <span>{t('room.beforeYouJoined')}</span>
@@ -748,12 +1165,15 @@ function RoomBubble({
             }`}
           >
             {formatTime(m.created_at)}
+            {m.edited_at && !isDeleted && <span className="ml-1">{t('message.editedMark')}</span>}
           </p>
         </div>
 
-        <div className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
-          <ReactionChips reactions={reactions} me={me} onToggle={onToggleReaction} />
-        </div>
+        {!isDeleted && (
+          <div className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
+            <ReactionChips reactions={reactions} me={me} onToggle={onToggleReaction} />
+          </div>
+        )}
       </div>
     </li>
   );

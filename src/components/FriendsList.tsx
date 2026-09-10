@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { Profile, Friendship, Message, ConversationSummary } from '../lib/types';
@@ -13,19 +13,40 @@ import { advanceRead, fetchUnreadCounts } from '../lib/receipts';
 import { useConversationPreviews } from '../hooks/useConversationPreviews';
 import { useThreadPrefetch } from '../hooks/useThreadPrefetch';
 import { useConnection, reportChannelStatus, forgetChannel } from '../lib/connection';
-import { BellOff, Bell, Pin, PinOff, Trash2, UserPlus, Check, X, Users } from 'lucide-react';
+import {
+  Archive,
+  ArchiveRestore,
+  BellOff,
+  Bell,
+  ChevronDown,
+  ChevronRight,
+  Mail,
+  MailOpen,
+  Pin,
+  PinOff,
+  Trash2,
+  UserPlus,
+  Check,
+  X,
+  Users,
+} from 'lucide-react';
 import {
   isMuted,
+  isUnreadMarked,
   loadChatFlags,
+  partitionArchived,
+  setArchived,
   setDismissed,
   setMuted,
   setPinned,
+  setUnreadMark,
   sortByFlags,
   subscribeChatFlags,
   visibleRequests,
   type ChatFlags,
 } from '../lib/chat-flags';
 import { cachedConversationList, putConversationList } from '../lib/localdb';
+import { draftsVersion, subscribeDrafts } from '../lib/drafts';
 import { removeContact } from '../lib/remove-contact';
 import { syncMutedIds } from '../lib/mute';
 import { SwipeRow } from './SwipeRow';
@@ -92,9 +113,16 @@ export function FriendsList({
   const [loaded, setLoaded] = useState(false);
   /** This device's pins, mutes and dismissals — see `lib/chat-flags.ts`. */
   const [flags, setFlags] = useState<Map<string, ChatFlags>>(new Map());
+  // Drafts live in memory, not in state, so the rows that read them need
+  // telling when one appears or goes. Subscribed here rather than per row:
+  // one store, one subscription, and the rows read it during render.
+  useSyncExternalStore(subscribeDrafts, draftsVersion, draftsVersion);
   /** Which row's action rail is open. One at a time: two rails open at once is
    *  a list with two rows in a state the user did not put them both in. */
   const [openRail, setOpenRail] = useState<string | null>(null);
+  /** Whether the archive shelf is open. Session state on purpose: the shelf is
+   *  meant to be out of the way, so it closes again next time. */
+  const [showArchived, setShowArchived] = useState(false);
   /** The contact a delete is being confirmed for. */
   const [confirmRemove, setConfirmRemove] = useState<ConversationSummary | null>(null);
   const [removing, setRemoving] = useState(false);
@@ -516,6 +544,13 @@ export function FriendsList({
     [conversations, flags]
   );
 
+  /** The everyday list and the shelf. Archiving does not stop a conversation
+   *  or silence it; it takes it out of the list you read every day. */
+  const { active: activeRows, archived: archivedRows } = useMemo(
+    () => partitionArchived(ordered, flags),
+    [ordered, flags]
+  );
+
   /** Requests from people this device removed are not shown: removal stops
    *  them messaging, but nothing stops them asking again. */
   const shownRequests = useMemo(
@@ -538,7 +573,9 @@ export function FriendsList({
     conversation: ConversationSummary,
     self: boolean,
     pinned: boolean,
-    muted: boolean
+    muted: boolean,
+    archived: boolean,
+    unread: boolean
   ) {
     const id = conversation.peer_id;
     const actions = [
@@ -548,6 +585,22 @@ export function FriendsList({
         icon: pinned ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4" />,
         onClick: () => {
           void setPinned(id, 'peer', !pinned);
+        },
+      },
+      // Marking read and marking unread are the same control: whichever the
+      // row is not. Two separate entries would leave one of them a no-op on
+      // every row it appeared on.
+      {
+        key: 'unread',
+        label: unread ? t('chatList.markRead') : t('chatList.markUnread'),
+        icon: unread ? <MailOpen className="w-4 h-4" /> : <Mail className="w-4 h-4" />,
+        onClick: () => {
+          if (unread) {
+            void setUnreadMark(id, 'peer', false);
+            clearUnreadFor(id);
+          } else {
+            void setUnreadMark(id, 'peer', true);
+          }
         },
       },
     ];
@@ -563,6 +616,14 @@ export function FriendsList({
         },
       },
       {
+        key: 'archive',
+        label: archived ? t('chatList.unarchive') : t('chatList.archive'),
+        icon: archived ? <ArchiveRestore className="w-4 h-4" /> : <Archive className="w-4 h-4" />,
+        onClick: () => {
+          void setArchived(id, 'peer', !archived);
+        },
+      },
+      {
         key: 'delete',
         label: t('common.delete'),
         icon: <Trash2 className="w-4 h-4" />,
@@ -570,6 +631,54 @@ export function FriendsList({
         onClick: () => setConfirmRemove(conversation),
       },
     ];
+  }
+
+  /** One row, used by both the everyday list and the archive shelf — the same
+   *  row in two places rather than two copies that drift. */
+  function renderRow(conversation: ConversationSummary) {
+    const peerId = conversation.peer_id;
+    const self = isSelfChat(me, peerId);
+    const pinned = flags.get(peerId)?.pinnedAt != null;
+    const muted = isMuted(peerId, flags);
+    const archived = flags.get(peerId)?.archivedAt != null;
+    const counted = unread.get(peerId) ?? 0;
+    const marked = isUnreadMarked(peerId, flags, conversation.last_at);
+    return (
+      <li key={peerId} className="group/row">
+        <SwipeRow
+          open={openRail === peerId}
+          onOpenChange={(open) => setOpenRail(open ? peerId : null)}
+          actions={rowActions(conversation, self, pinned, muted, archived, counted > 0 || marked)}
+        >
+          <ConversationRow
+            conversation={conversation}
+            me={me}
+            // A hand-placed mark has no number behind it, so it shows as a dot
+            // rather than inventing a count the server never gave.
+            unread={counted}
+            markedUnread={marked && counted === 0}
+            lastText={previews.get(peerId) ?? null}
+            selected={selectedFriendId === peerId}
+            pinned={pinned}
+            muted={muted}
+            onSelect={() => {
+              // A rail left open behind a chat is a state the user cannot see
+              // and will not expect on the way back.
+              setOpenRail(null);
+              // Opening a conversation is reading it, so a mark placed by hand
+              // has served its purpose and goes.
+              if (marked) void setUnreadMark(peerId, 'peer', false);
+              onSelectFriend({
+                id: peerId,
+                display_name: conversation.display_name,
+                avatar_url: conversation.avatar_url,
+                last_seen_at: conversation.last_seen_at,
+              });
+            }}
+          />
+        </SwipeRow>
+      </li>
+    );
   }
 
   async function confirmRemoveContact() {
@@ -705,44 +814,33 @@ export function FriendsList({
             so the only genuinely empty render is the one before the first fetch
             lands, and a spinner-shaped hole in a list that paints in a moment is
             worse than the space it fills. */}
-        <ul className="motion-stagger p-2 space-y-0.5">
-          {ordered.map((conversation) => {
-            const peerId = conversation.peer_id;
-            const self = isSelfChat(me, peerId);
-            const pinned = flags.get(peerId)?.pinnedAt != null;
-            const muted = isMuted(peerId, flags);
-            return (
-              <li key={peerId} className="group/row">
-                <SwipeRow
-                  open={openRail === peerId}
-                  onOpenChange={(open) => setOpenRail(open ? peerId : null)}
-                  actions={rowActions(conversation, self, pinned, muted)}
-                >
-                  <ConversationRow
-                    conversation={conversation}
-                    me={me}
-                    unread={unread.get(peerId) ?? 0}
-                    lastText={previews.get(peerId) ?? null}
-                    selected={selectedFriendId === peerId}
-                    pinned={pinned}
-                    muted={muted}
-                    onSelect={() => {
-                      // A rail left open behind a chat is a state the user
-                      // cannot see and will not expect on the way back.
-                      setOpenRail(null);
-                      onSelectFriend({
-                        id: peerId,
-                        display_name: conversation.display_name,
-                        avatar_url: conversation.avatar_url,
-                        last_seen_at: conversation.last_seen_at,
-                      });
-                    }}
-                  />
-                </SwipeRow>
-              </li>
-            );
-          })}
-        </ul>
+        <ul className="motion-stagger p-2 space-y-0.5">{activeRows.map(renderRow)}</ul>
+
+        {/* The shelf, collapsed. Archived conversations are not gone and not
+            silenced — they are out of the way — so they get a heading that says
+            how many and opens on a tap, rather than a screen of their own that
+            somebody has to remember exists. */}
+        {archivedRows.length > 0 && (
+          <div className="px-2 pb-2">
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 rounded-field px-2 py-2 text-left hover:bg-wash"
+              onClick={() => setShowArchived((v) => !v)}
+              aria-expanded={showArchived}
+            >
+              {showArchived ? (
+                <ChevronDown className="w-4 h-4 text-subtle" />
+              ) : (
+                <ChevronRight className="w-4 h-4 text-subtle" />
+              )}
+              <Archive className="w-4 h-4 text-subtle" />
+              <span className="text-meta font-medium text-muted">
+                {t('chatList.archivedCount', { count: archivedRows.length })}
+              </span>
+            </button>
+            {showArchived && <ul className="space-y-0.5">{archivedRows.map(renderRow)}</ul>}
+          </div>
+        )}
 
         {/* Someone who has rooms but no contacts gets no first-run card, and
             their only direct row is the self-chat — still the person who most

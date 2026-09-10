@@ -29,7 +29,8 @@ import { openFile } from '../lib/media-crypto';
 import { imageDecodes } from '../lib/compress';
 import { keyToken, mimeForPath, type MediaFailure } from '../lib/media';
 import { cachedMedia, forgetMedia, putMedia } from '../lib/media-cache';
-import { pinnedObjectUrl } from '../lib/pins';
+import { keepMedia, pinnedObjectUrl } from '../lib/pins';
+import { keepPolicy, shouldKeep } from '../lib/media-retention';
 import type { MediaType } from '../lib/types';
 
 /** Lifetime asked for on each signature. */
@@ -87,7 +88,22 @@ export function useSignedMediaUrl(
    *  (`lib/pin-restore.ts`), so the object they name was deleted by the sender's
    *  trim. Go to the pinned copy first: signing a URL for it would spend a round
    *  trip to be told what is already known, on every mount, forever. */
-  preferPin = false
+  preferPin = false,
+  /**
+   * Record this object on the device once it has been opened, if the retention
+   * setting asks for it.
+   *
+   * Off by default, and deliberately NOT set where the thread draws a
+   * thumbnail: a kept copy of the small sealed preview would look like an
+   * archive and be a few hundred pixels. Set by the viewer, which fetches the
+   * real object, and by the voice-note player, which has no thumbnail and so
+   * always holds the whole file.
+   *
+   * Nothing here downloads anything extra. The keep runs off bytes that were
+   * fetched because somebody looked at them, which is what makes this cost
+   * storage and never bandwidth.
+   */
+  keepWhenOpened?: { expiresAt: string | null; caption: string } | null
 ): SignedMedia {
   const [url, setUrl] = useState<string | null>(null);
   const [failure, setFailure] = useState<MediaFailure | null>(null);
@@ -109,6 +125,12 @@ export function useSignedMediaUrl(
   // into the cache, where the thumbnail, the viewer opened over it and the same
   // file forwarded elsewhere all read the one blob.
   const ownedUrlRef = useRef<string | null>(null);
+  // Read through a ref, never depended on. Callers pass an object literal, so
+  // depending on it by identity would re-sign, re-download and re-decrypt the
+  // attachment on every parent render — the exact loop `keyRef` above exists
+  // to avoid, arriving through a second door.
+  const keepRef = useRef(keepWhenOpened ?? null);
+  keepRef.current = keepWhenOpened ?? null;
 
   const releaseOwnedUrl = useCallback(() => {
     if (ownedUrlRef.current) {
@@ -228,11 +250,35 @@ export function useSignedMediaUrl(
     decodedRef.current = true;
     releaseOwnedUrl();
     setUrl(putMedia(path, blob));
+
+    // The server's copy of this is bounded — `selectStaleMedia` trims a
+    // conversation back to its keep limits — and the phone's is not. Anything
+    // with a disappearing timer is refused inside `shouldKeep`, first, before
+    // the setting is even consulted.
+    const keep = keepRef.current;
+    if (
+      keep &&
+      messageId &&
+      kind &&
+      shouldKeep({ mediaType: kind, expiresAt: keep.expiresAt }, keepPolicy())
+    ) {
+      // Not awaited: a write to app-private storage must not sit between the
+      // decrypted bytes and the element that is waiting to draw them.
+      void keepMedia(messageId, path, new Uint8Array(await blob.arrayBuffer()), {
+        mediaType: kind,
+        caption: keep.caption,
+      }).catch(() => {
+        // A full disk, or a sandbox write that was refused. The attachment is
+        // on screen either way; keeping is the bonus, never the point.
+      });
+    }
     // `token` is listed on purpose. The rule is right that the body never
     // reads it: it stands in for `keyRef.current`, which the body does read
     // and the rule cannot see through. Dropping it pins this callback to the
     // first key it ever saw; a plain `mediaKey` dependency reintroduces the
     // re-decrypt loop described at the ref's declaration.
+    // `keepWhenOpened` is deliberately absent for the same kind of reason: it
+    // is read through `keepRef`, and callers pass an object literal.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [path, token, kind, messageId, preferPin, releaseOwnedUrl]);
 

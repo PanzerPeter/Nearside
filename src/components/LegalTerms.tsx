@@ -22,8 +22,12 @@ export const termsSections: LegalSection[] = [
     title: 'Who can use it',
     body: (
       <p>
-        You must be at least 16. That is the age at which you can consent to online services on
-        your own under EU data protection law, and Nearside has no parental consent process.
+        You must be at least 14. Nobody can reach you here without you first handing them a code
+        in person or scanning theirs — there is no directory, no username search, and no way for a
+        stranger to open a conversation with you — so the risk this floor usually exists to manage
+        is one the app does not have. Nearside has no parental consent process, and where local
+        law sets a higher age for consenting to an online service on your own, that age applies
+        to you instead of this one.
       </p>
     ),
   },

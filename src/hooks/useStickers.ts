@@ -5,12 +5,14 @@
 // `useSealedExchange` and `ChatRoom.open` use.
 
 import { useCallback, useEffect, useState } from 'react';
+import { changedPositions, moveItem, renumber } from '../lib/reorder';
 import {
   deleteSticker,
   forgetSticker,
   listStickers,
   nextSort,
   openStickers,
+  saveStickerOrder,
   sortStickers,
   stickerRejection,
   stickerUrl,
@@ -31,6 +33,10 @@ export interface StickerDrawer {
   full: boolean;
   add: (file: File, label: string) => Promise<string | null>;
   remove: (sticker: Sticker) => Promise<void>;
+  /** Move one sticker to another's place, by id. Applied to the grid at once
+   *  and written behind it — a drag that waited for a round trip per frame
+   *  would not feel like dragging. */
+  reorder: (fromId: string, toId: string) => void;
   reload: () => Promise<void>;
   /** Start loading. Called by the picker when it mounts — see below. */
   activate: () => void;
@@ -116,6 +122,21 @@ export function useStickers(userId: string | null, identity: Identity | null): S
     await deleteSticker(sticker.id, sticker.path);
   }, []);
 
+  const reorder = useCallback((fromId: string, toId: string) => {
+    setStickers((current) => {
+      const from = current.findIndex((s) => s.id === fromId);
+      const to = current.findIndex((s) => s.id === toId);
+      if (from < 0 || to < 0 || from === to) return current;
+      const next = renumber(moveItem(current, from, to));
+      // Written against the order the user just made, not against `current`
+      // read back later: another drag can land before this settles, and the
+      // second write is then the one that wins — which is the right one.
+      const positions = changedPositions(next);
+      if (positions.length > 0) void saveStickerOrder(positions);
+      return next;
+    });
+  }, []);
+
   const activate = useCallback(() => setActive(true), []);
 
   return {
@@ -123,6 +144,7 @@ export function useStickers(userId: string | null, identity: Identity | null): S
     urls,
     loading,
     full: stickers.length >= STICKER_LIMIT,
+    reorder,
     add,
     remove,
     reload,

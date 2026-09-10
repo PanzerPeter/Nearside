@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import sodium from 'libsodium-wrappers';
 import { generateMnemonic, seedFromMnemonic } from './crypto/mnemonic';
 import { identityFromSeed, toBase64, type Identity } from './crypto/keys';
-import { signBytes, signedPayload, signedPayloadV2 } from './crypto/seal';
+import { signBytes, signedPayload, signedPayloadV2, signedPayloadV3 } from './crypto/seal';
 import {
   ROOM_COLOURS,
   openRoomFileKey,
@@ -428,5 +428,83 @@ describe('room file keys', () => {
     // Not the two-uid folder a conversation uses: membership of a room is not
     // a pair, and the storage policy has to ask `is_room_member` instead.
     expect(roomMediaPath('r-1', 'a.bin')).toBe('r-1/a.bin');
+  });
+});
+
+describe('deleting a group message', () => {
+  /** The tombstone as `deleteRoomMessage` writes it: every body column nulled,
+   *  and the signature recomputed over what is left. */
+  async function aTombstone(sender: Identity, senderId: string, replyToId: string | null) {
+    await sodium.ready;
+    const emptied = {
+      ciphertext: null,
+      nonce: null,
+      media_path: null,
+      media_type: null,
+      media_duration_ms: null,
+      media_key_ciphertext: null,
+      media_key_nonce: null,
+      media_thumb_path: null,
+      reply_to_id: replyToId,
+    };
+    return {
+      id: 'm-del',
+      room_id: 'r1',
+      sender_id: senderId,
+      created_at: '2026-08-07T00:00:00.000Z',
+      deleted_at: '2026-08-07T01:00:00.000Z',
+      ...emptied,
+      signature: await signBytes(sender.signPrivate, signedPayloadV3(emptied)),
+      sig_v: 3,
+    } as RoomMessage;
+  }
+
+  it('reads as a verified tombstone, not as an attack', async () => {
+    // `openRoomRows` verifies before it looks at `deleted_at`. A delete that
+    // nulled the body and left the old signature in place would therefore
+    // render the sender's own deletion to the whole group as `unverified` —
+    // the badge that exists to mean somebody is forging messages.
+    const roomKey = await aRoomKey();
+    const alice = await anIdentity();
+    const tomb = await aTombstone(alice, 'alice', null);
+
+    const [opened] = await openRoomRows(
+      [tomb],
+      roomKey,
+      new Map([['alice', await toBase64(alice.signPublic)]])
+    );
+    expect(opened.sender).toBe('verified');
+    expect(opened.text).toBeNull();
+    expect(opened.deleted_at).toBe('2026-08-07T01:00:00.000Z');
+  });
+
+  it('keeps the reply target inside what was signed', async () => {
+    // `reply_to_id` is frozen by a trigger, so the tombstone's signature has to
+    // describe the row the server will actually hold. Signing it as null while
+    // the column keeps its value is a signature over a row that never existed.
+    const roomKey = await aRoomKey();
+    const alice = await anIdentity();
+    const tomb = await aTombstone(alice, 'alice', 'm-parent');
+
+    const [opened] = await openRoomRows(
+      [tomb],
+      roomKey,
+      new Map([['alice', await toBase64(alice.signPublic)]])
+    );
+    expect(opened.sender).toBe('verified');
+  });
+
+  it('still refuses a tombstone signed by somebody else', async () => {
+    const roomKey = await aRoomKey();
+    const alice = await anIdentity();
+    const mallory = await anIdentity();
+    const forged = await aTombstone(mallory, 'alice', null);
+
+    const [opened] = await openRoomRows(
+      [forged],
+      roomKey,
+      new Map([['alice', await toBase64(alice.signPublic)]])
+    );
+    expect(opened.sender).toBe('unverified');
   });
 });

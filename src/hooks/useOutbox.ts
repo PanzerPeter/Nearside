@@ -19,11 +19,13 @@ import {
   bumpAttempts,
   dequeue,
   enqueue,
+  isAttemptable,
   isDuplicateSend,
   listFor,
   nextDelayMs,
-  MAX_ATTEMPTS,
+  reviveQueued,
 } from '../lib/outbox';
+import { t } from '../lib/i18n';
 
 /**
  * How long the queue waits before looking again while the device is offline.
@@ -49,6 +51,11 @@ export interface Outbox {
   dropPending: (...ids: string[]) => void;
   /** Drop a settled message from whichever queue is holding it. */
   retire: (id: string) => Promise<void>;
+  /** Give a failed message another go: attempts reset, mark cleared, flush. */
+  retry: (id: string) => Promise<void>;
+  /** Throw a failed message away for good. The only path that deletes an
+   *  unsent body, and it is the user asking. */
+  discard: (id: string) => Promise<void>;
   flush: () => Promise<void>;
 }
 
@@ -248,6 +255,28 @@ export function useOutbox({
   }
 
   /**
+   * Put a failed message back into circulation.
+   *
+   * Both stores are revived, not just the durable one: a message `send` could
+   * not persist fails exactly the same way, and a Retry that worked on one and
+   * silently did nothing on the other would be a button that works most of the
+   * time.
+   */
+  async function retry(id: string): Promise<void> {
+    const unqueued = unqueuedRef.current.get(id);
+    if (unqueued) unqueuedRef.current.set(id, { ...unqueued, attempts: 0, failed: false });
+    const revived = await reviveQueued(id);
+    const fresh = revived ?? unqueuedRef.current.get(id);
+    if (fresh) setPending((prev) => prev.map((m) => (m.id === id ? fresh : m)));
+    await flush();
+  }
+
+  async function discard(id: string): Promise<void> {
+    await retire(id);
+    dropPending(id);
+  }
+
+  /**
    * Drain this conversation's queue: attempt every entry, dequeue and drop it
    * from `pending` on success, bump its attempt count on failure, give up and
    * toast at `MAX_ATTEMPTS`. A delivered message is not pushed into `messages`
@@ -287,9 +316,16 @@ export function useOutbox({
         return additions.length ? [...prev, ...additions] : prev;
       });
 
+      // Failed rows are seeded into `pending` above so the bubble is there to
+      // retry from, but they are not attempted: a queue holding one would
+      // otherwise spin against whatever is refusing it on every wake, and the
+      // whole point of the failed state is that the next attempt is the user's
+      // decision.
       const attemptList: Array<{ msg: PendingMessage; durable: boolean }> = [
-        ...queued.map((msg) => ({ msg, durable: true })),
-        ...[...unqueuedRef.current.values()].map((msg) => ({ msg, durable: false })),
+        ...queued.filter(isAttemptable).map((msg) => ({ msg, durable: true })),
+        ...[...unqueuedRef.current.values()]
+          .filter(isAttemptable)
+          .map((msg) => ({ msg, durable: false })),
       ];
 
       // An attempt is a record of the server refusing a message, not of time
@@ -335,12 +371,17 @@ export function useOutbox({
         // there is nothing to retry and nothing to report.
         if (!updated) continue;
 
-        if (updated.attempts >= MAX_ATTEMPTS) {
-          if (durable) await dequeue(msg.id);
-          else unqueuedRef.current.delete(msg.id);
+        if (updated.failed) {
+          // The message stays — in the queue and on screen, marked failed, with
+          // a Retry on its bubble. It used to be deleted here and the bubble
+          // dropped with it, which meant the sender's words were destroyed by
+          // the component whose entire job is not to destroy them; and since
+          // the toast was behind `onScreen`, a sender who had moved to another
+          // conversation was told nothing at all.
+          if (!durable) unqueuedRef.current.set(msg.id, updated);
           if (onScreen) {
-            dropPending(msg.id);
-            onError('Message failed to send.');
+            setPending((prev) => prev.map((m) => (m.id === msg.id ? updated : m)));
+            onError(t('outbox.failed'));
           }
           continue;
         }
@@ -367,5 +408,5 @@ export function useOutbox({
     }
   }
 
-  return { pending, pendingRef, sending, send, dropPending, retire, flush };
+  return { pending, pendingRef, sending, send, dropPending, retire, retry, discard, flush };
 }

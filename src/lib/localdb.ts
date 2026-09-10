@@ -45,6 +45,11 @@ export interface PinnedMedia {
   media_path: string | null;
   media_type: MediaType | null;
   caption: string | null;
+  /** Kept by the retention setting rather than pinned by hand. The two are the
+   *  same file on disk and differ only in who asked for it — which is exactly
+   *  what "clear automatically kept media" needs to tell apart, so that tidying
+   *  up storage never throws away something somebody deliberately kept. */
+  auto?: boolean;
 }
 
 /** A peer's public key as this device first saw it, and whether a human ever
@@ -75,6 +80,12 @@ export interface ChatFlagsRow {
   pinned_at: string | null;
   muted_at: string | null;
   dismissed_at: string | null;
+  archived_at: string | null;
+  /** Marked unread by hand. Stamped with the moment, so that a message
+   *  arriving afterwards can clear it — a chat you deliberately left unread
+   *  and then got a new message in is simply unread, and re-marking it would
+   *  be the app arguing with the person. */
+  unread_at: string | null;
 }
 
 /** The database file is named for the account, so the isolation is the
@@ -123,7 +134,8 @@ CREATE TABLE IF NOT EXISTS pins (
   pinned_at  TEXT NOT NULL,
   media_path TEXT,
   media_type TEXT,
-  caption    TEXT
+  caption    TEXT,
+  auto       INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS chat_flags (
@@ -131,7 +143,9 @@ CREATE TABLE IF NOT EXISTS chat_flags (
   kind         TEXT NOT NULL,
   pinned_at    TEXT,
   muted_at     TEXT,
-  dismissed_at TEXT
+  dismissed_at TEXT,
+  archived_at  TEXT,
+  unread_at    TEXT
 );
 
 CREATE TABLE IF NOT EXISTS messages_sealed (
@@ -241,6 +255,13 @@ export async function openLocalDb(userId: string): Promise<void> {
       'pins ADD COLUMN media_path TEXT',
       'pins ADD COLUMN media_type TEXT',
       'pins ADD COLUMN caption TEXT',
+      // Archive, and the deliberate "leave this unread" mark. Same reason as
+      // the pins columns above: a store created before these existed has the
+      // table without them.
+      'chat_flags ADD COLUMN archived_at TEXT',
+      'chat_flags ADD COLUMN unread_at TEXT',
+      // 0 or 1. See `PinnedMedia.auto`.
+      'pins ADD COLUMN auto INTEGER',
     ]) {
       try {
         await db.execute(`ALTER TABLE ${column}`);
@@ -563,22 +584,43 @@ export async function putPin(row: PinnedMedia): Promise<void> {
     return;
   }
   await db?.run(
-    `INSERT INTO pins (message_id, file_path, pinned_at, media_path, media_type, caption)
-     VALUES (?, ?, ?, ?, ?, ?)
+    `INSERT INTO pins (message_id, file_path, pinned_at, media_path, media_type, caption, auto)
+     VALUES (?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(message_id) DO UPDATE SET
        file_path = excluded.file_path,
        pinned_at = excluded.pinned_at,
        media_path = excluded.media_path,
        media_type = excluded.media_type,
-       caption = excluded.caption`,
-    [row.message_id, row.file_path, row.pinned_at, row.media_path, row.media_type, row.caption]
+       caption = excluded.caption,
+       -- A hand pin over an auto-kept file promotes it, and never the other
+       -- way round: once somebody has deliberately kept something, a later
+       -- automatic pass must not quietly relabel it as disposable.
+       auto = CASE WHEN excluded.auto = 1 THEN pins.auto ELSE 0 END`,
+    [
+      row.message_id,
+      row.file_path,
+      row.pinned_at,
+      row.media_path,
+      row.media_type,
+      row.caption,
+      row.auto ? 1 : 0,
+    ]
   );
+}
+
+/** Drop only what the retention setting kept, leaving hand-made pins alone. */
+export async function autoKeptPins(): Promise<PinnedMedia[]> {
+  if (!native()) return [...(pinStore()?.values() ?? [])].filter((row) => row.auto);
+  const res = await db?.query('SELECT * FROM pins WHERE auto = 1');
+  return ((res?.values as PinnedMedia[]) ?? []).map((row) => ({ ...row, auto: true }));
 }
 
 export async function cachedPin(messageId: string): Promise<PinnedMedia | null> {
   if (!native()) return pinStore()?.get(messageId) ?? null;
   const res = await db?.query('SELECT * FROM pins WHERE message_id = ?', [messageId]);
-  return (res?.values?.[0] as PinnedMedia) ?? null;
+  const row = res?.values?.[0] as (PinnedMedia & { auto?: number }) | undefined;
+  // SQLite has no boolean; the column is 0/1 and every reader wants a boolean.
+  return row ? { ...row, auto: !!row.auto } : null;
 }
 
 /**
@@ -594,6 +636,15 @@ export async function allChatFlags(): Promise<Map<string, ChatFlagsRow>> {
   return new Map(((res?.values as ChatFlagsRow[]) ?? []).map((row) => [row.id, row]));
 }
 
+/** A row nobody has an opinion in any more. Kept as one predicate so the
+ *  in-memory path and the SQL DELETE cannot disagree about what "empty" means
+ *  — a new flag added to one and not the other would silently orphan rows. */
+function isEmptyFlagRow(row: ChatFlagsRow): boolean {
+  return (
+    !row.pinned_at && !row.muted_at && !row.dismissed_at && !row.archived_at && !row.unread_at
+  );
+}
+
 /**
  * Set one flag on one conversation, creating the row if this is the first.
  *
@@ -604,7 +655,7 @@ export async function allChatFlags(): Promise<Map<string, ChatFlagsRow>> {
 export async function setChatFlag(
   id: string,
   kind: 'peer' | 'room',
-  flag: 'pinned_at' | 'muted_at' | 'dismissed_at',
+  flag: 'pinned_at' | 'muted_at' | 'dismissed_at' | 'archived_at' | 'unread_at',
   at: string | null
 ): Promise<void> {
   if (!native()) {
@@ -616,9 +667,11 @@ export async function setChatFlag(
       pinned_at: null,
       muted_at: null,
       dismissed_at: null,
+      archived_at: null,
+      unread_at: null,
     };
     const next = { ...row, kind, [flag]: at } as ChatFlagsRow;
-    if (!next.pinned_at && !next.muted_at && !next.dismissed_at) store.delete(id);
+    if (isEmptyFlagRow(next)) store.delete(id);
     else store.set(id, next);
     return;
   }
@@ -628,7 +681,9 @@ export async function setChatFlag(
     [id, kind, at]
   );
   await db?.run(
-    'DELETE FROM chat_flags WHERE id = ? AND pinned_at IS NULL AND muted_at IS NULL AND dismissed_at IS NULL',
+    `DELETE FROM chat_flags WHERE id = ?
+       AND pinned_at IS NULL AND muted_at IS NULL AND dismissed_at IS NULL
+       AND archived_at IS NULL AND unread_at IS NULL`,
     [id]
   );
 }

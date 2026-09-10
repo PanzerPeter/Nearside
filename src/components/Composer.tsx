@@ -336,7 +336,9 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
       {replyingTo && (
         <div className="flex items-center gap-2 mb-2 px-3 py-2 rounded-field bg-base-200/70 border-l-2 border-primary">
           <div className="min-w-0 flex-1">
-            <p className="text-meta font-medium text-primary">Replying to {replyingTo.display_name}</p>
+            <p className="text-meta font-medium text-primary">
+              {t('composer.replyingTo', { name: replyingTo.display_name })}
+            </p>
             <p className="text-meta text-muted truncate">{replyingTo.snippet}</p>
           </div>
           <button
@@ -356,9 +358,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
           <div className="min-w-0 flex-1">
             <VoicePreview url={previewUrls[only.id]} durationMs={stagedDurationMs} />
             {silentTake && (
-              <p className="mt-1 text-meta text-warning">
-                No sound came through. Play it back before you send this.
-              </p>
+              <p className="mt-1 text-meta text-warning">{t('composer.silentTake')}</p>
             )}
           </div>
           <button

@@ -5,6 +5,8 @@ import {
   setDismissed,
   setPinned,
   sortByFlags,
+  isUnreadMarked,
+  partitionArchived,
   subscribeChatFlags,
   visibleRequests,
   type ChatFlags,
@@ -13,7 +15,16 @@ import { clearLocalDb, openLocalDb } from './localdb';
 
 const flag = (id: string, over: Partial<ChatFlags> = {}): [string, ChatFlags] => [
   id,
-  { id, kind: 'peer', pinnedAt: null, mutedAt: null, dismissedAt: null, ...over },
+  {
+    id,
+    kind: 'peer',
+    pinnedAt: null,
+    mutedAt: null,
+    dismissedAt: null,
+    archivedAt: null,
+    unreadAt: null,
+    ...over,
+  },
 ];
 
 describe('sortByFlags', () => {
@@ -139,5 +150,64 @@ describe('flag changes are announced', () => {
     stop();
     await setDismissed('peer', true);
     expect(heard).toBe(0);
+  });
+});
+
+describe('isUnreadMarked', () => {
+  it('is false for a conversation nobody marked', () => {
+    expect(isUnreadMarked('a', new Map(), '2026-09-01T10:00:00Z')).toBe(false);
+  });
+
+  it('holds while the mark is the newest thing about the chat', () => {
+    const flags = new Map([flag('a', { unreadAt: '2026-09-01T12:00:00Z' })]);
+    expect(isUnreadMarked('a', flags, '2026-09-01T10:00:00Z')).toBe(true);
+  });
+
+  it('holds on a conversation with no messages at all', () => {
+    const flags = new Map([flag('a', { unreadAt: '2026-09-01T12:00:00Z' })]);
+    expect(isUnreadMarked('a', flags, null)).toBe(true);
+  });
+
+  it('lapses once a message arrives after it', () => {
+    // The chat is now unread for the ordinary reason, and the server's count
+    // is the truth. Leaving the hand mark on top would make a later "mark as
+    // read" fail to clear a row that really has been read.
+    const flags = new Map([flag('a', { unreadAt: '2026-09-01T12:00:00Z' })]);
+    expect(isUnreadMarked('a', flags, '2026-09-01T13:00:00Z')).toBe(false);
+  });
+
+  it('counts a message stamped at the same instant as covered by the mark', () => {
+    const flags = new Map([flag('a', { unreadAt: '2026-09-01T12:00:00Z' })]);
+    expect(isUnreadMarked('a', flags, '2026-09-01T12:00:00Z')).toBe(true);
+  });
+});
+
+describe('partitionArchived', () => {
+  it('splits the shelf off the everyday list', () => {
+    const flags = new Map([flag('b', { archivedAt: '2026-09-01T12:00:00Z' })]);
+    const { active, archived } = partitionArchived([{ id: 'a' }, { id: 'b' }, { id: 'c' }], flags);
+    expect(active.map((r) => r.id)).toEqual(['a', 'c']);
+    expect(archived.map((r) => r.id)).toEqual(['b']);
+  });
+
+  it('keeps the order it was given, in both halves', () => {
+    // Pinning and `sortConversations` have already ordered these; a partition
+    // that re-sorted would be a second opinion about the same question.
+    const flags = new Map([
+      flag('a', { archivedAt: '2026-09-01T12:00:00Z' }),
+      flag('c', { archivedAt: '2026-09-01T12:00:00Z' }),
+    ]);
+    const { active, archived } = partitionArchived(
+      [{ id: 'a' }, { id: 'b' }, { id: 'c' }, { id: 'd' }],
+      flags
+    );
+    expect(archived.map((r) => r.id)).toEqual(['a', 'c']);
+    expect(active.map((r) => r.id)).toEqual(['b', 'd']);
+  });
+
+  it('puts everything in the everyday list when nothing is shelved', () => {
+    const { active, archived } = partitionArchived([{ id: 'a' }], new Map());
+    expect(active).toHaveLength(1);
+    expect(archived).toEqual([]);
   });
 });

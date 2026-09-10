@@ -6,6 +6,7 @@ import { isSelfChat } from '../lib/conversation';
 import { formatDisplayName, useNickname } from '../lib/nicknames';
 import type { ConversationSummary, MediaType } from '../lib/types';
 import { BellOff, NotebookPen, Pin } from 'lucide-react';
+import { peekDraft } from '../lib/drafts';
 import { useT } from '../hooks/useT';
 
 interface ConversationRowProps {
@@ -23,6 +24,10 @@ interface ConversationRowProps {
    *  answer on the screen showing them. */
   pinned?: boolean;
   muted?: boolean;
+  /** Marked unread by hand, with no server count behind it. Drawn as a dot
+   *  rather than a number, because inventing "1" would be the app claiming a
+   *  message that does not exist. */
+  markedUnread?: boolean;
 }
 
 /** One line of the sidebar: who, what they last said, when, and how many unread. */
@@ -35,6 +40,7 @@ export function ConversationRow({
   lastText,
   pinned = false,
   muted = false,
+  markedUnread = false,
 }: ConversationRowProps) {
   const t = useT();
   const { display_name, avatar_url, last_media_type, last_sender_id, last_at } = conversation;
@@ -52,6 +58,12 @@ export function ConversationRow({
     audio: t('preview.voice'),
     sticker: t('preview.sticker'),
   };
+  // Unsent text beats the last message in the preview, the way it does in every
+  // other messenger: a draft is the thing you have not finished, and drafts here
+  // live only in memory, so a forgotten one is a lost one. Suppressed on the
+  // conversation that is open — the text is already on screen in the composer,
+  // and repeating it in the row beside it is noise.
+  const draft = selected ? '' : peekDraft('peer', conversation.peer_id).trim();
   const body = lastText?.trim() || (last_media_type ? mediaLabels[last_media_type] : '');
   // "You:" on a note to yourself would be noise — every message there is yours.
   const preview = body
@@ -98,7 +110,11 @@ export function ConversationRow({
       <span className="flex-1 min-w-0 text-left">
         <span className="flex items-baseline gap-2">
           <span className="flex-1 min-w-0 flex items-baseline gap-1.5">
-            <span className={`truncate text-body ${unread > 0 ? 'font-semibold' : 'font-medium'}`}>
+            <span
+              className={`truncate text-body ${
+                unread > 0 || markedUnread ? 'font-semibold' : 'font-medium'
+              }`}
+            >
               {title}
             </span>
             {handle && (
@@ -122,20 +138,26 @@ export function ConversationRow({
         </span>
         <span
           className={`block truncate text-meta ${
-            unread > 0 ? 'text-strong font-medium' : 'text-muted'
+            draft ? 'text-muted' : unread > 0 ? 'text-strong font-medium' : 'text-muted'
           }`}
         >
-          {preview}
+          {draft && <span className="text-error font-medium">{t('preview.draftLabel')} </span>}
+          {draft ? draft : preview}
         </span>
       </span>
-      {unread > 0 && (
+      {unread > 0 ? (
         <span
           className="shrink-0 min-w-[1.25rem] h-5 px-1.5 inline-flex items-center justify-center rounded-full bg-primary text-primary-content text-micro font-bold leading-none"
           aria-label={t('chatList.unread', { count: unread })}
         >
           {formatUnread(unread)}
         </span>
-      )}
+      ) : markedUnread ? (
+        <span
+          className="shrink-0 w-2.5 h-2.5 rounded-full bg-primary"
+          aria-label={t('chatList.markedUnread')}
+        />
+      ) : null}
     </button>
   );
 }

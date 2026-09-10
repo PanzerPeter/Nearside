@@ -262,6 +262,25 @@ export async function renameSticker(
 }
 
 /**
+ * Persist a new order for the library.
+ *
+ * One update per moved row, because `sort` is the only column changing and
+ * PostgREST has no bulk-update-by-primary-key that would not also need every
+ * other column of every row sent back — including the sealed label and the
+ * sealed file key, which this layer would then have to hold and re-send for a
+ * reason that has nothing to do with position.
+ *
+ * `changedPositions` is what keeps that honest: a drag between neighbours
+ * writes two rows, not a hundred. Failures are the caller's to surface; the
+ * order is already on screen by the time this runs.
+ */
+export async function saveStickerOrder(positions: readonly { id: string; sort: number }[]): Promise<void> {
+  await Promise.all(
+    positions.map(({ id, sort }) => supabase.from('stickers').update({ sort }).eq('id', id))
+  );
+}
+
+/**
  * Delete a sticker from the library.
  *
  * Row first: it holds the only copy of the file key, so once it is gone the

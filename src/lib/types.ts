@@ -124,4 +124,10 @@ export interface PendingMessage {
   reply_to_id: string | null;
   created_at: string;
   attempts: number;
+  /** Out of attempts. The row stays in the queue rather than being deleted:
+   *  the outbox exists so that a message the network refused is not lost, and
+   *  deleting it at the end of the backoff was the one path that lost one.
+   *  A failed message stops being retried automatically and waits for the
+   *  bubble's Retry — see `useOutbox.flush`. */
+  failed?: boolean;
 }

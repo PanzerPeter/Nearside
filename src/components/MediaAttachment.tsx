@@ -27,6 +27,10 @@ interface MediaAttachmentProps {
    *  they name is already gone — read the pinned copy and do not spend a
    *  signature and a failed download proving it. */
   restored?: boolean;
+  /** The row's disappearing stamp, passed through to the viewer: an attachment
+   *  with a timer on it is never kept on the device, whatever the retention
+   *  setting says. */
+  expiresAt?: string | null;
   /** Stretch the thumbnail to the bubble's full width, cropping what won't
    *  fit. Set when a caption is what sizes the bubble: left at its natural
    *  width, a picture narrower than the text leaves a band of bubble colour
@@ -52,6 +56,7 @@ export function MediaAttachment({
   mediaKey,
   caption,
   restored,
+  expiresAt,
   fill,
 }: MediaAttachmentProps) {
   const t = useT();
@@ -193,6 +198,7 @@ export function MediaAttachment({
           type={type}
           caption={caption}
           restored={restored}
+          expiresAt={expiresAt}
           // What the thumbnail already learned, so the viewer does not mount a
           // player that would start the soundtrack before finding out for
           // itself.
@@ -225,6 +231,7 @@ function FullSizeViewer({
   caption,
   restored,
   noPicture,
+  expiresAt,
   onClose,
 }: {
   messageId: string;
@@ -234,12 +241,23 @@ function FullSizeViewer({
   caption?: string | null;
   restored?: boolean;
   noPicture: boolean;
+  /** The row's disappearing stamp, so the retention setting can refuse to keep
+   *  something that is meant to go. */
+  expiresAt?: string | null;
   onClose: () => void;
 }) {
   const t = useT();
   // Not deferred: it is on screen by definition — the viewer only mounts
   // because somebody opened it.
-  const { url, failure } = useSignedMediaUrl(path, mediaKey, type, messageId, false, restored);
+  //
+  // This is also where an attachment becomes worth keeping. The thread draws a
+  // thumbnail, so nothing above this point holds the real file; opening one is
+  // the moment the whole object exists on the device, and keeping it here costs
+  // no download that was not already happening.
+  const { url, failure } = useSignedMediaUrl(path, mediaKey, type, messageId, false, restored, {
+    expiresAt: expiresAt ?? null,
+    caption: caption ?? '',
+  });
 
   if (failure) {
     return (

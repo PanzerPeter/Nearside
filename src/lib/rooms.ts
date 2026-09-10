@@ -64,6 +64,10 @@ export interface RoomMessage {
   reply_to_id?: string | null;
   edited_at?: string | null;
   deleted_at?: string | null;
+  /** Stamped by trigger from the group's disappearing timer. Read by the
+   *  device-side retention setting, which refuses to keep a local copy of
+   *  anything the group agreed would go — see `lib/media-retention.ts`. */
+  expires_at?: string | null;
   /** Which payload the signature covers. Absent means a row written before the
    *  column existed, which is v1 by definition. */
   sig_v?: number;
@@ -445,6 +449,126 @@ export async function sendRoomMessage(
 }
 
 /**
+ * Edit the body of a group message you sent.
+ *
+ * The signature is recomputed, not carried over. It covers the sealed bytes,
+ * and every member holds the room key — so a row whose ciphertext changed while
+ * its signature did not is a row anyone in the group could have written. The
+ * client verifies before it decrypts, so a stale signature would render the
+ * sender's own corrected message as `unverified`: an edit that looked like an
+ * attack.
+ *
+ * The media columns go into the payload unchanged because the payload is over
+ * the whole row shape, and a caption edit must not silently re-sign an
+ * attachment as absent.
+ *
+ * `edited_at` is stamped by `room_messages_body_guard`, never here — the
+ * server owns it for the same reason it owns `created_at`.
+ */
+export async function editRoomMessage(
+  id: string,
+  identity: Identity,
+  roomKey: Uint8Array,
+  text: string,
+  existing: Pick<
+    RoomMessage,
+    | 'media_path'
+    | 'media_type'
+    | 'media_duration_ms'
+    | 'media_key_ciphertext'
+    | 'media_key_nonce'
+    | 'media_thumb_path'
+    | 'reply_to_id'
+  >
+): Promise<void> {
+  await sodium.ready;
+  const nonce = sodium.randombytes_buf(sodium.crypto_secretbox_NONCEBYTES);
+  const row = {
+    ciphertext: sodium.to_base64(
+      sodium.crypto_secretbox_easy(sodium.from_string(text), nonce, roomKey),
+      sodium.base64_variants.ORIGINAL
+    ),
+    nonce: sodium.to_base64(nonce, sodium.base64_variants.ORIGINAL),
+    media_path: existing.media_path ?? null,
+    media_type: existing.media_type ?? null,
+    media_duration_ms: existing.media_duration_ms ?? null,
+    media_key_ciphertext: existing.media_key_ciphertext ?? null,
+    media_key_nonce: existing.media_key_nonce ?? null,
+    media_thumb_path: existing.media_thumb_path ?? null,
+    reply_to_id: existing.reply_to_id ?? null,
+  };
+
+  const { error } = await supabase
+    .from('room_messages')
+    .update({
+      ciphertext: row.ciphertext,
+      nonce: row.nonce,
+      signature: await signBytes(identity.signPrivate, signedPayloadV3(row)),
+      sig_v: 3,
+    })
+    .eq('id', id);
+  if (error) throw error;
+}
+
+/**
+ * Delete a group message you sent — a tombstone, not a removal.
+ *
+ * DELETE is revoked on the table, so this is the only shape available and it is
+ * the right one: the row keeps its place in the thread and loses everything
+ * that was in it. `room_messages_body_guard` refuses to un-delete it
+ * afterwards.
+ *
+ * **The tombstone is re-signed**, over the emptied row. `openRoomRows` verifies
+ * before it looks at `deleted_at`, so a row whose body was nulled while its
+ * signature still covered the old body fails verification — and the sender's
+ * own deletion would render to the whole group as `unverified`, which is the
+ * badge reserved for an attack in progress. Signing the empty row keeps the
+ * invariant the group relies on: every row states who wrote it, including the
+ * ones that now say nothing.
+ */
+export async function deleteRoomMessage(id: string, identity: Identity): Promise<void> {
+  await sodium.ready;
+  const emptied = {
+    ciphertext: null,
+    nonce: null,
+    media_path: null,
+    media_type: null,
+    media_duration_ms: null,
+    media_key_ciphertext: null,
+    media_key_nonce: null,
+    media_thumb_path: null,
+    // Frozen by `room_messages_prevent_reassign`, so it must go into the
+    // payload as it is rather than as null — the signature has to describe the
+    // row the server will actually hold.
+    reply_to_id: undefined as string | null | undefined,
+  };
+
+  const { data: current } = await supabase
+    .from('room_messages')
+    .select('reply_to_id')
+    .eq('id', id)
+    .single();
+  emptied.reply_to_id = (current as { reply_to_id: string | null } | null)?.reply_to_id ?? null;
+
+  const { error } = await supabase
+    .from('room_messages')
+    .update({
+      deleted_at: new Date().toISOString(),
+      ciphertext: null,
+      nonce: null,
+      media_path: null,
+      media_type: null,
+      media_key_ciphertext: null,
+      media_key_nonce: null,
+      media_thumb_path: null,
+      signature: await signBytes(identity.signPrivate, signedPayloadV3(emptied)),
+      sig_v: 3,
+    })
+    .eq('id', id);
+  if (error) throw error;
+}
+
+/**
  * Verifies, then opens.
  *
  * A row whose signature fails comes back as `sender: 'unverified'` with no
@@ -532,6 +656,82 @@ export async function listRooms(): Promise<RoomSummary[]> {
   const { data, error } = await supabase.rpc('rooms_for_me');
   if (error) throw error;
   return (data as RoomSummary[] | null) ?? [];
+}
+
+/**
+ * How far this account has read in each group, and how many rows are newer.
+ *
+ * `room_receipts` has existed since `0036` — table, policies and a monotonic
+ * clamp — with nothing in the app ever writing to it, so the transparency
+ * screen listed a row count that was always zero and groups had no unread
+ * count at all. This is the read half.
+ *
+ * The count is capped: past a point "lots" is the only useful answer, and
+ * asking Postgres to count ten thousand rows to render "99+" is work nobody
+ * sees. `head: true` fetches the count without the rows.
+ */
+export async function roomUnreadCounts(roomIds: readonly string[]): Promise<Map<string, number>> {
+  const counts = new Map<string, number>();
+  if (roomIds.length === 0) return counts;
+
+  const { data } = await supabase
+    .from('room_receipts')
+    .select('room_id, read_at')
+    .in('room_id', [...roomIds]);
+  const readAt = new Map(
+    ((data as { room_id: string; read_at: string }[] | null) ?? []).map((r) => [
+      r.room_id,
+      r.read_at,
+    ])
+  );
+
+  await Promise.all(
+    roomIds.map(async (roomId) => {
+      let q = supabase
+        .from('room_messages')
+        .select('id', { count: 'exact', head: true })
+        .eq('room_id', roomId);
+      const since = readAt.get(roomId);
+      // No receipt yet means the group has never been opened on any device of
+      // this account. Counting its whole history as unread is the honest
+      // answer and matches what the 1:1 side does with a missing watermark.
+      if (since) q = q.gt('created_at', since);
+      const { count } = await q;
+      if (count) counts.set(roomId, count);
+    })
+  );
+  return counts;
+}
+
+/**
+ * Mark a group read up to `at` — the newest message the reader has actually
+ * seen, never `Date.now()`.
+ *
+ * A device clock that runs fast would otherwise mark messages read before they
+ * arrived, which is exactly the bug `receipts.ts` documents on the 1:1 side.
+ * The server's own monotonic trigger stops the mark going backwards; this stops
+ * it going too far forwards.
+ */
+export async function markRoomRead(roomId: string, me: string, at: string): Promise<void> {
+  await supabase
+    .from('room_receipts')
+    .upsert({ room_id: roomId, user_id: me, read_at: at }, { onConflict: 'room_id,user_id' });
+  for (const listener of readListeners) listener();
+}
+
+/**
+ * One place to hear that a group's read mark moved.
+ *
+ * The list and the open group are siblings, not ancestor and descendant, so a
+ * prop would have to be threaded through `App` and `FriendsList` to connect
+ * two components that have nothing else to say to each other. Same shape as
+ * `subscribeChatFlags` and `subscribeDrafts`.
+ */
+const readListeners = new Set<() => void>();
+
+export function subscribeRoomReads(listener: () => void): () => void {
+  readListeners.add(listener);
+  return () => readListeners.delete(listener);
 }
 
 export async function roomMembers(roomId: string): Promise<RoomParticipant[]> {

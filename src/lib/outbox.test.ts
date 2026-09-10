@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_ATTEMPTS, belongsTo, clearFor, enqueue, isDuplicateSend, nextDelayMs } from './outbox';
+import {
+  MAX_ATTEMPTS,
+  belongsTo,
+  clearFor,
+  enqueue,
+  isAttemptable,
+  isDuplicateSend,
+  nextDelayMs,
+} from './outbox';
 import { PendingMessage } from './types';
 
 function samplePending(overrides: Partial<PendingMessage> = {}): PendingMessage {
@@ -100,5 +108,32 @@ describe('clearFor', () => {
   // contract is that a sign-out is never blocked by storage that isn't there.
   it('resolves rather than throwing when IndexedDB is unavailable', async () => {
     await expect(clearFor('me')).resolves.toBeUndefined();
+  });
+});
+
+describe('isAttemptable', () => {
+  it('attempts an ordinary queued message', () => {
+    expect(isAttemptable(samplePending())).toBe(true);
+  });
+
+  it('attempts one that has failed some attempts but not all of them', () => {
+    expect(isAttemptable(samplePending({ attempts: MAX_ATTEMPTS - 1 }))).toBe(true);
+  });
+
+  it('leaves a failed message alone', () => {
+    // Not the same question as "has it used its attempts": the mark is what
+    // the flush loop reads, so that a queue holding a failed message does not
+    // spin against whatever refused it every time the app wakes. Waking is
+    // frequent — every screen-on bumps the generation — and the next attempt
+    // is the user's decision, made on the bubble.
+    expect(isAttemptable(samplePending({ attempts: MAX_ATTEMPTS, failed: true }))).toBe(false);
+  });
+
+  it('treats a row written before the mark existed as attemptable', () => {
+    // `failed` is optional, so entries queued by an older build come back with
+    // it undefined. Reading that as "failed" would strand every one of them.
+    const legacy = samplePending();
+    delete (legacy as { failed?: boolean }).failed;
+    expect(isAttemptable(legacy)).toBe(true);
   });
 });

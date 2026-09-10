@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ImagePlus, Search, Trash2 } from 'lucide-react';
+import { indexAtPoint, movedBeyond } from '../lib/reorder';
 import { matchesLabel, STICKER_SOURCE_TYPES, type Sticker } from '../lib/stickers';
 import type { StickerDrawer } from '../hooks/useStickers';
 import { useT } from '../hooks/useT';
@@ -26,6 +27,15 @@ export function StickerPicker({ drawer, onSelect, onError }: StickerPickerProps)
   const [armed, setArmed] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const holdTimer = useRef<number | null>(null);
+  /** The sticker being dragged, once the pointer has travelled far enough to
+   *  mean it. Null while a press is still just a press. */
+  const [dragging, setDragging] = useState<string | null>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
+  const pressOrigin = useRef<{ x: number; y: number; id: string } | null>(null);
+  /** Suppresses the click that ends a drag: a pointerup after reordering is
+   *  still a click on the tile, and without this every drag also sent the
+   *  sticker it had just moved. */
+  const draggedRef = useRef(false);
 
   // The drawer is owned by ChatRoom and loads nothing until something asks. The
   // popover mounts this component the moment it opens, tab selected or not, so
@@ -58,6 +68,61 @@ export function StickerPicker({ drawer, onSelect, onError }: StickerPickerProps)
     holdTimer.current = null;
   }
 
+  /**
+   * Reordering is off while a search is filtering the grid.
+   *
+   * The tiles on screen are then a subset in their own order, and dropping one
+   * between two of them means nothing about where it sits in the library — the
+   * only honest answer would be to guess. Clearing the box is the way to
+   * reorder, and the placeholder says so.
+   */
+  const canReorder = query.trim() === '';
+
+  function onTilePointerDown(e: React.PointerEvent, id: string) {
+    startHold(id);
+    if (!canReorder) return;
+    pressOrigin.current = { x: e.clientX, y: e.clientY, id };
+    draggedRef.current = false;
+  }
+
+  function onTilePointerMove(e: React.PointerEvent) {
+    const origin = pressOrigin.current;
+    if (!origin) return;
+
+    if (!dragging) {
+      // A tap wobbles, so a drag only begins once the pointer has really
+      // travelled. Crossing that line also cancels the long-press: the two
+      // gestures start identically and only one of them can win.
+      if (!movedBeyond(origin, { x: e.clientX, y: e.clientY }, 6)) return;
+      cancelHold();
+      setArmed(null);
+      setDragging(origin.id);
+      draggedRef.current = true;
+      // Captured so the drag survives the pointer leaving the tile it started
+      // on — which it does immediately, that being the point.
+      (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+    }
+
+    const grid = gridRef.current;
+    if (!grid) return;
+    const tiles = [...grid.children] as HTMLElement[];
+    const over = indexAtPoint(
+      tiles.map((tile) => tile.getBoundingClientRect()),
+      e.clientX,
+      e.clientY
+    );
+    if (over === null) return;
+    const targetId = shown[over]?.id;
+    const heldId = dragging ?? origin.id;
+    if (targetId && targetId !== heldId) drawer.reorder(heldId, targetId);
+  }
+
+  function endDrag() {
+    cancelHold();
+    pressOrigin.current = null;
+    setDragging(null);
+  }
+
   return (
     <div className="flex flex-col h-full">
       <div className="px-2 pb-2 shrink-0">
@@ -83,24 +148,41 @@ export function StickerPicker({ drawer, onSelect, onError }: StickerPickerProps)
           </div>
         ) : drawer.stickers.length === 0 ? (
           <div className="flex flex-col items-center gap-2 py-10 px-4 text-center">
-            <p className="text-body text-muted">No stickers yet.</p>
-            <p className="text-meta text-faint">Add a picture to start one.</p>
+            <p className="text-body text-muted">{t('stickers.none')}</p>
+            <p className="text-meta text-faint">{t('stickers.noneHint')}</p>
           </div>
         ) : shown.length === 0 ? (
           <p className="py-10 text-center text-body text-subtle">
-            Nothing matches &ldquo;{query}&rdquo;.
+            {t('stickers.noMatch', { query })}
           </p>
         ) : (
-          <div className="grid grid-cols-4 gap-1.5">
+          <div ref={gridRef} className="grid grid-cols-4 gap-1.5">
             {shown.map((sticker) => (
-              <div key={sticker.id} className="relative aspect-square">
+              <div
+                key={sticker.id}
+                className={`relative aspect-square transition-transform ${
+                  dragging === sticker.id ? 'scale-110 opacity-80 z-10' : ''
+                }`}
+              >
                 <button
                   type="button"
                   className="w-full h-full flex items-center justify-center rounded-field hover:bg-wash active:scale-95 transition"
-                  onClick={() => (armed === sticker.id ? setArmed(null) : onSelect(sticker))}
-                  onPointerDown={() => startHold(sticker.id)}
-                  onPointerUp={cancelHold}
+                  onClick={() => {
+                    if (draggedRef.current) {
+                      draggedRef.current = false;
+                      return;
+                    }
+                    if (armed === sticker.id) setArmed(null);
+                    else onSelect(sticker);
+                  }}
+                  onPointerDown={(e) => onTilePointerDown(e, sticker.id)}
+                  onPointerMove={onTilePointerMove}
+                  onPointerUp={endDrag}
+                  onPointerCancel={endDrag}
                   onPointerLeave={cancelHold}
+                  // Only while a drag is live: set unconditionally it would
+                  // take scrolling the grid away from the finger.
+                  style={dragging ? { touchAction: 'none' } : undefined}
                   onContextMenu={(e) => {
                     e.preventDefault();
                     setArmed(sticker.id);
@@ -110,7 +192,7 @@ export function StickerPicker({ drawer, onSelect, onError }: StickerPickerProps)
                   {drawer.urls[sticker.id] ? (
                     <img
                       src={drawer.urls[sticker.id]}
-                      alt={sticker.label || 'sticker'}
+                      alt={sticker.label || t('preview.sticker')}
                       className="max-w-full max-h-full object-contain"
                     />
                   ) : (
@@ -128,7 +210,9 @@ export function StickerPicker({ drawer, onSelect, onError }: StickerPickerProps)
                       setArmed(null);
                       void drawer.remove(sticker);
                     }}
-                    aria-label={`Delete ${sticker.label || 'this sticker'}`}
+                    aria-label={t('stickers.deleteOne', {
+                      label: sticker.label || t('preview.sticker'),
+                    })}
                   >
                     <Trash2 className="w-3 h-3" />
                   </button>
@@ -160,6 +244,12 @@ export function StickerPicker({ drawer, onSelect, onError }: StickerPickerProps)
           <ImagePlus className="w-4 h-4 text-muted" />
           {drawer.full ? t('stickers.full') : t('stickers.add')}
         </button>
+        {/* Dragging is invisible until somebody tries it, and nobody tries a
+            gesture they were never told about. Shown only when there is
+            something to reorder and nothing filtering the grid. */}
+        {canReorder && drawer.stickers.length > 1 && (
+          <p className="px-2 pt-1 text-micro text-faint">{t('stickers.reorderHint')}</p>
+        )}
       </div>
     </div>
   );

@@ -46,6 +46,9 @@ export interface ChatFlags {
   pinnedAt: string | null;
   mutedAt: string | null;
   dismissedAt: string | null;
+  archivedAt: string | null;
+  /** When the conversation was marked unread by hand. See `isUnreadMarked`. */
+  unreadAt: string | null;
 }
 
 function fromRow(row: ChatFlagsRow): ChatFlags {
@@ -55,6 +58,8 @@ function fromRow(row: ChatFlagsRow): ChatFlags {
     pinnedAt: row.pinned_at,
     mutedAt: row.muted_at,
     dismissedAt: row.dismissed_at,
+    archivedAt: row.archived_at ?? null,
+    unreadAt: row.unread_at ?? null,
   };
 }
 
@@ -78,6 +83,30 @@ export async function setMuted(id: string, kind: 'peer' | 'room', on: boolean): 
 
 export async function setDismissed(id: string, on: boolean): Promise<void> {
   await setChatFlag(id, 'peer', 'dismissed_at', on ? new Date().toISOString() : null);
+  announce();
+}
+
+/**
+ * Archive is a shelf, not a delete: the conversation, its history and its
+ * notifications all carry on, it simply stops occupying a row in the list you
+ * read every day. Muting silences; archiving tidies; they are different wants
+ * and this app had only the first.
+ */
+export async function setArchived(id: string, kind: 'peer' | 'room', on: boolean): Promise<void> {
+  await setChatFlag(id, kind, 'archived_at', on ? new Date().toISOString() : null);
+  announce();
+}
+
+/**
+ * Mark a conversation unread by hand, or take the mark off.
+ *
+ * Stamped rather than a boolean because the stamp is what lets a later message
+ * clear it: a chat you left unread on purpose and then received something in is
+ * unread for the ordinary reason, and the mark has done its job. Compared in
+ * `isUnreadMarked` rather than here, so the comparison is testable.
+ */
+export async function setUnreadMark(id: string, kind: 'peer' | 'room', on: boolean): Promise<void> {
+  await setChatFlag(id, kind, 'unread_at', on ? new Date().toISOString() : null);
   announce();
 }
 
@@ -121,6 +150,40 @@ export function mutedIds(flags: ReadonlyMap<string, ChatFlags>): string[] {
 
 export function isMuted(id: string, flags: ReadonlyMap<string, ChatFlags>): boolean {
   return flags.get(id)?.mutedAt != null;
+}
+
+export function isArchived(id: string, flags: ReadonlyMap<string, ChatFlags>): boolean {
+  return flags.get(id)?.archivedAt != null;
+}
+
+/**
+ * Whether a conversation should show as unread because somebody said so.
+ *
+ * The mark only counts while it is the newest thing about the conversation. A
+ * message that arrived after it makes the chat unread on its own terms, and the
+ * server's own count is then the truth — leaving the hand mark on top of that
+ * would make "mark as read" fail to clear a row that has genuinely been read.
+ */
+export function isUnreadMarked(
+  id: string,
+  flags: ReadonlyMap<string, ChatFlags>,
+  lastAt: string | null
+): boolean {
+  const markedAt = flags.get(id)?.unreadAt;
+  if (!markedAt) return false;
+  return !lastAt || lastAt <= markedAt;
+}
+
+/** Split a list into the everyday one and the shelf. Order is preserved in
+ *  both, so whatever sorted the input still holds. */
+export function partitionArchived<T extends { id: string }>(
+  rows: readonly T[],
+  flags: ReadonlyMap<string, ChatFlags>
+): { active: T[]; archived: T[] } {
+  const active: T[] = [];
+  const archived: T[] = [];
+  for (const row of rows) (isArchived(row.id, flags) ? archived : active).push(row);
+  return { active, archived };
 }
 
 interface Request {

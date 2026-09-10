@@ -9,7 +9,7 @@ import { MessageBubble } from './MessageBubble';
 import { TypingIndicator } from './TypingIndicator';
 import { SealedExchange } from './SealedExchange';
 import type { OpenedAnswer } from '../lib/sealed-exchange';
-import { ChevronDown, Timer } from 'lucide-react';
+import { AlertCircle, ChevronDown, Timer } from 'lucide-react';
 import { useT } from '../hooks/useT';
 
 /** Group consecutive messages from the same sender within this window. */
@@ -64,6 +64,11 @@ interface MessageThreadProps {
   onCancelEdit: () => void;
   onStartEdit: (msg: Message) => void;
   onDelete: (msg: Message) => void;
+  /** Give a queued message that ran out of attempts another go. */
+  onRetryQueued: (id: string) => void;
+  /** Throw a failed queued message away — the one path that deletes an unsent
+   *  body, and it is the user asking for it. */
+  onDiscardQueued: (id: string) => void;
 }
 
 /** True when `msg` should sit tight under `prev` rather than start its own
@@ -122,6 +127,8 @@ export function MessageThread({
   onCancelEdit,
   onStartEdit,
   onDelete,
+  onRetryQueued,
+  onDiscardQueued,
 }: MessageThreadProps) {
   const t = useT();
   const noticeIndex = timerChange
@@ -308,7 +315,9 @@ export function MessageThread({
             return (
               <div
                 key={msg.id}
-                className={`opacity-90 ${groupedWithPrev ? 'mt-0.5' : 'mt-3 first:mt-0'}`}
+                className={`${msg.failed ? 'opacity-100' : 'opacity-90'} ${
+                  groupedWithPrev ? 'mt-0.5' : 'mt-3 first:mt-0'
+                }`}
               >
                 <MessageBubble
                   msg={pendingAsMessage(msg)}
@@ -341,6 +350,32 @@ export function MessageThread({
                   onDelete={() => {}}
                   formatTime={formatTime}
                 />
+                {/* The message ran out of attempts and is still here. It used
+                    to be deleted at this point, with a toast the sender only
+                    saw if they happened to still be in this conversation — so
+                    the words somebody typed were destroyed by the queue whose
+                    whole job is to keep them. Nothing is thrown away now
+                    without a person asking. */}
+                {msg.failed && (
+                  <div className="mt-1 flex items-center justify-end gap-2 pr-1 text-micro">
+                    <AlertCircle className="w-3 h-3 text-error" aria-hidden />
+                    <span className="text-error">{t('outbox.notSent')}</span>
+                    <button
+                      type="button"
+                      className="font-medium text-primary hover:underline"
+                      onClick={() => onRetryQueued(msg.id)}
+                    >
+                      {t('outbox.retry')}
+                    </button>
+                    <button
+                      type="button"
+                      className="text-subtle hover:underline"
+                      onClick={() => onDiscardQueued(msg.id)}
+                    >
+                      {t('outbox.discard')}
+                    </button>
+                  </div>
+                )}
               </div>
             );
           })}

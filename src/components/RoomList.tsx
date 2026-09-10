@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Bell, BellOff, Pin, PinOff, Plus, Users } from 'lucide-react';
-import { listRooms, type RoomSummary } from '../lib/rooms';
+import {
+  listRooms,
+  roomUnreadCounts,
+  subscribeRoomReads,
+  type RoomSummary,
+} from '../lib/rooms';
 import { formatListTime } from '../lib/time';
+import { formatUnread } from '../lib/receipts';
 import { useConnection } from '../lib/connection';
 import type { Identity } from '../lib/crypto/keys';
 import { CreateRoomModal } from './CreateRoomModal';
@@ -93,6 +99,8 @@ export function RoomList({
     [rooms, flags]
   );
   const { generation, live } = useConnection();
+  /** Unread per group, from `room_receipts`. Empty until the first load. */
+  const [unread, setUnread] = useState<Map<string, number>>(new Map());
 
   // Live ref rather than a dep: the callback is re-created on every render of
   // the list above, and keying `load` on it would restart the poll each time.
@@ -104,6 +112,9 @@ export function RoomList({
       const rows = await listRooms();
       setRooms(rows);
       onCountChangeRef.current?.(rows.length);
+      // After the list, not beside it: the counts are keyed on the ids this
+      // read just returned, and a group that has gone should not be counted.
+      setUnread(await roomUnreadCounts(rows.map((r) => r.id)));
     } catch {
       // A read that failed is not a list that is empty — leave whatever is on
       // screen rather than blanking it, same as the conversation list does.
@@ -115,6 +126,11 @@ export function RoomList({
   useEffect(() => {
     void load();
   }, [load, generation]);
+
+  // Opening a group marks it read; without this the badge would sit there
+  // until the next poll, which is up to a minute of the list disagreeing with
+  // the screen the user just came back from.
+  useEffect(() => subscribeRoomReads(() => void load()), [load]);
 
   // Skipped while the app is hidden, like every other poll in the app: the
   // wake path refetches on return, so a backgrounded tab polling on is spent
@@ -201,18 +217,26 @@ export function RoomList({
                     <span className="flex-1 min-w-0">
                       <span className="block text-body font-medium truncate">{room.title}</span>
                       <span className="block text-meta text-muted truncate">
-                        {room.member_count} {room.member_count === 1 ? 'member' : 'members'}
+                        {t('room.memberCount', { count: room.member_count })}
                       </span>
                     </span>
                     {muted && (
-                      <BellOff className="w-3 h-3 shrink-0 text-subtle" aria-label="Muted" />
+                      <BellOff className="w-3 h-3 shrink-0 text-subtle" aria-label={t('chatList.muted')} />
                     )}
                     {pinned && (
-                      <Pin className="w-3 h-3 shrink-0 text-subtle" aria-label="Pinned" />
+                      <Pin className="w-3 h-3 shrink-0 text-subtle" aria-label={t('chatList.pinned')} />
                     )}
                     {room.last_at && (
                       <span className="text-micro text-muted shrink-0">
                         {formatListTime(room.last_at)}
+                      </span>
+                    )}
+                    {(unread.get(room.id) ?? 0) > 0 && (
+                      <span
+                        className="shrink-0 min-w-[1.25rem] h-5 px-1.5 inline-flex items-center justify-center rounded-full bg-primary text-primary-content text-micro font-bold leading-none"
+                        aria-label={t('chatList.unread', { count: unread.get(room.id) ?? 0 })}
+                      >
+                        {formatUnread(unread.get(room.id) ?? 0)}
                       </span>
                     )}
                   </button>

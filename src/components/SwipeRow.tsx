@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useRef, useState, type ReactNode } from 'react';
 import { MoreHorizontal } from 'lucide-react';
 import { useSwipeActions } from '../hooks/useSwipeActions';
 import { isCoarsePointer } from '../lib/device';
 import { useT } from '../hooks/useT';
+import { RowMenu, type MenuAnchor } from './RowMenu';
 
 export interface RowAction {
   key: string;
@@ -43,9 +44,13 @@ const ACTION_PX = 64;
 export function SwipeRow({ actions, open, onOpenChange, children }: SwipeRowProps) {
   const t = useT();
   const railWidth = actions.length * ACTION_PX;
-  const [menuOpen, setMenuOpen] = useState(false);
+  // The rect the card hangs from, in viewport coordinates. Null means closed.
+  // Held as a value rather than a ref to the trigger because a right-click has
+  // no trigger — the anchor there is the pointer itself.
+  const [anchor, setAnchor] = useState<MenuAnchor | null>(null);
   const [coarse] = useState(isCoarsePointer);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const moreRef = useRef<HTMLButtonElement>(null);
 
   const swipe = useSwipeActions({
     railWidth,
@@ -54,26 +59,15 @@ export function SwipeRow({ actions, open, onOpenChange, children }: SwipeRowProp
     enabled: actions.length > 0,
   });
 
-  // A menu left open behind a scrolled list, or behind the chat that a click
-  // just opened, is a popover nobody asked to keep.
-  useEffect(() => {
-    if (!menuOpen) return;
-    const dismiss = (e: MouseEvent) => {
-      if (!wrapRef.current?.contains(e.target as Node)) setMenuOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setMenuOpen(false);
-    };
-    document.addEventListener('mousedown', dismiss);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', dismiss);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [menuOpen]);
+  // Focus goes back where it came from, so dismissing a menu with Escape does
+  // not drop a keyboard user at the top of the document.
+  const closeMenu = useCallback(() => {
+    setAnchor(null);
+    moreRef.current?.focus({ preventScroll: true });
+  }, []);
 
   function run(action: RowAction) {
-    setMenuOpen(false);
+    setAnchor(null);
     onOpenChange(false);
     action.onClick();
   }
@@ -85,7 +79,10 @@ export function SwipeRow({ actions, open, onOpenChange, children }: SwipeRowProp
       onContextMenu={(e) => {
         if (actions.length === 0) return;
         e.preventDefault();
-        setMenuOpen(true);
+        // A right-click has no trigger element, so the pointer is the anchor:
+        // a zero-size rect at the cursor, which `placeMenu` treats exactly as
+        // it treats a button's.
+        setAnchor({ top: e.clientY, bottom: e.clientY, left: e.clientX, right: e.clientX });
       }}
     >
       <div
@@ -136,37 +133,39 @@ export function SwipeRow({ actions, open, onOpenChange, children }: SwipeRowProp
           fine pointer so it can be reached by tab, not only by hover. */}
       {!coarse && actions.length > 0 && (
         <button
+          ref={moreRef}
           type="button"
           className="absolute right-1 top-1/2 -translate-y-1/2 btn btn-ghost btn-xs btn-circle opacity-0 focus-visible:opacity-100 group-hover/row:opacity-100"
           onClick={(e) => {
             e.stopPropagation();
-            setMenuOpen((v) => !v);
+            // Measured here, not inside the updater: `currentTarget` is cleared
+            // once the handler returns, and a state updater can run after it.
+            const rect = e.currentTarget.getBoundingClientRect();
+            setAnchor((current) => (current ? null : rect));
           }}
           title={t('chatList.actions')}
           aria-label={t('chatList.actions')}
-          aria-expanded={menuOpen}
+          aria-haspopup="menu"
+          aria-expanded={anchor !== null}
         >
           <MoreHorizontal className="w-4 h-4" />
         </button>
       )}
 
-      {menuOpen && (
-        <div className="absolute right-2 top-1/2 z-20 -translate-y-1/2 rounded-field border border-hairline bg-base-100 py-1 shadow-lg">
-          {actions.map((action) => (
-            <button
-              key={action.key}
-              type="button"
-              onClick={() => run(action)}
-              className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-meta hover:bg-base-200 ${
-                action.destructive ? 'text-error' : ''
-              }`}
-            >
-              {action.icon}
-              {action.label}
-            </button>
-          ))}
-        </div>
-      )}
+      {/* Outside the clipped box above, in a portal — see `RowMenu`. */}
+      <RowMenu
+        open={anchor !== null}
+        anchor={anchor}
+        label={t('chatList.actions')}
+        onClose={closeMenu}
+        items={actions.map((action) => ({
+          key: action.key,
+          label: action.label,
+          icon: action.icon,
+          destructive: action.destructive,
+          onClick: () => run(action),
+        }))}
+      />
     </div>
   );
 }

@@ -20,6 +20,12 @@ interface VoiceNoteProps {
   mediaKey?: Uint8Array | null;
   /** Recorded length from the message row; see `Message.media_duration_ms`. */
   durationMs: number | null;
+  /** The row's disappearing stamp. A recording with a timer on it is never
+   *  kept, whatever the retention setting says. */
+  expiresAt?: string | null;
+  /** The caption under the recording, recorded with a kept copy so the words
+   *  survive the server's trim along with the audio. */
+  caption?: string | null;
 }
 
 /**
@@ -29,12 +35,30 @@ interface VoiceNoteProps {
  * both bubble palettes (primary for your own messages, neutral for the
  * friend's) without being told which one it is in.
  */
-export function VoiceNote({ messageId, path, durationMs, mediaKey }: VoiceNoteProps) {
+export function VoiceNote({
+  messageId,
+  path,
+  durationMs,
+  mediaKey,
+  expiresAt,
+  caption,
+}: VoiceNoteProps) {
   const t = useT();
   const audioRef = useRef<HTMLAudioElement>(null);
   // 'audio' is what tells `mimeForPath` that a .webm here is a recording and
   // not a video — the container is the same and the extension cannot say.
-  const { url, failure, reload } = useSignedMediaUrl(path, mediaKey, 'audio', messageId);
+  // A voice note has no thumbnail, so rendering one downloads the whole file —
+  // which makes this the one media type the retention setting can keep without
+  // anybody having to open anything.
+  const { url, failure, reload } = useSignedMediaUrl(
+    path,
+    mediaKey,
+    'audio',
+    messageId,
+    false,
+    false,
+    { expiresAt: expiresAt ?? null, caption: caption ?? '' }
+  );
   const [playing, setPlaying] = useState(false);
   const [positionMs, setPositionMs] = useState(0);
   // Filled in from the element only when the row has no stored duration.

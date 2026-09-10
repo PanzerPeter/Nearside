@@ -323,6 +323,8 @@ export function MessageBubble({
                 <VoiceNote
                   messageId={msg.id}
                   path={msg.media_path}
+                  expiresAt={msg.expires_at}
+                  caption={msg.text}
                   durationMs={msg.media_duration_ms}
                   mediaKey={msg.media_key}
                 />
@@ -342,6 +344,7 @@ export function MessageBubble({
                 <MediaAttachment
                   messageId={msg.id}
                   path={msg.media_path}
+                  expiresAt={msg.expires_at}
                   thumbPath={msg.media_thumb_path}
                   type={msg.media_type}
                   mediaKey={msg.media_key}
@@ -540,6 +543,8 @@ export function MessageBubble({
                     <VoiceNote
                       messageId={msg.id}
                       path={msg.media_path}
+                      expiresAt={msg.expires_at}
+                      caption={msg.text}
                       durationMs={msg.media_duration_ms}
                       mediaKey={msg.media_key}
                     />
@@ -561,6 +566,7 @@ export function MessageBubble({
                       <MediaAttachment
                         messageId={msg.id}
                         path={msg.media_path}
+                        expiresAt={msg.expires_at}
                         thumbPath={msg.media_thumb_path}
                         type={msg.media_type}
                         mediaKey={msg.media_key}
@@ -629,7 +635,9 @@ export function MessageBubble({
               }`}
             >
               <time className={isDeleted ? '' : 'opacity-75'}>{formatTime(msg.created_at)}</time>
-              {msg.edited_at && !isDeleted && <span className="opacity-75">(edited)</span>}
+              {msg.edited_at && !isDeleted && (
+                <span className="opacity-75">{t('message.editedMark')}</span>
+              )}
               {isOwn && status && !isDeleted && <MessageStatus status={status} />}
             </div>
           </div>

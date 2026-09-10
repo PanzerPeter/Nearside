@@ -23,8 +23,22 @@ interface EmojiPickerProps {
  * only thing pinning the app to React 18. Inlining it costs nothing — the
  * types it shipped were `props: any` — and the peer range goes with it.
  */
+/**
+ * Light or dark, from the theme the user actually chose.
+ *
+ * `data-surface` is set by `applyTheme` off the active pack's `color-scheme`,
+ * which is the same signal the system bars and the elevation tokens read. The
+ * picker used to be constructed with a hardcoded `theme: 'dark'`, so somebody
+ * on a light pack opened a black panel in the middle of a cream app — the one
+ * surface in Nearside that ignored the theme store it was sold from.
+ */
+function surface(): 'light' | 'dark' {
+  return document.documentElement.dataset.surface === 'light' ? 'light' : 'dark';
+}
+
 export default function EmojiPicker({ onSelect, onClickOutside }: EmojiPickerProps) {
   const hostRef = useRef<HTMLDivElement>(null);
+  const theme = surface();
 
   // The picker keeps the callbacks it was constructed with, and it is
   // constructed once. Reading them out of a ref at call time is what stops the
@@ -46,9 +60,13 @@ export default function EmojiPicker({ onSelect, onClickOutside }: EmojiPickerPro
     // `.current` off it, empties that node and appends itself to it.
     new Picker({
       data,
-      theme: 'dark',
+      theme,
       previewPosition: 'none',
-      skinTonePosition: 'none',
+      // In the search row rather than 'none'. A picker that cannot be set to
+      // your own skin tone hands back a default one every time, which is the
+      // kind of small wrongness people notice in every message they send;
+      // emoji-mart remembers the choice itself.
+      skinTonePosition: 'search',
       dynamicWidth: true,
       onEmojiSelect: (e: { native: string }) => callbacks.current.onSelect(e.native),
       onClickOutside: (e: MouseEvent) => callbacks.current.onClickOutside(e),
@@ -60,7 +78,10 @@ export default function EmojiPicker({ onSelect, onClickOutside }: EmojiPickerPro
     // would get there too, but not on StrictMode's discarded first pass, which
     // re-runs this effect against a host that is still mounted.
     return () => host.replaceChildren();
-  }, []);
+    // Rebuilt when the surface flips, which is the only way a constructed-once
+    // custom element can follow a theme change. Rare enough that losing the
+    // panel's scroll position costs nothing.
+  }, [theme]);
 
   return <div ref={hostRef} />;
 }

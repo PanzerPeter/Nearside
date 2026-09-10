@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { Images, Pin, RefreshCw, Search } from 'lucide-react';
 import { clearCachedMessages } from '../../lib/localdb';
-import { clearPinnedMedia } from '../../lib/pins';
+import { clearAutoKeptMedia, clearPinnedMedia } from '../../lib/pins';
+import { keepPolicy, setKeepPolicy, type KeepPolicy } from '../../lib/media-retention';
+import type { MessageKey } from '../../lib/i18n';
 import { forgetAllMedia } from '../../lib/media-cache';
 import { formatBytes } from '../../lib/storage-usage';
 import { isMobileNative } from '../../lib/platform';
@@ -10,9 +12,9 @@ import { useToast } from '../../hooks/useToast';
 import { ActionRow, Card, InfoRow, Note } from './SettingsUi';
 import { useT } from '../../hooks/useT';
 
-/** Which clear is waiting for a second tap. Both of them destroy the only copy
- *  of something, so neither is a single tap. */
-type Pending = 'mirror' | 'pins' | null;
+/** Which clear is waiting for a second tap. Each destroys the only copy of
+ *  something, so none of them is a single tap. */
+type Pending = 'mirror' | 'pins' | 'autoKept' | null;
 
 /**
  * What this device is holding, and how to get it back.
@@ -26,6 +28,9 @@ type Pending = 'mirror' | 'pins' | null;
 export function StoragePage() {
   const { usage, failed, reload } = useStorageUsage();
   const [pending, setPending] = useState<Pending>(null);
+  // Read once and held: the setting is written from this screen and nowhere
+  // else, so a re-read per render would only ever return what is on screen.
+  const [keep, setKeep] = useState<KeepPolicy>(keepPolicy);
   const [working, setWorking] = useState(false);
   const toast = useToast();
   const native = isMobileNative();
@@ -37,6 +42,9 @@ export function StoragePage() {
       if (what === 'mirror') {
         await clearCachedMessages();
         toast.success(t('storage.mirrorCleared'));
+      } else if (what === 'autoKept') {
+        await clearAutoKeptMedia();
+        toast.success(t('storage.autoKeptCleared'));
       } else {
         await clearPinnedMedia();
         toast.success(t('storage.pinsCleared'));
@@ -144,6 +152,60 @@ export function StoragePage() {
               onAction={() => setPending('pins')}
             />
           ))}
+      </Card>
+
+      {/*
+        The server's copy of an attachment is bounded — a conversation is trimmed
+        back to its keep limits — and this phone's is not. That is what this
+        card is: the opt-out, per device, because how much room a phone has is
+        not a fact about the account.
+      */}
+      <Card title={t('storage.keepTitle')}>
+        <div className="px-3 py-2.5">
+          <p className="text-meta text-muted">{t('storage.keepHint')}</p>
+          <div className="mt-2 flex flex-col gap-1.5">
+            {(['off', 'light', 'all'] as KeepPolicy[]).map((option) => (
+              <label key={option} className="flex items-start gap-2.5 cursor-pointer">
+                <input
+                  type="radio"
+                  name="keep-policy"
+                  className="radio radio-sm radio-primary mt-0.5 shrink-0"
+                  checked={keep === option}
+                  onChange={() => {
+                    setKeep(option);
+                    setKeepPolicy(option);
+                  }}
+                />
+                <span className="min-w-0">
+                  <span className="block text-body text-strong">
+                    {t(`storage.keep.${option}` as MessageKey)}
+                  </span>
+                  <span className="block text-meta text-muted">
+                    {t(`storage.keep.${option}Hint` as MessageKey)}
+                  </span>
+                </span>
+              </label>
+            ))}
+          </div>
+        </div>
+        <Note>{t('storage.keepDisappearing')}</Note>
+        {pending === 'autoKept' ? (
+          <Confirm
+            working={working}
+            onCancel={() => setPending(null)}
+            onConfirm={() => void run('autoKept')}
+            label={t('storage.clearAutoKept')}
+          >
+            {t('storage.clearAutoKeptBody')}
+          </Confirm>
+        ) : (
+          <ActionRow
+            label={t('storage.clearAutoKept')}
+            hint={t('storage.clearAutoKeptHint')}
+            action={t('common.remove')}
+            onAction={() => setPending('autoKept')}
+          />
+        )}
       </Card>
 
       <Card title={t('storage.mediaCache')}>

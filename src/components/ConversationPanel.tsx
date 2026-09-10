@@ -59,8 +59,8 @@ export function ConversationPanel({
   return (
     <div className="bg-base-100 border-b border-hairline shadow-[0_1px_3px_rgba(0,0,0,0.15)] shrink-0">
       <div className="flex items-center gap-2 px-4 sm:px-5 pt-2.5">
-        <p className="flex-1 text-body font-semibold">In this conversation</p>
-        <button className="btn btn-ghost btn-xs btn-square" onClick={onClose} title="Close">
+        <p className="flex-1 text-body font-semibold">{t('panel.inThisConversation')}</p>
+        <button className="btn btn-ghost btn-xs btn-square" onClick={onClose} title={t('common.close')}>
           <X className="w-4 h-4" />
         </button>
       </div>
@@ -138,6 +138,7 @@ function DateList({
   onJump,
   empty,
 }: ListProps & { insights: { upcoming: DateInsight[]; past: DateInsight[]; now: number } }) {
+  const t = useT();
   if (insights.upcoming.length === 0 && insights.past.length === 0) return <Empty text={empty} />;
 
   return (
@@ -146,7 +147,7 @@ function DateList({
         <DateRow key={rowKey(event)} event={event} now={insights.now} who={who} onJump={onJump} />
       ))}
       {insights.past.length > 0 && (
-        <p className="px-2 pt-3 pb-1 text-meta font-medium text-subtle">Already passed</p>
+        <p className="px-2 pt-3 pb-1 text-meta font-medium text-subtle">{t('panel.alreadyPassed')}</p>
       )}
       {insights.past.map((event) => (
         <DateRow

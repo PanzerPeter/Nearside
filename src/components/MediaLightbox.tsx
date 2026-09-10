@@ -100,7 +100,7 @@ export function MediaLightbox({
       const blob = await (await fetch(url)).blob();
       await saveToGallery(blob, downloadName(path, type), type);
       setSaved(true);
-      toast.success(type === 'image' ? 'Photo saved to your gallery.' : 'Video saved to your gallery.');
+      toast.success(t(type === 'image' ? 'lightbox.photoSaved' : 'lightbox.videoSaved'));
     } catch {
       toast.error(t('lightbox.saveFailed'));
     } finally {
@@ -215,10 +215,7 @@ export function MediaLightbox({
           // the save button, which is the way out.
           <div className="flex max-w-sm flex-col items-center gap-3 px-6 text-center text-white/75">
             <VideoOff className="w-8 h-8" />
-            <p className="text-body">
-              This video's format can't be played here. Save it and open it in a video
-              player.
-            </p>
+            <p className="text-body">{t('lightbox.unplayableBody')}</p>
           </div>
         ) : (
           <video

@@ -191,6 +191,14 @@ export const privacySections: LegalSection[] = [
           sent exists so the same message is never announced twice.
         </p>
         <p>
+          That trim is about the server&rsquo;s storage, not yours. Your phone can keep its own copy
+          of an attachment after the server lets go of it, and by default it keeps photos and voice
+          messages you have opened. Those copies live inside the app&rsquo;s private storage on your
+          device, never on a server and never in your gallery, and Settings &rsaquo; Storage is where
+          you change what is kept or delete it. A message with a disappearing timer is never kept
+          this way, whatever that setting says.
+        </p>
+        <p>
           If a disappearing-message timer is set on a conversation, that takes precedence. The server
           stamps an expiry on each new message in it and a scheduled job deletes them once it passes,
           for both people, read or not. The timer is set by either of you and applies to messages

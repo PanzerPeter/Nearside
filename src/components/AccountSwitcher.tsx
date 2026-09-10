@@ -104,7 +104,7 @@ export function AccountSwitcher({
           onClick={onAddAccount}
         >
           <Plus className="w-4 h-4 text-muted shrink-0" />
-          <span className="flex-1 text-left">Add another account</span>
+          <span className="flex-1 text-left">{t('accounts.addAnother')}</span>
         </button>
       )}
     </div>
