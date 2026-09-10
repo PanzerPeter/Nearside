@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import sodium from 'libsodium-wrappers';
 import { generateMnemonic, seedFromMnemonic } from './crypto/mnemonic';
 import { identityFromSeed, toBase64, type Identity } from './crypto/keys';
@@ -14,6 +14,7 @@ import {
   type RoomDraft,
   type RoomMessage,
 } from './rooms';
+import { cachedPreview, clearLocalDb, openLocalDb, searchCached } from './localdb';
 
 async function anIdentity(): Promise<Identity> {
   return identityFromSeed(await seedFromMnemonic(generateMnemonic()));
@@ -506,5 +507,112 @@ describe('deleting a group message', () => {
       new Map([['alice', await toBase64(alice.signPublic)]])
     );
     expect(opened.sender).toBe('unverified');
+  });
+});
+
+describe('the local mirror of a group', () => {
+  beforeEach(async () => {
+    await openLocalDb('me');
+    await clearLocalDb();
+  });
+
+  it('keeps what this device decrypted, so a group is searchable', async () => {
+    // The server dropped message bodies in 0023, so the mirror is the only
+    // copy of a group's plaintext there is — without this write a group was
+    // unsearchable on every device, not merely on one that never loaded it.
+    const roomKey = await aRoomKey();
+    const alice = await anIdentity();
+    const row = await aRow(roomKey, alice, 'alice', 'meet at the pier');
+
+    await openRoomRows([row], roomKey, new Map([['alice', await toBase64(alice.signPublic)]]));
+
+    const hits = await searchCached('r1', 'pier');
+    expect(hits).toHaveLength(1);
+    expect(hits[0].user_id).toBe('alice');
+  });
+
+  it('keys the mirror on the group, not on the sender', async () => {
+    // A group is one conversation however many people are in it. Keyed by
+    // sender, a search in the group would answer for whoever spoke last.
+    const roomKey = await aRoomKey();
+    const alice = await anIdentity();
+    const bob = await anIdentity();
+    const signing = new Map([
+      ['alice', await toBase64(alice.signPublic)],
+      ['bob', await toBase64(bob.signPublic)],
+    ]);
+    const first = await aRow(roomKey, alice, 'alice', 'first light');
+    const second = { ...(await aRow(roomKey, bob, 'bob', 'second light')), id: 'm2' };
+
+    await openRoomRows([first, second], roomKey, signing);
+
+    expect(await searchCached('r1', 'light')).toHaveLength(2);
+    expect(await searchCached('alice', 'light')).toHaveLength(0);
+  });
+
+  it('never mirrors a row it could not verify', async () => {
+    // An unverified row is a claim, not a message. Mirroring it would make a
+    // forgery searchable on this device long after the bubble warning about it
+    // scrolled away.
+    const roomKey = await aRoomKey();
+    const alice = await anIdentity();
+    const mallory = await anIdentity();
+    const row = await aRow(roomKey, mallory, 'alice', 'trust me');
+
+    await openRoomRows([row], roomKey, new Map([['alice', await toBase64(alice.signPublic)]]));
+
+    expect(await searchCached('r1', 'trust me')).toHaveLength(0);
+  });
+
+  it('drops a deleted group message from the mirror', async () => {
+    // "Delete" that leaves the body findable in search and previewed in the
+    // list is the one place the word would visibly not mean what it says.
+    const roomKey = await aRoomKey();
+    const alice = await anIdentity();
+    const signing = new Map([['alice', await toBase64(alice.signPublic)]]);
+    const row = await aRow(roomKey, alice, 'alice', 'forget this');
+    await openRoomRows([row], roomKey, signing);
+    expect(await searchCached('r1', 'forget this')).toHaveLength(1);
+
+    const emptied = {
+      ciphertext: null,
+      nonce: null,
+      media_path: null,
+      media_type: null,
+      media_duration_ms: null,
+      media_key_ciphertext: null,
+      media_key_nonce: null,
+      media_thumb_path: null,
+      reply_to_id: null,
+    };
+    await openRoomRows(
+      [
+        {
+          ...row,
+          ...emptied,
+          deleted_at: '2026-08-07T01:00:00.000Z',
+          signature: await signBytes(alice.signPrivate, signedPayloadV3(emptied)),
+          sig_v: 3,
+        } as RoomMessage,
+      ],
+      roomKey,
+      signing
+    );
+
+    expect(await searchCached('r1', 'forget this')).toHaveLength(0);
+    expect(await cachedPreview('r1')).toBeNull();
+  });
+
+  it('mirrors an edit over the words it replaced', async () => {
+    const roomKey = await aRoomKey();
+    const alice = await anIdentity();
+    const signing = new Map([['alice', await toBase64(alice.signPublic)]]);
+    await openRoomRows([await aRow(roomKey, alice, 'alice', 'six oclock')], roomKey, signing);
+
+    const corrected = await aRow(roomKey, alice, 'alice', 'seven oclock');
+    await openRoomRows([{ ...corrected, edited_at: '2026-08-07T01:00:00.000Z' }], roomKey, signing);
+
+    expect(await searchCached('r1', 'six')).toHaveLength(0);
+    expect((await cachedPreview('r1'))?.text).toBe('seven oclock');
   });
 });

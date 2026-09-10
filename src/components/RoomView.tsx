@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { RealtimeChannel, Session } from '@supabase/supabase-js';
 import {
   ArrowLeft,
   Lock,
   LogOut,
   Pencil,
+  Search,
   Reply,
   ShieldAlert,
   ShieldQuestion,
@@ -25,6 +26,7 @@ import {
   removeMember,
   markRoomRead,
   roomMembers,
+  roomReadAt,
   roomSigningKeys,
   sendRoomMessage,
   type RoomMessage,
@@ -45,6 +47,7 @@ import { useReactions } from '../hooks/useReactions';
 import { useSwipeToReply } from '../hooks/useSwipeToReply';
 import { useDraft } from '../hooks/useDraft';
 import { draftKey } from '../lib/drafts';
+import { privacyPrefs } from '../lib/privacy-prefs';
 import type { Profile, Reaction } from '../lib/types';
 import { Composer, MAX_TEXTAREA_PX, type ComposerHandle } from './Composer';
 import { MediaAttachment } from './MediaAttachment';
@@ -53,8 +56,10 @@ import { jumboEmojiCount } from '../lib/emoji-only';
 import { ReactionBar } from './ReactionBar';
 import { ReactionChips } from './ReactionChips';
 import { StickerAttachment } from './StickerAttachment';
+import { ConversationSearch } from './ConversationSearch';
 import { StickerPicker } from './StickerPicker';
 import { VoiceNote } from './VoiceNote';
+import { useUnreadDivider } from '../hooks/useUnreadDivider';
 import { useT } from '../hooks/useT';
 // `roomSnippet` is a helper rather than a component, so it reaches the catalog
 // directly; aliased to stay distinct from the hook's `t`.
@@ -69,6 +74,9 @@ interface RoomViewProps {
 }
 
 const PAGE_SIZE = 50;
+/** How far back a search result may drag the thread. The same cap the 1:1
+ *  thread uses: past it the jump costs more than reading back by hand. */
+const MAX_JUMP_PAGES = 10;
 /** How long a typing mark survives without another broadcast. Matches the 1:1
  *  thread's, so the indicator behaves the same in both places. */
 const TYPING_LINGER_MS = 3_000;
@@ -122,6 +130,14 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
    *  `edited_at` and hang "(edited)" on a message nobody changed. */
   const editingOriginal = useRef('');
   const [showMembers, setShowMembers] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  /** How far this account had read when the group opened. `undefined` while
+   *  that read is in flight — the mark below waits for it, because the mark is
+   *  what would erase it. */
+  const [readAtOnOpen, setReadAtOnOpen] = useState<string | null | undefined>(undefined);
+  /** One jump at a time: two loops would page the same thread against each
+   *  other's `messages` and `hasMore`. */
+  const jumpInFlight = useRef(false);
   /** Who is mid-removal, so their row can show it and not be tapped twice. */
   const [removing, setRemoving] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -298,6 +314,75 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
   }, [room.id, roomKey, messages, loadingOlder, openPage]);
 
   /**
+   * Follow a search result back to its message, loading pages until it is on
+   * screen.
+   *
+   * Paged rather than fetched around the hit: a page dropped into the middle of
+   * the thread with a hole on either side of it reads as a thread that lost
+   * messages. The cap is what stops a hit from years back paging the whole
+   * group into memory.
+   */
+  const jumpToMessage = useCallback(
+    async (id: string, createdAt: string) => {
+      if (jumpInFlight.current) return;
+      jumpInFlight.current = true;
+      try {
+        if (messages.some((m) => m.id === id)) {
+          jumpTo(id);
+          return;
+        }
+        if (!roomKey || !hasMore) {
+          toast.error(t('search.notFound'));
+          return;
+        }
+
+        setLoadingOlder(true);
+        let cursor: string | undefined = messages[0]?.created_at;
+        let more: boolean = hasMore;
+        let found = false;
+        for (let page = 0; page < MAX_JUMP_PAGES && more && cursor; page++) {
+          const { data, error } = await supabase
+            .from('room_messages')
+            .select(ROOM_MESSAGE_COLUMNS)
+            .eq('room_id', room.id)
+            .lt('created_at', cursor)
+            .order('created_at', { ascending: false })
+            .limit(PAGE_SIZE + 1);
+          if (error) break;
+
+          const rows = (data as unknown as RoomMessage[] | null) ?? [];
+          more = rows.length > PAGE_SIZE;
+          const older = await openPage(rows.slice(0, PAGE_SIZE).reverse(), roomKey);
+          if (older.length === 0) {
+            more = false;
+            break;
+          }
+          skipAutoScroll.current = true;
+          setMessages((prev) => {
+            const known = new Set(prev.map((m) => m.id));
+            return [...older.filter((m) => !known.has(m.id)), ...prev];
+          });
+          setHasMore(more);
+          found = older.some((m) => m.id === id);
+          if (found) break;
+          cursor = older[0].created_at;
+          // Paged past where the hit should have been: it is not in this group
+          // any more, whatever the mirror still remembers.
+          if (cursor < createdAt) break;
+        }
+        setLoadingOlder(false);
+
+        // Let the merged pages paint before measuring where to scroll to.
+        if (found) requestAnimationFrame(() => jumpTo(id));
+        else toast.error(t('search.tooFarBack'));
+      } finally {
+        jumpInFlight.current = false;
+      }
+    },
+    [room.id, roomKey, messages, hasMore, openPage, jumpTo, toast, t]
+  );
+
+  /**
    * Verify, open and append one row that arrived over the socket.
    *
    * The subscription used to call `loadMessages`, which re-read the newest
@@ -386,6 +471,9 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
       // room of six is not worth showing, and the name is what makes it worth
       // showing.
       .on('broadcast', { event: 'typing' }, ({ payload }) => {
+        // The setting is symmetric: with typing off this device broadcasts
+        // none of its own, so it does not read anybody else's.
+        if (!privacyPrefs().typing) return;
         const who = payload?.userId as string | undefined;
         if (!who || who === me) return;
         setTypingBy((current) => new Map(current).set(who, Date.now()));
@@ -434,6 +522,24 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
     return () => clearInterval(id);
   }, [live, roomKey, loadMessages]);
 
+  useEffect(() => {
+    let alive = true;
+    setReadAtOnOpen(undefined);
+    void (async () => {
+      const at = await roomReadAt(room.id, me);
+      if (alive) setReadAtOnOpen(at);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [room.id, me]);
+
+  const dividerRows = useMemo(
+    () => messages.map((m) => ({ id: m.id, from: m.sender_id, created_at: m.created_at })),
+    [messages]
+  );
+  const unreadDividerId = useUnreadDivider(room.id, me, dividerRows, readAtOnOpen);
+
   /**
    * Mark the group read up to its newest message.
    *
@@ -443,11 +549,11 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
    */
   useEffect(() => {
     const newest = messages[messages.length - 1]?.created_at;
-    if (!newest) return;
+    if (!newest || readAtOnOpen === undefined) return;
     // The list hears about this through `subscribeRoomReads`, not through a
     // prop threaded up to App and back down.
     void markRoomRead(room.id, me, newest);
-  }, [room.id, me, messages]);
+  }, [room.id, me, messages, readAtOnOpen]);
 
   useEffect(() => {
     // A page of older messages is the one update that must not move the view:
@@ -470,6 +576,7 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
    * and a broadcast per keystroke would be a message per character.
    */
   function notifyTyping() {
+    if (!privacyPrefs().typing) return;
     const now = Date.now();
     if (now - lastTypingSent.current < TYPING_THROTTLE_MS) return;
     lastTypingSent.current = now;
@@ -616,6 +723,14 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
         </div>
         <button
           className="btn btn-ghost btn-sm btn-square"
+          onClick={() => setSearchOpen((v) => !v)}
+          title={t('chat.searchMessages')}
+          aria-label={t('chat.searchMessages')}
+        >
+          <Search className="w-4 h-4" />
+        </button>
+        <button
+          className="btn btn-ghost btn-sm btn-square"
           onClick={() => setShowMembers((v) => !v)}
           title={t('room.members')}
         >
@@ -629,6 +744,21 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
           {isOwner ? <Trash2 className="w-4 h-4" /> : <LogOut className="w-4 h-4" />}
         </button>
       </header>
+
+      {searchOpen && (
+        <ConversationSearch
+          key={room.id}
+          peerId={room.id}
+          me={me}
+          peerLabel={room.title}
+          senderName={nameFor}
+          onJump={(messageId, createdAt) => {
+            setSearchOpen(false);
+            void jumpToMessage(messageId, createdAt);
+          }}
+          onClose={() => setSearchOpen(false)}
+        />
+      )}
 
       {showMembers && (
         <div className="bg-base-100 border-b border-hairline px-4 py-3 shrink-0">
@@ -700,8 +830,17 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
 
         <ul className="space-y-2.5">
           {messages.map((m) => (
+            <Fragment key={m.id}>
+              {m.id === unreadDividerId && (
+                <li className="flex items-center gap-2 py-1">
+                  <span className="flex-1 h-px bg-primary/40" />
+                  <span className="text-micro font-semibold uppercase tracking-wide text-primary">
+                    {t('thread.newMessages')}
+                  </span>
+                  <span className="flex-1 h-px bg-primary/40" />
+                </li>
+              )}
             <RoomBubble
-              key={m.id}
               m={m}
               me={me}
               senderName={nameFor(m.sender_id)}
@@ -724,6 +863,7 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
               onCancelEdit={cancelEdit}
               onDelete={() => void handleDelete(m)}
             />
+            </Fragment>
           ))}
         </ul>
         {typingNames.length > 0 && (

@@ -85,6 +85,7 @@ export const es: Catalog = {
   'presence.active': 'En línea',
   'presence.away': 'Ausente',
   'presence.offline': 'Desconectado',
+  'presence.hidden': 'El estado en línea está desactivado',
 
   'chat.connecting': 'Conectando…',
   'chat.noConnection': 'Sin conexión',
@@ -170,6 +171,7 @@ export const es: Catalog = {
   'thread.selfEmptyNote': 'Tus palabras van cifradas con una clave que solo tiene este teléfono.',
   'thread.startWith': 'Empieza la conversación con {name}',
   'thread.typing': '{name} está escribiendo',
+  'thread.newMessages': 'Mensajes nuevos',
 
   'common.dismiss': 'Descartar',
   'common.notNow': 'Ahora no',
@@ -326,6 +328,12 @@ export const es: Catalog = {
   'search.placeholderSelf': 'Buscar en tus notas...',
   'search.close': 'Cerrar la búsqueda',
   'search.searching': 'Buscando…',
+  'search.results#one': '{count} resultado',
+  'search.results#few': '{count} resultados',
+  'search.results#many': '{count} resultados',
+  'search.results#other': '{count} resultados',
+  'search.notFound': 'No se encontró ese mensaje.',
+  'search.tooFarBack': 'No se encontró ese mensaje. Puede estar demasiado atrás en el historial.',
   'panel.dates': 'Fechas',
   'panel.links': 'Enlaces',
   'panel.reading': 'Leyendo…',
@@ -574,6 +582,9 @@ export const es: Catalog = {
   'server.message_receipts.label': 'Marcas de entregado y leído',
   'server.message_receipts.note':
     'Las marcas de tiempo detrás de los ticks. Información de tiempos, por definición.',
+  'server.receipt_prefs.label': 'Si compartes tus marcas de lectura',
+  'server.receipt_prefs.note':
+    'Un interruptor. Lo aplica el servidor: desactivado, quienes hablan contigo no pueden leer tus marcas.',
   'server.friend_nicknames.label': 'Apodos privados',
   'server.friend_nicknames.note':
     'Los nombres que pusiste a tus contactos. Privados frente a ellos, porque nunca se les dice, pero no frente al servidor, que los guarda como texto normal.',
@@ -799,6 +810,15 @@ export const es: Catalog = {
   'privacy.lockNote':
     'Esto protege la app, no tu clave. La clave ya está en el almacén de claves del teléfono y nada de esto la vuelve a cifrar.',
   'privacy.whatLeaves': 'Qué sale de este dispositivo',
+  'privacy.signals': 'Lo que tu dispositivo dice de ti',
+  'privacy.readReceipts': 'Confirmaciones de lectura',
+  'privacy.readReceiptsHint': 'Deja que vean hasta dónde has leído. Si lo desactivas, tú tampoco ves las suyas.',
+  'privacy.typing': 'Indicador de escritura',
+  'privacy.typingHint': 'Muestra cuándo estás escribiendo. Si lo desactivas, tú tampoco ves el suyo.',
+  'privacy.presence': 'Estado en línea',
+  'privacy.presenceHint': 'Muestra cuándo estás aquí. Si lo desactivas, tú tampoco ves el suyo.',
+  'privacy.signalsNote': 'Las confirmaciones de lectura las aplica el servidor: desactivadas, nadie puede leer tu marca, ni siquiera una app modificada. El indicador de escritura y el estado en línea los envía solo este dispositivo, así que desactivarlos significa que deja de enviarlos.',
+  'privacy.receiptsFailed': 'No se pudo cambiar. Sigue como estaba.',
   'privacy.serverKnows': 'Qué sabe el servidor',
   'privacy.serverKnowsHint': 'Recuentos en vivo, directos de la base de datos',
   'privacy.limits': 'Dónde termina esta protección',

@@ -33,6 +33,9 @@ interface MessageThreadProps {
   hasMore: boolean;
   loadingOlder: boolean;
   peerReceipt: Receipt | null;
+  /** The message the "new messages" line sits above, or null when there is
+   *  nothing the reader missed. */
+  unreadDividerId: string | null;
   reactions: Map<string, Reaction[]>;
   replyTargets: ReplyTargets;
   scroll: ThreadScroll;
@@ -106,6 +109,7 @@ export function MessageThread({
   hasMore,
   loadingOlder,
   peerReceipt,
+  unreadDividerId,
   reactions,
   replyTargets,
   scroll,
@@ -235,6 +239,18 @@ export function MessageThread({
                     <span className="text-micro font-medium text-muted bg-base-300/80 px-3 py-1 rounded-full ring-1 ring-base-content/5 backdrop-blur-xs">
                       {msgDate}
                     </span>
+                  </div>
+                )}
+                {msg.id === unreadDividerId && (
+                  // Above the first message they had not seen, not above the
+                  // newest: the line answers "where was I", so it has to sit
+                  // where reading starts again.
+                  <div className="flex items-center gap-2 my-4" aria-hidden={false}>
+                    <span className="flex-1 h-px bg-primary/40" />
+                    <span className="text-micro font-semibold uppercase tracking-wide text-primary">
+                      {t('thread.newMessages')}
+                    </span>
+                    <span className="flex-1 h-px bg-primary/40" />
                   </div>
                 )}
                 {timerChange && noticeIndex === i && <TimerNotice label={timerChange.label} />}

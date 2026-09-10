@@ -25,6 +25,10 @@ interface ConversationSearchProps {
   peerLabel: string;
   /** True for the self-chat, where there is no other side to name. */
   isSelf?: boolean;
+  /** How to name the sender of a hit. A 1:1 thread has two possible answers and
+   *  needs none of this; a group has one per member, and a result list that
+   *  named them all after the group would be no better than not naming them. */
+  senderName?: (userId: string) => string;
   onJump: (messageId: string, createdAt: string) => void;
   onClose: () => void;
 }
@@ -59,6 +63,7 @@ export function ConversationSearch({
   me,
   peerLabel,
   isSelf = false,
+  senderName,
   onJump,
   onClose,
 }: ConversationSearchProps) {
@@ -148,9 +153,7 @@ export function ConversationSearch({
       {showResults && (
         <div className="px-4 sm:px-5 pb-2.5">
           <p className="text-meta text-muted mb-1.5">
-            {searching
-              ? t('search.searching')
-              : `${results.length} result${results.length === 1 ? '' : 's'}`}
+            {searching ? t('search.searching') : t('search.results', { count: results.length })}
           </p>
           <div className="max-h-64 overflow-y-auto space-y-1">
             {results.map((hit) => (
@@ -161,7 +164,11 @@ export function ConversationSearch({
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-meta font-medium text-strong">
-                    {hit.user_id === me ? 'You' : peerLabel}
+                    {senderName
+                      ? senderName(hit.user_id)
+                      : hit.user_id === me
+                        ? t('common.you')
+                        : peerLabel}
                   </span>
                   <span className="text-meta text-muted shrink-0">
                     {formatListTime(hit.created_at)}

@@ -18,9 +18,13 @@ export function AvatarWithStatus({ userId, display_name, url, size = 40 }: Avata
   return (
     <div className="relative shrink-0" style={{ width: size, height: size }}>
       <Avatar display_name={display_name} url={url} size={size} />
-      <span className="absolute -bottom-0.5 -right-0.5">
-        <StatusDot status={status} size={dot} />
-      </span>
+      {/* No dot at all while presence is off, rather than a grey one: grey
+          says "offline", which is a claim about them. */}
+      {status && (
+        <span className="absolute -bottom-0.5 -right-0.5">
+          <StatusDot status={status} size={dot} />
+        </span>
+      )}
     </div>
   );
 }

@@ -14,6 +14,43 @@ one of them drifts.
 
 ## [Unreleased]
 
+## [1.10.0] — 2026-09-10
+
+### Added
+
+- **Groups are searchable, and the group list says what was last said.** The
+  server has held no message bodies since it stopped being able to read them, so
+  a conversation is searchable on a device that decrypted it and nowhere else.
+  Groups were simply never written into that local copy; now they are. A group
+  this phone has never opened still shows its member count, which is the honest
+  answer rather than a blank line.
+- **A search result in a group jumps to its message**, loading the pages in
+  between so the thread arrives whole instead of with a hole around the hit.
+- **A "new messages" line** marks where you stopped reading, in conversations
+  and groups. It is placed once, when you open the thread, and stays there while
+  you read rather than chasing the newest message down the screen.
+- **Read receipts, the typing indicator and your online status can each be
+  switched off** (Settings › Privacy). Each switch works both ways: turn one off
+  and you stop seeing that signal from other people too — the alternative is
+  watching somebody who cannot watch you. Read receipts are enforced by the
+  server, not by this app politely not looking: with them off, nobody you talk
+  to can read your read marks at all.
+
+### Changed
+
+- With online status off, people show no dot rather than a grey one — grey means
+  "offline", which is a claim about them.
+- Search results now name whoever wrote the message, which in a group of six is
+  the difference between a result list and a list of guesses.
+- The result count and a few small strings around search and message editing are
+  translated; they had been English in every language.
+
+### Fixed
+
+- Deleting a group message now also removes it from this device's copy, so it
+  stops appearing in search and in the group list's last line. Editing one
+  replaces the words there instead of leaving the old ones findable.
+
 ## [1.9.0] — 2026-09-10
 
 ### Added

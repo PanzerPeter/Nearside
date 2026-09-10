@@ -67,8 +67,8 @@
 -- `REFERENCES ... ON DELETE CASCADE` — through `profiles` for the messaging
 -- tables, directly for `connect_tokens`, `rooms` and the three room tables.
 -- So this one statement empties `profiles`, `friendships`, `connect_tokens`,
--- `messages`, `message_reactions`, `message_receipts`, `sealed_answers`,
--- `stickers`, `chat_backgrounds`, `friend_nicknames`, `rooms`,
+-- `messages`, `message_reactions`, `message_receipts`, `receipt_prefs`,
+-- `sealed_answers`, `stickers`, `chat_backgrounds`, `friend_nicknames`, `rooms`,
 -- `room_participants`, `room_keys`, `room_messages`, `room_message_reactions`,
 -- `room_receipts`, `conversation_timers`, `message_pushes`, `push_alerts`,
 -- `room_message_pushes`, `room_push_alerts` and `theme_grants`.
@@ -106,6 +106,7 @@ UNION ALL SELECT 'connect_tokens',      count(*) FROM public.connect_tokens
 UNION ALL SELECT 'messages',            count(*) FROM public.messages
 UNION ALL SELECT 'message_reactions',   count(*) FROM public.message_reactions
 UNION ALL SELECT 'message_receipts',    count(*) FROM public.message_receipts
+UNION ALL SELECT 'receipt_prefs',       count(*) FROM public.receipt_prefs
 UNION ALL SELECT 'sealed_answers',      count(*) FROM public.sealed_answers
 UNION ALL SELECT 'stickers',            count(*) FROM public.stickers
 UNION ALL SELECT 'chat_backgrounds',    count(*) FROM public.chat_backgrounds

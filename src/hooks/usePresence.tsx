@@ -11,6 +11,7 @@ import { Session, RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { conversationKey } from '../lib/conversation';
 import { useConnection } from '../lib/connection';
+import { usePrivacyPrefs } from './usePrivacyPrefs';
 import { isAppActive, subscribeAppActive } from '../lib/app-active';
 import {
   PeerMeta,
@@ -29,12 +30,23 @@ const HEARTBEAT_MS = 25_000;
 const TICK_MS = 8_000;
 
 /** Live tracks for every peer we have heard from, plus a ticking clock. */
-interface PresenceView {
+interface PresenceTracks {
   tracks: Map<string, PeerTrack>;
   now: number;
 }
 
-const PresenceContext = createContext<PresenceView>({ tracks: new Map(), now: 0 });
+interface PresenceView extends PresenceTracks {
+  /** False while this account has presence switched off. Distinct from "no
+   *  track": everybody would otherwise render as a grey "offline" dot, which
+   *  claims something about them rather than saying nothing about them. */
+  enabled: boolean;
+}
+
+const PresenceContext = createContext<PresenceView>({
+  tracks: new Map(),
+  now: 0,
+  enabled: true,
+});
 
 /** Own status: in front of the user, or merely running. `app-active` is what
  *  knows — on a phone the DOM's answer is wrong. */
@@ -68,7 +80,7 @@ export function PresenceProvider({
   children: ReactNode;
 }) {
   const me = session.user.id;
-  const [view, setView] = useState<PresenceView>(() => ({ tracks: new Map(), now: Date.now() }));
+  const [view, setView] = useState<PresenceTracks>(() => ({ tracks: new Map(), now: Date.now() }));
   // Peer tracks outlive the effect below. A wake rebuilds every channel, and
   // for the second or two before they re-sync, presence lists nobody — reading
   // that literally turned the whole friend list grey and back on every wake.
@@ -77,13 +89,17 @@ export function PresenceProvider({
   // tracking against a connection that no longer exists, so both our own
   // status and the peers' are frozen at the moment of sleep until rebuilt.
   const { generation } = useConnection();
+  // Presence off means this provider never joins: nothing is published and
+  // nothing is read, so the setting is symmetric by construction rather than by
+  // a render-time check somebody could forget. See `lib/privacy-prefs.ts`.
+  const { presence: presenceOn } = usePrivacyPrefs();
 
   // Stable primitive dep: re-subscribing on every array identity would tear
   // down and rebuild every channel each time the friends list refetches.
   const peerKey = useMemo(() => [...friendIds].sort().join(','), [friendIds]);
 
   useEffect(() => {
-    const peers = peerKey ? peerKey.split(',') : [];
+    const peers = presenceOn && peerKey ? peerKey.split(',') : [];
     // Forget anyone no longer a friend; their last-known status is not ours to
     // keep rendering.
     for (const id of tracks.current.keys()) {
@@ -157,19 +173,26 @@ export function PresenceProvider({
       unwatchActive();
       for (const channel of channels) supabase.removeChannel(channel);
     };
-  }, [me, peerKey, generation]);
+  }, [me, peerKey, generation, presenceOn]);
 
-  return <PresenceContext.Provider value={view}>{children}</PresenceContext.Provider>;
+  const value = useMemo(
+    () => ({ ...view, enabled: presenceOn }),
+    [view, presenceOn]
+  );
+
+  return <PresenceContext.Provider value={value}>{children}</PresenceContext.Provider>;
 }
 
-/** Live status for a single user id (defaults to offline). */
+/** Live status for a single user id, or null while presence is switched off —
+ *  which is what a caller draws as no dot at all. */
 // react-refresh/only-export-components fires because this file exports a
 // component (PresenceProvider) alongside a hook. The pairing is required by
 // this hook's contract — it reads a context only that provider supplies — so
 // it is suppressed rather than split, the same call `useToast.tsx` makes.
 // eslint-disable-next-line react-refresh/only-export-components
-export function usePresenceStatus(userId: string | null | undefined): PresenceStatus {
-  const { tracks, now } = useContext(PresenceContext);
+export function usePresenceStatus(userId: string | null | undefined): PresenceStatus | null {
+  const { tracks, now, enabled } = useContext(PresenceContext);
+  if (!enabled) return null;
   if (!userId) return 'offline';
   const track = tracks.get(userId);
   if (!track) return 'offline';

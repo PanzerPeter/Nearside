@@ -69,10 +69,18 @@ export const privacySections: LegalSection[] = [
         </p>
         <p>
           Three more things are stored as ordinary text and people are often surprised by them.
-          Emoji reactions are not encrypted, in conversations and in rooms alike. Delivery and read
-          timestamps are not encrypted, and in a room that includes who has read it. Room titles are
-          readable, because the server has to list your rooms, so treat a room title like the
+          Emoji reactions are not encrypted, in conversations and in groups alike. Delivery and read
+          timestamps are not encrypted, and in a group that includes who has read it. Room titles are
+          readable, because the server has to list your groups, so treat a group name like the
           outside of an envelope.
+        </p>
+        <p>
+          Read receipts, the typing indicator and your online status can each be switched off in
+          Settings › Privacy. Read receipts are the one the server enforces: with the setting off,
+          nobody you talk to can read your read marks at all — not a modified app, not a direct
+          query. The typing indicator and your online status are never stored anywhere; your device
+          broadcasts them live, so switching them off means it stops sending them. Each switch works
+          in both directions: turn one off and you stop seeing that signal from other people too.
         </p>
         <p>
           Your avatar is stored in a public bucket and served from a URL that needs no sign-in.

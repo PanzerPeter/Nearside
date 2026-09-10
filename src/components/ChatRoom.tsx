@@ -354,6 +354,7 @@ export function ChatRoom({ session, friend, identity, onBack }: ChatRoomProps) {
         hasMore={thread.hasMore}
         loadingOlder={thread.loadingOlder}
         peerReceipt={thread.peerReceipt}
+        unreadDividerId={thread.unreadDividerId}
         reactions={byMessage}
         replyTargets={replyTargets}
         scroll={thread.scroll}

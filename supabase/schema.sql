@@ -887,6 +887,68 @@ CREATE TRIGGER message_reactions_rate_limit
   timestamps about someone you already chat with. INSERT and UPDATE stay
   owner-only, so nobody can forge a receipt claiming you read something.
 */
+/*
+  Whether this account lets the people it talks to see its read watermarks.
+
+  One row per account, written when the setting changes and never on the hot
+  path — the watermark upsert runs on every glance at a conversation, and a
+  preference folded into it would make an old client unable to advance its own
+  watermark at all.
+*/
+CREATE TABLE IF NOT EXISTS public.receipt_prefs (
+  user_id    uuid PRIMARY KEY REFERENCES public.profiles(id) ON DELETE CASCADE,
+  share_read boolean NOT NULL DEFAULT true
+);
+
+ALTER TABLE public.receipt_prefs ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "receipt_prefs_select_own" ON public.receipt_prefs;
+CREATE POLICY "receipt_prefs_select_own" ON public.receipt_prefs
+  FOR SELECT TO authenticated
+  USING ((select auth.uid()) = user_id);
+
+DROP POLICY IF EXISTS "receipt_prefs_insert_own" ON public.receipt_prefs;
+CREATE POLICY "receipt_prefs_insert_own" ON public.receipt_prefs
+  FOR INSERT TO authenticated
+  WITH CHECK ((select auth.uid()) = user_id);
+
+DROP POLICY IF EXISTS "receipt_prefs_update_own" ON public.receipt_prefs;
+CREATE POLICY "receipt_prefs_update_own" ON public.receipt_prefs
+  FOR UPDATE TO authenticated
+  USING ((select auth.uid()) = user_id)
+  WITH CHECK ((select auth.uid()) = user_id);
+
+DROP POLICY IF EXISTS "receipt_prefs_delete_own" ON public.receipt_prefs;
+CREATE POLICY "receipt_prefs_delete_own" ON public.receipt_prefs
+  FOR DELETE TO authenticated
+  USING ((select auth.uid()) = user_id);
+
+REVOKE ALL ON TABLE public.receipt_prefs FROM PUBLIC, anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.receipt_prefs TO authenticated;
+
+/*
+  No row means yes: every account that predates 0045 shared its watermarks, and
+  a default that turned the feature off for them would be a change nobody asked
+  for. SECURITY DEFINER for the reason `has_answered()` is — the policy has to
+  ask about somebody else's row, and a policy reading a table the caller cannot
+  read returns nothing rather than the truth.
+*/
+CREATE OR REPLACE FUNCTION public.shares_read(uid uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+  SELECT coalesce(
+    (SELECT p.share_read FROM public.receipt_prefs p WHERE p.user_id = uid),
+    true
+  );
+$$;
+
+REVOKE ALL ON FUNCTION public.shares_read(uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.shares_read(uuid) TO authenticated;
+
 CREATE TABLE IF NOT EXISTS public.message_receipts (
   user_id      uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   peer_id      uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
@@ -903,10 +965,22 @@ CREATE INDEX IF NOT EXISTS message_receipts_peer_idx
 
 ALTER TABLE public.message_receipts ENABLE ROW LEVEL SECURITY;
 
+/*
+  A peer sees your watermarks only while you share them (0045). Your own row is
+  always visible to you: `unread_counts()` and the thread's "new messages" line
+  are built on it, and a setting about what the *other* side can see must not
+  blind the account to its own history.
+
+  Withdrawing access takes the whole row, delivery included. "Read" hidden while
+  "delivered on their phone at 03:12" still shows is not a privacy setting.
+*/
 DROP POLICY IF EXISTS "receipts_select_participant" ON public.message_receipts;
 CREATE POLICY "receipts_select_participant" ON public.message_receipts
   FOR SELECT TO authenticated
-  USING ((select auth.uid()) IN (user_id, peer_id));
+  USING (
+    (select auth.uid()) = user_id
+    OR ((select auth.uid()) = peer_id AND public.shares_read(user_id))
+  );
 
 DROP POLICY IF EXISTS "receipts_insert_own" ON public.message_receipts;
 CREATE POLICY "receipts_insert_own" ON public.message_receipts

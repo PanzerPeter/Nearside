@@ -22,6 +22,7 @@ import {
   type Sealed,
 } from './crypto/seal';
 import { supabase } from './supabase';
+import { cacheMessage, forgetCachedMessage } from './localdb';
 
 export interface RoomSummary {
   id: string;
@@ -566,6 +567,11 @@ export async function deleteRoomMessage(id: string, identity: Identity): Promise
     })
     .eq('id', id);
   if (error) throw error;
+  // Not left to the realtime echo: the row this device holds is gone from the
+  // server's point of view the moment the update lands, and a mirror still
+  // answering searches with it in the meantime is the delete not having
+  // happened yet.
+  await forgetCachedMessage(id);
 }
 
 /**
@@ -625,6 +631,10 @@ export async function openRoomRows(
       // A tombstone and a caption-less attachment both arrive with no body.
       // Neither is a failure to open, so neither is flagged as one.
       if (row.ciphertext === null || row.nonce === null) {
+        // A deletion has to reach the mirror as well as the server's row: the
+        // mirror is what search and the list preview read, and a body left
+        // here goes on being findable after the message is gone.
+        if (row.deleted_at) await forgetCachedMessage(row.id);
         return { ...row, text: null, mediaKey, sender: 'verified' };
       }
 
@@ -636,6 +646,28 @@ export async function openRoomRows(
             roomKey
           )
         );
+        // Mirrored under the room id rather than the sender's: a group is one
+        // conversation however many people are talking in it, and the server
+        // has held no bodies since 0023, so this is the only copy of a group's
+        // plaintext that exists anywhere. Only a verified row gets here — a
+        // forgery must not become searchable on this device long after the
+        // warning bubble scrolled away.
+        // An emptied caption is a caption taken back, so the mirror has to
+        // lose it too rather than keep answering searches with it.
+        if (!text) {
+          await forgetCachedMessage(row.id);
+          return { ...row, text, mediaKey, sender: 'verified' };
+        }
+        await cacheMessage({
+          id: row.id,
+          peer_id: row.room_id,
+          user_id: row.sender_id,
+          text,
+          created_at: row.created_at,
+          // The row's own stamp: mirroring a timed message as permanent would
+          // put it beyond the local sweep for good.
+          expires_at: row.expires_at ?? null,
+        });
         return { ...row, text, mediaKey, sender: 'verified' };
       } catch {
         // Signed by the right person but sealed under a key this device does
@@ -701,6 +733,26 @@ export async function roomUnreadCounts(roomIds: readonly string[]): Promise<Map<
     })
   );
   return counts;
+}
+
+/**
+ * How far this account had read in one group.
+ *
+ * Read when the group opens and before the mark below moves, for the reason
+ * `fetchMyReadAt` gives on the 1:1 side: a watermark read after it advances
+ * always says there was nothing new.
+ */
+export async function roomReadAt(roomId: string, me: string): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('room_receipts')
+    .select('read_at')
+    .eq('room_id', roomId)
+    .eq('user_id', me)
+    .maybeSingle();
+  // A failed read claims nothing rather than claiming the whole group is
+  // unread — see `fetchMyReadAt`.
+  if (error) return new Date().toISOString();
+  return (data as { read_at: string | null } | null)?.read_at ?? null;
 }
 
 /**

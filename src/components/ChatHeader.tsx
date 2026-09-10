@@ -38,7 +38,9 @@ interface ChatHeaderProps {
   /** Null when the peer has published no key; there is nothing to compare, so
    *  the verify button has nothing to open. */
   peerKey: Uint8Array | null;
-  friendStatus: PresenceStatus;
+  /** Null while presence is switched off — the line says nothing rather than
+   *  reporting a grey "offline" nobody chose to publish. */
+  friendStatus: PresenceStatus | null;
   searchOpen: boolean;
   onBack: () => void;
   /** Open the profile card. The avatar is the way in — it is the one thing in
@@ -182,14 +184,14 @@ export function ChatHeader({
             // itself; what is worth saying here is that nobody else can read
             // any of it.
             <span>{t('chat.onlyYou')}</span>
-          ) : (
+          ) : friendStatus ? (
             <span className="inline-flex items-center gap-1.5">
               <StatusDot status={friendStatus} size={8} pulse />
               {friendStatus === 'offline' && friend.last_seen_at
                 ? formatLastSeen(friend.last_seen_at)
                 : t(presenceLabels[friendStatus])}
             </span>
-          )}
+          ) : null}
           {/* A running timer belongs on the line that already says what state
               this conversation is in, not behind a menu nobody opens. */}
           {timer?.ttlSeconds != null && (

@@ -1,10 +1,14 @@
-import { useState } from 'react';
-import { Database, EyeOff, Lock, ShieldAlert } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { CheckCheck, Circle, Database, EyeOff, Lock, PenLine, ShieldAlert } from 'lucide-react';
 import { MIN_PASSPHRASE_LENGTH, type RelockAfter } from '../../lib/app-lock';
 import type { AppLock } from '../../hooks/useAppLock';
 import { ServerView } from '../ServerView';
 import { SecurityLimits } from '../SecurityLimits';
 import { Card, NavRow, Note, ToggleRow } from './SettingsUi';
+import { applyPrivacyPrefs, privacyPrefs, setPrivacyPref } from '../../lib/privacy-prefs';
+import { usePrivacyPrefs } from '../../hooks/usePrivacyPrefs';
+import { fetchShareRead, setShareRead } from '../../lib/receipts';
+import { useToast } from '../../hooks/useToast';
 import { HiddenRequests } from './HiddenRequests';
 import { useT } from '../../hooks/useT';
 
@@ -24,6 +28,40 @@ export function PrivacyPage({ appLock }: PrivacyPageProps) {
   const [showServerView, setShowServerView] = useState(false);
   const [showLimits, setShowLimits] = useState(false);
   const [showHidden, setShowHidden] = useState(false);
+  const signals = usePrivacyPrefs();
+  const toast = useToast();
+  /** True while the read-receipt switch is waiting on the server. That one is
+   *  a row in the database, not a local flag, so the switch must not pretend
+   *  it moved until the write lands. */
+  const [savingReceipts, setSavingReceipts] = useState(false);
+
+  // The account's answer, not this device's cache: an account signed in on a
+  // second phone brings its setting with it.
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      const shared = await fetchShareRead();
+      if (alive) applyPrivacyPrefs({ ...privacyPrefs(), readReceipts: shared });
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  async function toggleReceipts() {
+    const next = !signals.readReceipts;
+    setSavingReceipts(true);
+    try {
+      await setShareRead(next);
+      applyPrivacyPrefs({ ...privacyPrefs(), readReceipts: next });
+    } catch {
+      // Left as it was: a switch that moved while the server kept the old
+      // answer is the one failure this setting cannot afford.
+      toast.error(t('privacy.receiptsFailed'));
+    } finally {
+      setSavingReceipts(false);
+    }
+  }
 
   const lockOn = appLock.state !== 'off' && appLock.state !== 'loading';
 
@@ -136,6 +174,35 @@ export function PrivacyPage({ appLock }: PrivacyPageProps) {
       {/* Load-bearing, not decoration: the lock must never read as a second
           layer of encryption over the seed. */}
       <Note>{t('privacy.lockNote')}</Note>
+
+      {/* Three things a device says about you without anybody typing them. Each
+          switch is symmetric — off stops this device sending *and* showing —
+          because the alternative is watching somebody who cannot watch you. */}
+      <Card title={t('privacy.signals')}>
+        <ToggleRow
+          icon={CheckCheck}
+          label={t('privacy.readReceipts')}
+          hint={t('privacy.readReceiptsHint')}
+          checked={signals.readReceipts}
+          busy={savingReceipts}
+          onChange={() => void toggleReceipts()}
+        />
+        <ToggleRow
+          icon={PenLine}
+          label={t('privacy.typing')}
+          hint={t('privacy.typingHint')}
+          checked={signals.typing}
+          onChange={() => setPrivacyPref('typing', !signals.typing)}
+        />
+        <ToggleRow
+          icon={Circle}
+          label={t('privacy.presence')}
+          hint={t('privacy.presenceHint')}
+          checked={signals.presence}
+          onChange={() => setPrivacyPref('presence', !signals.presence)}
+        />
+      </Card>
+      <Note>{t('privacy.signalsNote')}</Note>
 
       <Card title={t('privacy.whatLeaves')}>
         <NavRow

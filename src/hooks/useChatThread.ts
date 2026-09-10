@@ -5,9 +5,11 @@
 // they are composed here rather than side by side in the component. `ChatRoom`
 // sees one object.
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
+import { t } from '../lib/i18n';
+import { privacyPrefs } from '../lib/privacy-prefs';
 import { Message } from '../lib/types';
 import {
   fetchLatestPage,
@@ -24,6 +26,8 @@ import { useConnection, reportChannelStatus, forgetChannel } from '../lib/connec
 import type { Identity } from '../lib/crypto/keys';
 import { useThreadScroll, type ThreadScroll } from './useThreadScroll';
 import { useReadReceipts } from './useReadReceipts';
+import { useUnreadDivider } from './useUnreadDivider';
+import { usePrivacyPrefs } from './usePrivacyPrefs';
 import { useOutbox, type Outbox } from './useOutbox';
 import {
   hasExpired,
@@ -58,6 +62,9 @@ export interface ChatThread {
   loadingOlder: boolean;
   friendTyping: boolean;
   peerReceipt: Receipt | null;
+  /** Where the unread line goes — the id of the first message this account had
+   *  not seen when the conversation opened, or null when it had seen them all. */
+  unreadDividerId: string | null;
   outbox: Outbox;
   scroll: ThreadScroll;
   /** Ids already painted on screen for the open conversation. Read during
@@ -102,6 +109,9 @@ export function useChatThread({
   // `generation` bumps every time the app wakes (sleep, tab restore, network
   // return); `live` is false while realtime isn't delivering.
   const { generation, live } = useConnection();
+  // Both halves of each signal, together: a client that stops sending but keeps
+  // watching is a one-way mirror. See `lib/privacy-prefs.ts`.
+  const privacy = usePrivacyPrefs();
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [hasMore, setHasMore] = useState(false);
@@ -148,6 +158,14 @@ export function useChatThread({
   const lastTypingSent = useRef(0);
 
   const receipts = useReadReceipts({ peerId, isSelf, messages, loadedFor, generation });
+  // Rows in the shape the divider rule reads, so the same rule serves the 1:1
+  // thread and a group without either of them owning it.
+  const dividerRows = useMemo(
+    () => messages.map((m) => ({ id: m.id, from: m.user_id, created_at: m.created_at })),
+    [messages]
+  );
+  const unreadDividerId = useUnreadDivider(peerId, me, dividerRows, receipts.readAtOnOpen);
+
   const outbox = useOutbox({
     me,
     peerId,
@@ -486,7 +504,7 @@ export function useChatThread({
       }
 
       if (!hasMore) {
-        onError('Could not find that message.');
+        onError(t('search.notFound'));
         return;
       }
 
@@ -538,7 +556,7 @@ export function useChatThread({
           scroll.scrollToMessage(messageId);
         });
       } else {
-        onError("Couldn't find that message. It may be too far back in the history.");
+        onError(t('search.tooFarBack'));
       }
     } finally {
       jumpInFlight.current = false;
@@ -571,6 +589,9 @@ export function useChatThread({
         config: { broadcast: { self: false } },
       })
       .on('broadcast', { event: 'typing' }, ({ payload }) => {
+        // Not subscribed-and-ignored for show: with the setting off this
+        // device sends none either, so there is nothing to be one-sided about.
+        if (!privacyPrefs().typing) return;
         // `self: false` suppresses the echo to the sending tab but not to this
         // user's other devices, so in the self-chat typing on a laptop would
         // show "typing" on the phone, about yourself.
@@ -659,6 +680,7 @@ export function useChatThread({
 
   function notifyTyping() {
     if (isSelf) return;
+    if (!privacyPrefs().typing) return;
     const now = Date.now();
     if (now - lastTypingSent.current < TYPING_THROTTLE_MS) return;
     lastTypingSent.current = now;
@@ -675,8 +697,11 @@ export function useChatThread({
     changeTimer,
     hasMore,
     loadingOlder,
-    friendTyping,
-    peerReceipt: receipts.peerReceipt,
+    friendTyping: privacy.typing && friendTyping,
+    // The server already withholds our watermark from them (0045); this is the
+    // other half of the same choice, and the only half a client can make.
+    peerReceipt: privacy.readReceipts ? receipts.peerReceipt : null,
+    unreadDividerId,
     outbox,
     scroll,
     isAlreadySeen: (id) => seenMessageIdsRef.current.has(id),

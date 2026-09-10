@@ -85,6 +85,7 @@ export const de: Catalog = {
   'presence.active': 'Gerade aktiv',
   'presence.away': 'Abwesend',
   'presence.offline': 'Offline',
+  'presence.hidden': 'Online-Status ist aus',
 
   'chat.connecting': 'Verbinden…',
   'chat.noConnection': 'Keine Verbindung',
@@ -171,6 +172,7 @@ export const de: Catalog = {
     'Deine Worte sind mit einem Schlüssel verschlüsselt, den nur dieses Telefon hat.',
   'thread.startWith': 'Beginne die Unterhaltung mit {name}',
   'thread.typing': '{name} tippt gerade',
+  'thread.newMessages': 'Neue Nachrichten',
 
   'common.dismiss': 'Ausblenden',
   'common.notNow': 'Jetzt nicht',
@@ -330,6 +332,12 @@ export const de: Catalog = {
   'search.placeholderSelf': 'Deine Notizen durchsuchen...',
   'search.close': 'Suche schließen',
   'search.searching': 'Wird gesucht…',
+  'search.results#one': '{count} Treffer',
+  'search.results#few': '{count} Treffer',
+  'search.results#many': '{count} Treffer',
+  'search.results#other': '{count} Treffer',
+  'search.notFound': 'Diese Nachricht wurde nicht gefunden.',
+  'search.tooFarBack': 'Diese Nachricht wurde nicht gefunden. Sie liegt vermutlich zu weit zurück.',
   'panel.dates': 'Termine',
   'panel.links': 'Links',
   'panel.reading': 'Wird gelesen…',
@@ -585,6 +593,9 @@ export const de: Catalog = {
   'server.message_receipts.label': 'Zugestellt- und Gelesen-Marken',
   'server.message_receipts.note':
     'Die Zeitstempel hinter den Haken. Zeitinformationen, per Definition.',
+  'server.receipt_prefs.label': 'Ob du Lesestände teilst',
+  'server.receipt_prefs.note':
+    'Ein Schalter. Der Server setzt ihn durch: ausgeschaltet kann niemand deine Lesestände abrufen.',
   'server.friend_nicknames.label': 'Private Spitznamen',
   'server.friend_nicknames.note':
     'Die Namen, die du deinen Kontakten gegeben hast. Privat vor ihnen, weil sie es nie erfahren, aber nicht privat vor dem Server, der sie als gewöhnlichen Text speichert.',
@@ -810,6 +821,15 @@ export const de: Catalog = {
   'privacy.lockNote':
     'Das schützt die App, nicht deinen Schlüssel. Der liegt bereits im Schlüsselspeicher des Telefons, und hier wird er nicht noch einmal verschlüsselt.',
   'privacy.whatLeaves': 'Was dieses Gerät verlässt',
+  'privacy.signals': 'Was dein Gerät über dich sagt',
+  'privacy.readReceipts': 'Lesebestätigungen',
+  'privacy.readReceiptsHint': 'Andere sehen, wie weit du gelesen hast. Aus heißt: du siehst ihre auch nicht mehr.',
+  'privacy.typing': 'Tippanzeige',
+  'privacy.typingHint': 'Andere sehen, wenn du schreibst. Aus heißt: du siehst ihre auch nicht mehr.',
+  'privacy.presence': 'Online-Status',
+  'privacy.presenceHint': 'Andere sehen, wenn du da bist. Aus heißt: du siehst ihren auch nicht mehr.',
+  'privacy.signalsNote': 'Lesebestätigungen setzt der Server durch: ausgeschaltet kann niemand deinen Lesestand abrufen, auch keine veränderte App. Tippanzeige und Online-Status verschickt nur dieses Gerät — ausgeschaltet sendet es sie einfach nicht mehr.',
+  'privacy.receiptsFailed': 'Änderung nicht möglich. Die Einstellung bleibt wie sie war.',
   'privacy.serverKnows': 'Was der Server weiß',
   'privacy.serverKnowsHint': 'Aktuelle Zahlen, direkt aus der Datenbank',
   'privacy.limits': 'Wo dieser Schutz endet',

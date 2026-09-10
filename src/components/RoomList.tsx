@@ -22,6 +22,7 @@ import {
   type ChatFlags,
 } from '../lib/chat-flags';
 import { syncMutedIds } from '../lib/mute';
+import { cachedPreview } from '../lib/localdb';
 import { useT } from '../hooks/useT';
 
 interface RoomListProps {
@@ -101,6 +102,11 @@ export function RoomList({
   const { generation, live } = useConnection();
   /** Unread per group, from `room_receipts`. Empty until the first load. */
   const [unread, setUnread] = useState<Map<string, number>>(new Map());
+  /** The last line of each group, from the mirror this device wrote as it
+   *  decrypted. A group nobody has opened on this phone has no line here and
+   *  falls back to its member count — the honest answer, since the server
+   *  holds no bodies to ask for. */
+  const [previews, setPreviews] = useState<Map<string, string>>(new Map());
 
   // Live ref rather than a dep: the callback is re-created on every render of
   // the list above, and keying `load` on it would restart the poll each time.
@@ -115,6 +121,14 @@ export function RoomList({
       // After the list, not beside it: the counts are keyed on the ids this
       // read just returned, and a group that has gone should not be counted.
       setUnread(await roomUnreadCounts(rows.map((r) => r.id)));
+      // Local reads, one per group: the mirror is the only place a group's
+      // plaintext exists, and there is no server call that could answer this.
+      const lines = new Map<string, string>();
+      for (const row of rows) {
+        const hit = await cachedPreview(row.id);
+        if (hit?.text) lines.set(row.id, hit.text);
+      }
+      setPreviews(lines);
     } catch {
       // A read that failed is not a list that is empty — leave whatever is on
       // screen rather than blanking it, same as the conversation list does.
@@ -217,7 +231,7 @@ export function RoomList({
                     <span className="flex-1 min-w-0">
                       <span className="block text-body font-medium truncate">{room.title}</span>
                       <span className="block text-meta text-muted truncate">
-                        {t('room.memberCount', { count: room.member_count })}
+                        {previews.get(room.id) ?? t('room.memberCount', { count: room.member_count })}
                       </span>
                     </span>
                     {muted && (

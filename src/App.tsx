@@ -24,6 +24,8 @@ import { useAppBadge } from './hooks/useAppBadge';
 import { PresenceProvider } from './hooks/usePresence';
 import { CallProvider } from './hooks/useCall';
 import { CallScreen } from './components/CallScreen';
+import { applyPrivacyPrefs, privacyPrefs } from './lib/privacy-prefs';
+import { fetchShareRead } from './lib/receipts';
 import { forgetIceServers } from './lib/call/ice';
 import { initSoundUnlock } from './lib/sound';
 import {
@@ -300,6 +302,12 @@ function App() {
     // behind, the next account's first list refresh would be compared against
     // it and skip the write that corrects it.
     forgetMutedIds();
+    // The read-receipt setting is the account's, not the device's: it is a row
+    // in `receipt_prefs` and it travels with whoever signs in. Reset to shared
+    // so the next account is never shown the previous one's answer while its
+    // own is still being fetched — the default is also what the server assumes
+    // for an account that has never set it.
+    applyPrivacyPrefs({ ...privacyPrefs(), readReceipts: true });
     // TURN credentials are minted against the signed-in user's JWT. Left
     // behind, the next account on this phone would relay its calls under the
     // previous owner's credentials.
@@ -407,6 +415,21 @@ function App() {
     if (!userId) return;
     void initNotifications(userId);
     void initPurchases(userId);
+  }, [userId]);
+
+  // The account's read-receipt setting, fetched once per sign-in. The switch
+  // itself lives in Settings, but the *display* half of it — whether this
+  // device shows the peer's ticks — applies everywhere, so it cannot wait for
+  // somebody to open that page.
+  useEffect(() => {
+    if (!userId) return;
+    let alive = true;
+    void fetchShareRead().then((shared) => {
+      if (alive) applyPrivacyPrefs({ ...privacyPrefs(), readReceipts: shared });
+    });
+    return () => {
+      alive = false;
+    };
   }, [userId]);
 
   // Reported whenever the friend list settles, not only on the first accepted

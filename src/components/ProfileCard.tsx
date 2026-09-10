@@ -24,7 +24,8 @@ interface ProfileCardProps {
   nickname: string | null;
   isSelf: boolean;
   trust: VerificationState;
-  friendStatus: PresenceStatus;
+  /** Null while presence is switched off; see `ChatHeader`. */
+  friendStatus: PresenceStatus | null;
   /** Opens the nickname editor. Absent for the self-chat, which is named
    *  rather than nicknamed. */
   onEditNickname: () => void;
@@ -110,13 +111,16 @@ export function ProfileCard({
           <p className="mt-0.5 flex items-center justify-center gap-1.5 text-meta text-muted">
             {isSelf ? (
               <span>{t('chat.onlyYou')}</span>
-            ) : (
+            ) : friendStatus ? (
               <>
                 <StatusDot status={friendStatus} size={8} />
                 {friendStatus === 'offline' && profile.last_seen_at
                   ? formatLastSeen(profile.last_seen_at)
                   : t(presenceLabels[friendStatus])}
               </>
+            ) : (
+              // Presence off: this account publishes none and reads none.
+              <span>{t('presence.hidden')}</span>
             )}
           </p>
         </div>

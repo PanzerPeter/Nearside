@@ -93,6 +93,7 @@ export const en = {
   'presence.active': 'Active now',
   'presence.away': 'Away',
   'presence.offline': 'Offline',
+  'presence.hidden': 'Online status is off',
 
   // -------------------------------------------------- conversation header
   'chat.connecting': 'Connecting…',
@@ -182,6 +183,7 @@ export const en = {
   'thread.selfEmptyNote': 'Your words are encrypted with a key only this phone holds.',
   'thread.startWith': 'Start the conversation with {name}',
   'thread.typing': '{name} is typing',
+  'thread.newMessages': 'New messages',
 
   // ------------------------------------------------------- small surfaces
   'common.dismiss': 'Dismiss',
@@ -343,6 +345,12 @@ export const en = {
   'search.placeholderSelf': 'Search your notes...',
   'search.close': 'Close search',
   'search.searching': 'Searching…',
+  'search.results#one': '{count} result',
+  'search.results#few': '{count} results',
+  'search.results#many': '{count} results',
+  'search.results#other': '{count} results',
+  'search.notFound': 'Could not find that message.',
+  'search.tooFarBack': 'Could not find that message. It may be too far back in the history.',
   'panel.dates': 'Dates',
   'panel.links': 'Links',
   'panel.reading': 'Reading…',
@@ -599,6 +607,9 @@ export const en = {
     'Reactions are not encrypted. A single emoji carries too little to seal usefully, and the server would still see who reacted to what and when.',
   'server.message_receipts.label': 'Delivered and read marks',
   'server.message_receipts.note': 'The timestamps behind the ticks. Timing information, by definition.',
+  'server.receipt_prefs.label': 'Whether you share read marks',
+  'server.receipt_prefs.note':
+    'One switch. The server enforces it: with it off, the people you talk to cannot read your marks at all.',
   'server.friend_nicknames.label': 'Private nicknames',
   'server.friend_nicknames.note':
     'The names you gave your contacts. Private from them, since they are never told, but not private from the server, which stores them as ordinary text.',
@@ -823,6 +834,15 @@ export const en = {
   'privacy.lockNote':
     'This guards the app, not your key. The key already sits in the phone’s keystore and nothing here re-encrypts it.',
   'privacy.whatLeaves': 'What leaves this device',
+  'privacy.signals': 'What your device says about you',
+  'privacy.readReceipts': 'Read receipts',
+  'privacy.readReceiptsHint': 'Let people see how far you have read. Turn it off and you stop seeing theirs too.',
+  'privacy.typing': 'Typing indicator',
+  'privacy.typingHint': 'Show people when you are writing. Turn it off and you stop seeing theirs too.',
+  'privacy.presence': 'Online status',
+  'privacy.presenceHint': 'Show people when you are here. Turn it off and you stop seeing theirs too.',
+  'privacy.signalsNote': 'Read receipts are enforced by the server: with them off, nobody can read your watermark at all, not even a modified app. Typing and online status are sent by this device only, so switching them off means it stops sending them.',
+  'privacy.receiptsFailed': 'Could not change that. It is still set the way it was.',
   'privacy.serverKnows': 'What the server knows',
   'privacy.serverKnowsHint': 'Live counts, straight from the database',
   'privacy.limits': 'Where this protection stops',

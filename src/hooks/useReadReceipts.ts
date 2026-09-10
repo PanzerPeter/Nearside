@@ -4,12 +4,17 @@
 
 import { useEffect, useRef, useState, type Dispatch, type MutableRefObject, type SetStateAction } from 'react';
 import { Message } from '../lib/types';
-import { advanceRead, fetchPeerReceipt, type Receipt } from '../lib/receipts';
+import { advanceRead, fetchMyReadAt, fetchPeerReceipt, type Receipt } from '../lib/receipts';
 import { closeNotificationsFor } from '../lib/notifications';
 
 export interface ReadReceipts {
   /** The peer's watermarks, or null until they have one. */
   peerReceipt: Receipt | null;
+  /** How far this account had read when the conversation opened, or null when
+   *  it never had. `undefined` while that read is still in flight — the "new
+   *  messages" line has to wait for it rather than guess, and so does the first
+   *  write of our own watermark. */
+  readAtOnOpen: string | null | undefined;
   /** Apply a row delivered over realtime. React's own setter, so the realtime
    *  handler's long-lived closure can hold it without going stale. */
   setPeerReceipt: Dispatch<SetStateAction<Receipt | null>>;
@@ -38,6 +43,10 @@ export function useReadReceipts({
   generation,
 }: ReadReceiptsOptions): ReadReceipts {
   const [peerReceipt, setPeerReceipt] = useState<Receipt | null>(null);
+  // Where this account had read up to before opening. Captured *before* the
+  // effect below advances it: reading it afterwards always answers "nothing
+  // new", which is exactly how an unread line quietly stops appearing.
+  const [readAtOnOpen, setReadAtOnOpen] = useState<string | null | undefined>(undefined);
   // The `created_at` last written to our read watermark for this conversation.
   // `messages` changes on every send, page load, and realtime edit/delete, and
   // the peer subscribes to `message_receipts` with `event: '*'` — so a
@@ -49,6 +58,28 @@ export function useReadReceipts({
     lastReadSent.current = null;
     setPeerReceipt(null);
   }, [peerId]);
+
+  // One read per conversation, not per wake: the point is what was unread when
+  // this view opened, and a `generation` bump does not reopen it.
+  useEffect(() => {
+    if (isSelf) {
+      // Your own notes have no watermark and no other side to have missed.
+      setReadAtOnOpen(null);
+      return;
+    }
+    let cancelled = false;
+    const forPeer = peerId;
+    setReadAtOnOpen(undefined);
+    void (async () => {
+      const at = await fetchMyReadAt(forPeer);
+      if (cancelled || loadedFor.current !== forPeer) return;
+      setReadAtOnOpen(at);
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [peerId, isSelf]);
 
   useEffect(() => {
     if (isSelf) return;
@@ -85,6 +116,9 @@ export function useReadReceipts({
      */
     function markReadHere() {
       if (isSelf) return;
+      // Nothing is marked read until the baseline above has been captured,
+      // otherwise this write is the one that erases it.
+      if (readAtOnOpen === undefined) return;
       const newestInbound = [...messages].reverse().find((m) => m.user_id === peerId);
       if (!newestInbound) return;
       if (newestInbound.created_at === lastReadSent.current) return;
@@ -99,7 +133,7 @@ export function useReadReceipts({
       window.removeEventListener('focus', mark);
       document.removeEventListener('visibilitychange', mark);
     };
-  }, [messages, peerId, isSelf]);
+  }, [messages, peerId, isSelf, readAtOnOpen]);
 
-  return { peerReceipt, setPeerReceipt };
+  return { peerReceipt, setPeerReceipt, readAtOnOpen };
 }

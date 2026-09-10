@@ -136,6 +136,14 @@ export const TABLE_REPORTS: TableSpec[] = [
     note: 'server.message_receipts.note',
   },
   {
+    table: 'receipt_prefs',
+    group: 'about-you',
+    label: 'server.receipt_prefs.label',
+    readable: ['user_id', 'share_read'],
+    opaque: [],
+    note: 'server.receipt_prefs.note',
+  },
+  {
     table: 'friend_nicknames',
     group: 'about-you',
     label: 'server.friend_nicknames.label',

@@ -122,6 +122,70 @@ export async function fetchPeerReceipt(peerId: string): Promise<Receipt | null> 
   return row ?? null;
 }
 
+/**
+ * How far *this* account has read in a conversation.
+ *
+ * Read once when a conversation opens, before the watermark is advanced by
+ * looking at it — that ordering is the whole feature, since a watermark read
+ * after it moves always says "nothing new".
+ */
+export async function fetchMyReadAt(peerId: string): Promise<string | null> {
+  const { data } = await supabase.auth.getSession();
+  const me = data.session?.user.id;
+  if (!me) return null;
+
+  const { data: row, error } = await supabase
+    .from('message_receipts')
+    .select('read_at')
+    .eq('user_id', me)
+    .eq('peer_id', peerId)
+    .maybeSingle();
+  if (error) {
+    console.warn(`receipts: failed to fetch own watermark for peer ${peerId}`, error);
+    // Not null: an unreadable watermark would draw the line above the whole
+    // conversation, which claims everything is unread on a read failure.
+    return new Date().toISOString();
+  }
+  return (row as { read_at: string | null } | null)?.read_at ?? null;
+}
+
+/**
+ * Whether this account currently lets its peers see its watermarks.
+ *
+ * The row is the setting; the *enforcement* is the SELECT policy on
+ * `message_receipts` (migration 0045). This read exists so the toggle can show
+ * the account's real answer rather than whatever this device last cached —
+ * accounts move between devices and the answer travels with the account.
+ */
+export async function fetchShareRead(): Promise<boolean> {
+  const { data } = await supabase.auth.getSession();
+  const me = data.session?.user.id;
+  if (!me) return true;
+
+  const { data: row, error } = await supabase
+    .from('receipt_prefs')
+    .select('share_read')
+    .eq('user_id', me)
+    .maybeSingle();
+  // No row, or a database that predates 0045: shared, which is how the app
+  // behaved before the setting existed.
+  if (error) return true;
+  return (row as { share_read: boolean } | null)?.share_read ?? true;
+}
+
+/** Change it. Throws, so the settings page can say the change did not land
+ *  rather than showing a switch that lies about the server's state. */
+export async function setShareRead(on: boolean): Promise<void> {
+  const { data } = await supabase.auth.getSession();
+  const me = data.session?.user.id;
+  if (!me) throw new Error('not signed in');
+
+  const { error } = await supabase
+    .from('receipt_prefs')
+    .upsert({ user_id: me, share_read: on }, { onConflict: 'user_id' });
+  if (error) throw error;
+}
+
 /** Display helper: cap large counts so the badge keeps its width. */
 export function formatUnread(count: number): string {
   return count > 99 ? '99+' : String(count);
