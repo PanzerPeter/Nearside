@@ -21,10 +21,17 @@ import { useT } from '../hooks/useT';
 
 interface ForwardModalProps {
   me: string;
-  /** What is being passed along, already narrowed to what travels — see
-   *  `peerSource` and `roomSource`. The modal never sees the row it came off,
-   *  which is what keeps a group signature from following it. */
-  source: ForwardSource;
+  /**
+   * What is being passed along, already narrowed to what travels — see
+   * `peerSource` and `roomSource`. The modal never sees the rows they came
+   * off, which is what keeps a group signature from following one.
+   *
+   * A list, because a selection of several is forwarded through exactly this
+   * sheet: picking the destinations once for nine messages is the whole point,
+   * and a second sheet for the plural case would be a second set of rules
+   * about what may be forwarded where.
+   */
+  sources: readonly ForwardSource[];
   /** A one-line preview of the message, drawn at the top of the sheet. */
   preview: string;
   /** The conversation it is being forwarded *from*, by peer id or room id.
@@ -73,7 +80,7 @@ interface Target {
  */
 export function ForwardModal({
   me,
-  source,
+  sources,
   preview,
   fromKey,
   identity,
@@ -182,9 +189,20 @@ export function ForwardModal({
     const failures: Array<{ label: string; reason: ForwardFailure }> = [];
 
     for (const target of chosen) {
-      const result = await forwardMessage(me, source, target.target, identity);
-      if (result.ok) delivered.push(target.label);
-      else failures.push({ label: target.label, reason: result.reason });
+      // In the order they were sent, one at a time: nine messages arriving as
+      // nine rows in the order the conversation had them is the only reading
+      // that makes sense, and firing them together leaves that to chance.
+      // A target counts as delivered only if every message reached it —
+      // "sent to Alice" while three of the nine failed is the wrong claim.
+      let ok = true;
+      for (const source of sources) {
+        const result = await forwardMessage(me, source, target.target, identity);
+        if (result.ok) continue;
+        ok = false;
+        failures.push({ label: target.label, reason: result.reason });
+        break;
+      }
+      if (ok) delivered.push(target.label);
     }
 
     setSending(false);

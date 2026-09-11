@@ -70,7 +70,8 @@
 -- `messages`, `message_reactions`, `message_receipts`, `receipt_prefs`,
 -- `sealed_answers`, `stickers`, `chat_backgrounds`, `friend_nicknames`, `rooms`,
 -- `room_participants`, `room_keys`, `room_messages`, `room_message_reactions`,
--- `room_receipts`, `conversation_timers`, `message_pushes`, `push_alerts`,
+-- `room_receipts`, `room_backgrounds`, `conversation_timers`, `conversation_pins`,
+-- `room_pins`, `message_pushes`, `push_alerts`,
 -- `room_message_pushes`, `room_push_alerts` and `theme_grants`.
 --
 -- Listing those tables here instead would be the same delete with more ways
@@ -117,7 +118,10 @@ UNION ALL SELECT 'room_keys',           count(*) FROM public.room_keys
 UNION ALL SELECT 'room_messages',       count(*) FROM public.room_messages
 UNION ALL SELECT 'room_message_reactions', count(*) FROM public.room_message_reactions
 UNION ALL SELECT 'room_receipts',       count(*) FROM public.room_receipts
+UNION ALL SELECT 'room_backgrounds',    count(*) FROM public.room_backgrounds
 UNION ALL SELECT 'conversation_timers', count(*) FROM public.conversation_timers
+UNION ALL SELECT 'conversation_pins',    count(*) FROM public.conversation_pins
+UNION ALL SELECT 'room_pins',            count(*) FROM public.room_pins
 UNION ALL SELECT 'message_pushes',      count(*) FROM public.message_pushes
 UNION ALL SELECT 'push_alerts',         count(*) FROM public.push_alerts
 UNION ALL SELECT 'room_message_pushes', count(*) FROM public.room_message_pushes

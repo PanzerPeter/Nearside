@@ -99,6 +99,10 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   const cameraVideoRef = useRef<HTMLInputElement>(null);
   const emojiBtnRef = useRef<HTMLButtonElement>(null);
   const [emojiOpen, setEmojiOpen] = useState(false);
+  /** Whether a file is being dragged over the composer, and how deep into its
+   *  children the pointer has gone — see `onDragEnter`. */
+  const [dragging, setDragging] = useState(false);
+  const dragDepth = useRef(0);
   const [attachOpen, setAttachOpen] = useState(false);
   // Keyed by staged id: the same photo can be picked twice, and the file gives
   // nothing else to tell those two entries apart.
@@ -320,6 +324,45 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
     if (files.length) onStageFile(files);
   }
 
+  /**
+   * A file dropped onto the composer, which on a desktop is how anybody expects
+   * to attach one.
+   *
+   * Every `dragover` has to be cancelled or the browser takes the drop itself
+   * and navigates the whole window to the file — in a packaged shell that means
+   * the app is replaced by a picture with no way back. `dragleave` fires as the
+   * pointer crosses a child element, so the highlight is counted in and out
+   * rather than toggled, or it flickers off over every button in the bar.
+   */
+  function onDragEnter(e: React.DragEvent) {
+    if (!e.dataTransfer.types.includes('Files')) return;
+    e.preventDefault();
+    dragDepth.current += 1;
+    setDragging(true);
+  }
+
+  function onDragOver(e: React.DragEvent) {
+    if (!e.dataTransfer.types.includes('Files')) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  }
+
+  function onDragLeave() {
+    dragDepth.current = Math.max(0, dragDepth.current - 1);
+    if (dragDepth.current === 0) setDragging(false);
+  }
+
+  function onDrop(e: React.DragEvent) {
+    dragDepth.current = 0;
+    setDragging(false);
+    const files = Array.from(e.dataTransfer.files);
+    if (!files.length) return;
+    e.preventDefault();
+    // Validation and the "unsupported type" message belong to `stageFiles`,
+    // which the picker and the paste path already go through.
+    onStageFile(files);
+  }
+
   function handlePaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
     const files = Array.from(e.clipboardData.items)
       .filter((i) => i.type.startsWith('image/'))
@@ -351,8 +394,24 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
         e.preventDefault();
         submit();
       }}
-      className="p-3 sm:p-4 pb-[calc(0.75rem+var(--safe-bottom))] sm:pb-[calc(1rem+var(--safe-bottom))] bg-base-100 border-t border-hairline shrink-0"
+      onDragEnter={onDragEnter}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
+      className={`relative p-3 sm:p-4 pb-[calc(0.75rem+var(--safe-bottom))] sm:pb-[calc(1rem+var(--safe-bottom))] bg-base-100 border-t border-hairline shrink-0 ${
+        dragging ? 'ring-2 ring-inset ring-primary' : ''
+      }`}
     >
+      {dragging && (
+        <div
+          // `pointer-events-none`, or this would sit between the drop and the
+          // form that is listening for it and the file would go nowhere.
+          aria-hidden
+          className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-base-100/85 text-body font-medium text-primary"
+        >
+          {t('composer.dropToAttach')}
+        </div>
+      )}
       {replyingTo && (
         <div className="flex items-center gap-2 mb-2 px-3 py-2 rounded-field bg-base-200/70 border-l-2 border-primary">
           <div className="min-w-0 flex-1">

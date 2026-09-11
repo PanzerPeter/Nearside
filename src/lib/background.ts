@@ -1,4 +1,5 @@
 import { classifyMedia, mediaPath } from './conversation';
+import { roomMediaPath } from './rooms';
 
 /**
  * Chat background helpers. Each user has their own background per conversation;
@@ -32,6 +33,18 @@ export const MAX_BACKGROUND_BYTES = 5 * 1024 * 1024;
 /** Storage object path for a background image. */
 export function backgroundPath(me: string, other: string, ext: string): string {
   return mediaPath(me, other, `bg-${crypto.randomUUID()}.${ext}`);
+}
+
+/**
+ * The same, for a group (migration 0047).
+ *
+ * The room's own folder, so `is_room_member()` covers it and no new storage
+ * policy is involved — the same bargain the 1:1 background strikes with the
+ * conversation folder, and the same reason the file is sealed: that policy
+ * opens the folder to every member, and a background is shown to nobody.
+ */
+export function roomBackgroundPath(roomId: string, ext: string): string {
+  return roomMediaPath(roomId, `bg-${crypto.randomUUID()}.${ext}`);
 }
 
 /**

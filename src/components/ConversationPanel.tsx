@@ -1,8 +1,12 @@
 import { useEffect, useState } from 'react';
-import { CalendarClock, ExternalLink, Link2, MessageSquare, X } from 'lucide-react';
+import { CalendarClock, ExternalLink, Images, Link2, MessageSquare, X } from 'lucide-react';
 import { formatListTime } from '../lib/time';
 import { formatWhen, type DateInsight, type LinkInsight } from '../lib/extract';
 import { useConversationInsights } from '../hooks/useConversationInsights';
+import { useSharedMedia, type SharedMedia } from '../hooks/useSharedMedia';
+import { GalleryProvider } from '../hooks/useGallery';
+import { MediaAttachment } from './MediaAttachment';
+import type { Message } from '../lib/types';
 import { useT } from '../hooks/useT';
 // `emptyReason` is a helper, not a component, so it reaches the catalog
 // directly. Aliased to keep it distinct from the hook's `t` inside components.
@@ -16,11 +20,14 @@ interface ConversationPanelProps {
   /** The thread's message count. A message arriving while the panel is open
    *  should be in it. */
   revision: number;
+  /** The conversation's decrypt boundary (`ChatRoom.open`). The media tab asks
+   *  the server for rows and they come back sealed, like every other read. */
+  open: (rows: Message[]) => Promise<Message[]>;
   onJump: (messageId: string, createdAt: string) => void;
   onClose: () => void;
 }
 
-type Tab = 'dates' | 'links';
+type Tab = 'dates' | 'links' | 'media';
 
 /**
  * What this conversation turned out to contain: the days somebody named, and
@@ -38,12 +45,16 @@ export function ConversationPanel({
   peerLabel,
   isSelf,
   revision,
+  open,
   onJump,
   onClose,
 }: ConversationPanelProps) {
   const t = useT();
   const [tab, setTab] = useState<Tab>('dates');
   const insights = useConversationInsights(peerId, true, revision);
+  // Only while its tab is showing: a round trip and a decrypt per row is not
+  // something to spend on a tab nobody opened.
+  const media = useSharedMedia(me, peerId, tab === 'media', open);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -53,7 +64,10 @@ export function ConversationPanel({
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [onClose]);
 
-  const who = (userId: string) => (userId === me ? 'You' : isSelf ? 'You' : peerLabel);
+  // Bare English until now, and invisible to the untranslated-literal scan
+  // because it never reaches JSX as text — it is a string handed to a child.
+  const who = (userId: string) =>
+    userId === me || isSelf ? t('common.you') : peerLabel;
   const dateCount = insights.upcoming.length + insights.past.length;
 
   return (
@@ -84,6 +98,19 @@ export function ConversationPanel({
           {t('panel.links')}
           <span className="text-meta text-subtle">{insights.links.length}</span>
         </button>
+        <button
+          role="tab"
+          className={`tab gap-1.5 ${tab === 'media' ? 'tab-active' : ''}`}
+          onClick={() => setTab('media')}
+        >
+          <Images className="w-4 h-4" />
+          {t('panel.media')}
+          {/* No count until the tab has been opened: a number that says nothing
+              is worse than no number, and the count costs the fetch. */}
+          {media.rows.length > 0 && (
+            <span className="text-meta text-subtle">{media.rows.length}</span>
+          )}
+        </button>
       </div>
 
       <div className="max-h-72 overflow-y-auto px-3 sm:px-4 py-2 space-y-1">
@@ -96,13 +123,15 @@ export function ConversationPanel({
             onJump={onJump}
             empty={emptyReason(insights.scanned, t('panel.noDates'))}
           />
-        ) : (
+        ) : tab === 'links' ? (
           <LinkList
             links={insights.links}
             who={who}
             onJump={onJump}
             empty={emptyReason(insights.scanned, t('panel.noLinks'))}
           />
+        ) : (
+          <MediaGrid media={media} />
         )}
       </div>
 
@@ -110,7 +139,11 @@ export function ConversationPanel({
           decrypted it. Saying so is the same claim the transparency screen
           makes, in the one place where it would be reasonable to wonder. */}
       <p className="px-4 sm:px-5 pb-2 text-micro leading-snug text-subtle">
-        {t('panel.provenance')}
+        {/* Two different claims, and saying the wrong one here would be the
+            kind of privacy copy this app refuses to ship: dates and links are
+            read out of what this phone decrypted, while an attachment's path
+            is a column the server has always held. */}
+        {tab === 'media' ? t('panel.mediaProvenance') : t('panel.provenance')}
       </p>
     </div>
   );
@@ -248,5 +281,48 @@ function LinkList({ links, who, onJump, empty }: ListProps & { links: LinkInsigh
         </div>
       ))}
     </>
+  );
+}
+
+/**
+ * The conversation's pictures as a grid of thumbnails.
+ *
+ * Each tile is an ordinary `MediaAttachment`, so it draws the small sealed
+ * preview the sender uploaded rather than the full file — a grid of a hundred
+ * photographs costs about what one of them would. Tapping one opens the same
+ * viewer the thread opens, and the provider around the grid is what lets the
+ * arrows there walk the whole conversation's media instead of stopping at the
+ * one that was tapped.
+ */
+function MediaGrid({ media }: { media: SharedMedia }) {
+  const t = useT();
+
+  if (media.loading && media.rows.length === 0) {
+    return <Empty text={translate('panel.reading')} />;
+  }
+  // Not the empty state: "there are no pictures" is a claim, and a failed
+  // request has not earned it.
+  if (media.failed) return <Empty text={t('panel.mediaFailed')} />;
+  if (media.rows.length === 0) return <Empty text={t('panel.noMedia')} />;
+
+  return (
+    <GalleryProvider messages={media.rows}>
+      <ul className="grid grid-cols-3 gap-1 sm:grid-cols-4">
+        {media.rows.map((row) => (
+          <li key={row.id} className="aspect-square overflow-hidden rounded-field bg-base-200">
+            <MediaAttachment
+              messageId={row.id}
+              path={row.media_path as string}
+              thumbPath={row.media_thumb_path}
+              type={row.media_type === 'video' ? 'video' : 'image'}
+              mediaKey={row.media_key}
+              caption={row.text}
+              expiresAt={row.expires_at}
+              square
+            />
+          </li>
+        ))}
+      </ul>
+    </GalleryProvider>
   );
 }

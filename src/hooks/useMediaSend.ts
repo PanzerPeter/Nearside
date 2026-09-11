@@ -48,6 +48,7 @@ type TrimRow = MediaRow & {
 import { forgetMedia } from '../lib/media-cache';
 import { keepMedia, pinnedIds } from '../lib/pins';
 import { CHAT_IMAGE_MAX_EDGE, compressImageResult } from '../lib/compress';
+import { stripVideoMetadata } from '../lib/video-bytes';
 import {
   imageThumbnail,
   shouldMakeThumbnail,
@@ -302,10 +303,11 @@ export function useMediaSend({
     //
     // Images are re-encoded on the way past — a phone photo is typically
     // megabytes of resolution this UI never paints — and whatever is sent, the
-    // camera's metadata comes off it first. Videos and voice notes go up as
-    // recorded (voice is already ~180 KB a minute), metadata included: there is
-    // no cheap way to rewrite an MP4's atoms here, and it is the one gap left
-    // in this path.
+    // camera's metadata comes off it first. A video keeps every pixel it was
+    // recorded with, and loses the same metadata: the coordinates, the device
+    // and any GPS trace, overwritten in place so the picture never moves
+    // (`lib/video-bytes.ts`). Voice notes go up as recorded; a recording this
+    // app made itself has nothing on it to take off.
     let body = file;
     let bytes: Uint8Array;
     if (kind === 'image') {
@@ -334,6 +336,13 @@ export function useMediaSend({
       } catch (error) {
         return fail(describeMediaError(error), error);
       }
+      // Only `bytes` is stripped; `body` stays the file as it was picked. It is
+      // read twice more below and neither use can carry metadata anywhere — the
+      // name decides the download's extension, and the poster is pixels drawn
+      // onto a canvas. Rebuilding a `File` around a 50 MB video to keep the two
+      // identical would put a second copy of it on the heap beside the one
+      // about to be sealed, on the device least able to afford it.
+      bytes = stripVideoMetadata(bytes, body.type);
     }
 
     // Sealed after compression, never before: compressImage decodes an image,

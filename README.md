@@ -174,8 +174,10 @@ The app ships a screen that says this too. In short:
 - `profiles.display_name`, `profiles.bio`, `last_seen_at` and room titles are
   ordinary text columns. The nickname you give a contact is not one: it is
   sealed under your vault key.
-- Video metadata is not stripped. Photos lose their EXIF on the way out; there
-  is no cheap way to rewrite MP4 atoms on the device, and this is the gap.
+- A video keeps the time it was recorded. Photos lose their EXIF on the way
+  out and videos lose their location, device and any GPS trace; the capture
+  timestamp sits in a structural part of the container, and the message already
+  carries a time of its own.
 - A call that cannot find a direct path is relayed by a TURN provider, which
   sees that two addresses exchanged packets and not what was in them. The
   credentials are minted per call with a short life, and the transparency screen

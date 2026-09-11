@@ -6,11 +6,13 @@ import {
   clearLocalDb,
   openLocalDb,
   searchCached,
+  searchEverywhere,
 } from './localdb';
 
 const PEER = '22222222-2222-2222-2222-222222222222';
 const ME = '11111111-1111-1111-1111-111111111111';
 const OTHER_ACCOUNT = '33333333-3333-3333-3333-333333333333';
+const ROOM = '44444444-4444-4444-4444-444444444444';
 
 function msg(id: string, text: string, at: string) {
   return { id, peer_id: PEER, user_id: ME, text, created_at: at, expires_at: null };
@@ -153,5 +155,57 @@ describe('purgeExpired', () => {
       expires_at: null,
     });
     expect(await purgeExpired(Date.now())).toEqual([]);
+  });
+});
+
+describe('searchEverywhere', () => {
+  beforeEach(async () => {
+    await openLocalDb(ME);
+    await clearLocalDb();
+  });
+
+  function elsewhere(id: string, peer: string, text: string, at: string) {
+    return { id, peer_id: peer, user_id: ME, text, created_at: at, expires_at: null };
+  }
+
+  it('finds a hit in a conversation that is not the open one', async () => {
+    await cacheMessage(elsewhere('a', PEER, 'the pier at six', '2026-08-06T10:00:00Z'));
+    await cacheMessage(elsewhere('b', ROOM, 'meet at the pier', '2026-08-06T11:00:00Z'));
+
+    const hits = await searchEverywhere('pier');
+    expect(hits.map((h) => h.peer_id).sort()).toEqual([PEER, ROOM].sort());
+  });
+
+  it('returns the newest first, across conversations', async () => {
+    await cacheMessage(elsewhere('old', PEER, 'pier', '2026-08-06T10:00:00Z'));
+    await cacheMessage(elsewhere('new', ROOM, 'pier', '2026-08-06T12:00:00Z'));
+    expect((await searchEverywhere('pier')).map((h) => h.id)).toEqual(['new', 'old']);
+  });
+
+  it('keeps each result’s conversation on it, so the caller can name it', async () => {
+    await cacheMessage(elsewhere('a', ROOM, 'pier', '2026-08-06T10:00:00Z'));
+    expect((await searchEverywhere('pier'))[0].peer_id).toBe(ROOM);
+  });
+
+  it('matches case-insensitively, like the per-conversation search', async () => {
+    await cacheMessage(elsewhere('a', PEER, 'Buy Milk', '2026-08-06T10:00:00Z'));
+    expect(await searchEverywhere('milk')).toHaveLength(1);
+  });
+
+  it('treats % as a character somebody typed, not a wildcard', async () => {
+    await cacheMessage(elsewhere('a', PEER, '50X off', '2026-08-06T10:00:00Z'));
+    await cacheMessage(elsewhere('b', PEER, '50% off', '2026-08-06T11:00:00Z'));
+    expect((await searchEverywhere('50% off')).map((h) => h.id)).toEqual(['b']);
+  });
+
+  it('finds nothing for an empty query rather than everything', async () => {
+    await cacheMessage(elsewhere('a', PEER, 'anything', '2026-08-06T10:00:00Z'));
+    expect(await searchEverywhere('   ')).toEqual([]);
+  });
+
+  it('cannot see another account’s messages', async () => {
+    await cacheMessage(elsewhere('a', PEER, 'private', '2026-08-06T10:00:00Z'));
+    await openLocalDb(OTHER_ACCOUNT);
+    expect(await searchEverywhere('private')).toEqual([]);
   });
 });

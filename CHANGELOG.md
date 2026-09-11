@@ -14,6 +14,80 @@ one of them drifts.
 
 ## [Unreleased]
 
+## [1.12.0] — 2026-09-11
+
+### Added
+
+- **A photo opens into the whole conversation's photos.** The viewer used to
+  open one picture and dead-end, so looking through an afternoon's worth meant
+  closing it and finding the next one in the thread. Arrows, arrow keys and a
+  swipe now move between them, and the header says where you are in the set.
+- **A Media tab beside Dates and Links**, which is every picture and video the
+  conversation holds rather than the ones this phone happens to have scrolled
+  past. This is the one thing in that panel the server can answer: it has never
+  been able to read a message, but it has always held the files — as ciphertext,
+  with the key sealed to you.
+- **Search across every chat**, from the top of the chat list. Until now the app
+  could only answer "where in this conversation", which meant finding something
+  you could not place began with guessing which conversation it was in. Results
+  are grouped by chat, newest first, and opening one lands on the message.
+- **A message can be pinned to the top of a conversation.** The address, the
+  door code, the time — the one line everybody keeps scrolling back for, kept
+  where it does not need finding. One per conversation, both sides see the same
+  one, and either of you can unpin it. The pin records which message it is and
+  nothing about what it says.
+- **Several messages can be picked out at once** and forwarded or deleted
+  together. Deleting is offered only when all of them are yours, and forwarding
+  only when all of them can be forwarded — an action that would work on four of
+  the nine is not offered at all.
+- **Export a conversation as a text file.** It is a local read: the words are on
+  this phone because this phone decrypted them, and nothing is uploaded or asked
+  of anybody to produce the file. It says inside itself what it does not contain.
+- **Copy a picture**, from the viewer, straight to the clipboard.
+- **A recently-used row at the top of the sticker drawer.** Which stickers you
+  reach for is kept on the device and never sent anywhere.
+- **Conversations can be set to arrive quietly, or urgently.** Separate from
+  muting, which is still the switch for silence — this is the loudness a
+  conversation comes back to. Like every other opinion this app holds about your
+  chat list, it stays on the phone; the server is never told which people you
+  want to hear from most.
+- **A group can have a background, and a disappearing-message timer**, both of
+  which a one-to-one conversation has had for a while. The background is
+  encrypted with a key only you hold — it sits in the group's own folder, which
+  every member can read, so here the encryption is against them as well as
+  against the server.
+- **Keyboard shortcuts on a desktop.** Ctrl/⌘+K to find a conversation, Ctrl/⌘+F
+  to search the open one, Alt with an arrow to move between chats, Ctrl/⌘+E to
+  archive. They are listed in Settings › About, and there is a menu bar to reach
+  them from.
+- **The desktop app has a tray icon**, an unread count on the dock where the
+  system shows one, and it remembers where its window was.
+- **A file dropped onto the message box is attached**, which on a desktop is how
+  anybody expects to attach one. Pasting already worked.
+
+### Changed
+
+- **A video now leaves its location behind.** A phone records the coordinates,
+  the device and sometimes a whole GPS trace into the file; photos have had that
+  taken off them for a while, and this was the acknowledged gap. Encryption kept
+  those coordinates from the server and did nothing to keep them from the person
+  receiving the video. Every pixel is untouched — the metadata is overwritten
+  where it sits, so nothing is re-encoded and nothing is re-compressed. The time
+  the recording was made is still in there: it is part of the container's
+  structure, and the message it arrives on carries a time anyway.
+- **Deleting a message can be taken back** for a few seconds. It was the one
+  action in a conversation with no way out — the message becomes a tombstone on
+  both phones and the words are gone from this device's copy — and it happened
+  the instant it was tapped.
+- **Leaving or deleting a group now asks first.** For an owner that button ended
+  the group for everybody, and it sat in the header one mis-tap away. The group's
+  other settings moved behind a menu beside it.
+
+### Fixed
+
+- The line above a result in the conversation panel said "You" in every
+  language.
+
 ## [1.11.1] — 2026-09-10
 
 ### Fixed

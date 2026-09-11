@@ -14,6 +14,7 @@ const flags = (entries: [string, string | null][]) =>
         dismissedAt: null,
         archivedAt: null,
         unreadAt: null,
+        alertLevel: null,
       },
     ])
   );

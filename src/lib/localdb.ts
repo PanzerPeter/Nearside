@@ -86,6 +86,17 @@ export interface ChatFlagsRow {
    *  and then got a new message in is simply unread, and re-marking it would
    *  be the app arguing with the person. */
   unread_at: string | null;
+  /**
+   * How loudly this conversation should arrive: 'quiet' or 'urgent'.
+   *
+   * Null is the ordinary case and means "however the app's own notification
+   * setting says" — the column holds the exceptions, like every other flag
+   * here. Muting is deliberately not one of the values: it is a different
+   * question (whether to show anything at all) with its own flag and its own
+   * native store, and folding the two into one column would mean unmuting had
+   * to guess which loudness to go back to.
+   */
+  alert_level: string | null;
 }
 
 /** The database file is named for the account, so the isolation is the
@@ -97,6 +108,10 @@ const NEWEST_FIRST = (a: CachedMessage, b: CachedMessage) =>
   a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : 0;
 
 const SEARCH_LIMIT = 100;
+/** Higher than one conversation's cap, because the results are spread across
+ *  all of them: a hundred hits in the chat you are reading is a lot, and a
+ *  hundred hits spread over thirty conversations is three each. */
+const GLOBAL_SEARCH_LIMIT = 200;
 const CONVERSATION_LIMIT = 1000;
 
 /**
@@ -145,7 +160,8 @@ CREATE TABLE IF NOT EXISTS chat_flags (
   muted_at     TEXT,
   dismissed_at TEXT,
   archived_at  TEXT,
-  unread_at    TEXT
+  unread_at    TEXT,
+  alert_level  TEXT
 );
 
 CREATE TABLE IF NOT EXISTS messages_sealed (
@@ -260,6 +276,9 @@ export async function openLocalDb(userId: string): Promise<void> {
       // table without them.
       'chat_flags ADD COLUMN archived_at TEXT',
       'chat_flags ADD COLUMN unread_at TEXT',
+      // How loudly one conversation arrives. Same reason as the columns above:
+      // a store created before this existed has the table without it.
+      'chat_flags ADD COLUMN alert_level TEXT',
       // 0 or 1. See `PinnedMedia.auto`.
       'pins ADD COLUMN auto INTEGER',
     ]) {
@@ -339,6 +358,41 @@ export async function searchCached(peerId: string, query: string): Promise<Cache
      WHERE peer_id = ? AND text LIKE ? ESCAPE '\\'
      ORDER BY created_at DESC LIMIT ${SEARCH_LIMIT}`,
     [peerId, `%${escaped}%`]
+  );
+  return (res?.values as CachedMessage[]) ?? [];
+}
+
+/**
+ * The same search, across every conversation this device has decrypted.
+ *
+ * One query rather than a loop over the conversations, which is the whole
+ * reason this exists: the mirror already holds every chat in one table, and
+ * asking it per conversation would be N round trips to answer a question the
+ * store can answer in one.
+ *
+ * Results carry their `peer_id`, and naming it is the caller's job — a room id
+ * and a friend's user id are both just ids here, and this file has no idea
+ * which conversations the account is still in.
+ */
+export async function searchEverywhere(query: string): Promise<CachedMessage[]> {
+  const needle = query.trim();
+  if (!needle) return [];
+
+  if (!native()) {
+    const lowered = needle.toLowerCase();
+    return [...(memoryStore()?.values() ?? [])]
+      .filter((r) => r.text.toLowerCase().includes(lowered))
+      .sort(NEWEST_FIRST)
+      .slice(0, GLOBAL_SEARCH_LIMIT);
+  }
+  // ESCAPE for the same reason `searchCached` needs it: without it a search for
+  // "50% off" matches "50X off".
+  const escaped = needle.replace(/[\\%_]/g, (c) => `\\${c}`);
+  const res = await db?.query(
+    `SELECT * FROM messages_cache
+     WHERE text LIKE ? ESCAPE '\\'
+     ORDER BY created_at DESC LIMIT ${GLOBAL_SEARCH_LIMIT}`,
+    [`%${escaped}%`]
   );
   return (res?.values as CachedMessage[]) ?? [];
 }
@@ -641,7 +695,12 @@ export async function allChatFlags(): Promise<Map<string, ChatFlagsRow>> {
  *  — a new flag added to one and not the other would silently orphan rows. */
 function isEmptyFlagRow(row: ChatFlagsRow): boolean {
   return (
-    !row.pinned_at && !row.muted_at && !row.dismissed_at && !row.archived_at && !row.unread_at
+    !row.pinned_at &&
+    !row.muted_at &&
+    !row.dismissed_at &&
+    !row.archived_at &&
+    !row.unread_at &&
+    !row.alert_level
   );
 }
 
@@ -655,7 +714,9 @@ function isEmptyFlagRow(row: ChatFlagsRow): boolean {
 export async function setChatFlag(
   id: string,
   kind: 'peer' | 'room',
-  flag: 'pinned_at' | 'muted_at' | 'dismissed_at' | 'archived_at' | 'unread_at',
+  flag: 'pinned_at' | 'muted_at' | 'dismissed_at' | 'archived_at' | 'unread_at' | 'alert_level',
+  /** The moment, for the stamped flags; the level, for `alert_level`. Null
+   *  clears either. */
   at: string | null
 ): Promise<void> {
   if (!native()) {
@@ -669,6 +730,7 @@ export async function setChatFlag(
       dismissed_at: null,
       archived_at: null,
       unread_at: null,
+      alert_level: null,
     };
     const next = { ...row, kind, [flag]: at } as ChatFlagsRow;
     if (isEmptyFlagRow(next)) store.delete(id);
@@ -683,7 +745,7 @@ export async function setChatFlag(
   await db?.run(
     `DELETE FROM chat_flags WHERE id = ?
        AND pinned_at IS NULL AND muted_at IS NULL AND dismissed_at IS NULL
-       AND archived_at IS NULL AND unread_at IS NULL`,
+       AND archived_at IS NULL AND unread_at IS NULL AND alert_level IS NULL`,
     [id]
   );
 }

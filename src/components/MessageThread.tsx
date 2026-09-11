@@ -64,6 +64,15 @@ interface MessageThreadProps {
   /** Open the sheet listing who reacted to this message. */
   onShowReactions: (msg: Message) => void;
   onJumpToReplied: (target: Message) => void;
+  /** Picking several messages out at once — see `lib/selection.ts`. */
+  selecting: boolean;
+  selectedIds: ReadonlySet<string>;
+  onStartSelecting: (msg: Message) => void;
+  onToggleSelected: (msg: Message) => void;
+  /** The message held at the top of this conversation, so its own bubble can
+   *  offer "unpin" rather than "pin". Null when nothing is pinned. */
+  pinnedId: string | null;
+  onTogglePin: (msg: Message) => void;
   onEditingTextChange: (v: string) => void;
   onSaveEdit: (id: string) => void;
   onCancelEdit: () => void;
@@ -129,6 +138,12 @@ export function MessageThread({
   onForward,
   onShowReactions,
   onJumpToReplied,
+  selecting,
+  selectedIds,
+  onStartSelecting,
+  onToggleSelected,
+  pinnedId,
+  onTogglePin,
   onEditingTextChange,
   onSaveEdit,
   onCancelEdit,
@@ -289,6 +304,12 @@ export function MessageThread({
                   onForward={onForward}
                   onShowReactions={() => onShowReactions(msg)}
                   onJumpToReplied={onJumpToReplied}
+                  onStartSelecting={onStartSelecting}
+                  isPinned={pinnedId === msg.id}
+                  onTogglePin={onTogglePin}
+                  selecting={selecting}
+                  selected={selectedIds.has(msg.id)}
+                  onToggleSelected={onToggleSelected}
                   status={
                     // No ticks in the self-chat: delivered-to-whom, read-by-whom.
                     isOwn && !isSelf ? statusFor(msg.created_at, peerReceipt) : undefined

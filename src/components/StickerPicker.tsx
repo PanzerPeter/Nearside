@@ -238,6 +238,45 @@ export function StickerPicker({ drawer, onSelect, onError }: StickerPickerProps)
             {t('stickers.noMatch', { query })}
           </p>
         ) : (
+          <>
+          {/* Only when there is nothing typed: a search is a request for a
+              particular sticker, and a shelf of unrelated ones above the
+              results is the drawer answering a question nobody asked. It also
+              needs more than one, because a "recent" row holding the single
+              sticker directly below it is two tiles of the same picture. */}
+          {!query && drawer.recent.length > 1 && (
+            <div className="mb-2">
+              <p className="px-0.5 pb-1 text-micro font-semibold uppercase tracking-wider text-subtle">
+                {t('stickers.recent')}
+              </p>
+              <div className="flex gap-1.5 overflow-x-auto pb-1">
+                {drawer.recent.map((sticker) => (
+                  <button
+                    key={sticker.id}
+                    type="button"
+                    className="h-12 w-12 shrink-0 rounded-field p-1 transition hover:bg-wash active:scale-95"
+                    onClick={() => {
+                      drawer.noteUse(sticker);
+                      onSelect(sticker);
+                    }}
+                    title={sticker.label}
+                    aria-label={sticker.label}
+                  >
+                    {drawer.urls[sticker.id] ? (
+                      <img
+                        src={drawer.urls[sticker.id]}
+                        alt=""
+                        className="h-full w-full object-contain"
+                        draggable={false}
+                      />
+                    ) : (
+                      <span className="block h-full w-full rounded-field bg-base-200" />
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           <div ref={gridRef} className="grid grid-cols-4 gap-1.5">
             {shown.map((sticker) => (
               <div
@@ -257,7 +296,10 @@ export function StickerPicker({ drawer, onSelect, onError }: StickerPickerProps)
                       return;
                     }
                     if (armed === sticker.id) setArmed(null);
-                    else onSelect(sticker);
+                    else {
+                      drawer.noteUse(sticker);
+                      onSelect(sticker);
+                    }
                   }}
                   onPointerDown={(e) => onTilePointerDown(e, sticker.id)}
                   onPointerMove={onTilePointerMove}
@@ -318,6 +360,7 @@ export function StickerPicker({ drawer, onSelect, onError }: StickerPickerProps)
               </div>
             ))}
           </div>
+          </>
         )}
       </div>
 

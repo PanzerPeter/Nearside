@@ -2,15 +2,22 @@ import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, use
 import type { RealtimeChannel, Session } from '@supabase/supabase-js';
 import {
   ArrowLeft,
+  BellRing,
+  CheckSquare,
   CornerUpRight,
+  FileDown,
+  Image as ImageIcon,
   Lock,
   LogOut,
+  MoreVertical,
   Pencil,
+  Pin,
   Search,
   Reply,
   ShieldAlert,
   ShieldQuestion,
   SmilePlus,
+  Timer,
   Trash2,
   UserMinus,
   Users,
@@ -36,6 +43,25 @@ import {
   type RoomSummary,
 } from '../lib/rooms';
 import { formatDisplayName, nicknameFor } from '../lib/nicknames';
+import {
+  describeTimerChange,
+  formatTtl,
+  timerChangeIndex,
+  loadRoomTimer,
+  saveRoomTimer,
+  TTL_OPTIONS,
+  type ConversationTimer,
+} from '../lib/disappearing';
+import { useChatBackground } from '../hooks/useChatBackground';
+import { ChatBackgroundModal } from './ChatBackgroundModal';
+import { Modal } from './Modal';
+import { PinnedBanner } from './PinnedBanner';
+import {
+  loadRoomPin,
+  pinRoomMessage,
+  unpinRoomMessage,
+  type PinnedMessage,
+} from '../lib/pinned-message';
 import { MAX_MESSAGE_LENGTH, canEditBody, isBodyOptional } from '../lib/conversation';
 import { formatTime } from '../lib/time';
 import { prefersReducedMotion } from '../lib/motion';
@@ -53,6 +79,17 @@ import { privacyPrefs } from '../lib/privacy-prefs';
 import type { Profile, Reaction } from '../lib/types';
 import { Composer, MAX_TEXTAREA_PX, type ComposerHandle } from './Composer';
 import { MediaAttachment } from './MediaAttachment';
+import { GalleryProvider } from '../hooks/useGallery';
+import { useShortcut } from '../hooks/useShortcut';
+import { useExportChat } from '../hooks/useExportChat';
+import { selectionPowers, toggleSelected } from '../lib/selection';
+import {
+  alertLevelFor,
+  loadChatFlags,
+  setAlertLevel,
+  subscribeChatFlags,
+  type AlertLevel,
+} from '../lib/chat-flags';
 import { MessageText } from './MessageText';
 import { jumboEmojiCount } from '../lib/emoji-only';
 import { ReactionBar } from './ReactionBar';
@@ -74,6 +111,9 @@ interface RoomViewProps {
   session: Session;
   room: RoomSummary;
   identity: import('../lib/crypto/keys').Identity;
+  /** A message to land on when the group opens, from a search across all
+   *  chats. Null every other time — the default is the newest message. */
+  openAt?: { messageId: string; createdAt: string } | null;
   onBack: () => void;
   onLeft: () => void;
 }
@@ -98,10 +138,26 @@ const POLL_DEGRADED_MS = 5_000;
  * hiding it would conceal an attack in progress, which is precisely the case
  * the signature exists to surface.
  */
-export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewProps) {
+export function RoomView({ session, room, identity, openAt, onBack, onLeft }: RoomViewProps) {
   const t = useT();
   const me = session.user.id;
   const [messages, setMessages] = useState<RoomMessage[]>([]);
+  /** Deletes asked for but not yet written — see `requestDelete`. */
+  const [deleting, setDeleting] = useState<Set<string>>(() => new Set());
+  /** Messages picked out to be acted on together. Null when nothing is being
+   *  picked, which is a different state from an empty set — see `ChatRoom`. */
+  const [selectedIds, setSelectedIds] = useState<Set<string> | null>(null);
+  /** A bulk forward, through the sheet a single forward uses. */
+  const [forwardingMany, setForwardingMany] = useState<RoomMessage[] | null>(null);
+  /** The one message held at the top of the group — see migration 0048. */
+  const [pinned, setPinned] = useState<PinnedMessage | null>(null);
+  const [pinBusy, setPinBusy] = useState(false);
+  /** The group's disappearing-message timer, from `rooms.ttl_seconds`. */
+  const [timer, setTimer_] = useState<ConversationTimer | null>(null);
+  const [backgroundOpen, setBackgroundOpen] = useState(false);
+  /** Leaving is the one action here that cannot be undone — for an owner it
+   *  ends the group for everybody — so it is asked twice. */
+  const [confirmLeave, setConfirmLeave] = useState(false);
   /** Whether the server has anything older than the oldest row on screen. A
    *  group used to be a hard window of the newest fifty with no way back:
    *  message fifty-one existed and could not be reached from the UI. */
@@ -159,6 +215,62 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
   // The drawer is per account, not per room — the same hook the 1:1 composer
   // uses, and the same cache behind it.
   const stickers = useStickers(me, identity);
+  const background = useChatBackground(me, { kind: 'room', roomId: room.id }, identity);
+
+  // Read once per group. The timer is changed rarely and by a member, so the
+  // realtime `rooms` stream is not worth a subscription of its own — a change
+  // made elsewhere lands the next time the group is opened, and the messages
+  // themselves already carry the expiry the server stamped on them.
+  useEffect(() => {
+    let alive = true;
+    void loadRoomTimer(room.id).then((t) => {
+      if (alive) setTimer_(t);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [room.id]);
+
+  // The same shortcut a 1:1 conversation answers, for the same reason.
+  useShortcut((shortcut) => {
+    if (shortcut !== 'search-chat') return false;
+    setSearchOpen(true);
+    return true;
+  });
+
+  /** How loudly this group arrives — see `ChatRoom` for why it is read from
+   *  the flag store rather than held here. */
+  const [alertLevel, setAlertLevelState] = useState<AlertLevel | null>(null);
+  useEffect(() => {
+    let alive = true;
+    const read = () =>
+      void loadChatFlags().then((flags) => {
+        if (alive) setAlertLevelState(alertLevelFor(room.id, flags));
+      });
+    read();
+    const stop = subscribeChatFlags(read);
+    return () => {
+      alive = false;
+      stop();
+    };
+  }, [room.id]);
+
+  async function changeAlertLevel(level: AlertLevel | null) {
+    try {
+      await setAlertLevel(room.id, 'room', level);
+    } catch {
+      toast.error(t('alerts.failed'));
+    }
+  }
+
+  async function setTimer(ttlSeconds: number | null) {
+    try {
+      await saveRoomTimer(room.id, ttlSeconds);
+      setTimer_(await loadRoomTimer(room.id));
+    } catch {
+      toast.error(t('room.timerFailed'));
+    }
+  }
 
   const media = useMediaSend({
     me,
@@ -195,6 +307,33 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
   /** Loaded messages by id, for resolving a quote without a second query. A
    *  reply whose target is outside the window renders as unavailable. */
   const byId = useMemo(() => new Map(messages.map((m) => [m.id, m])), [messages]);
+  // `openRoomRows` hands back the opened file key as `mediaKey`; every 1:1 row
+  // in the app calls the same thing `media_key`, and the gallery reads the
+  // second name because that is the shape `lib/types.ts` defines.
+  const galleryRows = useMemo(
+    () => messages.map((m) => ({ ...m, media_key: m.mediaKey ?? null })),
+    [messages]
+  );
+  /** What the thread draws: everything except the messages whose delete is
+   *  still inside its undo window. */
+  const shown = useMemo(() => messages.filter((m) => !deleting.has(m.id)), [messages, deleting]);
+
+  // The one line the group shows about its timer, and where in the thread it
+  // belongs. `rooms` keeps the current setting and who set it last, so — as in
+  // a 1:1 conversation — this is the whole history the app can honestly draw.
+  const timerChange = useMemo(
+    () => (timer ? describeTimerChange(timer, me, nameFor(timer.setBy)) : null),
+    // `nameFor` reads the member list, which is state; it is re-created on
+    // every render and as a dependency would recompute this on each of them.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [timer, me, members]
+  );
+  const noticeIndex = timerChange
+    ? timerChangeIndex(
+        shown.map((m) => m.created_at),
+        timerChange.at
+      )
+    : -1;
 
   const jumpTo = useCallback((id: string) => {
     document.getElementById(`room-msg-${id}`)?.scrollIntoView({
@@ -216,6 +355,114 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
     },
     [me, profiles, t]
   );
+
+  // Re-read on every wake, like every other fetch beside a subscription.
+  useEffect(() => {
+    let alive = true;
+    void loadRoomPin(room.id)
+      .then((row) => {
+        if (alive) setPinned(row);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [room.id, generation]);
+
+  useEffect(() => {
+    const channel = supabase
+      .channel(`room-pin:${room.id}:${generation}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'room_pins' }, () => {
+        // One row, so a re-read is cheaper than reassembling it from a payload
+        // whose DELETE half carries only the key.
+        void loadRoomPin(room.id).then(setPinned).catch(() => {});
+      })
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [room.id, generation]);
+
+  const pinnedSnippet = useMemo(() => {
+    if (!pinned) return null;
+    const row = messages.find((m) => m.id === pinned.messageId);
+    return row ? roomSnippet(row) : null;
+  }, [pinned, messages]);
+
+  async function togglePin(id: string) {
+    setPinBusy(true);
+    try {
+      if (pinned?.messageId === id) await unpinRoomMessage(room.id);
+      else await pinRoomMessage(room.id, id);
+      setPinned(await loadRoomPin(room.id));
+    } catch {
+      toast.error(t('pin.failed'));
+    } finally {
+      setPinBusy(false);
+    }
+  }
+
+  /** The picked messages, resolved against what the thread still holds. */
+  const picked = useMemo(
+    () => (selectedIds ? messages.filter((m) => selectedIds.has(m.id)) : []),
+    [selectedIds, messages]
+  );
+  const powers = useMemo(
+    () =>
+      selectionPowers(
+        picked.map((m) => ({
+          id: m.id,
+          isOwn: m.sender_id === me,
+          // A row this device could not verify must not be re-signed as
+          // somebody else's — the same rule a single forward follows.
+          forwardable: isRoomForwardable(m),
+        }))
+      ),
+    [picked, me]
+  );
+
+  function deleteSelected() {
+    const doomed = picked;
+    setSelectedIds(null);
+    setDeleting((prev) => {
+      const next = new Set(prev);
+      for (const m of doomed) next.add(m.id);
+      return next;
+    });
+    const forget = () =>
+      setDeleting((prev) => {
+        const next = new Set(prev);
+        for (const m of doomed) next.delete(m.id);
+        return next;
+      });
+    toast.offer(
+      t('message.deletedMany', { count: doomed.length }),
+      { label: t('common.undo'), onAct: forget },
+      () => {
+        forget();
+        for (const m of doomed) {
+          void deleteRoomMessage(m.id, identity).catch(() =>
+            toast.error(t('room.deleteMessageFailed'))
+          );
+        }
+      }
+    );
+  }
+
+  const chatExport = useExportChat({
+    conversationId: room.id,
+    title: room.title,
+    me,
+    meLabel: t('common.you'),
+    nameFor,
+  });
+
+  async function runExport() {
+    if (chatExport.busy) return;
+    const written = await chatExport.run();
+    if (written === null) toast.error(t('chat.exportFailed'));
+    else toast.success(t('chat.exported', { count: written }));
+  }
 
   /** Who is typing right now, by name. A group needs the names: three dots in
    *  a room of six say nothing about who is about to speak. */
@@ -390,6 +637,24 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
     },
     [room.id, roomKey, messages, hasMore, openPage, jumpTo, toast, t]
   );
+
+  // Land on the message a search result named, once, after the first page is
+  // in. Keyed on the target rather than run on mount: opening the same group at
+  // a different message is a second jump, and re-running every render would
+  // fight the reader for the scroll position.
+  const jumpedTo = useRef<string | null>(null);
+  useEffect(() => {
+    if (!openAt) {
+      jumpedTo.current = null;
+      return;
+    }
+    if (jumpedTo.current === openAt.messageId || messages.length === 0) return;
+    jumpedTo.current = openAt.messageId;
+    void jumpToMessage(openAt.messageId, openAt.createdAt);
+    // `jumpToMessage` is rebuilt whenever `messages` changes, which is every
+    // page; as a dependency it would re-enter the jump it just finished.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openAt, messages.length]);
 
   /**
    * Verify, open and append one row that arrived over the socket.
@@ -636,13 +901,30 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
     }
   }
 
-  async function handleDelete(m: RoomMessage) {
+  /**
+   * Ask for a message to be deleted, and hold it for as long as the toast is
+   * up.
+   *
+   * Same bargain as the 1:1 thread: the bubble goes at once, because a grace
+   * period nobody can see is not one, and the write — which re-signs an emptied
+   * row on everybody's phone and cannot be taken back — only starts when the
+   * offer of an undo expires.
+   */
+  function requestDelete(m: RoomMessage) {
     if (editingId === m.id) cancelEdit();
-    try {
-      await deleteRoomMessage(m.id, identity);
-    } catch {
-      toast.error(t('room.deleteMessageFailed'));
-    }
+    setDeleting((prev) => new Set(prev).add(m.id));
+    const forget = () =>
+      setDeleting((prev) => {
+        const next = new Set(prev);
+        next.delete(m.id);
+        return next;
+      });
+    toast.offer(t('message.deleteToast'), { label: t('common.undo'), onAct: forget }, () => {
+      forget();
+      void deleteRoomMessage(m.id, identity).catch(() =>
+        toast.error(t('room.deleteMessageFailed'))
+      );
+    });
   }
 
   async function send() {
@@ -706,7 +988,7 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
   }
 
   return (
-    <div className="flex flex-col h-full bg-base-200/50 min-h-0">
+    <div className="relative flex flex-col h-full bg-base-200/50 min-h-0">
       {/* Same top edge as ChatHeader, and inset the same way — see the comment
           there for why `lg:` puts it back. */}
       <header className="navbar bg-base-100 px-2 sm:px-4 pt-[calc(0.5rem+var(--safe-top))] shrink-0 border-b border-hairline min-h-[3.5rem] lg:min-h-[var(--chrome-top)] gap-1">
@@ -745,14 +1027,114 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
         >
           <Users className="w-4 h-4" />
         </button>
-        <button
-          className="btn btn-ghost btn-sm btn-square text-error"
-          onClick={() => void handleLeave()}
-          title={isOwner ? t('room.delete') : t('room.leave')}
-        >
-          {isOwner ? <Trash2 className="w-4 h-4" /> : <LogOut className="w-4 h-4" />}
-        </button>
+        {/* Everything that is not a one-tap action moves behind a menu, the
+            way the 1:1 header does it. Leaving used to be a bare button beside
+            the member list, which for an owner meant the group could be
+            deleted for everybody by one mis-tap with no way back. */}
+        <div className="dropdown dropdown-end">
+          <button
+            tabIndex={0}
+            className="btn btn-ghost btn-sm btn-square"
+            title={t('room.more')}
+            aria-label={t('room.more')}
+          >
+            <MoreVertical className="w-4 h-4" />
+          </button>
+          <ul
+            tabIndex={0}
+            className="dropdown-content menu z-30 mt-1 w-60 rounded-box bg-base-100 p-2 shadow-overlay ring-1 ring-base-content/5"
+          >
+            <li>
+              <details>
+                <summary className="whitespace-nowrap">
+                  <Timer
+                    className={`w-4 h-4 ${timer?.ttlSeconds != null ? 'text-primary' : ''}`}
+                  />
+                  {t('chat.disappearing')}
+                  <span className="ml-auto text-meta text-subtle">
+                    {formatTtl(timer?.ttlSeconds ?? null)}
+                  </span>
+                </summary>
+                <ul>
+                  {TTL_OPTIONS.map((seconds) => (
+                    <li key={String(seconds)}>
+                      <button
+                        className={(timer?.ttlSeconds ?? null) === seconds ? 'active' : ''}
+                        onClick={() => void setTimer(seconds)}
+                      >
+                        {formatTtl(seconds)}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            </li>
+            <li>
+              <button onClick={() => setBackgroundOpen(true)}>
+                <ImageIcon className="w-4 h-4" />
+                {t('chat.background')}
+              </button>
+            </li>
+            <li>
+              <details>
+                <summary className="whitespace-nowrap">
+                  <BellRing className={`w-4 h-4 ${alertLevel ? 'text-primary' : ''}`} />
+                  {t('alerts.title')}
+                  <span className="ml-auto text-meta text-subtle">
+                    {t(
+                      alertLevel === 'quiet'
+                        ? 'alerts.quiet'
+                        : alertLevel === 'urgent'
+                          ? 'alerts.urgent'
+                          : 'alerts.default'
+                    )}
+                  </span>
+                </summary>
+                <ul>
+                  {([null, 'quiet', 'urgent'] as const).map((level) => (
+                    <li key={level ?? 'default'}>
+                      <button
+                        className={alertLevel === level ? 'active' : ''}
+                        onClick={() => void changeAlertLevel(level)}
+                      >
+                        {t(
+                          level === 'quiet'
+                            ? 'alerts.quiet'
+                            : level === 'urgent'
+                              ? 'alerts.urgent'
+                              : 'alerts.default'
+                        )}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            </li>
+            <li>
+              <button onClick={() => void runExport()}>
+                <FileDown className="w-4 h-4" />
+                {t('chat.export')}
+              </button>
+            </li>
+            <li>
+              <button className="text-error" onClick={() => setConfirmLeave(true)}>
+                {isOwner ? <Trash2 className="w-4 h-4" /> : <LogOut className="w-4 h-4" />}
+                {isOwner ? t('room.delete') : t('room.leave')}
+              </button>
+            </li>
+          </ul>
+        </div>
       </header>
+
+      {pinned && (
+        <PinnedBanner
+          snippet={pinnedSnippet}
+          by={pinned.pinnedBy === me ? t('common.you') : nameFor(pinned.pinnedBy)}
+          busy={pinBusy}
+          onJump={() => void jumpToMessage(pinned.messageId, pinned.pinnedAt)}
+          onUnpin={() => void togglePin(pinned.messageId)}
+        />
+      )}
 
       {searchOpen && (
         <ConversationSearch
@@ -769,6 +1151,43 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
         />
       )}
 
+      {backgroundOpen && (
+        <ChatBackgroundModal
+          url={background.url}
+          busy={background.busy}
+          onPick={background.setBackground}
+          onRemove={background.removeBackground}
+          onClose={() => setBackgroundOpen(false)}
+        />
+      )}
+
+      {confirmLeave && (
+        <Modal
+          title={isOwner ? t('room.confirmDeleteTitle') : t('room.confirmLeaveTitle')}
+          onClose={() => setConfirmLeave(false)}
+        >
+          <p className="text-body text-muted">
+            {isOwner
+              ? t('room.confirmDeleteBody', { name: room.title })
+              : t('room.confirmLeaveBody', { name: room.title })}
+          </p>
+          <div className="mt-4 flex justify-end gap-2">
+            <button className="btn btn-ghost btn-sm" onClick={() => setConfirmLeave(false)}>
+              {t('common.cancel')}
+            </button>
+            <button
+              className="btn btn-error btn-sm"
+              onClick={() => {
+                setConfirmLeave(false);
+                void handleLeave();
+              }}
+            >
+              {isOwner ? t('room.delete') : t('room.leave')}
+            </button>
+          </div>
+        </Modal>
+      )}
+
       {showingReactions && (
         <ReactionSheet
           reactions={reactions.byMessage.get(showingReactions) ?? []}
@@ -778,10 +1197,27 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
         />
       )}
 
+      {forwardingMany && (
+        <ForwardModal
+          me={me}
+          // Oldest first, so they arrive in the order the group had them.
+          sources={[...forwardingMany]
+            .sort((a, b) => a.created_at.localeCompare(b.created_at))
+            .map(roomSource)}
+          preview={t('selection.count', { count: forwardingMany.length })}
+          fromKey={room.id}
+          identity={identity}
+          onClose={() => {
+            setForwardingMany(null);
+            setSelectedIds(null);
+          }}
+        />
+      )}
+
       {forwarding && (
         <ForwardModal
           me={me}
-          source={roomSource(forwarding)}
+          sources={[roomSource(forwarding)]}
           preview={roomSnippet(forwarding)}
           fromKey={room.id}
           identity={identity}
@@ -830,7 +1266,24 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
         </div>
       )}
 
-      <div ref={listRef} className="flex-1 overflow-y-auto px-3 sm:px-4 py-4 min-h-0">
+      {background.url && (
+        <>
+          {/* Decoration only, behind the list — the same two layers the 1:1
+              thread uses, including the scrim that keeps bare text (the date
+              dividers, the empty state, the load-older button) legible over a
+              light photograph. */}
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 bg-cover bg-center"
+            style={{ backgroundImage: `url("${background.url}")` }}
+          />
+          <div aria-hidden className="pointer-events-none absolute inset-0 bg-base-200/65" />
+        </>
+      )}
+      <div
+        ref={listRef}
+        className="relative flex-1 overflow-y-auto px-3 sm:px-4 py-4 min-h-0"
+      >
         {hasMore && (
           <div className="flex justify-center pb-3">
             <button
@@ -857,46 +1310,62 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
           </div>
         )}
 
-        <ul className="space-y-2.5">
-          {messages.map((m) => (
-            <Fragment key={m.id}>
-              {m.id === unreadDividerId && (
-                <li className="flex items-center gap-2 py-1">
-                  <span className="flex-1 h-px bg-primary/40" />
-                  <span className="text-micro font-semibold uppercase tracking-wide text-primary">
-                    {t('thread.newMessages')}
-                  </span>
-                  <span className="flex-1 h-px bg-primary/40" />
-                </li>
-              )}
-            <RoomBubble
-              m={m}
-              me={me}
-              senderName={nameFor(m.sender_id)}
-              senderColour={colourFor(m.sender_id)}
-              reactions={reactions.byMessage.get(m.id) ?? []}
-              handles={handles}
-              myHandle={myHandle}
-              repliedTo={m.reply_to_id ? (byId.get(m.reply_to_id) ?? null) : null}
-              repliedToName={
-                m.reply_to_id ? nameFor(byId.get(m.reply_to_id)?.sender_id ?? '') : ''
-              }
-              isEditing={editingId === m.id}
-              editingText={editingText}
-              onToggleReaction={(emoji) => void reactions.toggle(m.id, emoji)}
-              onReply={() => setReplyingTo(m)}
-              onJumpTo={jumpTo}
-              onStartEdit={() => startEdit(m)}
-              onEditingTextChange={setEditingText}
-              onSaveEdit={() => void saveEdit(m.id)}
-              onCancelEdit={cancelEdit}
-              onDelete={() => void handleDelete(m)}
-              onForward={() => setForwarding(m)}
-              onShowReactions={() => setShowingReactions(m.id)}
-            />
-            </Fragment>
-          ))}
-        </ul>
+        {/* The group's pictures, so the viewer opened from one of them can
+            step to the next (`lib/gallery.ts`). A group row carries its
+            opened file key under a different name than a 1:1 row does. */}
+        <GalleryProvider messages={galleryRows}>
+          <ul className="space-y-2.5">
+            {shown.map((m) => (
+              <Fragment key={m.id}>
+                {m.id === unreadDividerId && (
+                  <li className="flex items-center gap-2 py-1">
+                    <span className="flex-1 h-px bg-primary/40" />
+                    <span className="text-micro font-semibold uppercase tracking-wide text-primary">
+                      {t('thread.newMessages')}
+                    </span>
+                    <span className="flex-1 h-px bg-primary/40" />
+                  </li>
+                )}
+              <RoomBubble
+                m={m}
+                me={me}
+                senderName={nameFor(m.sender_id)}
+                senderColour={colourFor(m.sender_id)}
+                reactions={reactions.byMessage.get(m.id) ?? []}
+                handles={handles}
+                myHandle={myHandle}
+                repliedTo={m.reply_to_id ? (byId.get(m.reply_to_id) ?? null) : null}
+                repliedToName={
+                  m.reply_to_id ? nameFor(byId.get(m.reply_to_id)?.sender_id ?? '') : ''
+                }
+                isEditing={editingId === m.id}
+                editingText={editingText}
+                onToggleReaction={(emoji) => void reactions.toggle(m.id, emoji)}
+                onReply={() => setReplyingTo(m)}
+                onJumpTo={jumpTo}
+                onStartEdit={() => startEdit(m)}
+                onEditingTextChange={setEditingText}
+                onSaveEdit={() => void saveEdit(m.id)}
+                onCancelEdit={cancelEdit}
+                onDelete={() => requestDelete(m)}
+                onForward={() => setForwarding(m)}
+                onShowReactions={() => setShowingReactions(m.id)}
+                isPinned={pinned?.messageId === m.id}
+                onTogglePin={() => void togglePin(m.id)}
+                onStartSelecting={() => setSelectedIds(new Set([m.id]))}
+                selecting={selectedIds !== null}
+                selected={selectedIds?.has(m.id) ?? false}
+                onToggleSelected={() =>
+                  setSelectedIds((current) => toggleSelected(current ?? new Set(), m.id))
+                }
+              />
+              </Fragment>
+            ))}
+            {timerChange && noticeIndex === shown.length && shown.length > 0 && (
+              <TimerNotice label={timerChange.label} />
+            )}
+          </ul>
+        </GalleryProvider>
         {typingNames.length > 0 && (
           <div className="flex items-center gap-2 mt-3" aria-live="polite" aria-atomic="true">
             {/* The incoming bubble's fill, minus the padding a line of text
@@ -920,6 +1389,37 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
         <div ref={bottomRef} />
       </div>
 
+      {/* While messages are being picked out the bar stands in for the
+          composer, the same way it does in a 1:1 thread. */}
+      {selectedIds !== null ? (
+        <div className="flex items-center gap-2 border-t border-hairline bg-base-100 p-3 pb-[calc(0.75rem+var(--safe-bottom))] sm:p-4 sm:pb-[calc(1rem+var(--safe-bottom))]">
+          <button className="btn btn-ghost btn-sm" onClick={() => setSelectedIds(null)}>
+            {t('selection.cancel')}
+          </button>
+          <span className="flex-1 truncate text-body font-medium">
+            {t('selection.count', { count: powers.count })}
+          </span>
+          <button
+            className="btn btn-ghost btn-sm btn-square"
+            disabled={!powers.canForward}
+            onClick={() => setForwardingMany(picked)}
+            title={powers.canForward ? t('message.forward') : t('selection.mixedForward')}
+            aria-label={t('message.forward')}
+          >
+            <CornerUpRight className="h-4 w-4" />
+          </button>
+          <button
+            className="btn btn-ghost btn-sm btn-square text-error"
+            disabled={!powers.canDelete}
+            onClick={deleteSelected}
+            title={powers.canDelete ? t('common.delete') : t('selection.mixedOwn')}
+            aria-label={t('common.delete')}
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </div>
+      ) : (
+      <>
       {/* The same composer the 1:1 thread uses, not a second one: attaching,
           recording and the sticker drawer are behaviour a room must not have
           its own slightly different copy of. */}
@@ -973,12 +1473,28 @@ export function RoomView({ session, room, identity, onBack, onLeft }: RoomViewPr
           />
         }
       />
+      </>
+      )}
     </div>
   );
 }
 
 /** What a quoted room message reads as in the composer and in the quote block.
  *  A caption-less attachment has no text to show, so it is named by kind. */
+/** The timer change, in the middle of the thread where it happened — the same
+ *  pill the 1:1 thread draws, because it is the same kind of thing: not
+ *  something a member said, but something that happened to the group. */
+function TimerNotice({ label }: { label: string }) {
+  return (
+    <li className="my-3 flex justify-center">
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-base-300/80 px-3 py-1 text-micro font-medium text-muted ring-1 ring-base-content/5 backdrop-blur-xs">
+        <Timer className="h-3 w-3 shrink-0" />
+        {label}
+      </span>
+    </li>
+  );
+}
+
 function roomSnippet(m: RoomMessage): string {
   if (m.deleted_at) return translate('message.deleted');
   if (m.text) return m.text;
@@ -1022,6 +1538,16 @@ interface RoomBubbleProps {
   /** Show who reacted. The chips say how many; in a group of eight that is not
    *  the useful half. */
   onShowReactions: () => void;
+  /** Whether this is the message held at the top of the group. */
+  isPinned: boolean;
+  onTogglePin: () => void;
+  /** Start picking messages out, with this one already picked. */
+  onStartSelecting: () => void;
+  /** True while a selection is open. Every other gesture the bubble answers is
+   *  off then: in this mode a tap means "pick this one". */
+  selecting: boolean;
+  selected: boolean;
+  onToggleSelected: () => void;
 }
 
 /**
@@ -1052,6 +1578,12 @@ function RoomBubble({
   onDelete,
   onForward,
   onShowReactions,
+  isPinned,
+  onTogglePin,
+  onStartSelecting,
+  selecting,
+  selected,
+  onToggleSelected,
 }: RoomBubbleProps) {
   const t = useT();
   const mine = m.sender_id === me;
@@ -1096,7 +1628,7 @@ function RoomBubble({
       : 0;
 
   const swipe = useSwipeToReply({
-    enabled: readable && !isDeleted && !isEditing,
+    enabled: readable && !isDeleted && !isEditing && !selecting,
     onReply,
     direction: mine ? -1 : 1,
   });
@@ -1106,7 +1638,20 @@ function RoomBubble({
       id={`room-msg-${m.id}`}
       // Same side marker as MessageBubble — see index.css.
       data-own={mine}
-      className={`flex ${mine ? 'justify-end' : 'justify-start'} animate-message-in`}
+      className={`flex ${mine ? 'justify-end' : 'justify-start'} animate-message-in ${
+        selecting ? 'cursor-pointer rounded-box transition-colors' : ''
+      } ${selected ? 'bg-primary/10' : ''}`}
+      // The whole row is the target while a selection is open — see the same
+      // handler on `MessageBubble` for why it is not a checkbox.
+      onClickCapture={
+        selecting
+          ? (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onToggleSelected();
+            }
+          : undefined
+      }
     >
       <div className="max-w-[85%] sm:max-w-[70%] flex flex-col gap-1">
         {menuOpen && readable && !isDeleted && (
@@ -1197,7 +1742,7 @@ function RoomBubble({
             {mine && (
               <button
                 type="button"
-                className="btn btn-ghost btn-sm btn-circle mr-1 text-error"
+                className="btn btn-ghost btn-sm btn-circle text-error"
                 title={t('common.delete')}
                 aria-label={t('common.delete')}
                 onClick={() => {
@@ -1208,6 +1753,32 @@ function RoomBubble({
                 <Trash2 className="w-4 h-4" />
               </button>
             )}
+            {/* Either side's messages: the useful line in a group is as often
+                somebody else's as your own. */}
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm btn-circle"
+              title={isPinned ? t('pin.unpin') : t('pin.pin')}
+              aria-label={isPinned ? t('pin.unpin') : t('pin.pin')}
+              onClick={() => {
+                onTogglePin();
+                setMenuOpen(false);
+              }}
+            >
+              <Pin className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm btn-circle mr-1"
+              title={t('message.select')}
+              aria-label={t('message.select')}
+              onClick={() => {
+                onStartSelecting();
+                setMenuOpen(false);
+              }}
+            >
+              <CheckSquare className="w-4 h-4" />
+            </button>
           </div>
         )}
 

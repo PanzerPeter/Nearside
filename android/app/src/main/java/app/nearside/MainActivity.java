@@ -17,6 +17,12 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(ScreenGuard.class);
         registerPlugin(CallNative.class);
         registerPlugin(MuteStore.class);
+        registerPlugin(AlertStore.class);
+        // Both channels created at launch as well as on the first write. A
+        // notification posted to a channel that does not exist is dropped by
+        // Android with no error, and the write that would have created them
+        // only happens when somebody changes a setting.
+        AlertStore.ensureChannels(this);
         super.onCreate(savedInstanceState);
         handleCallIntent(getIntent());
     }

@@ -86,6 +86,15 @@ export default defineConfig({
   window: {
     width: 1200,
     height: 800,
+    // Below this the two panes stop being two panes and the chat list has
+    // nowhere to go: the layout's breakpoint for a sidebar beside a thread is
+    // `lg`, and a window narrower than that is a phone layout on a desktop.
+    minWidth: 480,
+    minHeight: 520,
+    // The shell's own default, written down rather than relied on: where the
+    // window was left is the kind of thing whose absence is only noticed after
+    // an upgrade quietly changes a default.
+    statePersistence: true,
   },
   csp: {
     policy: policy(),

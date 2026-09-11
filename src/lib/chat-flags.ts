@@ -49,6 +49,26 @@ export interface ChatFlags {
   archivedAt: string | null;
   /** When the conversation was marked unread by hand. See `isUnreadMarked`. */
   unreadAt: string | null;
+  /** How loudly this one arrives, or null for however the app is set. */
+  alertLevel: AlertLevel | null;
+}
+
+/**
+ * How loudly one conversation arrives.
+ *
+ * Deliberately three states and not four: muting is a different question —
+ * whether anything is shown at all — with its own flag, so that unmuting has a
+ * loudness to go back to rather than having to guess one.
+ *
+ * 'quiet' shows the notification without a sound; 'urgent' asks the system to
+ * put it in front of whatever is on screen. Both are hints: Android's per-app
+ * notification settings are the final word, and a phone in Do Not Disturb owes
+ * this app nothing.
+ */
+export type AlertLevel = 'quiet' | 'urgent';
+
+function toLevel(raw: string | null | undefined): AlertLevel | null {
+  return raw === 'quiet' || raw === 'urgent' ? raw : null;
 }
 
 function fromRow(row: ChatFlagsRow): ChatFlags {
@@ -60,6 +80,7 @@ function fromRow(row: ChatFlagsRow): ChatFlags {
     dismissedAt: row.dismissed_at,
     archivedAt: row.archived_at ?? null,
     unreadAt: row.unread_at ?? null,
+    alertLevel: toLevel(row.alert_level),
   };
 }
 
@@ -108,6 +129,41 @@ export async function setArchived(id: string, kind: 'peer' | 'room', on: boolean
 export async function setUnreadMark(id: string, kind: 'peer' | 'room', on: boolean): Promise<void> {
   await setChatFlag(id, kind, 'unread_at', on ? new Date().toISOString() : null);
   announce();
+}
+
+/**
+ * How loudly one conversation should arrive, or null for the ordinary setting.
+ *
+ * Written to the local store and mirrored to native storage by
+ * `lib/alerts.ts`, for the same reason the mute list is: a push arrives when
+ * the WebView is not running, which is exactly when a preference held in
+ * JavaScript is unreadable.
+ */
+export async function setAlertLevel(
+  id: string,
+  kind: 'peer' | 'room',
+  level: AlertLevel | null
+): Promise<void> {
+  await setChatFlag(id, kind, 'alert_level', level);
+  announce();
+}
+
+/** What this conversation is set to, or null for the ordinary setting. */
+export function alertLevelFor(
+  id: string,
+  flags: ReadonlyMap<string, ChatFlags>
+): AlertLevel | null {
+  return flags.get(id)?.alertLevel ?? null;
+}
+
+/** Every conversation with a loudness of its own, as `{ id: level }`. What
+ *  `lib/alerts.ts` hands to the notification extension. */
+export function alertLevels(flags: ReadonlyMap<string, ChatFlags>): Record<string, AlertLevel> {
+  const out: Record<string, AlertLevel> = {};
+  for (const [id, flag] of flags) {
+    if (flag.alertLevel) out[id] = flag.alertLevel;
+  }
+  return out;
 }
 
 export async function forgetChat(id: string): Promise<void> {

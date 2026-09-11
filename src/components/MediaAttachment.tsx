@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { VisualMediaType } from '../lib/types';
 import { useSignedMediaUrl } from '../hooks/useSignedMediaUrl';
 import { MediaLightbox } from './MediaLightbox';
 import { mediaFailureNotice, videoTrackIsUnsupported } from '../lib/media';
 import { ImageOff, Play, VideoOff } from 'lucide-react';
 import { useT } from '../hooks/useT';
+import { useGallery } from '../hooks/useGallery';
+import { galleryIndexOf, stepGallery, type GalleryItem } from '../lib/gallery';
 
 interface MediaAttachmentProps {
   /** The owning message, so the viewer can pin it and so a pruned object can
@@ -36,6 +38,17 @@ interface MediaAttachmentProps {
    *  width, a picture narrower than the text leaves a band of bubble colour
    *  down one side that reads as a rendering fault. */
   fill?: boolean;
+  /**
+   * Fill a tile of a fixed shape, cropping whatever will not fit.
+   *
+   * The grid in `ConversationPanel` is squares, and `fill` alone is not enough
+   * for one: it sets the width and leaves the height to the picture, so a wide
+   * photograph sits in the top of its square with a band of empty tile under
+   * it. Deliberately separate from `fill` rather than folded into it — a bubble
+   * must keep sizing itself to the picture, which is the whole reason `fill`
+   * caps the height instead of setting it.
+   */
+  square?: boolean;
 }
 
 /**
@@ -58,6 +71,7 @@ export function MediaAttachment({
   restored,
   expiresAt,
   fill,
+  square,
 }: MediaAttachmentProps) {
   const t = useT();
   // The thumbnail when there is one, the full object when there is not. A
@@ -105,7 +119,7 @@ export function MediaAttachment({
       <div
         ref={probeRef}
         className={`flex items-center justify-center bg-base-content/5 ${
-          fill ? 'w-full h-40' : 'mx-3.5 w-40 h-40 rounded-field'
+          square ? 'h-full w-full' : fill ? 'w-full h-40' : 'mx-3.5 w-40 h-40 rounded-field'
         }`}
       >
         <span className="loading loading-spinner loading-sm" />
@@ -118,7 +132,11 @@ export function MediaAttachment({
   // width and only a picture narrower than the caption is stretched up to it.
   // max-h keeps a portrait crop from taking the whole screen; the full frame is
   // one tap away in the viewer.
-  const frame = fill ? 'block w-full max-h-72 object-cover' : 'block max-w-full max-h-72 object-cover';
+  const frame = square
+    ? 'block h-full w-full object-cover'
+    : fill
+      ? 'block w-full max-h-72 object-cover'
+      : 'block max-w-full max-h-72 object-cover';
 
   return (
     <>
@@ -130,7 +148,9 @@ export function MediaAttachment({
         // `w-full` on the button as well as the image: a form control sizes to
         // fit-content even as a block, so on its own the image's 100% resolved
         // against a box already shrunk to the picture.
-        className={`relative block overflow-hidden cursor-zoom-in ${fill ? 'w-full' : ''}`}
+        className={`relative block overflow-hidden cursor-zoom-in ${
+          square ? 'h-full w-full' : fill ? 'w-full' : ''
+        }`}
         onClick={(e) => {
           e.stopPropagation();
           setViewing(true);
@@ -154,7 +174,7 @@ export function MediaAttachment({
           // where saving lives.
           <div
             className={`flex flex-col items-center justify-center gap-1.5 bg-base-content/5 text-muted ${
-              fill ? 'w-full h-40' : 'w-40 h-40'
+              square ? 'h-full w-full' : fill ? 'w-full h-40' : 'w-40 h-40'
             }`}
           >
             <VideoOff className="w-5 h-5" />
@@ -247,6 +267,33 @@ function FullSizeViewer({
   onClose: () => void;
 }) {
   const t = useT();
+  const gallery = useGallery();
+
+  // The conversation's pictures, to step along. A viewer opened from outside a
+  // thread — the pinned-media screen — finds itself in an empty gallery and
+  // stands alone, which is what this component did before there was a gallery.
+  const items = useMemo(() => {
+    if (galleryIndexOf(gallery, messageId) >= 0) return gallery;
+    const alone: GalleryItem = {
+      messageId,
+      path,
+      type,
+      mediaKey: mediaKey ?? null,
+      caption: caption ?? null,
+      expiresAt: expiresAt ?? null,
+      restored: !!restored,
+    };
+    return [alone];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gallery, messageId]);
+
+  // Which file is open, held by id and never by position. The thread goes on
+  // loading while the viewer is up, and an older page arriving pushes every
+  // index along — a remembered number would silently become a different photo.
+  const [currentId, setCurrentId] = useState(messageId);
+  const atIndex = Math.max(0, galleryIndexOf(items, currentId));
+  const current = items[atIndex] ?? items[0];
+
   // Not deferred: it is on screen by definition — the viewer only mounts
   // because somebody opened it.
   //
@@ -254,10 +301,23 @@ function FullSizeViewer({
   // thumbnail, so nothing above this point holds the real file; opening one is
   // the moment the whole object exists on the device, and keeping it here costs
   // no download that was not already happening.
-  const { url, failure } = useSignedMediaUrl(path, mediaKey, type, messageId, false, restored, {
-    expiresAt: expiresAt ?? null,
-    caption: caption ?? '',
-  });
+  const { url, failure } = useSignedMediaUrl(
+    current.path,
+    current.mediaKey,
+    current.type,
+    current.messageId,
+    false,
+    current.restored,
+    {
+      expiresAt: current.expiresAt,
+      caption: current.caption ?? '',
+    }
+  );
+
+  function step(delta: number) {
+    const next = items[stepGallery(items, atIndex, delta)];
+    if (next) setCurrentId(next.messageId);
+  }
 
   if (failure) {
     return (
@@ -266,7 +326,7 @@ function FullSizeViewer({
         onClick={onClose}
       >
         <ImageOff className="h-5 w-5 shrink-0" />
-        {mediaFailureNotice(failure, type)}
+        {mediaFailureNotice(failure, current.type)}
       </div>
     );
   }
@@ -285,12 +345,22 @@ function FullSizeViewer({
 
   return (
     <MediaLightbox
-      messageId={messageId}
+      // Deliberately NOT keyed on the file. A key change remounts the viewer,
+      // and its unmount calls `history.back()` to consume the entry it pushed
+      // — the `popstate` that produces is indistinguishable from a back press,
+      // so the freshly mounted viewer heard it and closed itself. Stepping to
+      // the next picture shut the whole thing instead. The per-file state is
+      // reset inside the viewer instead; see the effect on `messageId` there.
+      messageId={current.messageId}
       url={url}
-      path={path}
-      type={type}
-      caption={caption}
-      noPicture={noPicture}
+      path={current.path}
+      type={current.type}
+      caption={current.caption}
+      // Only the picture the bubble itself drew has already told us this.
+      noPicture={current.messageId === messageId ? noPicture : false}
+      position={{ index: atIndex + 1, total: items.length }}
+      onPrev={atIndex > 0 ? () => step(-1) : undefined}
+      onNext={atIndex < items.length - 1 ? () => step(1) : undefined}
       onClose={onClose}
     />
   );

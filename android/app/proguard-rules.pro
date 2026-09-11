@@ -52,6 +52,14 @@
 # push that arrives as a silent banner months later, on somebody's phone.
 -keep class app.nearside.CallNotificationExtension { *; }
 
+# `AlertStore` is reached two ways, and R8 sees neither. Capacitor resolves the
+# plugin's methods reflectively from the `@CapacitorPlugin` annotation, and the
+# notification extension above calls its statics from code R8 has already been
+# told to keep whole — so the class survives but its members do not have to,
+# and a stripped `channelFor` is a per-conversation loudness that silently
+# stops being honoured in release builds only.
+-keep class app.nearside.AlertStore { *; }
+
 # RevenueCat deserialises the Play Billing responses into Kotlin data classes.
 -keep class com.revenuecat.purchases.** { *; }
 -keep class com.android.billingclient.** { *; }

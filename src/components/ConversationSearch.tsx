@@ -4,6 +4,7 @@ import { formatListTime } from '../lib/time';
 import { useToast } from '../hooks/useToast';
 import { Search, X } from 'lucide-react';
 import { useT } from '../hooks/useT';
+import { Highlight } from './Highlight';
 
 /** Kept from search_messages()'s server-side floor: a one-character query
  *  matches most of a conversation and is never what someone meant. */
@@ -31,30 +32,6 @@ interface ConversationSearchProps {
   senderName?: (userId: string) => string;
   onJump: (messageId: string, createdAt: string) => void;
   onClose: () => void;
-}
-
-/** Regex metacharacters that would otherwise break `new RegExp` below —
- *  distinct from the SQL LIKE metacharacters the migration escapes. */
-function escapeRegExp(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-/** Wrap every case-insensitive occurrence of `needle` in `text` with <mark>. */
-function highlight(text: string, needle: string) {
-  if (!needle) return text;
-  // Splitting on a capturing group keeps the matched substrings themselves in
-  // the output array (at the odd indices), so no separate matching pass over
-  // the string is needed to know which piece to wrap.
-  const parts = text.split(new RegExp(`(${escapeRegExp(needle)})`, 'gi'));
-  return parts.map((part, i) =>
-    i % 2 === 1 ? (
-      <mark key={i} className="bg-warning/30 text-base-content rounded px-0.5">
-        {part}
-      </mark>
-    ) : (
-      <span key={i}>{part}</span>
-    )
-  );
 }
 
 /** Search panel for one conversation, docked under the chat header. */
@@ -175,7 +152,7 @@ export function ConversationSearch({
                   </span>
                 </div>
                 <p className="text-body line-clamp-2 text-strong">
-                  {highlight(hit.text, trimmedQuery)}
+                  <Highlight text={hit.text} needle={trimmedQuery} />
                 </p>
               </button>
             ))}

@@ -4,4 +4,13 @@
     <string name="title_activity_main">Nearside</string>
     <string name="package_name">app.nearside</string>
     <string name="custom_url_scheme">app.nearside</string>
+
+    <!-- The two notification channels a conversation can be routed to when it
+         has been given a loudness of its own. Shown in Android's own
+         per-app notification settings, which is where somebody turns one of
+         them down for good — see AlertStore. -->
+    <string name="channel_quiet">Quiet conversations</string>
+    <string name="channel_quiet_description">Messages from conversations you set to quiet. Shown without a sound.</string>
+    <string name="channel_urgent">Urgent conversations</string>
+    <string name="channel_urgent_description">Messages from conversations you set to urgent. Shown in front of whatever is on screen.</string>
 </resources>

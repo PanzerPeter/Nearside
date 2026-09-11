@@ -168,6 +168,35 @@ export const TABLE_REPORTS: TableSpec[] = [
     note: 'server.chat_backgrounds.note',
   },
   {
+    table: 'conversation_pins',
+    group: 'about-you',
+    label: 'server.conversation_pins.label',
+    readable: ['user_a', 'user_b', 'message_id', 'pinned_by', 'pinned_at'],
+    // Nothing sealed here to name: the row is a pointer, and the message it
+    // points at keeps its body in its own encrypted columns.
+    opaque: [],
+    note: 'server.conversation_pins.note',
+  },
+  {
+    table: 'room_pins',
+    group: 'about-you',
+    label: 'server.room_pins.label',
+    readable: ['room_id', 'message_id', 'pinned_by', 'pinned_at'],
+    opaque: [],
+    note: 'server.room_pins.note',
+  },
+  {
+    table: 'room_backgrounds',
+    group: 'about-you',
+    label: 'server.room_backgrounds.label',
+    readable: ['owner_id', 'room_id', 'media_path', 'updated_at'],
+    // Sealed from the start, unlike the 1:1 table — and here it is the other
+    // members the seal is against, not only the server: the object shares the
+    // group's own storage folder, which every member may read.
+    opaque: ['key_ciphertext', 'key_nonce'],
+    note: 'server.room_backgrounds.note',
+  },
+  {
     table: 'rooms',
     group: 'about-you',
     label: 'server.rooms.label',
@@ -178,6 +207,7 @@ export const TABLE_REPORTS: TableSpec[] = [
       'created_at',
       'ttl_seconds',
       'ttl_set_by',
+      'ttl_set_at',
       'avatar_path',
     ],
     opaque: ['avatar_key_ciphertext', 'avatar_key_nonce'],

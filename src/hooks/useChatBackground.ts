@@ -7,6 +7,7 @@ import {
   forgetBackgroundUrl,
   rememberBackgroundUrl,
   reusableBackgroundUrl,
+  roomBackgroundPath,
   validateBackgroundFile,
 } from '../lib/background';
 import { BACKGROUND_MAX_EDGE, compressImage } from '../lib/compress';
@@ -17,16 +18,56 @@ import { fromBase64, toBase64, type Identity } from '../lib/crypto/keys';
 /** How long a background's signed URL stays valid. Matches MediaAttachment. */
 const SIGNED_URL_TTL = 3600;
 
+/**
+ * Which conversation's background this is.
+ *
+ * A union rather than an optional room id beside a peer id, for the reason
+ * `MediaTarget` is one: the two live in different tables, key on differently
+ * named columns and upload into different folders, and a shape where both
+ * halves can be set at once is a wrong query waiting to be written.
+ */
+export type BackgroundTarget =
+  | { kind: 'peer'; peerId: string }
+  | { kind: 'room'; roomId: string };
+
+/**
+ * A row from either table, under one set of names.
+ *
+ * The scope column is aliased in the SELECT below (`scope_id:peer_id`), so
+ * everything after the query is written once. It is the only difference
+ * between the two tables that the rest of this hook would otherwise have to
+ * keep branching on.
+ */
 interface BackgroundRow {
   owner_id: string;
-  peer_id: string;
+  scope_id: string;
   media_path: string;
-  /** Null on a row written before 0039, which points at a plaintext object. */
+  /** Null on a `chat_backgrounds` row written before 0039, which points at a
+   *  plaintext object. Never null for a group: 0047's columns are NOT NULL,
+   *  because no plaintext group background has ever existed. */
   key_ciphertext: string | null;
   key_nonce: string | null;
 }
 
-const COLUMNS = 'owner_id, peer_id, media_path, key_ciphertext, key_nonce';
+/** Table, scope column and conflict target for one kind of conversation. */
+function shapeOf(target: BackgroundTarget) {
+  return target.kind === 'room'
+    ? {
+        table: 'room_backgrounds' as const,
+        column: 'room_id' as const,
+        id: target.roomId,
+        conflict: 'owner_id,room_id',
+      }
+    : {
+        table: 'chat_backgrounds' as const,
+        column: 'peer_id' as const,
+        id: target.peerId,
+        conflict: 'owner_id,peer_id',
+      };
+}
+
+const COLUMNS = (column: string) =>
+  `owner_id, scope_id:${column}, media_path, key_ciphertext, key_nonce`;
 
 /**
  * The current user's own background image for one 1:1 conversation.
@@ -43,7 +84,8 @@ const COLUMNS = 'owner_id, peer_id, media_path, key_ciphertext, key_nonce';
  * `setBackground` and `removeBackground` resolve to an error message, or null on
  * success; the caller owns how that is surfaced.
  */
-export function useChatBackground(me: string, friendId: string, identity: Identity) {
+export function useChatBackground(me: string, target: BackgroundTarget, identity: Identity) {
+  const { table, column, id: scopeId, conflict } = shapeOf(target);
   const [url, setUrl] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   // The current row, read synchronously by the mutators so a replacement knows
@@ -116,11 +158,11 @@ export function useChatBackground(me: string, friendId: string, identity: Identi
     };
 
     const { data, error } = await supabase
-      .from('chat_backgrounds')
-      .select(COLUMNS)
+      .from(table)
+      .select(COLUMNS(column))
       .eq('owner_id', me)
-      .eq('peer_id', friendId)
-      .maybeSingle();
+      .eq(column, scopeId)
+      .maybeSingle<BackgroundRow>();
 
     // A read failure is not worth a toast — the chat is still usable without a
     // background — but it must not be silent, since a missing table or grant
@@ -145,7 +187,7 @@ export function useChatBackground(me: string, friendId: string, identity: Identi
     // A missing object degrades to no background rather than a broken paint —
     // same posture as MediaAttachment's "no longer available" fallback.
     apply(data, url);
-  }, [me, friendId, fetchBackground]);
+  }, [me, table, column, scopeId, fetchBackground]);
 
   useEffect(() => {
     // Clear first: switching conversations must not leave the previous chat's
@@ -159,10 +201,10 @@ export function useChatBackground(me: string, friendId: string, identity: Identi
 
   useEffect(() => {
     const channel = supabase
-      .channel(`chat-bg:${me}:${friendId}`)
+      .channel(`chat-bg:${me}:${scopeId}`)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'chat_backgrounds' },
+        { event: '*', schema: 'public', table },
         (payload) => {
           // RLS scopes this stream to our own rows, so what arrives here is our
           // backgrounds for every conversation — hence the peer filter. It is
@@ -174,10 +216,13 @@ export function useChatBackground(me: string, friendId: string, identity: Identi
           // fallback never fires and a DELETE would be tested against `{}` and
           // dropped. `old` is fully populated because the table is REPLICA
           // IDENTITY FULL.
-          const row = (
-            payload.eventType === 'DELETE' ? payload.old : payload.new
-          ) as Partial<BackgroundRow>;
-          if (row.owner_id !== me || row.peer_id !== friendId) return;
+          // The raw row, under the table's own column names — the alias above
+          // applies to the query, not to the replication stream.
+          const row = (payload.eventType === 'DELETE' ? payload.old : payload.new) as Record<
+            string,
+            unknown
+          >;
+          if (row.owner_id !== me || row[column] !== scopeId) return;
           void load();
         }
       )
@@ -185,7 +230,7 @@ export function useChatBackground(me: string, friendId: string, identity: Identi
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [me, friendId, load]);
+  }, [me, table, column, scopeId, load]);
 
   const setBackground = useCallback(
     async (file: File): Promise<string | null> => {
@@ -200,7 +245,10 @@ export function useChatBackground(me: string, friendId: string, identity: Identi
       setBusy(true);
       try {
         const previousPath = rowRef.current?.media_path ?? null;
-        const path = backgroundPath(me, friendId, fileExtension(image));
+        const path =
+          target.kind === 'room'
+            ? roomBackgroundPath(target.roomId, fileExtension(image))
+            : backgroundPath(me, target.peerId, fileExtension(image));
 
         // Sealed before it is uploaded, and the key sealed before the row that
         // will carry it — everything that can fail happens while nothing has
@@ -218,16 +266,16 @@ export function useChatBackground(me: string, friendId: string, identity: Identi
         // Any other order can leave the row referencing a file that is not
         // there yet, or already gone.
         const { error: upsertError } = await supabase
-          .from('chat_backgrounds')
+          .from(table)
           .upsert(
             {
               owner_id: me,
-              peer_id: friendId,
+              [column]: scopeId,
               media_path: path,
               key_ciphertext: sealedKey.ciphertext,
               key_nonce: sealedKey.nonce,
             },
-            { onConflict: 'owner_id,peer_id' }
+            { onConflict: conflict }
           );
         if (upsertError) {
           // Logged in full because the toast only carries the summary, and the
@@ -250,7 +298,7 @@ export function useChatBackground(me: string, friendId: string, identity: Identi
         setBusy(false);
       }
     },
-    [me, friendId, load, identity]
+    [me, target, table, column, scopeId, conflict, load, identity]
   );
 
   const removeBackground = useCallback(async (): Promise<string | null> => {
@@ -260,10 +308,10 @@ export function useChatBackground(me: string, friendId: string, identity: Identi
     setBusy(true);
     try {
       const { error } = await supabase
-        .from('chat_backgrounds')
+        .from(table)
         .delete()
         .eq('owner_id', me)
-        .eq('peer_id', friendId);
+        .eq(column, scopeId);
       if (error) {
         console.error('chat background delete failed', error);
         return describeWriteError(error);
@@ -279,7 +327,7 @@ export function useChatBackground(me: string, friendId: string, identity: Identi
     } finally {
       setBusy(false);
     }
-  }, [me, friendId]);
+  }, [me, table, column, scopeId]);
 
   return { url, busy, setBackground, removeBackground };
 }

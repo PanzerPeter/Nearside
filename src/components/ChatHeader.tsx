@@ -7,7 +7,9 @@ import { formatLastSeen } from '../lib/time';
 import { useConnection, useDegraded } from '../lib/connection';
 import {
   ArrowLeft,
+  BellRing,
   CalendarClock,
+  FileDown,
   Image as ImageIcon,
   Lock,
   MoreVertical,
@@ -21,6 +23,7 @@ import {
   Video,
 } from 'lucide-react';
 import type { CallKind } from '../lib/call/types';
+import type { AlertLevel } from '../lib/chat-flags';
 import { formatTtl, TTL_OPTIONS, type ConversationTimer } from '../lib/disappearing';
 import { useT } from '../hooks/useT';
 
@@ -50,6 +53,13 @@ interface ChatHeaderProps {
   onToggleSearch: () => void;
   onOpenVerify: () => void;
   onOpenBackground: () => void;
+  /** Write this conversation out as a text file. */
+  onExport: () => void;
+  /** How loudly this conversation arrives, and how to change it. Muting is a
+   *  separate flag with its own row in the chat list — this is the loudness a
+   *  conversation returns to when it is not muted. */
+  alertLevel: AlertLevel | null;
+  onSetAlertLevel: (level: AlertLevel | null) => void;
   /** Open the sealed-question composer. Never reached in the self-chat. */
   onAskSealed: () => void;
   /** Open the dates-and-links panel for this conversation. */
@@ -93,6 +103,9 @@ export function ChatHeader({
   onToggleSearch,
   onOpenVerify,
   onOpenBackground,
+  onExport,
+  alertLevel,
+  onSetAlertLevel,
   onAskSealed,
   onOpenPanel,
   timer,
@@ -355,6 +368,43 @@ export function ChatHeader({
             >
               <Pencil className="w-4 h-4" />
               {isSelf ? t('chat.nameThisChat') : t('chat.setNickname')}
+            </button>
+          </li>
+          <li>
+            <details>
+              <summary className="whitespace-nowrap">
+                <BellRing className={`w-4 h-4 ${alertLevel ? 'text-primary' : ''}`} />
+                {t('alerts.title')}
+                <span className="ml-auto text-meta text-subtle">
+                  {t(alertLevel === 'quiet' ? 'alerts.quiet' : alertLevel === 'urgent' ? 'alerts.urgent' : 'alerts.default')}
+                </span>
+              </summary>
+              <ul>
+                {([null, 'quiet', 'urgent'] as const).map((level) => (
+                  <li key={level ?? 'default'}>
+                    <button
+                      className={alertLevel === level ? 'active' : ''}
+                      onClick={() => {
+                        closeMenu();
+                        onSetAlertLevel(level);
+                      }}
+                    >
+                      {t(level === 'quiet' ? 'alerts.quiet' : level === 'urgent' ? 'alerts.urgent' : 'alerts.default')}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          </li>
+          <li>
+            <button
+              onClick={() => {
+                closeMenu();
+                onExport();
+              }}
+            >
+              <FileDown className="w-4 h-4" />
+              {t('chat.export')}
             </button>
           </li>
         </ul>

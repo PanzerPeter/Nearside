@@ -19,7 +19,7 @@ const KIND_STYLES: Record<ToastKind, string> = {
  */
 export function Toast() {
   const t = useT();
-  const { toasts, dismiss } = useToast();
+  const { toasts, dismiss, act } = useToast();
 
   if (toasts.length === 0) return null;
 
@@ -35,6 +35,15 @@ export function Toast() {
           className={`motion-toast pointer-events-auto flex items-center gap-2 max-w-sm w-full sm:w-auto rounded-field border px-3 py-2.5 shadow-overlay backdrop-blur-xs ${KIND_STYLES[toast.kind]}`}
         >
           <p className="text-body flex-1">{toast.message}</p>
+          {toast.action && (
+            <button
+              type="button"
+              onClick={() => act(toast.id)}
+              className="btn btn-ghost btn-xs shrink-0 font-semibold"
+            >
+              {toast.action.label}
+            </button>
+          )}
           <button
             type="button"
             onClick={() => dismiss(toast.id)}

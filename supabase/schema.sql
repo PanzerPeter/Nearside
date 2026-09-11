@@ -1522,6 +1522,12 @@ CREATE TABLE IF NOT EXISTS public.rooms (
   created_by  uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   ttl_seconds integer,
   ttl_set_by  uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
+  -- When the timer was last changed, so the thread can put its notice in the
+  -- right place in the conversation rather than at the top of it. `rooms` has
+  -- no general `updated_at`, and adding one would mean a trigger firing on
+  -- every title change for a column only this reads. Null on rows whose timer
+  -- was set before 0047 recorded the moment.
+  ttl_set_at  timestamptz,
 
   -- The room picture: an attachment that happens to be an avatar. An object in
   -- `chat-media` and a file key sealed under the room key. Profile avatars are
@@ -2108,6 +2114,79 @@ CREATE TRIGGER room_receipts_monotonic
   BEFORE UPDATE ON public.room_receipts
   FOR EACH ROW EXECUTE FUNCTION public.room_receipts_monotonic();
 
+/*
+  A group's background, one per member and shown to nobody else.
+
+  A second table rather than a column on `chat_backgrounds` because that one is
+  keyed `(owner_id, peer_id)` with `peer_id` a foreign key into `profiles`, and
+  a room id is not a profile id. Two tables, each with a real key and a real
+  reference, is cheaper to reason about than one whose key can be half-set.
+
+  Sealed for the reason 0039 gives, only more so: the object lives in the
+  room's storage folder, which `is_room_member()` opens to every member. That
+  policy was written for attachments the group shares; a background is not one.
+  The key columns are NOT NULL here — unlike `chat_backgrounds`, no plaintext
+  group background has ever existed, so there is nothing to stay compatible
+  with.
+*/
+
+CREATE TABLE IF NOT EXISTS public.room_backgrounds (
+  owner_id   uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  room_id    uuid NOT NULL REFERENCES public.rooms(id)    ON DELETE CASCADE,
+  media_path text NOT NULL,
+
+  -- The image's file key, sealed under the owner's vault key. Not null: see
+  -- the header — there are no pre-seal rows to be compatible with.
+  key_ciphertext text NOT NULL,
+  key_nonce      text NOT NULL,
+
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (owner_id, room_id),
+  CONSTRAINT room_backgrounds_path_length CHECK (char_length(media_path) BETWEEN 1 AND 512)
+);
+
+-- The PK indexes (owner_id, room_id); room_id needs its own for the FK.
+CREATE INDEX IF NOT EXISTS room_backgrounds_room_idx
+  ON public.room_backgrounds (room_id);
+
+ALTER TABLE public.room_backgrounds ENABLE ROW LEVEL SECURITY;
+
+REVOKE ALL ON public.room_backgrounds FROM anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.room_backgrounds TO authenticated;
+
+DROP TRIGGER IF EXISTS room_backgrounds_set_updated_at ON public.room_backgrounds;
+CREATE TRIGGER room_backgrounds_set_updated_at
+  BEFORE UPDATE ON public.room_backgrounds
+  FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+-- Your own row and nobody else's. A background is not shared, so there is no
+-- case in which another member should see that one exists, let alone its path.
+DROP POLICY IF EXISTS "room_backgrounds_select_own" ON public.room_backgrounds;
+CREATE POLICY "room_backgrounds_select_own" ON public.room_backgrounds
+  FOR SELECT TO authenticated
+  USING ((select auth.uid()) = owner_id);
+
+-- Membership is checked on write as well as ownership: without it a row could
+-- be planted for a room the writer has no part in, naming a path in that
+-- room's folder.
+DROP POLICY IF EXISTS "room_backgrounds_insert_own" ON public.room_backgrounds;
+CREATE POLICY "room_backgrounds_insert_own" ON public.room_backgrounds
+  FOR INSERT TO authenticated
+  WITH CHECK ((select auth.uid()) = owner_id AND public.is_room_member(room_id));
+
+-- Replacing a background is an upsert, so the same gate has to hold on UPDATE.
+DROP POLICY IF EXISTS "room_backgrounds_update_own" ON public.room_backgrounds;
+CREATE POLICY "room_backgrounds_update_own" ON public.room_backgrounds
+  FOR UPDATE TO authenticated
+  USING ((select auth.uid()) = owner_id)
+  WITH CHECK ((select auth.uid()) = owner_id AND public.is_room_member(room_id));
+
+-- Deliberately ownership only. Somebody removed from a group must still be
+-- able to clear the row they left behind.
+DROP POLICY IF EXISTS "room_backgrounds_delete_own" ON public.room_backgrounds;
+CREATE POLICY "room_backgrounds_delete_own" ON public.room_backgrounds
+  FOR DELETE TO authenticated
+  USING ((select auth.uid()) = owner_id);
 -- ===========================================================================
 -- 8. Disappearing messages
 -- ===========================================================================
@@ -2246,7 +2325,7 @@ BEGIN
   END IF;
 
   UPDATE public.rooms
-     SET ttl_seconds = ttl, ttl_set_by = me
+     SET ttl_seconds = ttl, ttl_set_by = me, ttl_set_at = now()
    WHERE id = target;
 END;
 $$;
@@ -2303,6 +2382,174 @@ $$;
 
 REVOKE ALL ON FUNCTION public.expire_messages() FROM PUBLIC, anon, authenticated;
 
+/*
+  One pinned message per conversation.
+
+  The row holds a pointer and nothing else: the message is already in
+  `messages` or `room_messages`, already sealed, already readable by exactly
+  the right people. A pin carrying a copy of the text would be a second copy of
+  a body outside the encrypted column — which is what 0023 exists to prevent —
+  and it would go stale the moment the message was edited.
+
+  One per conversation rather than a list: a list of pins is a second thread
+  with its own ordering, and it gets long enough to need scrolling, at which
+  point it is the conversation again. The primary key is the conversation, so
+  pinning a second message replaces the first.
+
+  Writes go through `set_conversation_pin` / `set_room_pin`, which are the only
+  things that can normalize the pair, check that the message belongs to the
+  conversation it is being pinned in, and record who pinned it truthfully.
+  Either participant — any member, in a group — may unpin: it is everybody's
+  screen, and a pin one person cannot remove is a lever that does not belong in
+  an app with no moderation.
+*/
+
+-- ===========================================================================
+-- One-to-one
+-- ===========================================================================
+
+CREATE TABLE IF NOT EXISTS public.conversation_pins (
+  user_a     uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  user_b     uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  message_id uuid NOT NULL REFERENCES public.messages(id) ON DELETE CASCADE,
+  pinned_by  uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  pinned_at  timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (user_a, user_b),
+  -- <= rather than <: the self-chat is a conversation like any other and can
+  -- pin a note to itself like any other.
+  CONSTRAINT pins_normalized CHECK (user_a <= user_b)
+);
+
+-- The PK indexes the pair; the message needs its own index for the FK's
+-- cascade, which otherwise scans this table on every message delete.
+CREATE INDEX IF NOT EXISTS conversation_pins_message_idx
+  ON public.conversation_pins (message_id);
+
+ALTER TABLE public.conversation_pins ENABLE ROW LEVEL SECURITY;
+
+REVOKE ALL ON public.conversation_pins FROM anon;
+-- No INSERT or UPDATE grant: writes go through `set_conversation_pin()`, which
+-- is the only thing that can normalize the pair and record who pinned it.
+-- DELETE is granted because unpinning has nothing to normalize — the row is
+-- already found by the pair the reader is a member of.
+GRANT SELECT, DELETE ON public.conversation_pins TO authenticated;
+
+DROP POLICY IF EXISTS pins_select_participant ON public.conversation_pins;
+CREATE POLICY pins_select_participant ON public.conversation_pins
+  FOR SELECT TO authenticated
+  USING ((select auth.uid()) IN (user_a, user_b));
+
+-- Either participant may unpin, deliberately. A pin is shown to both of them
+-- and takes space at the top of both their screens; one person being able to
+-- put something there that the other cannot remove is a small lever that does
+-- not belong in a two-person app with no moderation.
+DROP POLICY IF EXISTS pins_delete_participant ON public.conversation_pins;
+CREATE POLICY pins_delete_participant ON public.conversation_pins
+  FOR DELETE TO authenticated
+  USING ((select auth.uid()) IN (user_a, user_b));
+
+CREATE OR REPLACE FUNCTION public.set_conversation_pin(peer uuid, target uuid)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  me uuid := auth.uid();
+BEGIN
+  IF me IS NULL THEN
+    RAISE EXCEPTION 'not authenticated';
+  END IF;
+
+  -- The message must be one of this conversation's, not merely one the caller
+  -- can see. Without this a pin could point the peer's client at a row from a
+  -- different conversation — which their RLS would refuse to open, leaving a
+  -- permanent unreadable banner at the top of their screen.
+  IF NOT EXISTS (
+    SELECT 1 FROM public.messages m
+    WHERE m.id = target
+      AND m.deleted_at IS NULL
+      AND ((m.sender_id = me AND m.receiver_id = peer)
+        OR (m.sender_id = peer AND m.receiver_id = me))
+  ) THEN
+    RAISE EXCEPTION 'message is not part of that conversation';
+  END IF;
+
+  INSERT INTO public.conversation_pins (user_a, user_b, message_id, pinned_by, pinned_at)
+  VALUES (least(me, peer), greatest(me, peer), target, me, now())
+  ON CONFLICT (user_a, user_b) DO UPDATE
+    SET message_id = EXCLUDED.message_id,
+        pinned_by  = EXCLUDED.pinned_by,
+        pinned_at  = EXCLUDED.pinned_at;
+END;
+$$;
+
+-- ===========================================================================
+-- Groups
+-- ===========================================================================
+
+CREATE TABLE IF NOT EXISTS public.room_pins (
+  room_id    uuid PRIMARY KEY REFERENCES public.rooms(id) ON DELETE CASCADE,
+  message_id uuid NOT NULL REFERENCES public.room_messages(id) ON DELETE CASCADE,
+  pinned_by  uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  pinned_at  timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS room_pins_message_idx
+  ON public.room_pins (message_id);
+
+ALTER TABLE public.room_pins ENABLE ROW LEVEL SECURITY;
+
+REVOKE ALL ON public.room_pins FROM anon;
+GRANT SELECT, DELETE ON public.room_pins TO authenticated;
+
+DROP POLICY IF EXISTS room_pins_select_member ON public.room_pins;
+CREATE POLICY room_pins_select_member ON public.room_pins
+  FOR SELECT TO authenticated
+  USING (public.is_room_member(room_id));
+
+-- Any member may unpin, not only whoever pinned it and not only the owner.
+-- Same reasoning as the 1:1 policy above: it is everybody's screen.
+DROP POLICY IF EXISTS room_pins_delete_member ON public.room_pins;
+CREATE POLICY room_pins_delete_member ON public.room_pins
+  FOR DELETE TO authenticated
+  USING (public.is_room_member(room_id));
+
+CREATE OR REPLACE FUNCTION public.set_room_pin(target_room uuid, target uuid)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  me uuid := auth.uid();
+BEGIN
+  IF me IS NULL OR NOT public.is_room_member(target_room) THEN
+    RAISE EXCEPTION 'not a member of that room';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM public.room_messages rm
+    WHERE rm.id = target
+      AND rm.room_id = target_room
+      AND rm.deleted_at IS NULL
+  ) THEN
+    RAISE EXCEPTION 'message is not part of that room';
+  END IF;
+
+  INSERT INTO public.room_pins (room_id, message_id, pinned_by, pinned_at)
+  VALUES (target_room, target, me, now())
+  ON CONFLICT (room_id) DO UPDATE
+    SET message_id = EXCLUDED.message_id,
+        pinned_by  = EXCLUDED.pinned_by,
+        pinned_at  = EXCLUDED.pinned_at;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.set_conversation_pin(uuid, uuid) FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.set_room_pin(uuid, uuid)         FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.set_conversation_pin(uuid, uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.set_room_pin(uuid, uuid)         TO authenticated;
 -- ===========================================================================
 -- 9. Push infrastructure
 -- ===========================================================================

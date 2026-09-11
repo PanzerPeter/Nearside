@@ -5,6 +5,10 @@ import {
   setDismissed,
   setPinned,
   sortByFlags,
+  setAlertLevel,
+  alertLevelFor,
+  loadChatFlags,
+  setMuted,
   isUnreadMarked,
   partitionArchived,
   subscribeChatFlags,
@@ -23,6 +27,7 @@ const flag = (id: string, over: Partial<ChatFlags> = {}): [string, ChatFlags] =>
     dismissedAt: null,
     archivedAt: null,
     unreadAt: null,
+    alertLevel: null,
     ...over,
   },
 ];
@@ -209,5 +214,40 @@ describe('partitionArchived', () => {
     const { active, archived } = partitionArchived([{ id: 'a' }], new Map());
     expect(active).toHaveLength(1);
     expect(archived).toEqual([]);
+  });
+});
+
+describe('alert level', () => {
+  it('is written to the store and read back', async () => {
+    await openLocalDb('user-alerts');
+    await clearLocalDb();
+    await setAlertLevel('alice', 'peer', 'urgent');
+    expect(alertLevelFor('alice', await loadChatFlags())).toBe('urgent');
+  });
+
+  it('is cleared by setting it back to the ordinary loudness', async () => {
+    await openLocalDb('user-alerts');
+    await clearLocalDb();
+    await setAlertLevel('alice', 'peer', 'quiet');
+    await setAlertLevel('alice', 'peer', null);
+    expect(alertLevelFor('alice', await loadChatFlags())).toBeNull();
+  });
+
+  it('leaves no row behind when it was the only opinion held', async () => {
+    await openLocalDb('user-alerts');
+    await clearLocalDb();
+    await setAlertLevel('alice', 'peer', 'quiet');
+    await setAlertLevel('alice', 'peer', null);
+    expect((await loadChatFlags()).has('alice')).toBe(false);
+  });
+
+  it('does not disturb the other flags on the same conversation', async () => {
+    await openLocalDb('user-alerts');
+    await clearLocalDb();
+    await setMuted('alice', 'peer', true);
+    await setAlertLevel('alice', 'peer', 'urgent');
+    const flags = await loadChatFlags();
+    expect(flags.get('alice')?.mutedAt).not.toBeNull();
+    expect(flags.get('alice')?.alertLevel).toBe('urgent');
   });
 });

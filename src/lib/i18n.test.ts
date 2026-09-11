@@ -82,6 +82,8 @@ describe('catalogs', () => {
       'voice.pause',
       // German borrows "Passphrase" whole.
       'lock.passphrase',
+      // "Normal" is the same word in Spanish and in German.
+      'alerts.default',
     ]);
     for (const code of TRANSLATED) {
       const untranslated = Object.keys(en).filter(

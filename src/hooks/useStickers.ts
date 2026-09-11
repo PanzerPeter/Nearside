@@ -4,9 +4,10 @@
 // that holds an identity, so this is where it is opened — the same split
 // `useSealedExchange` and `ChatRoom.open` use.
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { mapWithLimit } from '../lib/pool';
 import { planReorder } from '../lib/reorder';
+import { recentStickerIds, recordStickerUse, resolveRecents } from '../lib/sticker-recents';
 import {
   deleteSticker,
   forgetSticker,
@@ -42,12 +43,24 @@ export interface StickerDrawer {
   reload: () => Promise<void>;
   /** Start loading. Called by the picker when it mounts — see below. */
   activate: () => void;
+  /** The stickers this device reached for most recently, newest first, already
+   *  resolved against the library. Empty until one has been sent from here —
+   *  the shelf is not drawn at all until it has something to hold. */
+  recent: Sticker[];
+  /** Record that one was sent. Called by the picker rather than by the send,
+   *  because it is the *choosing* that this remembers: a sticker forwarded on
+   *  from somewhere else was never picked out of the drawer. */
+  noteUse: (sticker: Sticker) => void;
 }
 
 export function useStickers(userId: string | null, identity: Identity | null): StickerDrawer {
   const [stickers, setStickers] = useState<Sticker[]>([]);
   const [urls, setUrls] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
+  // Seeded from the device rather than fetched: the shelf is local by design
+  // (see `lib/sticker-recents.ts`), so it is already there on the first render.
+  const [recentIds, setRecentIds] = useState<string[]>(() => recentStickerIds(userId));
+  useEffect(() => setRecentIds(recentStickerIds(userId)), [userId]);
   /**
    * Whether the drawer has been opened at all this session.
    *
@@ -175,6 +188,15 @@ export function useStickers(userId: string | null, identity: Identity | null): S
 
   const activate = useCallback(() => setActive(true), []);
 
+  // Resolved here rather than in the picker so a sticker deleted on another
+  // device leaves the shelf as soon as the library reloads, with no second
+  // place holding a list of ids that may no longer name anything.
+  const recent = useMemo(() => resolveRecents(recentIds, stickers), [recentIds, stickers]);
+
+  function noteUse(sticker: Sticker) {
+    setRecentIds(recordStickerUse(userId, sticker.id));
+  }
+
   return {
     stickers,
     urls,
@@ -185,5 +207,7 @@ export function useStickers(userId: string | null, identity: Identity | null): S
     remove,
     reload,
     activate,
+    recent,
+    noteUse,
   };
 }

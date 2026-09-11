@@ -9,6 +9,9 @@ import { ConversationRow } from './ConversationRow';
 import { ConnectModal } from './ConnectModal';
 import { FirstRunInvite } from './FirstRunInvite';
 import { RoomList } from './RoomList';
+import { useGlobalSearch, type SearchTarget } from '../hooks/useGlobalSearch';
+import { useShortcut } from '../hooks/useShortcut';
+import { stepChat } from '../lib/shortcuts';
 import { advanceRead, fetchUnreadCounts } from '../lib/receipts';
 import { useConversationPreviews } from '../hooks/useConversationPreviews';
 import { useThreadPrefetch } from '../hooks/useThreadPrefetch';
@@ -49,6 +52,7 @@ import { cachedConversationList, putConversationList } from '../lib/localdb';
 import { draftsVersion, subscribeDrafts } from '../lib/drafts';
 import { removeContact } from '../lib/remove-contact';
 import { syncMutedIds } from '../lib/mute';
+import { syncAlertLevels } from '../lib/alerts';
 import { SwipeRow } from './SwipeRow';
 import { Modal } from './Modal';
 import type { Identity } from '../lib/crypto/keys';
@@ -86,6 +90,20 @@ interface FriendsListProps {
    *  so the selection is owned by App and reported back down. */
   selectedRoomId: string | null;
   onSelectRoom: (room: RoomSummary) => void;
+  /**
+   * Open a conversation at one particular message.
+   *
+   * One callback carrying both halves rather than a selection followed by a
+   * jump: the two arrive in the same act, and split across two calls the
+   * selection's own handler clears the jump before the jump is made.
+   *
+   * The chat itself rather than its id, because this list is where both are
+   * already loaded — App has the selection, not the roster behind it.
+   */
+  onOpenSearchHit?: (
+    chat: { kind: 'peer'; friend: Profile } | { kind: 'room'; room: RoomSummary },
+    at: { messageId: string; createdAt: string }
+  ) => void;
 }
 
 export function FriendsList({
@@ -97,6 +115,7 @@ export function FriendsList({
   onUnreadTotalChange,
   selectedRoomId,
   onSelectRoom,
+  onOpenSearchHit,
 }: FriendsListProps) {
   const t = useT();
   const toast = useToast();
@@ -110,6 +129,9 @@ export function FriendsList({
    *  initial empty state instead, it would flash on every cold start for
    *  accounts that have plenty of contacts. */
   const [roomCount, setRoomCount] = useState<number | null>(null);
+  /** The groups as RoomList last read them, kept only so a search hit in one
+   *  can be shown under its title rather than under a uuid. */
+  const [rooms, setRooms] = useState<RoomSummary[]>([]);
   const [loaded, setLoaded] = useState(false);
   /** This device's pins, mutes and dismissals — see `lib/chat-flags.ts`. */
   const [flags, setFlags] = useState<Map<string, ChatFlags>>(new Map());
@@ -193,6 +215,8 @@ export function FriendsList({
     // The notification extension reads its own copy, because a push arrives
     // when no JavaScript of ours is running. See `lib/mute.ts`.
     void syncMutedIds(me, next);
+    // Beside the mute list, and for the same reason — see `lib/alerts.ts`.
+    void syncAlertLevels(me, next);
   }, [me]);
 
   useEffect(() => {
@@ -567,6 +591,93 @@ export function FriendsList({
    *  louder than the content they label. */
   const showSections = hasFriendRows || (roomCount ?? 0) > 0;
 
+  /** Every conversation a hit could be in, under the name this list shows it
+   *  by — the nickname where there is one, exactly as the row above would. */
+  const searchTargets = useMemo(() => {
+    const map = new Map<string, SearchTarget>();
+    for (const c of conversations) {
+      const self = isSelfChat(me, c.peer_id);
+      map.set(c.peer_id, {
+        id: c.peer_id,
+        name: formatDisplayName(nicknameFor(c.peer_id), c.display_name, self),
+        avatarUrl: c.avatar_url,
+        isRoom: false,
+      });
+    }
+    for (const room of rooms) {
+      map.set(room.id, { id: room.id, name: room.title, avatarUrl: null, isRoom: true });
+    }
+    return map;
+  }, [conversations, rooms, me]);
+
+  const search = useGlobalSearch({
+    me,
+    targets: searchTargets,
+    onOpen: (target, messageId, createdAt) => {
+      const at = { messageId, createdAt };
+      if (target.isRoom) {
+        const room = rooms.find((r) => r.id === target.id);
+        if (room) onOpenSearchHit?.({ kind: 'room', room }, at);
+        return;
+      }
+      const conversation = conversations.find((c) => c.peer_id === target.id);
+      if (!conversation) return;
+      onOpenSearchHit?.(
+        {
+          kind: 'peer',
+          friend: {
+            id: conversation.peer_id,
+            display_name: conversation.display_name,
+            avatar_url: conversation.avatar_url,
+            last_seen_at: conversation.last_seen_at,
+          },
+        },
+        at
+      );
+    },
+  });
+
+  /**
+   * The desktop keyboard shortcuts this list can answer.
+   *
+   * Moving between conversations walks the everyday list only — the shelf is
+   * deliberately out of the way, and arrowing into it would be a surprise. A
+   * group is not in this list at all, so `Alt+↑/↓` from an open group starts
+   * from the end rather than from nowhere: `stepChat` treats an id it cannot
+   * find as nothing selected.
+   */
+  useShortcut((shortcut) => {
+    if (shortcut === 'search-all') {
+      search.focus();
+      return true;
+    }
+    if (shortcut === 'previous-chat' || shortcut === 'next-chat') {
+      const next = stepChat(
+        activeRows.map((row) => row.peer_id),
+        selectedFriendId,
+        shortcut === 'next-chat' ? 1 : -1
+      );
+      const conversation = next && activeRows.find((row) => row.peer_id === next);
+      if (!conversation) return true;
+      onSelectFriend({
+        id: conversation.peer_id,
+        display_name: conversation.display_name,
+        avatar_url: conversation.avatar_url,
+        last_seen_at: conversation.last_seen_at,
+      });
+      return true;
+    }
+    if (shortcut === 'archive-chat') {
+      // Your own notes are never archived: the row is where a new account
+      // lands and there is nothing to take it off the shelf with.
+      if (!selectedFriendId || isSelfChat(me, selectedFriendId)) return false;
+      const archived = flags.get(selectedFriendId)?.archivedAt != null;
+      void setArchived(selectedFriendId, 'peer', !archived);
+      return true;
+    }
+    return false;
+  });
+
   /** The three actions behind a row. Your own notes are not a contact, so they
    *  get the two that mean something and not the one that does not. */
   function rowActions(
@@ -739,6 +850,7 @@ export function FriendsList({
             <UserPlus className="w-5 h-5" />
           </button>
         </div>
+        {search.field}
       </div>
 
       {/* Pending Requests */}
@@ -781,8 +893,14 @@ export function FriendsList({
         </div>
       )}
 
-      {/* Conversation List */}
+      {/* Conversation List. A search across every chat stands in for it rather
+          than sitting under it: the results are the answer to "which chat",
+          and a list of all the others below them is the question again. */}
       <div className="flex-1 overflow-y-auto">
+        {search.active ? (
+          search.results
+        ) : (
+        <>
         {firstRun && (
           <FirstRunInvite
             onShowCode={() => setConnectTab('show')}
@@ -797,6 +915,7 @@ export function FriendsList({
           selectedRoomId={selectedRoomId}
           onSelectRoom={onSelectRoom}
           onCountChange={setRoomCount}
+          onRoomsChange={setRooms}
           hideWhenEmpty={firstRun}
           creating={creatingRoom}
           onCreatingChange={setCreatingRoom}
@@ -854,6 +973,8 @@ export function FriendsList({
               {t('chatList.showOrScan')}
             </button>
           </div>
+        )}
+        </>
         )}
       </div>
 

@@ -44,9 +44,20 @@ public class CallNotificationExtension implements INotificationServiceExtension 
             return;
         }
 
-        // Every other push this app sends is a message, and those must go on
-        // being displayed exactly as OneSignal built them.
-        if (!"call".equals(data.optString("type"))) return;
+        // Every other push this app sends is a message. Those are displayed as
+        // OneSignal built them, with one change: a conversation given a
+        // loudness of its own is moved onto the channel that carries it. The
+        // channel decides the sound and whether the notification comes to the
+        // front, and Android will not let either be set on the notification
+        // itself once a channel exists.
+        if (!"call".equals(data.optString("type"))) {
+            String channel = AlertStore.channelFor(event.getContext(), from);
+            if (channel != null) {
+                AlertStore.ensureChannels(event.getContext());
+                event.getNotification().setExtender(builder -> builder.setChannelId(channel));
+            }
+            return;
+        }
 
         String callId = data.optString("callId", null);
         if (callId == null || callId.isEmpty()) return;

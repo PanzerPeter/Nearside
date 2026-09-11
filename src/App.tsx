@@ -57,10 +57,12 @@ import { clearPinnedMedia, clearPinnedMediaFor, forgetPinIndex } from './lib/pin
 import { forgetAllPeerKeys } from './lib/peer-keys';
 import { forgetAllPublishedKeys, forgetAllRoomKeys } from './lib/rooms';
 import { forgetStickers } from './lib/stickers';
+import { forgetStickerRecents } from './lib/sticker-recents';
 import { forgetAllMedia } from './lib/media-cache';
 import { forgetAllBackgroundUrls } from './lib/background';
 import { forgetAllDrafts } from './lib/drafts';
 import { forgetMutedIds } from './lib/mute';
+import { forgetAlertLevels } from './lib/alerts';
 import { useMobileBackClose } from './hooks/useMobileBackClose';
 import { useAppLock } from './hooks/useAppLock';
 import { AppLockScreen } from './components/AppLockScreen';
@@ -83,6 +85,10 @@ function App() {
   // closes the other. Two selections set at once would render whichever the
   // JSX below checked first.
   const [selectedRoom, setSelectedRoom] = useState<RoomSummary | null>(null);
+  /** Where to land when the pane opens, set only by a result from the search
+   *  across all chats. Cleared by every ordinary selection, so tapping the same
+   *  conversation again afterwards opens it at the newest message. */
+  const [openAt, setOpenAt] = useState<{ messageId: string; createdAt: string } | null>(null);
   const [myProfile, setMyProfile] = useState<Profile | null>(null);
   // The phone's tab bar selection. Desktop shows both panes at once and reaches
   // settings through the top bar's dialog, so this only decides what the
@@ -302,6 +308,9 @@ function App() {
     // behind, the next account's first list refresh would be compared against
     // it and skip the write that corrects it.
     forgetMutedIds();
+    // The per-conversation loudness, beside it: the next account on this phone
+    // must not inherit which of the previous one's conversations were loud.
+    forgetAlertLevels();
     // The read-receipt setting is the account's, not the device's: it is a row
     // in `receipt_prefs` and it travels with whoever signs in. Reset to shared
     // so the next account is never shown the previous one's answer while its
@@ -333,6 +342,10 @@ function App() {
     // account to sign in on this phone meets the previous owner's lock screen
     // and cannot get past it.
     if (userId) await clearLock(userId).catch(() => {});
+    // Which stickers this account reached for most often. Device-local and
+    // keyed per account, so a switch leaves it alone; signing out clears the
+    // decrypted mirror and this belongs in the same sweep.
+    forgetStickerRecents(userId);
     // Signing out drops the switcher entry too. Leaving it would make the row a
     // one-tap undo of the sign-out that was just confirmed, which is not what
     // anybody means by the word.
@@ -634,6 +647,7 @@ function App() {
               selectedFriendId={selectedFriend?.id || null}
               onSelectFriend={(friend) => {
                 setSelectedRoom(null);
+                setOpenAt(null);
                 setSelectedFriend(friend);
               }}
               onFriendsChange={setFriendIds}
@@ -641,7 +655,18 @@ function App() {
               selectedRoomId={selectedRoom?.id ?? null}
               onSelectRoom={(room) => {
                 setSelectedFriend(null);
+                setOpenAt(null);
                 setSelectedRoom(room);
+              }}
+              onOpenSearchHit={(chat, at) => {
+                setOpenAt(at);
+                if (chat.kind === 'room') {
+                  setSelectedFriend(null);
+                  setSelectedRoom(chat.room);
+                } else {
+                  setSelectedRoom(null);
+                  setSelectedFriend(chat.friend);
+                }
               }}
             />
           </div>
@@ -671,6 +696,7 @@ function App() {
               session={session}
               friend={selectedFriend}
               identity={identity}
+              openAt={openAt}
               onBack={() => setSelectedFriend(null)}
             />
           ) : selectedRoom ? (
@@ -678,6 +704,7 @@ function App() {
               session={session}
               room={selectedRoom}
               identity={identity}
+              openAt={openAt}
               onBack={() => setSelectedRoom(null)}
               onLeft={() => setSelectedRoom(null)}
             />

@@ -131,6 +131,35 @@ export async function saveConversationTimer(
   if (error) throw error;
 }
 
+/**
+ * A group's timer, which lives on the `rooms` row itself.
+ *
+ * Not in `conversation_timers`: that table is keyed by a normalized pair of
+ * user ids, and a group is not a pair. `ttl_seconds` and `ttl_set_by` have been
+ * columns on `rooms` since 0036 and the expiry trigger has read them since —
+ * this is the read the app was missing, not a new place to keep it.
+ */
+export async function loadRoomTimer(roomId: string): Promise<ConversationTimer | null> {
+  const { data } = await supabase
+    .from('rooms')
+    .select('ttl_seconds, ttl_set_by, ttl_set_at')
+    .eq('id', roomId)
+    .maybeSingle();
+  if (!data) return null;
+  return {
+    ttlSeconds: data.ttl_seconds,
+    setBy: data.ttl_set_by,
+    // Null on a timer set before 0047 began recording the moment. The thread
+    // draws no notice rather than placing one at the top of the conversation.
+    // Empty for a timer set before 0047 began recording the moment. That is
+    // deliberately not a null in the type: `timerChangeIndex` already has an
+    // answer for a stamp it cannot parse — put the line at the end of the
+    // thread — and for a timer whose change nothing recorded, "this is how the
+    // group is set now" is the honest place for it.
+    updatedAt: data.ttl_set_at ?? '',
+  };
+}
+
 export async function saveRoomTimer(roomId: string, ttlSeconds: number | null): Promise<void> {
   const { error } = await supabase.rpc('set_room_timer', { target: roomId, ttl: ttlSeconds });
   if (error) throw error;

@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { appTitle } from '../lib/app-title';
 
 /**
  * The two Badging API methods this hook needs. Not in lib.dom.d.ts (the API
@@ -16,6 +17,16 @@ interface NavigatorWithBadge extends Navigator {
  * guarded and failure is silent — a rejected promise here must never surface.
  */
 export function useAppBadge(total: number): void {
+  // The document title, which is also how the desktop shell learns the count.
+  // The Badging API above is not available inside an Electron renderer, and
+  // the alternative — an IPC channel and a preload bridge to carry one number
+  // — is a second thing to keep in step for something the title bar can say.
+  // `lib/app-title.ts` owns the format and a test holds the shell's parser to
+  // it.
+  useEffect(() => {
+    document.title = appTitle(total);
+  }, [total]);
+
   useEffect(() => {
     // Both names are checked, not just the one about to be called: a browser
     // shipping one half of the pair would throw synchronously, which no

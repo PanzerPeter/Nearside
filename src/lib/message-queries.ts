@@ -56,6 +56,42 @@ export async function fetchNewestMessage(me: string, peerId: string): Promise<Me
   return (data as Message | null) ?? null;
 }
 
+/**
+ * How far back the shared-media grid looks.
+ *
+ * A cap rather than a cursor: the grid is a way of finding a picture you
+ * remember, not an archive to page through, and a conversation with more than
+ * this many photographs in it is one where scrolling the thread is the faster
+ * way to the old ones anyway.
+ */
+export const MEDIA_GRID_LIMIT = 120;
+
+/**
+ * Every picture and video in a conversation, newest first, still sealed.
+ *
+ * Unlike search and the panel's other two tabs, this one can ask the server:
+ * `0023` took the message *bodies* away from it, and `media_path` was never a
+ * body. What the server returns is an opaque object path and a file key sealed
+ * to the reader — so a row here is as unreadable to Postgres as the rest, and
+ * as readable to this device as the thread.
+ *
+ * Stickers and voice notes are left out: neither has a full-size view, and a
+ * grid of sticker tiles is the drawer the user already has.
+ */
+export async function fetchMediaRows(me: string, peerId: string): Promise<Message[]> {
+  const { data } = await supabase
+    .from('messages')
+    .select('*')
+    .or(conversationFilter(me, peerId))
+    .is('deleted_at', null)
+    .not('media_path', 'is', null)
+    .in('media_type', ['image', 'video'])
+    .order('created_at', { ascending: false })
+    .order('id', { ascending: false })
+    .limit(MEDIA_GRID_LIMIT);
+  return (data ?? []) as Message[];
+}
+
 /** The page immediately older than `cursor`, newest first. */
 export async function fetchOlderPage(
   me: string,

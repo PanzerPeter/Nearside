@@ -22,6 +22,7 @@ import {
   type ChatFlags,
 } from '../lib/chat-flags';
 import { syncMutedIds } from '../lib/mute';
+import { syncAlertLevels } from '../lib/alerts';
 import { cachedPreview } from '../lib/localdb';
 import { useT } from '../hooks/useT';
 
@@ -33,7 +34,11 @@ interface RoomListProps {
   /** Reported after every *successful* load, never on a failed one: the list
    *  above uses it to decide whether this account is empty enough for the
    *  first-run card, and a read that failed is not a list that is empty. */
+  /** Reported together, because both answer questions the list above owns:
+   *  the count decides the first-run card, and the summaries are what lets a
+   *  search result in a group be shown under the group's name. */
   onCountChange?: (count: number) => void;
+  onRoomsChange?: (rooms: RoomSummary[]) => void;
   /** Render nothing while there are no rooms. Set only when the first-run card
    *  is on screen — it carries the create action in that state, so a section
    *  header explaining rooms to someone who has no contacts either is one
@@ -63,6 +68,7 @@ export function RoomList({
   selectedRoomId,
   onSelectRoom,
   onCountChange,
+  onRoomsChange,
   hideWhenEmpty = false,
   creating,
   onCreatingChange,
@@ -86,6 +92,8 @@ export function RoomList({
     // direct message carries a `senderId`, and the extension checks whichever
     // it finds against the same list.
     void syncMutedIds(me, next);
+    // Beside the mute list, and for the same reason — see `lib/alerts.ts`.
+    void syncAlertLevels(me, next);
   }, [me]);
 
   useEffect(() => {
@@ -112,12 +120,15 @@ export function RoomList({
   // the list above, and keying `load` on it would restart the poll each time.
   const onCountChangeRef = useRef(onCountChange);
   onCountChangeRef.current = onCountChange;
+  const onRoomsChangeRef = useRef(onRoomsChange);
+  onRoomsChangeRef.current = onRoomsChange;
 
   const load = useCallback(async () => {
     try {
       const rows = await listRooms();
       setRooms(rows);
       onCountChangeRef.current?.(rows.length);
+      onRoomsChangeRef.current?.(rows);
       // After the list, not beside it: the counts are keyed on the ids this
       // read just returned, and a group that has gone should not be counted.
       setUnread(await roomUnreadCounts(rows.map((r) => r.id)));
@@ -276,6 +287,7 @@ export function RoomList({
             void listRooms().then((rows) => {
               setRooms(rows);
               onCountChangeRef.current?.(rows.length);
+              onRoomsChangeRef.current?.(rows);
               const room = rows.find((r) => r.id === roomId);
               if (room) onSelectRoom(room);
             });

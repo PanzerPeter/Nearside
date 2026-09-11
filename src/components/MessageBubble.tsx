@@ -18,10 +18,12 @@ import { motionDuration } from '../lib/motion';
 import type { MessageStatusKind } from '../lib/receipts';
 import { MessageStatus } from './MessageStatus';
 import {
+  CheckSquare,
   Copy,
   CornerUpRight,
   MoreVertical,
   Pencil,
+  Pin,
   SmilePlus,
   Trash2,
   Reply,
@@ -66,6 +68,23 @@ interface MessageBubbleProps {
   onCancelEdit: () => void;
   onStartEdit: (msg: Message) => void;
   onDelete: (msg: Message) => void;
+  /** Start picking messages out, with this one already picked. Absent where
+   *  choosing several makes no sense — a queued message has nothing to act on
+   *  in bulk. */
+  onStartSelecting?: (msg: Message) => void;
+  /** Whether this is the message held at the top of the conversation. */
+  isPinned?: boolean;
+  /** Pin this message, or unpin it when it is already the pinned one. Absent
+   *  where there is nothing to pin — a queued message has no server row for
+   *  the pin to point at. */
+  onTogglePin?: (msg: Message) => void;
+  /** True while a selection is open. The bubble stops being a thing you can
+   *  reply to, react to or open a menu on: in this mode a tap means "pick this
+   *  one", and a bubble that also swiped and double-clicked would be answering
+   *  two questions with one gesture. */
+  selecting?: boolean;
+  selected?: boolean;
+  onToggleSelected?: (msg: Message) => void;
   formatTime: (s: string) => string;
 }
 
@@ -92,6 +111,12 @@ export function MessageBubble({
   onCancelEdit,
   onStartEdit,
   onDelete,
+  onStartSelecting,
+  isPinned = false,
+  onTogglePin,
+  selecting = false,
+  selected = false,
+  onToggleSelected,
   formatTime,
 }: MessageBubbleProps) {
   const isDeleted = !!msg.deleted_at;
@@ -261,6 +286,28 @@ export function MessageBubble({
           },
         ]
       : []),
+    // Either side's messages can be pinned: the useful line in a conversation
+    // is as often the other person's address as your own.
+    ...(onTogglePin && !isDeleted
+      ? [
+          {
+            key: 'pin',
+            label: isPinned ? t('pin.unpin') : t('pin.pin'),
+            icon: <Pin className="w-4 h-4" />,
+            onSelect: () => onTogglePin(msg),
+          },
+        ]
+      : []),
+    ...(onStartSelecting
+      ? [
+          {
+            key: 'select',
+            label: t('message.select'),
+            icon: <CheckSquare className="w-4 h-4" />,
+            onSelect: () => onStartSelecting(msg),
+          },
+        ]
+      : []),
   ];
 
   // Auto-grow the edit textarea, same reset-then-measure approach as
@@ -293,7 +340,10 @@ export function MessageBubble({
   // Gesture reply: swipe on touch, double-click on desktop, either side's
   // messages. A pending message has no server row, so a reply built against
   // its id would point `reply_to_id` at something the server has never seen.
-  const canReply = !isDeleted && !isEditing && status !== 'pending';
+  // While a selection is open a tap means "pick this one", so every other
+  // gesture the bubble answers is off: a swipe that replied and also selected
+  // would be one movement answering two questions.
+  const canReply = !isDeleted && !isEditing && status !== 'pending' && !selecting;
   // The friend's messages sit on the left and swipe right, own messages sit on
   // the right and swipe left. Both swipe away from their anchored edge.
   const direction = isOwn ? -1 : 1;
@@ -311,8 +361,28 @@ export function MessageBubble({
       data-own={isOwn}
       className={`group flex flex-col ${isOwn ? 'items-end' : 'items-start'} ${
         isNew ? 'animate-message-in' : ''
+      } ${selecting ? 'cursor-pointer rounded-box px-1 -mx-1 transition-colors' : ''} ${
+        selected ? 'bg-primary/10' : ''
       }`}
+      // The whole row, not a checkbox in the corner: on a phone the target has
+      // to be the message, and on a desktop hunting for a 16px box beside each
+      // of nine bubbles is the slow way to do the thing this exists to speed
+      // up. The bubble's own handlers are all disabled above.
+      onClickCapture={
+        selecting && onToggleSelected
+          ? (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onToggleSelected(msg);
+            }
+          : undefined
+      }
     >
+      {selecting && (
+        <span className="sr-only">
+          {selected ? t('message.selected') : t('message.notSelected')}
+        </span>
+      )}
       {/* Alignment alone already says who spoke in a two-person DM; the
           friend's name is still worth one anchor per group, but own messages
           need no label at all — time and status now live in the bubble's
