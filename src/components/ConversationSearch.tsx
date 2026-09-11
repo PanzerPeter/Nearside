@@ -10,6 +10,16 @@ import { Highlight } from './Highlight';
  *  matches most of a conversation and is never what someone meant. */
 const MIN_QUERY_LENGTH = 2;
 const DEBOUNCE_MS = 250;
+/**
+ * Floor between two re-runs provoked by the history walk rather than by
+ * typing.
+ *
+ * The keystroke debounce cannot do this job: it restarts on every change, and
+ * pages land faster than it expires, so a walk would hold the search off until
+ * it finished — the opposite of showing results as they arrive. This one
+ * counts from the last query actually run, so the wait only ever shrinks.
+ */
+const REFRESH_MS = 600;
 
 interface SearchHit {
   id: string;
@@ -30,6 +40,13 @@ interface ConversationSearchProps {
    *  needs none of this; a group has one per member, and a result list that
    *  named them all after the group would be no better than not naming them. */
   senderName?: (userId: string) => string;
+  /** The walk through the rest of this conversation is still running. Results
+   *  so far are over the part of it that has been mirrored. */
+  loadingHistory?: boolean;
+  /** Rows the walk has fetched. Re-runs the query as the history lands, so an
+   *  old message appears in the list the moment it is mirrored rather than
+   *  after somebody types another character. */
+  historyRevision?: number;
   onJump: (messageId: string, createdAt: string) => void;
   onClose: () => void;
 }
@@ -41,6 +58,8 @@ export function ConversationSearch({
   peerLabel,
   isSelf = false,
   senderName,
+  loadingHistory = false,
+  historyRevision = 0,
   onJump,
   onClose,
 }: ConversationSearchProps) {
@@ -53,6 +72,10 @@ export function ConversationSearch({
   // Guards against a slow response for an earlier keystroke overwriting the
   // results of a faster one that fired after it.
   const requestId = useRef(0);
+  /** The last query put to the mirror, and when — so a re-run caused by the
+   *  history landing can be told apart from one caused by typing. */
+  const lastQuery = useRef('');
+  const lastRunAt = useRef(0);
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -76,12 +99,19 @@ export function ConversationSearch({
 
     setSearching(true);
     const id = ++requestId.current;
+    const typed = trimmed !== lastQuery.current;
+    const wait = typed
+      ? DEBOUNCE_MS
+      : Math.max(0, REFRESH_MS - (Date.now() - lastRunAt.current));
     // Local, not an RPC: 0023 took message bodies away from the server, so the
     // only place a body exists to match against is the mirror this device
     // built as it decrypted them. A message this device has never opened is
-    // therefore not findable here — correct, and the honest consequence of the
-    // server not being able to read it either.
+    // therefore not findable here — which is why opening this panel starts the
+    // walk that opens the rest of the conversation (`useHistoryBackfill`), and
+    // why the query re-runs as its pages land.
     const timer = setTimeout(() => {
+      lastQuery.current = trimmed;
+      lastRunAt.current = Date.now();
       searchCached(peerId, trimmed)
         .then((rows) => {
           if (requestId.current !== id) return; // superseded — drop this response
@@ -93,13 +123,13 @@ export function ConversationSearch({
           setSearching(false);
           toast.error(t('search.failed'));
         });
-    }, DEBOUNCE_MS);
+    }, wait);
 
     return () => clearTimeout(timer);
     // toast is a stable useCallback (see useToast.tsx); omitting it here
     // keeps a fresh toast reference from re-firing this debounce.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, peerId]);
+  }, [query, peerId, historyRevision]);
 
   const trimmedQuery = query.trim();
   const showResults = trimmedQuery.length >= MIN_QUERY_LENGTH;
@@ -130,7 +160,14 @@ export function ConversationSearch({
       {showResults && (
         <div className="px-4 sm:px-5 pb-2.5">
           <p className="text-meta text-muted mb-1.5">
-            {searching ? t('search.searching') : t('search.results', { count: results.length })}
+            {searching
+              ? t('search.searching')
+              : loadingHistory
+                ? // The count is real but not final, and a bare "0 results"
+                  // while the older half of the conversation is still being
+                  // fetched is the app answering a question it has not read yet.
+                  t('search.resultsSoFar', { count: results.length })
+                : t('search.results', { count: results.length })}
           </p>
           <div className="max-h-64 overflow-y-auto space-y-1">
             {results.map((hit) => (

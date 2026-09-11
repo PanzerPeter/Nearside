@@ -169,8 +169,17 @@ export function MessageMenu({
       />
       {actions.length > 0 && (
         <ul className="border-t border-hairline py-1">
-          {actions.map((action) => (
-            <li key={action.key}>
+          {actions.map((action, i) => (
+            <li
+              key={action.key}
+              // A destructive row is fenced off from the ordinary ones rather
+              // than merely coloured: colour alone is a weak boundary for a
+              // thumb, and it is no boundary at all to anyone who cannot tell
+              // the red from the rest.
+              className={
+                action.danger && i > 0 ? 'mt-1 border-t border-hairline pt-1' : undefined
+              }
+            >
               <button
                 type="button"
                 role="menuitem"

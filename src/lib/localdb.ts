@@ -27,6 +27,29 @@ export interface CachedMessage {
   expires_at: string | null;
 }
 
+/**
+ * How far back this device has walked one conversation's history.
+ *
+ * The mirror holds what was decrypted, which until something goes looking is
+ * only the pages somebody scrolled. Search, the "in this conversation" panel
+ * and the transcript all read the mirror, so on a conversation older than the
+ * screen they were answering from a fraction of it — and answering
+ * confidently, which is the part that made it a bug rather than a limit.
+ *
+ * This row is the bookmark the walk resumes from. `complete` means the oldest
+ * message was reached: there is nothing left to fetch, and new ones arrive
+ * through the ordinary path already mirrored.
+ */
+export interface HistorySync {
+  peer_id: string;
+  /** The oldest row reached so far, as the cursor the next page asks for.
+   *  Null before the first page. */
+  oldest_at: string | null;
+  oldest_id: string | null;
+  /** 0 or 1 — SQLite has no boolean. */
+  complete: number;
+}
+
 /** A pinned attachment: the plaintext bytes are on this device, at
  *  `file_path`, and the server copy may be pruned at any time. Local only —
  *  a pin is a promise this phone makes, not one the server keeps. */
@@ -113,6 +136,15 @@ const SEARCH_LIMIT = 100;
  *  hundred hits spread over thirty conversations is three each. */
 const GLOBAL_SEARCH_LIMIT = 200;
 const CONVERSATION_LIMIT = 1000;
+/**
+ * The cap the transcript export reads under.
+ *
+ * High enough not to be a cap in practice and still a number rather than "all
+ * of it": the rows become one string the size of the whole conversation, and
+ * an unbounded read is how a phone with a decade of messages on it runs out of
+ * memory writing a file about them.
+ */
+export const EXPORT_LIMIT = 100_000;
 
 /**
  * How many sealed rows one conversation keeps on this device.
@@ -179,6 +211,13 @@ CREATE TABLE IF NOT EXISTS conversation_cache (
   position  INTEGER NOT NULL,
   row       TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS history_sync (
+  peer_id    TEXT PRIMARY KEY,
+  oldest_at  TEXT,
+  oldest_id  TEXT,
+  complete   INTEGER NOT NULL DEFAULT 0
+);
 `;
 
 let db: SQLiteDBConnection | null = null;
@@ -193,6 +232,7 @@ const pinMemory = new Map<string, Map<string, PinnedMedia>>();
 const flagMemory = new Map<string, Map<string, ChatFlagsRow>>();
 const sealedMemory = new Map<string, Map<string, SealedEntry>>();
 const listMemory = new Map<string, Map<string, ConversationSummary>>();
+const historyMemory = new Map<string, Map<string, HistorySync>>();
 
 /** A sealed row plus the two columns the store indexes and prunes on, so
  *  neither has to be parsed back out of the JSON to answer a query. */
@@ -239,6 +279,10 @@ function sealedStore(): Map<string, SealedEntry> | null {
 
 function listStore(): Map<string, ConversationSummary> | null {
   return scoped(listMemory);
+}
+
+function historyStore(): Map<string, HistorySync> | null {
+  return scoped(historyMemory);
 }
 
 /** Opens the store belonging to `userId`, closing whichever one was open. */
@@ -761,6 +805,34 @@ export async function forgetChatFlags(id: string): Promise<void> {
   await db?.run('DELETE FROM chat_flags WHERE id = ?', [id]);
 }
 
+/** How far the walk through one conversation's history got, or null if it has
+ *  never run here. */
+export async function historySync(peerId: string): Promise<HistorySync | null> {
+  if (!native()) return historyStore()?.get(peerId) ?? null;
+  const res = await db?.query('SELECT * FROM history_sync WHERE peer_id = ?', [peerId]);
+  return ((res?.values as HistorySync[]) ?? [])[0] ?? null;
+}
+
+/** Record the bookmark after a page. Written per page rather than at the end,
+ *  because the walk is interrupted by the ordinary things — the panel closing,
+ *  the app being put away — and starting over from the newest message each
+ *  time is how a long conversation never finishes. */
+export async function rememberHistorySync(state: HistorySync): Promise<void> {
+  if (!native()) {
+    historyStore()?.set(state.peer_id, state);
+    return;
+  }
+  await db?.run(
+    `INSERT INTO history_sync (peer_id, oldest_at, oldest_id, complete)
+     VALUES (?, ?, ?, ?)
+     ON CONFLICT(peer_id) DO UPDATE SET
+       oldest_at = excluded.oldest_at,
+       oldest_id = excluded.oldest_id,
+       complete  = excluded.complete`,
+    [state.peer_id, state.oldest_at, state.oldest_id, state.complete]
+  );
+}
+
 /** Drop one conversation's mirrored plaintext. Used by remove-contact, which
  *  must not leave the messages of somebody you just removed in search. */
 export async function clearConversation(peerId: string): Promise<void> {
@@ -771,9 +843,14 @@ export async function clearConversation(peerId: string): Promise<void> {
     const sealed = sealedStore();
     if (sealed) for (const [id, e] of sealed) if (e.peer_id === peerId) sealed.delete(id);
     listStore()?.delete(peerId);
+    historyStore()?.delete(peerId);
     return;
   }
   await db?.run('DELETE FROM messages_cache WHERE peer_id = ?', [peerId]);
+  // The bookmark describes plaintext that is now gone. Left behind, it would
+  // tell the next walk there is nothing to fetch for a conversation this
+  // device no longer holds a word of.
+  await db?.run('DELETE FROM history_sync WHERE peer_id = ?', [peerId]);
   await db?.run('DELETE FROM messages_sealed WHERE peer_id = ?', [peerId]);
   await db?.run('DELETE FROM conversation_cache WHERE peer_id = ?', [peerId]);
 }
@@ -854,9 +931,14 @@ export async function clearCachedMessages(): Promise<void> {
   if (!native()) {
     memoryStore()?.clear();
     sealedStore()?.clear();
+    historyStore()?.clear();
     return;
   }
   await db?.execute('DELETE FROM messages_cache');
+  // Every bookmark, too. Each one says "this conversation is already mirrored
+  // back to here", which stops being true the moment the mirror is emptied —
+  // and a stale "complete" is a search that quietly never refills.
+  await db?.execute('DELETE FROM history_sync');
   // The sealed page goes with it. It is the same messages in their unopened
   // form, and a "clear the offline copy" that left the thread painting from
   // disk would be the button not doing what it says. The conversation list
@@ -876,6 +958,7 @@ export async function clearLocalDb(): Promise<void> {
     flagStore()?.clear();
     sealedStore()?.clear();
     listStore()?.clear();
+    historyStore()?.clear();
     return;
   }
   await db?.execute('DELETE FROM messages_cache');
@@ -884,6 +967,7 @@ export async function clearLocalDb(): Promise<void> {
   await db?.execute('DELETE FROM chat_flags');
   await db?.execute('DELETE FROM messages_sealed');
   await db?.execute('DELETE FROM conversation_cache');
+  await db?.execute('DELETE FROM history_sync');
 }
 
 /**

@@ -14,6 +14,35 @@ one of them drifts.
 
 ## [Unreleased]
 
+## [1.13.0] — 2026-09-11
+
+### Fixed
+
+- **Pinning a message in a one-to-one conversation works.** It had never
+  worked: the server-side check asked the message table for a column that only
+  exists on the group one, which it could only report back as "Could not change
+  the pinned message." Pinning in a group was unaffected. The database change
+  that repairs it has to be applied to the project by hand, like every other
+  one — `supabase/SETUP.md` says so and says how.
+- **Searching inside a conversation searches the whole of it**, not the part
+  that happened to be on screen. The search reads what this phone has decrypted
+  — the server holds no message bodies to search — and until now the only thing
+  that decrypted a message was scrolling to it, so an old conversation answered
+  from its last page or two and gave no sign of it. Opening the search now
+  fetches the rest of the conversation in the background, saying so while it
+  does, and results appear as it arrives. The same goes for the dates and links
+  in "In this conversation", and for the exported transcript, which waits for
+  the whole history rather than writing a file that quietly stops.
+- **The bin is no longer offered on a selection it cannot act on.** Picking out
+  somebody else's message left a greyed-out delete button sitting there; you
+  can only delete what you wrote, so the button is simply absent now.
+
+### Changed
+
+- **Delete sits at the bottom of a message's menu**, under a rule of its own.
+  It used to be in the middle, which put the one destructive action on the way
+  to Pin and Select.
+
 ## [1.12.0] — 2026-09-11
 
 ### Added

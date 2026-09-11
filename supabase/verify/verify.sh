@@ -84,7 +84,7 @@ while IFS= read -r line; do
   [ -f "$ROOT/migrations/$line" ] || fail "apply-order.txt names $line, which does not exist."
 done < "$ROOT/migrations/apply-order.txt"
 
-for f in "$ROOT/schema.sql" "$ROOT/storage/setup.sql" "$HERE/platform-shim.sql" "$HERE/introspect.sql"; do
+for f in "$ROOT/schema.sql" "$ROOT/storage/setup.sql" "$HERE/platform-shim.sql" "$HERE/introspect.sql" "$HERE/smoke.sql"; do
   [ -f "$f" ] || fail "missing $f"
 done
 
@@ -125,6 +125,21 @@ psql_run from_schema < "$WORK/baseline.sql" > "$WORK/baseline.log" 2>&1 || {
   tail -30 "$WORK/baseline.log" >&2
   fail "schema.sql failed to apply."
 }
+
+# ---------------------------------------------------------------------------
+# Call the definer functions before comparing catalogs. A plpgsql body is only
+# resolved when it runs, so a function naming a column that does not exist
+# applies cleanly and fails in production — and it fails identically on both
+# sides of the diff, which is why the fingerprint cannot catch it. smoke.sql
+# rolls back, so the fingerprints below see the same databases either way.
+# ---------------------------------------------------------------------------
+say "calling the definer functions"
+for db in from_migrations from_schema; do
+  psql_run "$db" < "$HERE/smoke.sql" > "$WORK/smoke-$db.log" 2>&1 || {
+    tail -20 "$WORK/smoke-$db.log" >&2
+    fail "$db: a definer function failed when called — see above."
+  }
+done
 
 say "fingerprinting"
 # pg_get_constraintdef and a policy's USING clause are pretty-printed across

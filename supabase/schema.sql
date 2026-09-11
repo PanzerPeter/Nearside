@@ -2469,8 +2469,11 @@ BEGIN
     SELECT 1 FROM public.messages m
     WHERE m.id = target
       AND m.deleted_at IS NULL
-      AND ((m.sender_id = me AND m.receiver_id = peer)
-        OR (m.sender_id = peer AND m.receiver_id = me))
+      -- `user_id`, not `sender_id`: that is `room_messages`' name for the
+      -- sender. 0048 shipped with the wrong one here and every 1:1 pin failed
+      -- at runtime, because plpgsql does not resolve a body until it runs.
+      AND ((m.user_id = me AND m.receiver_id = peer)
+        OR (m.user_id = peer AND m.receiver_id = me))
   ) THEN
     RAISE EXCEPTION 'message is not part of that conversation';
   END IF;

@@ -74,6 +74,12 @@ current state; this table is about what each file *does*.
 | 43 | `0041_sealed_nicknames.sql` | `friend_nicknames.nickname` sealed under the owner's vault key; old rows re-sealed as each device meets them |
 | 44 | `0042_token_hygiene.sql` | Drops `connect_tokens.used_by` and the unused `pg_trgm`; spent connect codes now expire away |
 | 45 | `0043_table_columns.sql` | `public_table_columns()`, so the transparency screen can check its column lists as well as its table list |
+| 46 | `0044_media_thumbnails.sql` | `media_thumb_path` on both message tables: a small sealed copy under the same per-file key, so a thread of photographs stops costing the full-size ones |
+| 47 | `0045_receipt_privacy.sql` | Read receipts become a setting each side can decline, and declining hides your own as well |
+| 48 | `0046_room_forwarded.sql` | `room_messages.forwarded`, so a message passed on into a group says so |
+| 49 | `0047_room_backgrounds.sql` | Group backgrounds, sealed under the setter's vault key like the 1:1 ones |
+| 50 | `0048_pinned_messages.sql` | `conversation_pins` and `room_pins`: one message held at the top, stored as a pointer. **Its 1:1 function is broken — see `0049`** |
+| 51 | `0049_pin_sender_column.sql` | Repairs `set_conversation_pin()`, which asked `messages` for `room_messages`' `sender_id` column and so failed on every call |
 
 ## The two files that do not follow the numbering
 

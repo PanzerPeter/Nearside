@@ -82,6 +82,7 @@ import { MediaAttachment } from './MediaAttachment';
 import { GalleryProvider } from '../hooks/useGallery';
 import { useShortcut } from '../hooks/useShortcut';
 import { useExportChat } from '../hooks/useExportChat';
+import { useHistoryBackfill } from '../hooks/useHistoryBackfill';
 import { selectionPowers, toggleSelected } from '../lib/selection';
 import {
   alertLevelFor,
@@ -449,12 +450,67 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
     );
   }
 
+  /** Open a page of rows: verify every signature, then decrypt. Shared by the
+   *  newest-page load and the older-page load so the two cannot drift in what
+   *  they check. */
+  const openPage = useCallback(
+    async (rows: RoomMessage[], key: Uint8Array) => {
+      const signing = await roomSigningKeys([...new Set(rows.map((r) => r.sender_id))]);
+      return openRoomRows(rows, key, signing);
+    },
+    []
+  );
+
+  /**
+   * The rest of the room's history, fetched into the local mirror when
+   * something asks a question of the whole of it — the same walk the 1:1
+   * thread runs, and for the same reason: search and the transcript read the
+   * mirror, and the mirror holds what this device has opened.
+   *
+   * Pages go through `openPage`, so every row is signature-checked before it
+   * is mirrored. A forgery must not become searchable on this phone because it
+   * arrived through the back-fill rather than through the thread.
+   */
+  const history = useHistoryBackfill({
+    conversationId: room.id,
+    ready: roomKey !== null,
+    pageSize: PAGE_SIZE,
+    fetchOlder: useCallback(
+      async (cursor) => {
+        if (!roomKey) return [];
+        let query = supabase
+          .from('room_messages')
+          .select(ROOM_MESSAGE_COLUMNS)
+          .eq('room_id', room.id)
+          .order('created_at', { ascending: false })
+          .limit(PAGE_SIZE);
+        if (cursor) query = query.lt('created_at', cursor.created_at);
+        const { data, error } = await query;
+        if (error) throw error;
+        const page = (data as unknown as RoomMessage[] | null) ?? [];
+        await openPage(page, roomKey);
+        return page;
+      },
+      [room.id, roomKey, openPage]
+    ),
+  });
+
+  // The callback, not the object the hook returns: that one is rebuilt on
+  // every render, and depending on it would re-fire this effect on each.
+  const startHistory = history.ensure;
+  useEffect(() => {
+    if (searchOpen) void startHistory();
+  }, [searchOpen, startHistory]);
+
   const chatExport = useExportChat({
     conversationId: room.id,
     title: room.title,
     me,
     meLabel: t('common.you'),
     nameFor,
+    // Same as the 1:1 export: the file must not quietly stop where this
+    // device's mirror does.
+    prepare: history.ensure,
   });
 
   async function runExport() {
@@ -495,17 +551,6 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
       .in('id', rows.map((r) => r.user_id));
     setProfiles(new Map(((data as Profile[] | null) ?? []).map((p) => [p.id, p])));
   }, [room.id]);
-
-  /** Open a page of rows: verify every signature, then decrypt. Shared by the
-   *  newest-page load and the older-page load so the two cannot drift in what
-   *  they check. */
-  const openPage = useCallback(
-    async (rows: RoomMessage[], key: Uint8Array) => {
-      const signing = await roomSigningKeys([...new Set(rows.map((r) => r.sender_id))]);
-      return openRoomRows(rows, key, signing);
-    },
-    []
-  );
 
   const loadMessages = useCallback(async () => {
     if (!roomKey) return;
@@ -1143,6 +1188,8 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
           me={me}
           peerLabel={room.title}
           senderName={nameFor}
+          loadingHistory={history.running}
+          historyRevision={history.fetched}
           onJump={(messageId, createdAt) => {
             setSearchOpen(false);
             void jumpToMessage(messageId, createdAt);
@@ -1408,15 +1455,18 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
           >
             <CornerUpRight className="h-4 w-4" />
           </button>
-          <button
-            className="btn btn-ghost btn-sm btn-square text-error"
-            disabled={!powers.canDelete}
-            onClick={deleteSelected}
-            title={powers.canDelete ? t('common.delete') : t('selection.mixedOwn')}
-            aria-label={t('common.delete')}
-          >
-            <Trash2 className="h-4 w-4" />
-          </button>
+          {/* Hidden rather than greyed, same as the 1:1 bar: see the note
+              there. */}
+          {powers.canDelete && (
+            <button
+              className="btn btn-ghost btn-sm btn-square text-error"
+              onClick={deleteSelected}
+              title={t('common.delete')}
+              aria-label={t('common.delete')}
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          )}
         </div>
       ) : (
       <>

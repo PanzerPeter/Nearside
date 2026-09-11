@@ -13,9 +13,43 @@ its own. Run the query before trusting it.
 
 Every migration in
 [`migrations/apply-order.txt`](migrations/apply-order.txt) is live, `0001`
-through `0043`, with no gaps. The live database and `schema.sql` describe the
-same thing, which is the assumption every `npm run db:verify` result is only
-worth anything under.
+through `0048`, with no gaps — **except `0049_pin_sender_column.sql`, which is
+written and not yet applied**. Until it is, pinning a message in a 1:1
+conversation fails on the live project (see below). The live database and
+`schema.sql` describe the same thing, which is the assumption every
+`npm run db:verify` result is only worth anything under.
+
+`0044`–`0048` were applied individually as each shipped, and the paragraphs
+below stopped at `0043` for a while rather than the database doing so. Confirm
+what is really there with:
+
+```sql
+SELECT to_regclass('public.conversation_pins') IS NOT NULL AS pins_live,
+       to_regclass('public.room_pins')         IS NOT NULL AS room_pins_live;
+```
+
+### `0049_pin_sender_column.sql` — **not applied yet, and the pin is broken until it is**
+
+`0048` asked `messages` for `sender_id`. That column belongs to
+`room_messages`; the 1:1 table has called the sender `user_id` since `0001`. A
+plpgsql body is stored as text and resolved only when it runs, so the migration
+applied without complaint and every 1:1 pin has been failing since with
+`column m.sender_id does not exist` — which the app can only report as "Could
+not change the pinned message." Groups were never affected: `set_room_pin`
+names the column `room_messages` actually has.
+
+Apply `0049` in the SQL editor. It is one `CREATE OR REPLACE` over
+`set_conversation_pin` and touches nothing else. Confirm the pin works
+afterwards from the app, or here with a message id you own:
+
+```sql
+SELECT public.set_conversation_pin('<peer uuid>', '<message uuid>');
+```
+
+`supabase/verify/smoke.sql` now calls both pin functions during
+`npm run db:verify`, which is how this class of fault gets caught before it
+reaches a project: a catalog diff cannot see it, because both sides of the diff
+held the same wrong body.
 
 `0034` was applied before `0033`, a departure from the apply order and a safe
 one: the two files touch nothing in common. `0033` adds the `stickers` table

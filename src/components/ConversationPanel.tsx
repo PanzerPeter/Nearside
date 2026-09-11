@@ -17,9 +17,14 @@ interface ConversationPanelProps {
   me: string;
   peerLabel: string;
   isSelf: boolean;
-  /** The thread's message count. A message arriving while the panel is open
-   *  should be in it. */
+  /** The thread's message count, plus whatever the history walk has fetched.
+   *  A message arriving while the panel is open should be in it, and so should
+   *  a page of last year's that has just been mirrored. */
   revision: number;
+  /** The walk through the rest of the conversation is still running, so these
+   *  lists are over a part of it. Said out loud rather than left to look like
+   *  a quiet result. */
+  loadingHistory?: boolean;
   /** The conversation's decrypt boundary (`ChatRoom.open`). The media tab asks
    *  the server for rows and they come back sealed, like every other read. */
   open: (rows: Message[]) => Promise<Message[]>;
@@ -45,6 +50,7 @@ export function ConversationPanel({
   peerLabel,
   isSelf,
   revision,
+  loadingHistory = false,
   open,
   onJump,
   onClose,
@@ -114,6 +120,13 @@ export function ConversationPanel({
       </div>
 
       <div className="max-h-72 overflow-y-auto px-3 sm:px-4 py-2 space-y-1">
+        {/* A line rather than a spinner in place of the lists: what has been
+            read so far is already useful, and hiding it until the walk
+            finishes would make an old conversation look empty for longer than
+            it is. */}
+        {loadingHistory && tab !== 'media' && (
+          <p className="px-2 pb-1 text-meta text-muted">{t('panel.readingHistory')}</p>
+        )}
         {insights.loading && insights.scanned === 0 ? (
           <p className="px-2 py-6 text-center text-body text-muted">{t('panel.reading')}</p>
         ) : tab === 'dates' ? (

@@ -275,17 +275,6 @@ export function MessageBubble({
           },
         ]
       : []),
-    ...(isOwn
-      ? [
-          {
-            key: 'delete',
-            label: t('common.delete'),
-            icon: <Trash2 className="w-4 h-4" />,
-            onSelect: () => onDelete(msg),
-            danger: true,
-          },
-        ]
-      : []),
     // Either side's messages can be pinned: the useful line in a conversation
     // is as often the other person's address as your own.
     ...(onTogglePin && !isDeleted
@@ -305,6 +294,20 @@ export function MessageBubble({
             label: t('message.select'),
             icon: <CheckSquare className="w-4 h-4" />,
             onSelect: () => onStartSelecting(msg),
+          },
+        ]
+      : []),
+    // Last, below a rule, and the only red row in the card. Delete sat in the
+    // middle of the list, where the thumb travelling to Pin or Select passed
+    // over it — a destructive action should not be on the way to anything.
+    ...(isOwn
+      ? [
+          {
+            key: 'delete',
+            label: t('common.delete'),
+            icon: <Trash2 className="w-4 h-4" />,
+            onSelect: () => onDelete(msg),
+            danger: true,
           },
         ]
       : []),

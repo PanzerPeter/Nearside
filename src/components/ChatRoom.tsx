@@ -20,6 +20,7 @@ import {
 import { PinnedBanner } from './PinnedBanner';
 import { describeTimerChange } from '../lib/disappearing';
 import { openRows } from '../lib/sealed-body';
+import { PAGE_SIZE, fetchLatestPage, fetchOlderPage } from '../lib/message-queries';
 import { peerPublicKey } from '../lib/peer-keys';
 import type { Identity } from '../lib/crypto/keys';
 import { formatDisplayName, useNickname } from '../lib/nicknames';
@@ -43,6 +44,7 @@ import { MessageThread } from './MessageThread';
 import { GalleryProvider } from '../hooks/useGallery';
 import { useShortcut } from '../hooks/useShortcut';
 import { useExportChat } from '../hooks/useExportChat';
+import { useHistoryBackfill } from '../hooks/useHistoryBackfill';
 import { KeyChangedNotice } from './KeyChangedNotice';
 import { Modal } from './Modal';
 import { useReactions } from '../hooks/useReactions';
@@ -163,6 +165,46 @@ export function ChatRoom({ session, friend, identity, openAt, onBack }: ChatRoom
       openRows(identity, await peerPublicKey(friend.id), friend.id, rows),
     [identity, friend.id]
   );
+
+  /**
+   * The rest of this conversation, fetched into the local mirror when
+   * something asks a question of the whole of it.
+   *
+   * Search, the panel and the export all read the mirror, and the mirror holds
+   * what this device has opened — which, without this, is the pages somebody
+   * scrolled. A conversation older than a screenful answered those three from
+   * its last page and gave no sign it was doing so.
+   *
+   * Pages are fetched and opened exactly as the thread fetches them; opening
+   * is what mirrors them. Only after the identity exists — a page opened
+   * without one decrypts to nothing and would be walked again later for
+   * nothing.
+   */
+  const history = useHistoryBackfill({
+    conversationId: friend.id,
+    ready: identity !== null,
+    pageSize: PAGE_SIZE,
+    fetchOlder: useCallback(
+      async (cursor) => {
+        const page = cursor
+          ? await fetchOlderPage(me, friend.id, cursor)
+          : await fetchLatestPage(me, friend.id);
+        await open(page);
+        return page;
+      },
+      [me, friend.id, open]
+    ),
+  });
+
+  // Opening either panel is the question being asked, so that is where the
+  // walk starts. `ensure` joins a run already going rather than starting a
+  // second one.
+  // `history.ensure`, not `history`: the hook returns a fresh object every
+  // render, and depending on it would re-fire this on each one.
+  const startHistory = history.ensure;
+  useEffect(() => {
+    if (searchOpen || panelOpen) void startHistory();
+  }, [searchOpen, panelOpen, startHistory]);
 
   /** Composer housekeeping shared by both send paths: the message is on its
    *  way, so the box empties and takes focus back. */
@@ -304,6 +346,10 @@ export function ChatRoom({ session, friend, identity, openAt, onBack }: ChatRoom
     me,
     meLabel: t('common.you'),
     nameFor: () => peerLabel,
+    // A transcript missing everything older than the last screenful is not a
+    // transcript, and the file gives no hint that it is short — so the export
+    // waits for the walk rather than writing what happens to be mirrored.
+    prepare: history.ensure,
   });
 
   /** The picked messages, resolved against what the thread is still holding —
@@ -626,6 +672,8 @@ export function ChatRoom({ session, friend, identity, openAt, onBack }: ChatRoom
           me={me}
           peerLabel={peerLabel}
           isSelf={isSelf}
+          loadingHistory={history.running}
+          historyRevision={history.fetched}
           onJump={(messageId, createdAt) => {
             setSearchOpen(false);
             void thread.jumpToMessage(messageId, createdAt);
@@ -641,7 +689,10 @@ export function ChatRoom({ session, friend, identity, openAt, onBack }: ChatRoom
           me={me}
           peerLabel={peerLabel}
           isSelf={isSelf}
-          revision={thread.messages.length}
+          // Re-read as the walk lands pages, not only when a message arrives:
+          // the panel is scanning the mirror, and the mirror is still filling.
+          revision={thread.messages.length + history.fetched}
+          loadingHistory={history.running}
           open={open}
           onJump={(messageId, createdAt) => {
             setPanelOpen(false);
@@ -755,17 +806,22 @@ export function ChatRoom({ session, friend, identity, openAt, onBack }: ChatRoom
           >
             <CornerUpRight className="h-4 w-4" />
           </button>
-          <button
-            className="btn btn-ghost btn-sm btn-square text-error"
-            disabled={!powers.canDelete}
-            onClick={deleteSelected}
-            // The reason, on the control that is refusing: a greyed button
-            // with no explanation is the app declining without saying why.
-            title={powers.canDelete ? t('common.delete') : t('selection.mixedOwn')}
-            aria-label={t('common.delete')}
-          >
-            <Trash2 className="h-4 w-4" />
-          </button>
+          {/* Absent, not greyed, when the selection holds somebody else's
+              message. A disabled bin is the app offering to delete and then
+              refusing, and the only thing it can be read as is the rule being
+              arbitrary — whereas you cannot delete what you did not write, on
+              a server that keeps no copy for you to reach. The count line
+              above it is what changes as the selection does. */}
+          {powers.canDelete && (
+            <button
+              className="btn btn-ghost btn-sm btn-square text-error"
+              onClick={deleteSelected}
+              title={t('common.delete')}
+              aria-label={t('common.delete')}
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          )}
         </div>
       ) : trust === 'changed' ? (
         <KeyChangedNotice peerKey={peerKey} onVerify={() => setVerifyOpen(true)} />
