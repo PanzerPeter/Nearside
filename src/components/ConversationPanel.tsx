@@ -178,6 +178,9 @@ function Empty({ text }: { text: string }) {
   return <p className="px-2 py-6 text-center text-body text-muted">{text}</p>;
 }
 
+/** One message can name two days, so the id alone is not unique. */
+const rowKey = (event: DateInsight) => `${event.messageId}:${event.when}`;
+
 function DateList({
   insights,
   who,
@@ -208,9 +211,6 @@ function DateList({
     </>
   );
 }
-
-/** One message can name two days, so the id alone is not unique. */
-const rowKey = (event: DateInsight) => `${event.messageId}:${event.when}`;
 
 function DateRow({
   event,

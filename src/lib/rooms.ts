@@ -775,6 +775,10 @@ export async function roomReadAt(roomId: string, me: string): Promise<string | n
   return (data as { read_at: string | null } | null)?.read_at ?? null;
 }
 
+/** Subscribers to a read mark moving — declared above its first reader, so
+ *  the set exists before `markRoomRead` runs. */
+const readListeners = new Set<() => void>();
+
 /**
  * Mark a group read up to `at` — the newest message the reader has actually
  * seen, never `Date.now()`.
@@ -799,7 +803,6 @@ export async function markRoomRead(roomId: string, me: string, at: string): Prom
  * two components that have nothing else to say to each other. Same shape as
  * `subscribeChatFlags` and `subscribeDrafts`.
  */
-const readListeners = new Set<() => void>();
 
 export function subscribeRoomReads(listener: () => void): () => void {
   readListeners.add(listener);

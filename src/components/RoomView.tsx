@@ -319,23 +319,6 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
    *  still inside its undo window. */
   const shown = useMemo(() => messages.filter((m) => !deleting.has(m.id)), [messages, deleting]);
 
-  // The one line the group shows about its timer, and where in the thread it
-  // belongs. `rooms` keeps the current setting and who set it last, so — as in
-  // a 1:1 conversation — this is the whole history the app can honestly draw.
-  const timerChange = useMemo(
-    () => (timer ? describeTimerChange(timer, me, nameFor(timer.setBy)) : null),
-    // `nameFor` reads the member list, which is state; it is re-created on
-    // every render and as a dependency would recompute this on each of them.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [timer, me, members]
-  );
-  const noticeIndex = timerChange
-    ? timerChangeIndex(
-        shown.map((m) => m.created_at),
-        timerChange.at
-      )
-    : -1;
-
   const jumpTo = useCallback((id: string) => {
     document.getElementById(`room-msg-${id}`)?.scrollIntoView({
       behavior: prefersReducedMotion() ? 'auto' : 'smooth',
@@ -356,6 +339,30 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
     },
     [me, profiles, t]
   );
+
+  // The one line the group shows about its timer, and where in the thread it
+  // belongs. `rooms` keeps the current setting and who set it last, so — as in
+  // a 1:1 conversation — this is the whole history the app can honestly draw.
+  //
+  // Must stay below `nameFor`: the memo body calls it during the render that
+  // creates it, and every room has a `rooms` row, so `timer` is non-null the
+  // moment the fetch lands. Declared above, that call reads a `const` in its
+  // temporal dead zone — a ReferenceError in render, which the app-wide error
+  // boundary turns into "Something went wrong" for the whole app on opening
+  // any group.
+  const timerChange = useMemo(
+    () => (timer ? describeTimerChange(timer, me, nameFor(timer.setBy)) : null),
+    // `nameFor` reads the member list, which is state; it is re-created on
+    // every render and as a dependency would recompute this on each of them.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [timer, me, members]
+  );
+  const noticeIndex = timerChange
+    ? timerChangeIndex(
+        shown.map((m) => m.created_at),
+        timerChange.at
+      )
+    : -1;
 
   // Re-read on every wake, like every other fetch beside a subscription.
   useEffect(() => {

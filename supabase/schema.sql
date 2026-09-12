@@ -3134,6 +3134,12 @@ ALTER TABLE public.friend_nicknames  REPLICA IDENTITY FULL;
 -- the SELECT policy against the record carried in the event.
 ALTER TABLE public.room_message_reactions REPLICA IDENTITY FULL;
 
+-- FULL for the same reason on both pin tables: unpinning is a DELETE, and the
+-- other side's banner stays up pointing at a pin that is gone if the event
+-- carries no old row for the SELECT policy to be evaluated against.
+ALTER TABLE public.conversation_pins REPLICA IDENTITY FULL;
+ALTER TABLE public.room_pins         REPLICA IDENTITY FULL;
+
 DO $$
 DECLARE
   t text;
@@ -3152,7 +3158,11 @@ BEGIN
     -- INSERT events only, which carry the new record, so the SELECT policy can
     -- be evaluated against it and REPLICA IDENTITY FULL is unnecessary. The
     -- event that matters is the peer's answer landing: both sides open on it.
-    'sealed_answers'
+    'sealed_answers',
+    -- A pin is one person putting a line on everybody's screen, so both sides
+    -- have to hear it land and hear it go.
+    'conversation_pins',
+    'room_pins'
   ] LOOP
     IF NOT EXISTS (
       SELECT 1 FROM pg_publication_tables

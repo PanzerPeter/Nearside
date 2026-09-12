@@ -72,6 +72,18 @@ export default tseslint.config(
       'react-hooks/refs': 'off',
       'react-hooks/set-state-in-effect': 'off',
 
+      // A `const` read before its declaration in the same scope is a
+      // ReferenceError when the reader runs during render, and the app-wide
+      // error boundary turns that into "Something went wrong" for the whole
+      // app. RoomView shipped one: a `useMemo` whose body called a `useCallback`
+      // declared twenty lines below it, which blanked the app on opening any
+      // group. TypeScript cannot see it — the call is inside a closure.
+      // Functions are exempt: hoisted declarations are how this codebase reads.
+      '@typescript-eslint/no-use-before-define': [
+        'error',
+        { functions: false, classes: false, variables: true, typedefs: false, enums: false, ignoreTypeReferences: true },
+      ],
+
       'react-refresh/only-export-components': [
         'warn',
         { allowConstantExport: true },

@@ -80,6 +80,7 @@ current state; this table is about what each file *does*.
 | 49 | `0047_room_backgrounds.sql` | Group backgrounds, sealed under the setter's vault key like the 1:1 ones |
 | 50 | `0048_pinned_messages.sql` | `conversation_pins` and `room_pins`: one message held at the top, stored as a pointer. **Its 1:1 function is broken — see `0049`** |
 | 51 | `0049_pin_sender_column.sql` | Repairs `set_conversation_pin()`, which asked `messages` for `room_messages`' `sender_id` column and so failed on every call |
+| 52 | `0050_pin_realtime.sql` | Puts the two pin tables in the realtime publication, with `REPLICA IDENTITY FULL` so an unpin reaches the other side. 0048 subscribed to changes it never published |
 
 ## The two files that do not follow the numbering
 

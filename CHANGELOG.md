@@ -14,6 +14,21 @@ one of them drifts.
 
 ## [Unreleased]
 
+## [1.13.1] — 2026-09-12
+
+### Fixed
+
+- **Opening a group no longer blanks the app.** Every group carries a
+  disappearing-message setting, and the line describing it was being built one
+  step too early — before the app knew how to name the person who last changed
+  it. The app crashed to "Something went wrong" on the way into any group. The
+  line itself is unchanged; only when it is assembled.
+- **A pin now reaches the other person.** Pinning a message told everyone's
+  screen to update, but the database was never asked to announce the change, so
+  only the person who pinned it saw the banner — and only they saw it go when it
+  was unpinned. Everyone else found out by reopening the conversation. Needs the
+  new database change applied, like every other one.
+
 ## [1.13.0] — 2026-09-11
 
 ### Fixed

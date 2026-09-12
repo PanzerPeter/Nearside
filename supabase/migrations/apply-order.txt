@@ -59,3 +59,4 @@
 0047_room_backgrounds.sql
 0048_pinned_messages.sql
 0049_pin_sender_column.sql
+0050_pin_realtime.sql
