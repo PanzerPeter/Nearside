@@ -174,7 +174,11 @@ export function ChatHeader({
               title={t('chat.verifiedTitle')}
             >
               <ShieldCheck className="w-3 h-3" />
-              {t('chat.verified')}
+              {/* The word is the first thing to go when the name is long: a
+                  shield in the success colour beside a name already says it,
+                  and a truncated name is the worse loss. The title attribute
+                  keeps the wording reachable. */}
+              <span className="hidden sm:inline">{t('chat.verified')}</span>
             </span>
           )}
           {trust === 'changed' && !isSelf && (
@@ -183,7 +187,7 @@ export function ChatHeader({
               title={t('chat.keyChangedTitle')}
             >
               <ShieldAlert className="w-3 h-3" />
-              {t('chat.keyChanged')}
+              <span className="hidden sm:inline">{t('chat.keyChanged')}</span>
             </span>
           )}
         </p>
@@ -198,21 +202,19 @@ export function ChatHeader({
             // any of it.
             <span>{t('chat.onlyYou')}</span>
           ) : friendStatus ? (
-            <span className="inline-flex items-center gap-1.5">
+            <span className="inline-flex min-w-0 items-center gap-1.5">
               <StatusDot status={friendStatus} size={8} pulse />
+              <span className="truncate">
               {friendStatus === 'offline' && friend.last_seen_at
                 ? formatLastSeen(friend.last_seen_at)
                 : t(presenceLabels[friendStatus])}
+              </span>
             </span>
           ) : null}
-          {/* A running timer belongs on the line that already says what state
-              this conversation is in, not behind a menu nobody opens. */}
-          {timer?.ttlSeconds != null && (
-            <span className="inline-flex items-center gap-1 text-primary shrink-0">
-              <Timer className="w-3 h-3" />
-              {formatTtl(timer.ttlSeconds)}
-            </span>
-          )}
+          {/* No timer chip here. This line is barely wide enough for a long
+              "last seen yesterday at ..." on a phone, and the timer is not
+              news — it is a setting, and it is already in the menu with its
+              current value beside it. */}
         </p>
       </button>
       {/* Not in the self-chat: the vault has no second party, and a call

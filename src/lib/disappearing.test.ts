@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   describeTimerChange,
+  dropExpired,
   formatTtl,
   hasExpired,
   normalizePair,
@@ -126,5 +127,34 @@ describe('timerChangeIndex', () => {
 
   it('falls to the end rather than disappearing on an unparseable stamp', () => {
     expect(timerChangeIndex(sent, 'not a date')).toBe(3);
+  });
+});
+
+describe('dropExpired', () => {
+  const now = Date.parse('2026-08-08T12:00:00.000Z');
+  const rows = [
+    { id: 'a', expires_at: null },
+    { id: 'b', expires_at: '2026-08-08T11:59:00.000Z' },
+    { id: 'c', expires_at: '2026-08-08T12:30:00.000Z' },
+  ];
+
+  it('takes out what has expired and leaves the rest', () => {
+    expect(dropExpired(rows, now).map((r) => r.id)).toEqual(['a', 'c']);
+  });
+
+  it('takes out what the mirror sweep deleted, expired or not', () => {
+    expect(dropExpired(rows, now, new Set(['c'])).map((r) => r.id)).toEqual(['a']);
+  });
+
+  // The thread re-runs this every few seconds. A new array each time would
+  // repaint every bubble in the conversation to say nothing changed.
+  it('returns the same array when nothing goes', () => {
+    const live = [rows[0], rows[2]];
+    expect(dropExpired(live, now)).toBe(live);
+  });
+
+  it('keeps a row whose expiry will not parse', () => {
+    const broken = [{ id: 'd', expires_at: 'not a date' }];
+    expect(dropExpired(broken, now)).toBe(broken);
   });
 });

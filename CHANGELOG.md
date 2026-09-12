@@ -14,6 +14,25 @@ one of them drifts.
 
 ## [Unreleased]
 
+## [1.13.5] — 2026-09-12
+
+### Fixed
+
+- A disappearing message now goes while you are looking at it. It used to wait
+  for you to leave the conversation and come back: the server had deleted it,
+  but the open thread kept painting the copy it was already holding. Groups
+  never swept at all, so a group left open showed expired messages for as long
+  as it stayed open.
+
+### Changed
+
+- The chat header gives the name the room it needs on a phone. The verified
+  badge keeps its shield and drops the word, and the disappearing-messages
+  countdown is no longer repeated on the line under the name — it is a setting,
+  not news, and it is already in the menu with its current value beside it. The
+  line under the name now has room for "last seen yesterday at ..." instead of
+  cutting it off.
+
 ## [1.13.4] — 2026-09-12
 
 ### Changed

@@ -29,14 +29,13 @@ import { useReadReceipts } from './useReadReceipts';
 import { useUnreadDivider } from './useUnreadDivider';
 import { usePrivacyPrefs } from './usePrivacyPrefs';
 import { useOutbox, type Outbox } from './useOutbox';
+import { useExpirySweep } from './useExpirySweep';
 import {
-  hasExpired,
   loadConversationTimer,
   saveConversationTimer,
   type ConversationTimer,
 } from '../lib/disappearing';
-import { cachedSealedRows, purgeExpired, putSealedRows } from '../lib/localdb';
-import { unpinMedia } from '../lib/pins';
+import { cachedSealedRows, putSealedRows } from '../lib/localdb';
 
 /** Bounds how many pages a search jump will fetch looking for an old message,
  *  so a hit deep in history can't page indefinitely. */
@@ -234,40 +233,23 @@ export function useChatThread({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [generation]);
 
-  // Load the timer, and sweep whatever has expired since we last looked.
-  // Keyed on the generation so a phone that was asleep for a day sweeps on wake
-  // rather than showing a day of messages the server has already deleted.
+  // The timer itself. Re-read on wake because either side may have changed it
+  // while this phone was asleep, and nothing pushes that change.
   useEffect(() => {
     if (!me || !peerId) return;
     let cancelled = false;
-
-    async function refresh() {
-      const loaded = await loadConversationTimer(me, peerId);
-      if (cancelled) return;
-      setTimer(loaded);
-
-      const removed = await purgeExpired(Date.now());
-      if (cancelled) return;
-      const gone = new Set(removed);
-      // A pin keeps a picture past the server's pruning, not past a timer both
-      // people agreed to. Left behind, the decrypted bytes would outlive the
-      // message in app-private storage with nothing left pointing at them.
-      for (const id of removed) await unpinMedia(id).catch(() => {});
-      const now = Date.now();
-      setMessages((current) =>
-        current.filter((m) => !gone.has(m.id) && !hasExpired(m.expires_at, now))
-      );
-    }
-
-    void refresh();
-    // A minute, matching the server's cron cadence. There is no point sweeping
-    // faster than the rows are actually being deleted.
-    const tick = window.setInterval(() => void refresh(), 60_000);
+    void loadConversationTimer(me, peerId).then((loaded) => {
+      if (!cancelled) setTimer(loaded);
+    });
     return () => {
       cancelled = true;
-      window.clearInterval(tick);
     };
   }, [me, peerId, generation]);
+
+  // Taking expired messages off the screen is a separate job from reading the
+  // timer, and must not be able to fail with it: a thread that skipped its
+  // sweep because one fetch threw goes on showing a message that is gone.
+  useExpirySweep(setMessages, generation);
 
   const changeTimer = useCallback(
     async (seconds: number | null) => {

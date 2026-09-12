@@ -83,6 +83,7 @@ import { GalleryProvider } from '../hooks/useGallery';
 import { useShortcut } from '../hooks/useShortcut';
 import { useExportChat } from '../hooks/useExportChat';
 import { useHistoryBackfill } from '../hooks/useHistoryBackfill';
+import { useExpirySweep } from '../hooks/useExpirySweep';
 import { selectionPowers, toggleSelected } from '../lib/selection';
 import {
   alertLevelFor,
@@ -225,6 +226,11 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
   // uses, and the same cache behind it.
   const stickers = useStickers(me, identity);
   const background = useChatBackground(me, { kind: 'room', roomId: room.id }, identity);
+
+  // The same sweep the 1:1 thread runs, for the same reason: the server
+  // deletes the row, but a group left open goes on painting it from what this
+  // component is holding until somebody reopens the view.
+  useExpirySweep(setMessages, generation);
 
   // Read once per group. The timer is changed rarely and by a member, so the
   // realtime `rooms` stream is not worth a subscription of its own — a change

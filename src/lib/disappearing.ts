@@ -169,3 +169,20 @@ export async function saveRoomTimer(roomId: string, ttlSeconds: number | null): 
   const { error } = await supabase.rpc('set_room_timer', { target: roomId, ttl: ttlSeconds });
   if (error) throw error;
 }
+
+/**
+ * The rows still worth showing: whatever has not expired, minus whatever the
+ * mirror sweep just deleted.
+ *
+ * Returns the array it was given when nothing changed. The thread re-runs this
+ * on a timer, and a fresh array every tick would repaint every bubble in the
+ * conversation to say nothing.
+ */
+export function dropExpired<T extends { id: string; expires_at?: string | null }>(
+  rows: readonly T[],
+  nowMs: number,
+  removed?: ReadonlySet<string>
+): readonly T[] {
+  const kept = rows.filter((r) => !removed?.has(r.id) && !hasExpired(r.expires_at ?? null, nowMs));
+  return kept.length === rows.length ? rows : kept;
+}
