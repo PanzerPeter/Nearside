@@ -14,6 +14,29 @@ one of them drifts.
 
 ## [Unreleased]
 
+## [1.13.4] — 2026-09-12
+
+### Changed
+
+- The call screen. A voice call now has a centre — a soft pool of light behind
+  a larger portrait, a thin ring expanding out of it while the call is still
+  waiting on a person, and the end-to-end-encrypted line set as a badge rather
+  than a stray caption. The portrait is the person's actual picture; a call was
+  the one screen in the app that still showed the first letter of their name
+  when it had a photo to show. Answer and Decline sit at opposite ends of the screen
+  with their names under them: this is a row reached for in a hurry, usually
+  one-handed, and the two outcomes are not ones to confuse under a thumb.
+- On a video call the controls and the caller's name are drawn on their own
+  darkening, top and bottom, instead of straight onto the picture. They used to
+  take their colour from the theme, which meant a light pack's buttons
+  disappeared against a bright frame; over video they are now white on glass,
+  which holds against whatever the camera happens to be pointed at. The
+  self-view got rounder corners and an edge, so it reads as a picture-in-picture
+  rather than as a rectangle stuck on top.
+- The in-call buttons are grouped on one tray, with ending the call kept off it
+  and given its own larger red circle. Muting yourself and hanging up were the
+  same size, the same shape and one finger-width apart.
+
 ## [1.13.3] — 2026-09-12
 
 ### Fixed

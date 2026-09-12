@@ -1220,6 +1220,39 @@
   :root[data-motion='expressive'] .motion-recording {
     animation: rec-ring 1.4s ease-out infinite;
   }
+
+  /* The waiting call — a ring going out, or one coming in. The same claim the
+     recording dot makes: something is happening that you have not been told
+     about in words. It runs only while the call is waiting on a person; once
+     there is a clock on screen a pulse is decoration pretending to be status.
+
+     A thin ring that expands, not a `box-shadow` spread like the recording
+     dot's. Spread paints a solid disc of colour, which at seven pixels around
+     an eight-pixel dot reads as a glow and at eighteen pixels around a
+     128-pixel portrait reads as a grey plate somebody left behind the avatar.
+     Ends fully transparent, so the reduced-motion duration override leaves it
+     invisible rather than frozen mid-swell. */
+  @keyframes call-halo {
+    0% {
+      opacity: 0.55;
+      transform: scale(1);
+    }
+    70%,
+    100% {
+      opacity: 0;
+      transform: scale(1.3);
+    }
+  }
+
+  :root[data-motion='expressive'] .motion-call-halo::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 9999px;
+    border: 1px solid var(--color-base-content);
+    animation: call-halo 2s ease-out infinite;
+    pointer-events: none;
+  }
 }
 
 /* emoji-mart lives in a shadow DOM, so only its exposed custom properties are
