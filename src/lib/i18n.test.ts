@@ -3,6 +3,10 @@ import { en } from '../locales/en';
 import { es } from '../locales/es';
 import { de } from '../locales/de';
 import { ru } from '../locales/ru';
+import { hu } from '../locales/hu';
+import { fr } from '../locales/fr';
+import { pl } from '../locales/pl';
+import { zh } from '../locales/zh';
 import {
   LOCALES,
   deviceLocale,
@@ -14,7 +18,7 @@ import {
   type Locale,
 } from './i18n';
 
-const CATALOGS: Record<Locale, Catalog> = { en, es, de, ru };
+const CATALOGS: Record<Locale, Catalog> = { en, es, de, ru, hu, fr, pl, zh };
 
 const TRANSLATED = (Object.keys(CATALOGS) as Locale[]).filter((code) => code !== 'en');
 
@@ -84,6 +88,30 @@ describe('catalogs', () => {
       'lock.passphrase',
       // "Normal" is the same word in Spanish and in German.
       'alerts.default',
+      // French and English share more vocabulary than any other pair here, and
+      // each of these is the ordinary French word rather than a line nobody
+      // translated: minutes, notifications, photos, dates, messages and
+      // conversations are spelled the same in both.
+      'time.minutes#one',
+      'time.minutes#few',
+      'time.minutes#many',
+      'time.minutes#other',
+      'alerts.title',
+      'alerts.urgent',
+      'composer.image',
+      'preview.photo',
+      'chatList.direct',
+      'panel.dates',
+      'settings.notifications',
+      'themes.sampleComposer',
+      'storage.messages#one',
+      'storage.messages#few',
+      'storage.messages#many',
+      'storage.messages#other',
+      'storage.conversations#one',
+      'storage.conversations#few',
+      'storage.conversations#many',
+      'storage.conversations#other',
     ]);
     for (const code of TRANSLATED) {
       const untranslated = Object.keys(en).filter(
@@ -144,8 +172,15 @@ describe('locale resolution', () => {
   });
 
   it('falls back to English for a language that does not ship', () => {
-    expect(deviceLocale(['fr-FR', 'it'])).toBe('en');
+    expect(deviceLocale(['it-IT', 'nl'])).toBe('en');
     expect(deviceLocale([])).toBe('en');
+  });
+
+  it('answers every Chinese script with the one catalog that ships', () => {
+    // Simplified is what `zh.ts` holds, so a Traditional phone gets it rather
+    // than falling through to English.
+    expect(deviceLocale(['zh-Hans-CN'])).toBe('zh');
+    expect(deviceLocale(['zh-TW'])).toBe('zh');
   });
 
   it('takes an explicit choice over the device', () => {

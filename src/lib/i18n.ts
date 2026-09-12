@@ -10,16 +10,20 @@
 // a language change repaint the screen.
 //
 // Catalogs are typed against the English one, so a key added there without a
-// Spanish, German or Russian line fails `npm run typecheck` rather than
-// reaching a phone and rendering as a dotted identifier.
+// line in every other catalog fails `npm run typecheck` rather than reaching a
+// phone and rendering as a dotted identifier.
 
 import { en } from '../locales/en';
 import { es } from '../locales/es';
 import { de } from '../locales/de';
 import { ru } from '../locales/ru';
+import { hu } from '../locales/hu';
+import { fr } from '../locales/fr';
+import { pl } from '../locales/pl';
+import { zh } from '../locales/zh';
 
 /** The languages that ship. Order is the order the settings list shows. */
-export const LOCALES = ['en', 'es', 'de', 'ru'] as const;
+export const LOCALES = ['en', 'es', 'de', 'ru', 'hu', 'fr', 'pl', 'zh'] as const;
 
 export type Locale = (typeof LOCALES)[number];
 
@@ -41,7 +45,7 @@ type PluralBase<K> = K extends `${infer Base}#${string}` ? Base : never;
 /** What `t()` accepts: a plain key, or the base name of a pluralized one. */
 export type MessageKey = CatalogKey | PluralBase<CatalogKey>;
 
-const CATALOGS: Record<Locale, Catalog> = { en, es, de, ru };
+const CATALOGS: Record<Locale, Catalog> = { en, es, de, ru, hu, fr, pl, zh };
 
 /** The name of each language, written in that language. A list of languages
  *  translated into the one you cannot read is a list you cannot use. */
@@ -50,6 +54,10 @@ export const LOCALE_NAMES: Record<Locale, string> = {
   es: 'Español',
   de: 'Deutsch',
   ru: 'Русский',
+  hu: 'Magyar',
+  fr: 'Français',
+  pl: 'Polski',
+  zh: '简体中文',
 };
 
 const STORAGE_KEY = 'nearside.locale';
@@ -84,7 +92,8 @@ export function localePreference(): LocalePreference {
  * Matched on the base subtag only: `es-419`, `es-MX` and `es-ES` are all
  * answered by the Spanish catalog. Shipping a Latin American Spanish that
  * differs from a European one is a decision for a translator, not for a
- * language tag.
+ * language tag. The same rule sends `zh-TW` and `zh-HK` to the Simplified
+ * catalog, which is the one script that ships.
  */
 export function deviceLocale(tags: readonly string[] = navigatorLanguages()): Locale {
   for (const tag of tags) {

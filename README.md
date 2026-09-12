@@ -147,9 +147,10 @@ Losing the twelve words loses the history. There is no reset path.
 - **Several accounts on one phone.** Up to five, each with its own seed slot,
   mirror and lock. Switching tears down every per-account cache first, so a
   peer-key cache cannot follow one account into the next.
-- **Four languages.** English, Spanish, German and Russian, following the phone
-  by default. Catalogs are typed against the English one, so a missing line
-  fails `npm run typecheck` rather than reaching a phone.
+- **Eight languages.** English, Spanish, German, Russian, Hungarian, French,
+  Polish and Simplified Chinese, following the phone by default. Catalogs are
+  typed against the English one, so a missing line fails `npm run typecheck`
+  rather than reaching a phone.
 - **Chat backgrounds.** Per person and per conversation; your choice and your
   peer's are separate rows and separate objects. Sealed under your vault key,
   because the folder is shared with the conversation's attachments and an
@@ -334,7 +335,7 @@ src/
                 signaling.ts (sealed broadcast), state.ts + routing.ts (the
                 interleavings, as pure functions), warmup.ts (capture that
                 starts before the call needs it)
-  locales/      en, es, de, ru, each typed against en
+  locales/      en, es, de, ru, hu, fr, pl, zh, each typed against en
 supabase/
   schema.sql    The whole database as it stands. One file, for a fresh project
   migrations/   How it got there. Applied by hand, in apply-order.txt's order

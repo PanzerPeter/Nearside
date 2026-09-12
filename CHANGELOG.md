@@ -14,6 +14,22 @@ one of them drifts.
 
 ## [Unreleased]
 
+## [1.14.0] — 2026-09-12
+
+### Added
+
+- **Four more languages: Hungarian, French, Polish and Simplified Chinese.**
+  The app now speaks eight, and still follows the phone unless you pick one
+  yourself in Settings › Language. Every screen moves, including the ones that
+  explain what the server holds and where the encryption stops, because a
+  privacy claim you cannot read in your own language is not a claim you can
+  check. The Terms, the Privacy Policy and the licenses stay in English, as
+  they already did: a machine translation of a contract is a different
+  contract.
+- A phone set to Traditional Chinese gets the Simplified catalog rather than
+  falling back to English. One script ships, and matching on the language alone
+  puts it in front of everyone who reads Chinese.
+
 ## [1.13.9] — 2026-09-12
 
 ### Fixed
