@@ -13,22 +13,55 @@ its own. Run the query before trusting it.
 
 Every migration in
 [`migrations/apply-order.txt`](migrations/apply-order.txt) is live, `0001`
-through `0048`, with no gaps — **except `0049_pin_sender_column.sql`, which is
-written and not yet applied**. Until it is, pinning a message in a 1:1
-conversation fails on the live project (see below). The live database and
-`schema.sql` describe the same thing, which is the assumption every
-`npm run db:verify` result is only worth anything under.
+through `0050`, with two exceptions, both still to apply:
 
-`0044`–`0048` were applied individually as each shipped, and the paragraphs
-below stopped at `0043` for a while rather than the database doing so. Confirm
-what is really there with:
+- **`0038_alert_ladder.sql`** — `streak` is on neither `push_alerts` nor
+  `room_push_alerts`. Until it is, the notification ladder has no memory: the
+  anchor write names a column the table does not have, so it is dropped and
+  every message rings at full volume. Nobody reports that as a bug, which is
+  why the audit below is the thing that found it.
+- **`0049_pin_sender_column.sql`** — pinning a message in a 1:1 conversation
+  fails until it lands (see below). `0050`, which repairs the other half of the
+  same feature, *is* applied, so a pin would already reach the other person if
+  one could be made.
 
-```sql
-SELECT to_regclass('public.conversation_pins') IS NOT NULL AS pins_live,
-       to_regclass('public.room_pins')         IS NOT NULL AS room_pins_live;
+**Do not trust this paragraph — run the audit.** The list above was wrong twice
+before: it claimed `0038` was applied when it was not, and it claimed `0049`
+and `0050` were both outstanding when only `0049` was. Every entry here is a
+memory of a dashboard session, and the database is the only thing that knows.
+
+```bash
+npm run db:audit -- 'postgresql://postgres.<ref>:<password>@<host>:5432/postgres'
 ```
 
-### `0049_pin_sender_column.sql` — **not applied yet, and the pin is broken until it is**
+`verify/live-audit.sh` runs `verify/introspect.sql` — the same fingerprint
+`db:verify` compares its two throwaway databases with — against the live
+project, and diffs 677 facts: every table, column, default, constraint, index,
+policy, trigger, grant, realtime publication, storage bucket and function body.
+It reads and writes nothing. Three headings come out of it:
+
+- **WRONG BODY ON LIVE** — a function that exists and is granted and holds the
+  wrong definition. `db:verify` is blind to this by construction: both sides of
+  its diff hold the same body, right or wrong. This is what `0049` was.
+- **MISSING FROM LIVE** — a migration that never ran.
+- **EXTRA ON LIVE** — platform objects (`rls_auto_enable`, storage defaults),
+  noted further down this file. Anything else is drift, and a stray grant or
+  policy is a finding rather than noise.
+
+Every migration is idempotent enough to re-run — `0038` is
+`ADD COLUMN IF NOT EXISTS`, `0049` is one `CREATE OR REPLACE FUNCTION`, `0050`
+guards its publication add — so re-running one that is already there costs
+nothing, and re-running all of a feature's files is the safe answer to a doubt.
+
+The live database and `schema.sql` describe the same thing once the outstanding
+ones are in, which is the assumption every `npm run db:verify` result is only
+worth anything under.
+
+`0044`–`0048` were applied individually as each shipped, and the paragraphs
+below stopped at `0043` for a while rather than the database doing so. The query
+above covers the pin tables; anything else is `to_regclass` away.
+
+### `0049_pin_sender_column.sql` — **not applied yet, and the 1:1 pin is broken until it is**
 
 `0048` asked `messages` for `sender_id`. That column belongs to
 `room_messages`; the 1:1 table has called the sender `user_id` since `0001`. A
@@ -50,6 +83,20 @@ SELECT public.set_conversation_pin('<peer uuid>', '<message uuid>');
 `npm run db:verify`, which is how this class of fault gets caught before it
 reaches a project: a catalog diff cannot see it, because both sides of the diff
 held the same wrong body.
+
+### `0050_pin_realtime.sql` — applied
+
+`0048` created `conversation_pins` and `room_pins` outside the realtime
+publication. Both clients subscribe to changes on those tables, so the person
+who pinned saw the banner — their own client re-reads after the write — and
+nobody else did until they reopened the conversation. `0050` adds both tables
+to `supabase_realtime`, sets `REPLICA IDENTITY FULL` so an unpin (a DELETE) can
+be evaluated against the SELECT policy, and reloads PostgREST's schema cache.
+
+It landed while `0049` did not, which is worth remembering as a shape: the two
+halves of one feature were applied in one sitting and only one of them took.
+Nothing reported the gap, because a fix for a feature that cannot run yet looks
+exactly like a fix that worked.
 
 `0034` was applied before `0033`, a departure from the apply order and a safe
 one: the two files touch nothing in common. `0033` adds the `stickers` table
@@ -192,7 +239,11 @@ second friendship row for a pair that already had one was deleted (accepted
 kept over pending, then oldest). Both were no-ops on a project this client is
 the only writer for.
 
-### `0035`–`0038` — applied, the notification ladder and rooms catching up
+### `0035`–`0037` — applied, the notification ladder and rooms catching up
+
+(`0038`, described at the end of this section, is **not** applied — see
+Migrations above. Everything here about the ladder describes the code, not this
+project's behaviour, until it is.)
 
 `0035_push_alerts.sql` gives `send-push` somewhere to remember when it last made
 a receiver's phone make a noise, so a burst of messages arrives as one alert and

@@ -259,9 +259,15 @@ export function ChatHeader({
             <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-error" />
           )}
         </button>
+        {/* Sized to its content and capped at the viewport, like `MessageMenu`
+            and `RowMenu`. A fixed width was narrower than these rows are — an
+            icon, a label, the current answer and the disclosure chevron, none
+            of which wrap — so the last two sat out over the panel's rounded
+            edge, and did it in English before any translation made the labels
+            longer. */}
         <ul
           tabIndex={0}
-          className="dropdown-content menu bg-base-100 rounded-box z-30 w-72 p-2 shadow-sm"
+          className="dropdown-content menu z-30 mt-1 w-max max-w-[calc(100vw-1rem)] rounded-box border border-hairline bg-base-100 p-2 shadow-overlay"
         >
           {/* First in the menu because it is the one entry here that does
               something rather than configures something. Absent in the
@@ -324,7 +330,7 @@ export function ChatHeader({
           )}
           <li>
             <details>
-              <summary className="whitespace-nowrap">
+              <summary>
                 <Timer className={`w-4 h-4 ${timer?.ttlSeconds != null ? 'text-primary' : ''}`} />
                 {t('chat.disappearing')}
                 <span className="ml-auto text-meta text-subtle">
@@ -372,7 +378,7 @@ export function ChatHeader({
           </li>
           <li>
             <details>
-              <summary className="whitespace-nowrap">
+              <summary>
                 <BellRing className={`w-4 h-4 ${alertLevel ? 'text-primary' : ''}`} />
                 {t('alerts.title')}
                 <span className="ml-auto text-meta text-subtle">

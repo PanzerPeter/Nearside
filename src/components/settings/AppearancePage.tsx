@@ -16,6 +16,10 @@ export function AppearancePage() {
   const [osReducedMotion] = useState(prefersReducedMotion);
   const [showThemes, setShowThemes] = useState(false);
 
+  // A subpage rather than a modal, like every other route out of a settings
+  // row: see `SettingsPage`.
+  if (showThemes) return <ThemeStore onBack={() => setShowThemes(false)} />;
+
   return (
     <>
       <Card>
@@ -47,7 +51,6 @@ export function AppearancePage() {
       </Card>
       <Note>{t('appearance.hapticsNote')}</Note>
 
-      {showThemes && <ThemeStore onClose={() => setShowThemes(false)} />}
     </>
   );
 }

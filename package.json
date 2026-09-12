@@ -1,7 +1,7 @@
 {
   "name": "nearside",
   "private": true,
-  "version": "1.13.2",
+  "version": "1.13.3",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -18,7 +18,8 @@
     "electron:start": "npm run electron:sync && cap run @capawesome/capacitor-electron",
     "electron:pack": "npm run electron:sync && cd electron && npm run pack",
     "typecheck": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.worker.json",
-    "db:verify": "bash supabase/verify/verify.sh"
+    "db:verify": "bash supabase/verify/verify.sh",
+    "db:audit": "bash supabase/verify/live-audit.sh"
   },
   "overrides": {
     "xcode": {

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useMobileBackClose } from '../../hooks/useMobileBackClose';
@@ -149,6 +149,11 @@ export function Note({ children }: { children: ReactNode }) {
   return <p className="text-meta text-muted leading-relaxed px-1 -mt-2 mb-4">{children}</p>;
 }
 
+/** Set by a `SettingsPage` for any `SettingsPage` rendered inside it. Pages
+ *  nest — Privacy opens Hidden requests, Appearance opens Themes — and a nested
+ *  page renders *inside* its parent's children rather than beside them. */
+const NestedPage = createContext<((open: boolean) => void) | null>(null);
+
 /**
  * One settings subpage, with its own back affordance.
  *
@@ -158,6 +163,10 @@ export function Note({ children }: { children: ReactNode }) {
  * has no hardware back, and `useMobileBackClose` no-ops above 1023px, so the
  * chevron is the only route out there — which is why it is a real button and
  * not a decoration on the title.
+ *
+ * Only the innermost page draws a header. Every level drawing its own put two
+ * titles and two chevrons on one screen, disagreeing about where the reader
+ * was and about what one press of the top one would do.
  */
 export function SettingsPage({
   title,
@@ -170,21 +179,30 @@ export function SettingsPage({
 }) {
   useMobileBackClose(true, onBack);
   const t = useT();
+  const tellParent = useContext(NestedPage);
+  const [nested, setNested] = useState(false);
+
+  useEffect(() => {
+    tellParent?.(true);
+    return () => tellParent?.(false);
+  }, [tellParent]);
 
   return (
-    <div>
-      <div className="flex items-center gap-1 mb-4 -ml-2">
-        <button
-          type="button"
-          className="btn btn-ghost btn-sm btn-square"
-          onClick={onBack}
-          aria-label={t('settings.backToSettings')}
-        >
-          <ChevronLeft className="w-5 h-5" />
-        </button>
-        <h3 className="text-title font-semibold">{title}</h3>
-      </div>
+    <NestedPage.Provider value={setNested}>
+      {!nested && (
+        <div className="flex items-center gap-1 mb-4 -ml-2">
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm btn-square"
+            onClick={onBack}
+            aria-label={t('settings.backToSettings')}
+          >
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+          <h3 className="text-title font-semibold">{title}</h3>
+        </div>
+      )}
       {children}
-    </div>
+    </NestedPage.Provider>
   );
 }

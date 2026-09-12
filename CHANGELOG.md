@@ -14,6 +14,28 @@ one of them drifts.
 
 ## [Unreleased]
 
+## [1.13.3] — 2026-09-12
+
+### Fixed
+
+- The menu behind the ⋮ in a group chat was narrower than its own rows. The
+  current setting and the little chevron beside "Disappearing messages" and
+  "Notifications" sat out over the panel's rounded edge; it now sizes itself to
+  what it holds and stops at the screen. The one-to-one menu had the same fault
+  waiting for a longer translation, and gets the same fix and the same border.
+
+### Changed
+
+- Themes, What the server knows, Where this protection stops, Support, Open
+  source and both legal documents open as settings pages now, not as pop-up
+  dialogs. They read like a page rather than a window, they use the whole
+  screen on a phone, and the back gesture leaves them one step at a time — the
+  way Hidden requests already worked. Reaching one of those documents from the
+  sign-in screen still opens a dialog, because there is no settings screen
+  under it to go back to.
+- A settings page opened from inside another one shows one title and one back
+  chevron instead of two stacked headings arguing about where you are.
+
 ## [1.13.2] — 2026-09-12
 
 ### Fixed

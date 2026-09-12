@@ -81,9 +81,20 @@ export function PrivacyPage({ appLock }: PrivacyPageProps) {
     }
   }
 
-  // A subpage rather than a modal, so the back gesture walks out of it the way
-  // it walks out of every other settings page. See `SettingsPage`.
+  // Subpages rather than modals, so the back gesture walks out of each of them
+  // the way it walks out of every other settings page. See `SettingsPage`.
   if (showHidden) return <HiddenRequests onBack={() => setShowHidden(false)} />;
+  if (showLimits) return <SecurityLimits onBack={() => setShowLimits(false)} />;
+  if (showServerView)
+    return (
+      <ServerView
+        onBack={() => setShowServerView(false)}
+        onOpenLimits={() => {
+          setShowServerView(false);
+          setShowLimits(true);
+        }}
+      />
+    );
 
   return (
     <>
@@ -219,16 +230,6 @@ export function PrivacyPage({ appLock }: PrivacyPageProps) {
         />
       </Card>
 
-      {showServerView && (
-        <ServerView
-          onClose={() => setShowServerView(false)}
-          onOpenLimits={() => {
-            setShowServerView(false);
-            setShowLimits(true);
-          }}
-        />
-      )}
-      {showLimits && <SecurityLimits onClose={() => setShowLimits(false)} />}
     </>
   );
 }

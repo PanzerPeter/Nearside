@@ -11,12 +11,12 @@ import {
   Users,
   X,
 } from 'lucide-react';
-import { Modal } from './Modal';
+import { SettingsPage } from './settings/SettingsUi';
 import type { MessageKey } from '../lib/i18n';
 import { useT } from '../hooks/useT';
 
 interface SecurityLimitsProps {
-  onClose: () => void;
+  onBack: () => void;
 }
 
 /** The three shapes a section comes in: what holds, what does not, and the one
@@ -90,20 +90,11 @@ const SECTIONS: { tone: Tone; icon: LucideIcon; title: MessageKey; body: Message
  *
  * It carries no logic and it is one of the most important screens in the app.
  */
-export function SecurityLimits({ onClose }: SecurityLimitsProps) {
+export function SecurityLimits({ onBack }: SecurityLimitsProps) {
   const t = useT();
 
   return (
-    <Modal
-      title={t('privacy.limits')}
-      onClose={onClose}
-      className="max-w-lg"
-      actions={
-        <button className="btn btn-ghost" onClick={onClose}>
-          {t('common.close')}
-        </button>
-      }
-    >
+    <SettingsPage title={t('privacy.limits')} onBack={onBack}>
       <div className="space-y-4">
         {SECTIONS.map(({ tone, icon: Icon, title, body }) => (
           <section key={title} className={`rounded-box border p-3.5 ${TONE[tone].section}`}>
@@ -122,6 +113,6 @@ export function SecurityLimits({ onClose }: SecurityLimitsProps) {
           </section>
         ))}
       </div>
-    </Modal>
+    </SettingsPage>
   );
 }

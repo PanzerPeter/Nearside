@@ -285,6 +285,7 @@ Then, on the Supabase side:
 | `npm run typecheck` | tsc on both tsconfigs, no emit |
 | `npm run lint` | ESLint |
 | `npm run db:verify` | Replay migrations against `schema.sql` in Docker and diff |
+| `npm run db:audit -- '<url>'` | Diff the **live** project against `schema.sql`, read-only |
 | `npm run android:sync` · `android:open` | Native build into `android/`; open Android Studio |
 | `npm run ios:sync` · `ios:open` | Native build into `ios/`; open Xcode (macOS) |
 | `npm run electron:install` · `electron:start` · `electron:pack` | Desktop shell: install once, run, package |
@@ -340,6 +341,7 @@ supabase/
   storage/      Buckets and their policies
   functions/    send-push, delete-account, call-ring, call-ice (Deno)
   verify/       npm run db:verify: replays both paths and diffs them
+                npm run db:audit: diffs the live project against schema.sql
 android/        Capacitor shell, the mature target
 ios/            Capacitor shell, configured but never compiled
 electron/       Desktop shell, a convenience build

@@ -13,13 +13,13 @@ import {
 } from '../lib/purchases';
 import { grantedPacks, ownedPacks } from '../lib/theme-grants';
 import { useToast } from '../hooks/useToast';
-import { Modal } from './Modal';
+import { SettingsPage } from './settings/SettingsUi';
 import { isMobileNative } from '../lib/platform';
 import { useT } from '../hooks/useT';
 import type { MessageKey } from '../lib/i18n';
 
 interface ThemeStoreProps {
-  onClose: () => void;
+  onBack: () => void;
 }
 
 /**
@@ -32,7 +32,7 @@ interface ThemeStoreProps {
  * anywhere else in the app; see `no-ads.test.ts`, which enforces that at build
  * time.
  */
-export function ThemeStore({ onClose }: ThemeStoreProps) {
+export function ThemeStore({ onBack }: ThemeStoreProps) {
   const [owned, setOwned] = useState<Set<string>>(new Set());
   const [offers, setOffers] = useState<Map<string, PackOffer>>(new Map());
   const [active, setActive] = useState(storedTheme);
@@ -121,15 +121,7 @@ export function ThemeStore({ onClose }: ThemeStoreProps) {
   }
 
   return (
-    <Modal
-      title={t('themes.title')}
-      onClose={onClose}
-      actions={
-        <button className="btn btn-ghost" onClick={onClose}>
-          {t('common.close')}
-        </button>
-      }
-    >
+    <SettingsPage title={t('themes.title')} onBack={onBack}>
       <p className="text-body text-strong leading-relaxed">{t('themes.intro')}</p>
 
       <h3 className="text-meta font-medium uppercase tracking-wide text-subtle mt-5 mb-2">
@@ -193,7 +185,7 @@ export function ThemeStore({ onClose }: ThemeStoreProps) {
       {!native && (
         <p className="text-meta text-muted mt-2 text-center">{t('themes.browserOnly')}</p>
       )}
-    </Modal>
+    </SettingsPage>
   );
 }
 
@@ -313,7 +305,7 @@ function ThemeCard({
  *
  * `data-theme` on this element rather than on `<html>`, which is what makes a
  * preview a preview: the surrounding screen keeps the theme in use, nothing is
- * written to storage, and there is no state to walk back if the modal closes
+ * written to storage, and there is no state to walk back if the page is left
  * mid-look. Every colour below comes from a daisyUI token, so this stays
  * honest for a theme added after it was written.
  */

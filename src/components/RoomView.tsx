@@ -1100,13 +1100,15 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
           >
             <MoreVertical className="w-4 h-4" />
           </button>
+          {/* Same shell as the 1:1 header's menu, and sized the same way — see
+              the comment there for what a fixed width did to these rows. */}
           <ul
             tabIndex={0}
-            className="dropdown-content menu z-30 mt-1 w-60 rounded-box bg-base-100 p-2 shadow-overlay ring-1 ring-base-content/5"
+            className="dropdown-content menu z-30 mt-1 w-max max-w-[calc(100vw-1rem)] rounded-box border border-hairline bg-base-100 p-2 shadow-overlay"
           >
             <li>
               <details>
-                <summary className="whitespace-nowrap">
+                <summary>
                   <Timer
                     className={`w-4 h-4 ${timer?.ttlSeconds != null ? 'text-primary' : ''}`}
                   />
@@ -1145,7 +1147,7 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
             </li>
             <li>
               <details>
-                <summary className="whitespace-nowrap">
+                <summary>
                   <BellRing className={`w-4 h-4 ${alertLevel ? 'text-primary' : ''}`} />
                   {t('alerts.title')}
                   <span className="ml-auto text-meta text-subtle">

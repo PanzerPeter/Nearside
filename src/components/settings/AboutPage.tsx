@@ -3,7 +3,7 @@ import { FileText, Heart, Keyboard, Lock, Scale } from 'lucide-react';
 import { APP_VERSION } from '../../lib/version';
 import { SupportNearside } from '../SupportNearside';
 import { OpenSourceLicenses } from '../OpenSourceLicenses';
-import { LegalDocModal, type LegalDoc } from '../LegalFooter';
+import { LegalDocPage, type LegalDoc } from '../LegalFooter';
 import { Card, InfoRow, NavRow } from './SettingsUi';
 import { isCoarsePointer } from '../../lib/device';
 import { useT } from '../../hooks/useT';
@@ -29,6 +29,12 @@ export function AboutPage() {
   )
     ? '⌘'
     : 'Ctrl';
+
+  // Subpages rather than modals, like every other route out of a settings row:
+  // see `SettingsPage`.
+  if (showSupport) return <SupportNearside onBack={() => setShowSupport(false)} />;
+  if (showLicenses) return <OpenSourceLicenses onBack={() => setShowLicenses(false)} />;
+  if (legalDoc) return <LegalDocPage doc={legalDoc} onBack={() => setLegalDoc(null)} />;
 
   return (
     <>
@@ -59,9 +65,6 @@ export function AboutPage() {
           app store's build number is not something anyone reads back. */}
       <p className="px-1 text-meta text-faint">Nearside {APP_VERSION}</p>
 
-      {showSupport && <SupportNearside onClose={() => setShowSupport(false)} />}
-      {showLicenses && <OpenSourceLicenses onClose={() => setShowLicenses(false)} />}
-      {legalDoc && <LegalDocModal doc={legalDoc} onClose={() => setLegalDoc(null)} />}
     </>
   );
 }

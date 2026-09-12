@@ -8,11 +8,11 @@ import {
 } from '../lib/server-view';
 import { saveTextFile } from '../lib/download';
 import { useToast } from '../hooks/useToast';
-import { Modal } from './Modal';
+import { SettingsPage } from './settings/SettingsUi';
 import { useT } from '../hooks/useT';
 
 interface ServerViewProps {
-  onClose: () => void;
+  onBack: () => void;
   onOpenLimits: () => void;
 }
 
@@ -28,7 +28,7 @@ interface ServerViewProps {
  * one surface where a commercial interruption would falsify the page it sits
  * on.
  */
-export function ServerView({ onClose, onOpenLimits }: ServerViewProps) {
+export function ServerView({ onBack, onOpenLimits }: ServerViewProps) {
   const t = useT();
   const [report, setReport] = useState<StoredDataReport | null>(null);
   const [failed, setFailed] = useState(false);
@@ -63,16 +63,7 @@ export function ServerView({ onClose, onOpenLimits }: ServerViewProps) {
   }
 
   return (
-    <Modal
-      title={t('privacy.serverKnows')}
-      onClose={onClose}
-      className="max-w-2xl"
-      actions={
-        <button className="btn btn-ghost" onClick={onClose}>
-          {t('common.close')}
-        </button>
-      }
-    >
+    <SettingsPage title={t('privacy.serverKnows')} onBack={onBack}>
       <p className="text-body text-strong leading-relaxed">{t('serverView.intro')}</p>
       <p className="text-body text-muted leading-relaxed mt-2">{t('serverView.live')}</p>
 
@@ -280,6 +271,6 @@ export function ServerView({ onClose, onOpenLimits }: ServerViewProps) {
           </p>
         </>
       )}
-    </Modal>
+    </SettingsPage>
   );
 }

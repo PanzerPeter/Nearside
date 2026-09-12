@@ -2,12 +2,12 @@ import { useCallback, useEffect, useState } from 'react';
 import { Bell, Database, Heart, Palette } from 'lucide-react';
 import { DONATION_TIERS, donate, donationOffers, type DonationOffer } from '../lib/donations';
 import { useToast } from '../hooks/useToast';
-import { Modal } from './Modal';
+import { SettingsPage } from './settings/SettingsUi';
 import { isMobileNative } from '../lib/platform';
 import { useT } from '../hooks/useT';
 
 interface SupportNearsideProps {
-  onClose: () => void;
+  onBack: () => void;
 }
 
 /**
@@ -22,7 +22,7 @@ interface SupportNearsideProps {
  * which runs the other way: it gives away things that were already for sale
  * rather than putting anything new behind a price.
  */
-export function SupportNearside({ onClose }: SupportNearsideProps) {
+export function SupportNearside({ onBack }: SupportNearsideProps) {
   const t = useT();
   const [offers, setOffers] = useState<Map<string, DonationOffer>>(new Map());
   const [busy, setBusy] = useState<string | null>(null);
@@ -60,15 +60,7 @@ export function SupportNearside({ onClose }: SupportNearsideProps) {
   }
 
   return (
-    <Modal
-      title={t('about.support')}
-      onClose={onClose}
-      actions={
-        <button className="btn btn-ghost" onClick={onClose}>
-          {t('common.close')}
-        </button>
-      }
-    >
+    <SettingsPage title={t('about.support')} onBack={onBack}>
       <p className="text-body text-strong leading-relaxed">{t('support.intro')}</p>
 
       <h3 className="text-meta font-medium uppercase tracking-wide text-subtle mt-5 mb-2">
@@ -145,6 +137,6 @@ export function SupportNearside({ onClose }: SupportNearsideProps) {
       {!native && (
         <p className="text-meta text-muted mt-2 text-center">{t('support.browserOnly')}</p>
       )}
-    </Modal>
+    </SettingsPage>
   );
 }

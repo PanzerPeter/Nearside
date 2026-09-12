@@ -67,6 +67,46 @@ image does not have: the `auth` and `storage` schemas, the `anon` /
 `authenticated` roles, the realtime publication. It is a stub, not an emulator:
 it makes the DDL apply and the result comparable, and it enforces nothing.
 
+## `npm run db:audit -- '<connection string>'`
+
+The question `db:verify` cannot reach: is the live project actually the
+database these files describe? Migrations here are applied by hand in a
+dashboard, so the only record that one ran is somebody's memory of running it,
+and a migration that never ran leaves nothing behind to notice.
+
+It builds the reference from `schema.sql` in the same throwaway container
+(running `db:verify` first, so the reference is proven rather than assumed),
+fingerprints the live project with the same `verify/introspect.sql`, and diffs.
+Every statement it sends the live project is a catalog `SELECT`: it creates
+nothing, writes nothing and drops nothing.
+
+Three headings come out of it. **MISSING FROM LIVE** is a migration that never
+ran. **EXTRA ON LIVE** is usually the platform and occasionally drift worth
+looking at. **WRONG BODY ON LIVE** is the one nothing else can see: a
+`SECURITY DEFINER` function that exists, is granted, and holds an older
+migration's definition. `db:verify` is blind to that by construction — both
+sides of its diff hold the same body, right or wrong — and plpgsql does not
+resolve a body until it runs, so the first report is a user saying a button
+does not work.
+
+Extensions are listed rather than diffed: a Supabase project carries a dozen
+the migrations here never install, and burying real findings under them would
+defeat the point. `pg_net` is the exception, checked by name, because `0014`
+installs it and the push trigger cannot post without it.
+
+## `verify/applied.sql` — the cheap triage
+
+`db:audit` is the thorough answer and it wants Docker, `psql` and the database
+password. This one wants a browser tab: paste the file into the SQL editor and
+it prints one row per file in `migrations/apply-order.txt`, `OK` or `MISSING`,
+from whatever that file leaves behind in the catalog. It reads only.
+
+It answers "which *file* never ran", not "which fact is wrong" — each row
+checks one or two markers, so a migration that applied halfway can still read
+`OK`, and a few early files (`0002`, `0010`, `0012`) were undone by later ones
+and report `n/a` because there is nothing left to look at. When it is green,
+`db:audit` is still the thing that says the database is the right shape.
+
 ## Where the guarantees actually live
 
 - **No message body reaches Postgres.** `messages` and `room_messages` carry a

@@ -1,8 +1,8 @@
 import { ExternalLink } from 'lucide-react';
-import { Modal } from './Modal';
+import { SettingsPage } from './settings/SettingsUi';
 
 interface OpenSourceLicensesProps {
-  onClose: () => void;
+  onBack: () => void;
 }
 
 interface Dependency {
@@ -137,18 +137,9 @@ const DEPENDENCIES: Dependency[] = [
   },
 ];
 
-export function OpenSourceLicenses({ onClose }: OpenSourceLicensesProps) {
+export function OpenSourceLicenses({ onBack }: OpenSourceLicensesProps) {
   return (
-    <Modal
-      title="Open source"
-      onClose={onClose}
-      className="max-w-lg"
-      actions={
-        <button className="btn btn-ghost" onClick={onClose}>
-          Close
-        </button>
-      }
-    >
+    <SettingsPage title="Open source" onBack={onBack}>
       <p className="text-body text-strong leading-relaxed">
         Nearside is built on other people&rsquo;s work. The cryptography in particular is standard
         and borrowed on purpose. A messenger that rolled its own would be a worse one.
@@ -176,6 +167,6 @@ export function OpenSourceLicenses({ onClose }: OpenSourceLicensesProps) {
           </li>
         ))}
       </ul>
-    </Modal>
+    </SettingsPage>
   );
 }
