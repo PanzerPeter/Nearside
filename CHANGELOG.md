@@ -14,6 +14,17 @@ one of them drifts.
 
 ## [Unreleased]
 
+## [1.13.9] — 2026-09-12
+
+### Fixed
+
+- A long message menu no longer loses its last item. On a short screen, or with
+  a message that offers every action at once, the card was clamped into the
+  space available and whatever did not fit was simply off the edge — an action
+  that exists and cannot be reached. The card now scrolls inside itself
+  instead. The row menus in the chat list have worked this way for a while;
+  this is the same code doing both jobs rather than two versions of it.
+
 ## [1.13.8] — 2026-09-12
 
 ### Fixed

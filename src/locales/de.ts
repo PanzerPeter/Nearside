@@ -19,7 +19,6 @@ export const de: Catalog = {
   'common.checking': 'Wird geprüft…',
   'common.allow': 'Erlauben',
   'common.allowed': 'Erlaubt',
-  'common.on': 'An',
   'common.off': 'Aus',
   'common.none': 'keine',
   'common.turnOn': 'Einschalten',
@@ -28,10 +27,7 @@ export const de: Catalog = {
   'common.delete': 'Löschen',
   'common.done': 'Fertig',
   'common.copy': 'Kopieren',
-  'common.copied': 'Kopiert',
-  'common.continue': 'Weiter',
   'common.send': 'Senden',
-  'common.search': 'Suchen',
   'common.you': 'Du',
 
   'time.today': 'Heute',

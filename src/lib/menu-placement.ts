@@ -26,6 +26,15 @@ export interface PlacementInput {
   gap: number;
   /** Space between the card and the viewport edges. */
   margin: number;
+  /** Which edge of the anchor the card lines up with. `end` is the `⋯` button
+   *  at a row's right edge; `start` is a message bubble sitting on the left of
+   *  the thread, where a right-aligned card would point away from it. */
+  align?: 'start' | 'end';
+  /** Which side of the anchor to try first. A row menu wants `below` — that is
+   *  where the rest of the list is, so the card covers rows the user is not
+   *  acting on. A message menu wants `above`: that is where the thumb isn't,
+   *  and it leaves the message itself visible. Either flips when it won't fit. */
+  prefer?: 'above' | 'below';
 }
 
 export interface Placement {
@@ -56,19 +65,32 @@ export function placeMenu({
   safe,
   gap,
   margin,
+  align = 'end',
+  prefer = 'below',
 }: PlacementInput): Placement {
   const topLimit = margin + safe.top;
   const bottomLimit = viewport.height - margin - safe.bottom;
   const maxHeight = Math.max(0, bottomLimit - topLimit);
   const used = Math.min(height, maxHeight);
 
-  let top = anchor.bottom + gap;
-  if (top + used > bottomLimit) top = anchor.top - used - gap;
-  if (top < topLimit) top = Math.max(topLimit, Math.min(anchor.top, bottomLimit - used));
+  const above = anchor.top - used - gap;
+  const below = anchor.bottom + gap;
+  const fitsAbove = above >= topLimit;
+  const fitsBelow = below + used <= bottomLimit;
 
-  // Right-aligned to the anchor: the `⋯` button sits at a row's right edge, so
-  // the card unfolds inwards over the row rather than off the side.
-  const left = anchor.right - width;
+  // Neither side has room for the card even at its capped height, which only
+  // happens on a very short screen. Sit it as close to the anchor as the limits
+  // allow rather than hanging off one of them.
+  let top = Math.max(topLimit, Math.min(anchor.top, bottomLimit - used));
+  if (prefer === 'above') {
+    if (fitsAbove) top = above;
+    else if (fitsBelow) top = below;
+  } else {
+    if (fitsBelow) top = below;
+    else if (fitsAbove) top = above;
+  }
+
+  const left = align === 'start' ? anchor.left : anchor.right - width;
   return {
     top,
     left: Math.min(Math.max(margin, left), Math.max(margin, viewport.width - width - margin)),

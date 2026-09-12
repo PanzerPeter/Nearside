@@ -259,21 +259,6 @@ export async function uploadSticker(
   return { ...data, label: normalizeLabel(label), key };
 }
 
-/** Rename. The label is sealed, so this is a re-seal rather than a text update. */
-export async function renameSticker(
-  identity: Identity,
-  id: string,
-  label: string
-): Promise<string> {
-  const clean = normalizeLabel(label);
-  const sealed = await sealForSelf(identity.vaultKey, clean);
-  await supabase
-    .from('stickers')
-    .update({ label_ciphertext: sealed.ciphertext, label_nonce: sealed.nonce })
-    .eq('id', id);
-  return clean;
-}
-
 /**
  * Persist a new order for the library.
  *

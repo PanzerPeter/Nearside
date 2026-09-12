@@ -586,14 +586,6 @@ export async function sealedNewestByPeer(): Promise<Map<string, string>> {
 }
 
 /** Drop one row: a delete, or a message whose expiry has passed. */
-export async function forgetSealedRow(id: string): Promise<void> {
-  if (!native()) {
-    sealedStore()?.delete(id);
-    return;
-  }
-  await db?.run('DELETE FROM messages_sealed WHERE id = ?', [id]);
-}
-
 // ---- The conversation list --------------------------------------------------
 
 /**

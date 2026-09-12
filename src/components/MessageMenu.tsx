@@ -2,6 +2,7 @@ import { ReactNode, RefObject, useEffect, useLayoutEffect, useRef, useState } fr
 import { useT } from '../hooks/useT';
 import { createPortal } from 'react-dom';
 import { safeAreaInsets } from '../lib/safe-area';
+import { placeMenu, type Placement } from '../lib/menu-placement';
 import { ReactionBar } from './ReactionBar';
 
 export interface MessageMenuAction {
@@ -30,11 +31,6 @@ interface MessageMenuProps {
 const GAP = 8;
 const MARGIN = 8;
 
-interface Pos {
-  top: number;
-  left: number;
-}
-
 /**
  * Everything you can do to one message, in a single floating card: quick
  * reactions on top, then reply/copy/edit/delete.
@@ -58,7 +54,7 @@ export function MessageMenu({
   onClose,
 }: MessageMenuProps) {
   const t = useT();
-  const [pos, setPos] = useState<Pos | null>(null);
+  const [pos, setPos] = useState<Placement | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   // The emoji picker opens in its own portal, outside this card. While it is
   // up, a click in it is "outside" by DOM containment but very much inside as
@@ -82,31 +78,27 @@ export function MessageMenu({
       const anchor = anchorRef.current;
       const panel = panelRef.current;
       if (!anchor || !panel) return;
-
-      const a = anchor.getBoundingClientRect();
-      // offset*, not a rect: the card animates in with a scale, and a
-      // transformed rect would measure ~2% small on the frame this runs.
-      const width = panel.offsetWidth;
-      const height = panel.offsetHeight;
-      const vw = window.innerWidth;
-      const vh = window.innerHeight;
-      // The viewport runs under the status bar and the gesture pill, so the
-      // margin that keeps this card on screen has to keep it out from under
-      // them too — otherwise a tall menu clamps to a top edge occupied by the
-      // clock, or a bottom edge occupied by the pill.
-      const safe = safeAreaInsets();
-      const topLimit = MARGIN + safe.top;
-      const bottomLimit = vh - MARGIN - safe.bottom;
-
-      // Above the bubble by preference — that is where the thumb isn't, and
-      // it leaves the message itself visible. Below when there isn't room,
-      // clamped into the viewport when there is room for neither.
-      let top = a.top - height - GAP;
-      if (top < topLimit) top = a.bottom + GAP;
-      if (top + height > bottomLimit) top = Math.max(topLimit, bottomLimit - height);
-
-      const left = align === 'end' ? a.right - width : a.left;
-      setPos({ top, left: Math.min(Math.max(MARGIN, left), Math.max(MARGIN, vw - width - MARGIN)) });
+      setPos(
+        placeMenu({
+          anchor: anchor.getBoundingClientRect(),
+          // offsetWidth, not a rect: the card animates in with a scale, and a
+          // transformed rect would measure ~2% small on the frame this runs.
+          width: panel.offsetWidth,
+          // scrollHeight, not offsetHeight: once a previous pass has capped the
+          // card, its box is the cap and measuring it would ratchet the card
+          // smaller on every re-place.
+          height: panel.scrollHeight,
+          viewport: { width: window.innerWidth, height: window.innerHeight },
+          // The viewport runs under the status bar and the gesture pill, so the
+          // margin that keeps this card on screen has to keep it out from under
+          // them too.
+          safe: safeAreaInsets(),
+          gap: GAP,
+          margin: MARGIN,
+          align,
+          prefer: 'above',
+        })
+      );
     }
 
     place();
@@ -131,8 +123,11 @@ export function MessageMenu({
     // The card is anchored to a bubble in a scrolling list; rather than chase
     // the anchor, scrolling dismisses. Ignored while the picker is open,
     // since browsing emoji scrolls the picker's own list.
-    function onScroll() {
+    function onScroll(e: Event) {
       if (pickerOpen) return;
+      // A card taller than the screen scrolls inside itself; reading a long
+      // action list is not leaving it.
+      if (panelRef.current?.contains(e.target as Node)) return;
       onClose();
     }
 
@@ -153,10 +148,11 @@ export function MessageMenu({
       ref={panelRef}
       role="menu"
       aria-label={t('message.actions')}
-      className="fixed z-50 w-max max-w-[calc(100vw-1rem)] rounded-box bg-base-100 border border-hairline shadow-overlay overflow-hidden animate-message-in"
+      className="fixed z-50 w-max max-w-[calc(100vw-1rem)] rounded-box bg-base-100 border border-hairline shadow-overlay overflow-y-auto animate-message-in"
       style={{
         top: pos?.top ?? 0,
         left: pos?.left ?? 0,
+        maxHeight: pos?.maxHeight,
         visibility: pos ? 'visible' : 'hidden',
       }}
     >

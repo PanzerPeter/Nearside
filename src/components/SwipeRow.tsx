@@ -3,7 +3,8 @@ import { MoreHorizontal } from 'lucide-react';
 import { useSwipeActions } from '../hooks/useSwipeActions';
 import { isCoarsePointer } from '../lib/device';
 import { useT } from '../hooks/useT';
-import { RowMenu, type MenuAnchor } from './RowMenu';
+import { RowMenu } from './RowMenu';
+import type { MenuAnchor } from '../lib/menu-placement';
 
 export interface RowAction {
   key: string;

@@ -63,6 +63,26 @@ describe('placeMenu', () => {
     const wide = placeMenu({ ...BASE, width: 500, anchor: topRow });
     expect(wide.left).toBe(8);
   });
+
+  it('left-aligns to the anchor when asked', () => {
+    // A message bubble on the left of the thread: a right-aligned card would
+    // start where the bubble ends and point away from what it belongs to.
+    expect(placeMenu({ ...BASE, anchor: topRow, align: 'start' }).left).toBe(8);
+  });
+
+  it('prefers above the anchor when asked, where the thumb is not', () => {
+    // 100 - 120 - 4 = -24 would run off the top, so use a row low enough that
+    // above genuinely fits: 400 - 120 - 4 = 276.
+    const midRow = { top: 400, bottom: 456, left: 8, right: 392 };
+    expect(placeMenu({ ...BASE, anchor: midRow, prefer: 'above' }).top).toBe(276);
+    // The same anchor without the preference goes below.
+    expect(placeMenu({ ...BASE, anchor: midRow }).top).toBe(460);
+  });
+
+  it('flips an above-preferring card below when the top has no room', () => {
+    // 100 - 120 - 4 = -24, past the 32px top limit, so it has to go under.
+    expect(placeMenu({ ...BASE, anchor: topRow, prefer: 'above' }).top).toBe(160);
+  });
 });
 
 describe('nextMenuIndex', () => {

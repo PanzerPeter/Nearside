@@ -23,7 +23,6 @@ export const en = {
   'common.checking': 'Checking…',
   'common.allow': 'Allow',
   'common.allowed': 'Allowed',
-  'common.on': 'On',
   'common.off': 'Off',
   'common.none': 'none',
   'common.turnOn': 'Turn on',
@@ -32,10 +31,7 @@ export const en = {
   'common.delete': 'Delete',
   'common.done': 'Done',
   'common.copy': 'Copy',
-  'common.copied': 'Copied',
-  'common.continue': 'Continue',
   'common.send': 'Send',
-  'common.search': 'Search',
   'common.you': 'You',
 
   // ------------------------------------------------------------------ time

@@ -3,8 +3,6 @@ import { createPortal } from 'react-dom';
 import { safeAreaInsets } from '../lib/safe-area';
 import { nextMenuIndex, placeMenu, type MenuAnchor, type Placement } from '../lib/menu-placement';
 
-export type { MenuAnchor };
-
 export interface RowMenuItem {
   key: string;
   label: string;

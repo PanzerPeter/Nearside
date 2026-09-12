@@ -157,8 +157,3 @@ export async function forgetAccount(userId: string): Promise<void> {
   await writeRaw(removeAccount(list, userId));
 }
 
-/** The stored refresh token for an account, or null if it is not on the roster. */
-export async function accountToken(userId: string): Promise<string | null> {
-  const list = await loadAccounts();
-  return list.find((a) => a.userId === userId)?.refresh_token ?? null;
-}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { statusFor, type Receipt } from './receipts';
+import { formatUnread, statusFor, type Receipt } from './receipts';
 
 const PEER = '00000000-0000-0000-0000-00000000000b';
 const ME = '00000000-0000-0000-0000-00000000000a';
@@ -40,5 +40,21 @@ describe('statusFor', () => {
     const offsetForm = receipt('2026-07-20T10:00:05+00:00', null);
     expect(statusFor(T2, zForm)).toBe(statusFor(T2, offsetForm));
     expect(statusFor(T2, offsetForm)).toBe('delivered');
+  });
+});
+
+describe('formatUnread', () => {
+  it('renders small counts verbatim', () => {
+    expect(formatUnread(1)).toBe('1');
+    expect(formatUnread(42)).toBe('42');
+  });
+
+  it('renders the boundary exactly', () => {
+    expect(formatUnread(99)).toBe('99');
+  });
+
+  it('caps anything past the boundary', () => {
+    expect(formatUnread(100)).toBe('99+');
+    expect(formatUnread(5000)).toBe('99+');
   });
 });

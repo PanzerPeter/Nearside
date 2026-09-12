@@ -23,7 +23,6 @@ export const ru: Catalog = {
   'common.checking': 'Проверяем…',
   'common.allow': 'Разрешить',
   'common.allowed': 'Разрешено',
-  'common.on': 'Вкл.',
   'common.off': 'Выкл.',
   'common.none': 'нет',
   'common.turnOn': 'Включить',
@@ -32,10 +31,7 @@ export const ru: Catalog = {
   'common.delete': 'Удалить',
   'common.done': 'Готово',
   'common.copy': 'Копировать',
-  'common.copied': 'Скопировано',
-  'common.continue': 'Продолжить',
   'common.send': 'Отправить',
-  'common.search': 'Поиск',
   'common.you': 'Ты',
 
   'time.today': 'Сегодня',

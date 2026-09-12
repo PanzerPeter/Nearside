@@ -12,12 +12,7 @@
  * live here so the node suite can reach the ordering and the filtering.
  */
 
-import {
-  allChatFlags,
-  forgetChatFlags,
-  setChatFlag,
-  type ChatFlagsRow,
-} from './localdb';
+import { allChatFlags, setChatFlag, type ChatFlagsRow } from './localdb';
 
 /*
  * One place to hear that this device's opinion changed.
@@ -164,11 +159,6 @@ export function alertLevels(flags: ReadonlyMap<string, ChatFlags>): Record<strin
     if (flag.alertLevel) out[id] = flag.alertLevel;
   }
   return out;
-}
-
-export async function forgetChat(id: string): Promise<void> {
-  await forgetChatFlags(id);
-  announce();
 }
 
 interface Sortable {
