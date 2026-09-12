@@ -14,6 +14,22 @@ one of them drifts.
 
 ## [Unreleased]
 
+## [1.13.8] — 2026-09-12
+
+### Fixed
+
+- A reaction no longer floats over the menu you just opened. Reactions sit on
+  the corner of their bubble and were lifted just high enough to tie with the
+  header, and a tie goes to whatever is drawn last — which is the conversation,
+  not the menu on top of it.
+- An incoming call rings once. Android sounds the ringtone you chose for the
+  phone; the app was playing a tone of its own over the top of it, so a call
+  arrived as two ringtones at odds with each other. The app's own tone is now
+  only for the browser and desktop builds, which have no notification to ring
+  with — and the switch for it has gone from Calls settings on the phone, where
+  it was offering to silence something that no longer plays. Android's own
+  notification settings are where a phone's call ringing gets changed.
+
 ## [1.13.7] — 2026-09-12
 
 ### Fixed

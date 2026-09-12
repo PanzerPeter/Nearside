@@ -4,12 +4,15 @@
 //
 // Deliberately not gated on the message-chime mute in `lib/sound.ts`. Silencing
 // notification chimes is a statement about messages; someone who did that has
-// not asked for their phone to stay silent when a friend calls them. On Android
-// the notification channel's own ringtone covers the case where the app is not
-// in the foreground, so this is the in-app half — and its own switch, below, is
-// what someone who wants calls to arrive quietly reaches for instead.
+// not asked for their phone to stay silent when a friend calls them.
+//
+// On Android none of the incoming half plays: the ring notification is posted
+// for every incoming call, foreground or not, and its channel sounds the
+// phone's own ringtone (`CallNotifications.ensureChannels`). This is the ring
+// for the shells that have no notification to ring with.
 
 import { sharedAudioContext } from '../sound';
+import { isMobileNative } from '../platform';
 
 /** Separate from `nearside.sound.muted` for the reason above: the two are
  *  different statements and one key could only express one of them. */
@@ -98,6 +101,10 @@ export function setRingtoneMuted(muted: boolean): void {
  * session after someone turned it off.
  */
 export function startRingtone(): void {
+  // The ring notification is already sounding the phone's ringtone on the
+  // ringtone stream. A tone over it is two ringtones at once, and the one the
+  // owner did not choose is the one playing loudest.
+  if (isMobileNative()) return;
   if (isRingtoneMuted()) return;
   loop(RING, RING_PERIOD_MS);
 }
@@ -105,9 +112,9 @@ export function startRingtone(): void {
 /**
  * The tone the caller hears while the far end rings.
  *
- * Not covered by the switch above. That one silences a call arriving; this is
- * feedback for a call you just placed, and someone who dialled is waiting to
- * hear something.
+ * Not covered by the switch above, and not by the platform check either: a
+ * call you placed raises no notification anywhere, so this tone is the only
+ * feedback there is, and someone who dialled is waiting to hear something.
  */
 export function startRingback(): void {
   loop(RINGBACK, RINGBACK_PERIOD_MS);

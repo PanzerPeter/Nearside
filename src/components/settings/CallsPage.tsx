@@ -62,17 +62,24 @@ export function CallsPage() {
         {native && ringAllowed === null && (
           <InfoRow icon={PhoneCall} label={t('calls.fullScreen')} hint={t('common.checking')} />
         )}
-        <ToggleRow
-          icon={BellRing}
-          label={t('calls.ringOutLoud')}
-          hint={ringMuted ? t('calls.ringOutLoudOff') : t('calls.ringOutLoudOn')}
-          checked={!ringMuted}
-          onChange={() => {
-            const next = !ringMuted;
-            setMuted(next);
-            setRingtoneMuted(next);
-          }}
-        />
+        {/* The app's own ring, and therefore only for the shells that have
+            one. On a phone the ring is the notification's, sounding the
+            ringtone the owner chose for the device — a switch here would be
+            offering to silence something this build never plays. Android's own
+            channel settings are where that call gets silenced. */}
+        {!native && (
+          <ToggleRow
+            icon={BellRing}
+            label={t('calls.ringOutLoud')}
+            hint={ringMuted ? t('calls.ringOutLoudOff') : t('calls.ringOutLoudOn')}
+            checked={!ringMuted}
+            onChange={() => {
+              const next = !ringMuted;
+              setMuted(next);
+              setRingtoneMuted(next);
+            }}
+          />
+        )}
       </Card>
 
       <Card title={t('calls.leavesBehind')}>

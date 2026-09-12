@@ -740,11 +740,17 @@ export function MessageBubble({
           </div>
 
           {/* Reactions straddle the inner-bottom corner of the bubble:
-              bottom-left for your own messages, bottom-right for the friend's. */}
+              bottom-left for your own messages, bottom-right for the friend's.
+
+              Deliberately without a z-index. The chip is already above its own
+              bubble by document order and the spacer below reserves its
+              overhang, so the only thing a z-10 here bought was a tie with the
+              header — a flex item at z-10, which is the stacking context the
+              header's dropdown lives in. A tie is broken by document order and
+              the thread comes after the header, so the reaction painted over an
+              open menu. */}
           {!isDeleted && hasReactions && (
-            <div
-              className={`absolute -bottom-2.5 z-10 ${isOwn ? 'left-2' : 'right-2'}`}
-            >
+            <div className={`absolute -bottom-2.5 ${isOwn ? 'left-2' : 'right-2'}`}>
               <ReactionChips reactions={reactions} me={me} onToggle={onToggleReaction} />
             </div>
           )}
