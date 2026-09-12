@@ -14,6 +14,18 @@ one of them drifts.
 
 ## [Unreleased]
 
+## [1.13.7] — 2026-09-12
+
+### Fixed
+
+- Backing out of the QR scanner no longer claims the camera could not be
+  opened. Leaving the scanner is reported by the system the same way a real
+  failure is, and the app was taking it at its word — on a camera that had
+  just been open. Nothing is said now when you simply change your mind.
+- The two buttons at the top of Connect — "My code" and "Add someone" — share
+  the full width of the panel instead of huddling on the left with empty space
+  beside them.
+
 ## [1.13.6] — 2026-09-12
 
 ### Changed

@@ -59,7 +59,7 @@ export function ConnectModal({ session, identity, onClose, initialTab = 'show' }
       <div role="tablist" className="tabs tabs-box bg-base-200/50 mb-4">
         <button
           role="tab"
-          className={`tab gap-1.5 ${tab === 'show' ? 'tab-active' : ''}`}
+          className={`tab flex-1 gap-1.5 ${tab === 'show' ? 'tab-active' : ''}`}
           onClick={() => setTab('show')}
         >
           <QrCodeIcon className="w-4 h-4" />
@@ -67,7 +67,7 @@ export function ConnectModal({ session, identity, onClose, initialTab = 'show' }
         </button>
         <button
           role="tab"
-          className={`tab gap-1.5 ${tab === 'scan' ? 'tab-active' : ''}`}
+          className={`tab flex-1 gap-1.5 ${tab === 'scan' ? 'tab-active' : ''}`}
           onClick={() => setTab('scan')}
         >
           <Camera className="w-4 h-4" />

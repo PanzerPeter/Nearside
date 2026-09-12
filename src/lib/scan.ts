@@ -117,7 +117,21 @@ export async function scanQr(): Promise<ScanResult> {
     const { barcodes } = await BarcodeScanner.scan({ formats: [BarcodeFormat.QrCode] });
     const value = barcodes[0]?.rawValue;
     return value ? { value } : { failure: 'cancelled' };
-  } catch {
-    return { failure: 'error' };
+  } catch (err) {
+    return { failure: isScanCancelled(err) ? 'cancelled' : 'error' };
   }
+}
+
+/**
+ * Whether a rejection is the user backing out of the scanner.
+ *
+ * Leaving the camera doesn't resolve with no barcodes — it rejects, with this
+ * exact sentence (`ERROR_SCAN_CANCELED`, spelled the same in the Java and the
+ * Swift). Swallowed into the generic catch, a press of the back arrow reported
+ * the camera as broken on a phone whose camera had just been open.
+ */
+export function isScanCancelled(err: unknown): boolean {
+  return /scan cancell?ed\.?$/i.test(
+    typeof err === 'string' ? err : ((err as { message?: unknown } | null)?.message as string) ?? ''
+  );
 }
