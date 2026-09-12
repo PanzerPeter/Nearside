@@ -824,7 +824,6 @@ export const en = {
   'language.hint': 'What the app is written in',
   'language.system': 'Match my device',
   'language.systemHint': 'Follows the phone, and changes when it does.',
-  'language.note': 'Changes everything the app writes.',
   'language.untranslated': 'The Terms, the Privacy Policy and the licenses stay in English.',
 
   // ------------------------------------------------- settings: appearance
@@ -837,7 +836,7 @@ export const en = {
 
   // ------------------------------------------------------- theme store
   'themes.title': 'Appearance',
-  'themes.intro': 'Every feature in Nearside is free. These are looks — and the only way to pay for any of it.',
+  'themes.intro': 'Every feature in Nearside is free. These are looks, and the only way to pay for any of it.',
   'themes.included': 'Included',
   'themes.packs': 'Packs',
   'themes.bySupport': 'Included with your support. Thank you.',
@@ -911,12 +910,12 @@ export const en = {
   'privacy.whatLeaves': 'What leaves this device',
   'privacy.signals': 'What your device says about you',
   'privacy.readReceipts': 'Read receipts',
-  'privacy.readReceiptsHint': 'Let people see how far you have read. Turn it off and you stop seeing theirs too.',
+  'privacy.readReceiptsHint': 'Let people see how far you have read.',
   'privacy.typing': 'Typing indicator',
-  'privacy.typingHint': 'Show people when you are writing. Turn it off and you stop seeing theirs too.',
+  'privacy.typingHint': 'Show people when you are writing.',
   'privacy.presence': 'Online status',
-  'privacy.presenceHint': 'Show people when you are here. Turn it off and you stop seeing theirs too.',
-  'privacy.signalsNote': 'Read receipts are enforced by the server: with them off, nobody can read your watermark at all, not even a modified app. Typing and online status are sent by this device only.',
+  'privacy.presenceHint': 'Show people when you are here.',
+  'privacy.signalsNote': 'Each switch works both ways: off, and you stop seeing other people’s too. Read receipts are enforced by the server, so nobody can read yours, not even a modified app. Typing and online status are sent by this device only.',
   'privacy.receiptsFailed': 'Could not change that. It is still set the way it was.',
   'privacy.serverKnows': 'What the server knows',
   'privacy.serverKnowsHint': 'Live counts, straight from the database',
@@ -1074,7 +1073,7 @@ export const en = {
   'chatList.archivedCount#many': '{count} archived',
   'chatList.archivedCount#other': '{count} archived',
   'storage.keepTitle': 'Keeping attachments',
-  'storage.keepHint': 'The server tidies old photos, videos and voice notes out of a conversation to stay inside its storage. This phone does not have to.',
+  'storage.keepHint': 'The server tidies old photos, videos and voice notes out of a conversation. This phone does not have to.',
   'storage.keep.off': 'Keep nothing',
   'storage.keep.offHint': 'Attachments go when the server tidies them.',
   'storage.keep.light': 'Photos and voice notes',

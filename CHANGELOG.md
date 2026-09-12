@@ -14,6 +14,16 @@ one of them drifts.
 
 ## [Unreleased]
 
+## [1.13.6] — 2026-09-12
+
+### Changed
+
+- Settings says less. The read receipt, typing and online status switches each
+  repeated the same sentence about the setting working both ways; it is stated
+  once now, under the three of them. Storage and Appearance lost a clause
+  apiece, and the Language screen lost a note that only repeated the name of
+  the screen.
+
 ## [1.13.5] — 2026-09-12
 
 ### Fixed

@@ -64,7 +64,6 @@ export function LanguagePage() {
         ))}
       </Card>
 
-      <Note>{t('language.note')}</Note>
       <Note>{t('language.untranslated')}</Note>
     </>
   );
