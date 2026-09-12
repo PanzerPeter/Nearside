@@ -131,6 +131,14 @@ const TYPING_THROTTLE_MS = 2_000;
 /** Polling cadence while realtime is down, matching ChatRoom's fallback. */
 const POLL_DEGRADED_MS = 5_000;
 
+/** A daisyUI dropdown is held open by focus, so a menu item that only runs its
+ *  handler leaves the menu standing over the answer — see `ChatHeader`. The
+ *  entries that open a `<dialog>` hid it by taking focus; the ones that just
+ *  set something (the timer, the alert level) left it on screen. */
+function closeMenu() {
+  (document.activeElement as HTMLElement | null)?.blur();
+}
+
 /**
  * A room conversation.
  *
@@ -351,7 +359,7 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
   // boundary turns into "Something went wrong" for the whole app on opening
   // any group.
   const timerChange = useMemo(
-    () => (timer ? describeTimerChange(timer, me, nameFor(timer.setBy)) : null),
+    () => (timer?.setBy ? describeTimerChange(timer, me, nameFor(timer.setBy)) : null),
     // `nameFor` reads the member list, which is state; it is re-created on
     // every render and as a dependency would recompute this on each of them.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1112,7 +1120,10 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
                     <li key={String(seconds)}>
                       <button
                         className={(timer?.ttlSeconds ?? null) === seconds ? 'active' : ''}
-                        onClick={() => void setTimer(seconds)}
+                        onClick={() => {
+                          closeMenu();
+                          void setTimer(seconds);
+                        }}
                       >
                         {formatTtl(seconds)}
                       </button>
@@ -1122,7 +1133,12 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
               </details>
             </li>
             <li>
-              <button onClick={() => setBackgroundOpen(true)}>
+              <button
+                onClick={() => {
+                  closeMenu();
+                  setBackgroundOpen(true);
+                }}
+              >
                 <ImageIcon className="w-4 h-4" />
                 {t('chat.background')}
               </button>
@@ -1147,7 +1163,10 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
                     <li key={level ?? 'default'}>
                       <button
                         className={alertLevel === level ? 'active' : ''}
-                        onClick={() => void changeAlertLevel(level)}
+                        onClick={() => {
+                          closeMenu();
+                          void changeAlertLevel(level);
+                        }}
                       >
                         {t(
                           level === 'quiet'
@@ -1163,13 +1182,24 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
               </details>
             </li>
             <li>
-              <button onClick={() => void runExport()}>
+              <button
+                onClick={() => {
+                  closeMenu();
+                  void runExport();
+                }}
+              >
                 <FileDown className="w-4 h-4" />
                 {t('chat.export')}
               </button>
             </li>
             <li>
-              <button className="text-error" onClick={() => setConfirmLeave(true)}>
+              <button
+                className="text-error"
+                onClick={() => {
+                  closeMenu();
+                  setConfirmLeave(true);
+                }}
+              >
                 {isOwner ? <Trash2 className="w-4 h-4" /> : <LogOut className="w-4 h-4" />}
                 {isOwner ? t('room.delete') : t('room.leave')}
               </button>

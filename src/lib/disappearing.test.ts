@@ -67,6 +67,13 @@ describe('describeTimerChange', () => {
     expect(describeTimerChange(null, 'me', '@peter')).toBeNull();
   });
 
+  it('says nothing about a timer nobody set', () => {
+    // A group's timer lives on its `rooms` row, so the columns load for a group
+    // that has never had one. The line used to read "unknown turned off
+    // disappearing messages" at the bottom of every new group.
+    expect(describeTimerChange({ ttlSeconds: null, setBy: null, updatedAt: '' }, 'me', 'Mum')).toBeNull();
+  });
+
   it('names the duration and credits you when you set it', () => {
     const timer = { ttlSeconds: 3600, setBy: 'me', updatedAt: at };
     expect(describeTimerChange(timer, 'me', '@peter')).toEqual({

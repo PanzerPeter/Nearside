@@ -721,14 +721,24 @@ export async function listRooms(): Promise<RoomSummary[]> {
  * The count is capped: past a point "lots" is the only useful answer, and
  * asking Postgres to count ten thousand rows to render "99+" is work nobody
  * sees. `head: true` fetches the count without the rows.
+ *
+ * All three filters below are the ones `unread_counts()` applies on the 1:1
+ * side, and every one of them was missing here. The receipt read is the worst:
+ * SELECT on `room_receipts` is every member, so without `user_id` the map kept
+ * whichever row came back last — in a two-person group, usually the other
+ * member's — and counted everything said since *they* last looked.
  */
-export async function roomUnreadCounts(roomIds: readonly string[]): Promise<Map<string, number>> {
+export async function roomUnreadCounts(
+  me: string,
+  roomIds: readonly string[]
+): Promise<Map<string, number>> {
   const counts = new Map<string, number>();
   if (roomIds.length === 0) return counts;
 
   const { data } = await supabase
     .from('room_receipts')
     .select('room_id, read_at')
+    .eq('user_id', me)
     .in('room_id', [...roomIds]);
   const readAt = new Map(
     ((data as { room_id: string; read_at: string }[] | null) ?? []).map((r) => [
@@ -742,7 +752,11 @@ export async function roomUnreadCounts(roomIds: readonly string[]): Promise<Map<
       let q = supabase
         .from('room_messages')
         .select('id', { count: 'exact', head: true })
-        .eq('room_id', roomId);
+        .eq('room_id', roomId)
+        // Your own message is read the moment you send it, and a tombstone is
+        // nothing to come back for.
+        .neq('sender_id', me)
+        .is('deleted_at', null);
       const since = readAt.get(roomId);
       // No receipt yet means the group has never been opened on any device of
       // this account. Counting its whole history as unread is the honest

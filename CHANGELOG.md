@@ -14,6 +14,28 @@ one of them drifts.
 
 ## [Unreleased]
 
+## [1.13.2] — 2026-09-12
+
+### Fixed
+
+- A group's unread badge counted the wrong person's reading. Every member can
+  see every member's read mark, and the list was measuring against whichever
+  one the server happened to return last, so your own message could come back
+  as unread the moment you left the group. It now counts what other people have
+  said since *you* last looked, and skips deleted messages.
+- The menu in a group stayed open over whatever it had just done. Setting a
+  timer or an alert level left it standing across the conversation; it now
+  closes behind every entry, the way the one-to-one menu does.
+- A group nobody had ever set a timer in claimed "unknown turned off
+  disappearing messages" at the end of the thread. A group carries the timer
+  columns from the moment it exists, which is not the same as somebody having
+  changed something.
+
+### Changed
+
+- Shorter copy in Storage, Privacy and Support. Four settings explained
+  themselves twice; they now say it once.
+
 ## [1.13.1] — 2026-09-12
 
 ### Fixed

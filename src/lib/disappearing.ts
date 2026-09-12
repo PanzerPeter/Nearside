@@ -50,7 +50,9 @@ export function hasExpired(expiresAt: string | null, nowMs: number): boolean {
 
 export interface ConversationTimer {
   ttlSeconds: number | null;
-  setBy: string;
+  /** Null for a group nobody has ever set a timer in: the `rooms` row carries
+   *  the columns from the moment the group exists — see `loadRoomTimer`. */
+  setBy: string | null;
   updatedAt: string;
 }
 
@@ -73,7 +75,10 @@ export function describeTimerChange(
   me: string,
   peerLabel: string
 ): TimerChange | null {
-  if (!timer) return null;
+  // No author means no change ever happened: a group loads its timer from its
+  // own `rooms` row, which exists from the moment the group does. Crediting
+  // that to "unknown" told every new group somebody had turned something off.
+  if (!timer?.setBy) return null;
   const who = timer.setBy === me ? t('common.you') : peerLabel;
   // Whole sentences rather than a name glued to a fragment: German puts the
   // verb last and Russian declines the duration, and neither survives being

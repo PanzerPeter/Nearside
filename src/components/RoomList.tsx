@@ -131,7 +131,7 @@ export function RoomList({
       onRoomsChangeRef.current?.(rows);
       // After the list, not beside it: the counts are keyed on the ids this
       // read just returned, and a group that has gone should not be counted.
-      setUnread(await roomUnreadCounts(rows.map((r) => r.id)));
+      setUnread(await roomUnreadCounts(me, rows.map((r) => r.id)));
       // Local reads, one per group: the mirror is the only place a group's
       // plaintext exists, and there is no server call that could answer this.
       const lines = new Map<string, string>();
@@ -146,7 +146,7 @@ export function RoomList({
     } finally {
       setSettled(true);
     }
-  }, []);
+  }, [me]);
 
   useEffect(() => {
     void load();
