@@ -205,6 +205,11 @@ DROP POLICY IF EXISTS "profiles_delete_own" ON public.profiles;
 CREATE POLICY "profiles_delete_own" ON public.profiles
   FOR DELETE TO authenticated USING ((select auth.uid()) = id);
 
+-- Exactly the verbs there are policies for (0052). A grant wider than the
+-- policies beneath it is a second gate that has stopped describing the first.
+REVOKE ALL ON public.profiles FROM PUBLIC, anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.profiles TO authenticated;
+
 /*
   Signup. Open since 0019 — the invite gate was right for a private chat among
   friends and wrong for a store listing.
@@ -307,6 +312,9 @@ CREATE POLICY "friendships_delete_own" ON public.friendships
   FOR DELETE TO authenticated
   USING ((select auth.uid()) IN (requester_id, addressee_id));
 
+REVOKE ALL ON public.friendships FROM PUBLIC, anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.friendships TO authenticated;
+
 /*
   `friendships_update_addressee` is checked before and after the write, so the
   addressee stays the addressee — and `requester_id` is left free, because a
@@ -402,6 +410,10 @@ CREATE TABLE IF NOT EXISTS public.connect_tokens (
 );
 
 ALTER TABLE public.connect_tokens ENABLE ROW LEVEL SECURITY;
+
+-- No policy and no grant (0052). The two definer functions below are the only
+-- way in, and they are unaffected by either.
+REVOKE ALL ON public.connect_tokens FROM PUBLIC, anon, authenticated;
 
 CREATE OR REPLACE FUNCTION public.mint_connect_code()
 RETURNS text
@@ -652,7 +664,10 @@ CREATE POLICY "messages_update_sender" ON public.messages
   cascades from auth.users under the service role.
 */
 DROP POLICY IF EXISTS "messages_delete_sender" ON public.messages;
-REVOKE DELETE ON public.messages FROM anon, authenticated;
+-- DELETE is absent from the GRANT below and that absence is the revocation
+-- (0052 replaced 0034's narrower `REVOKE DELETE` with the absolute form).
+REVOKE ALL ON public.messages FROM PUBLIC, anon, authenticated;
+GRANT SELECT, INSERT, UPDATE ON public.messages TO authenticated;
 
 /*
   An RLS policy cannot compare the NEW row against the OLD one, so the UPDATE
@@ -839,6 +854,11 @@ CREATE POLICY "reactions_delete_own" ON public.message_reactions
   FOR DELETE TO authenticated
   USING ((select auth.uid()) = user_id);
 
+-- A reaction is added or taken back, never edited: there has never been an
+-- UPDATE policy for one, so there is no UPDATE grant either.
+REVOKE ALL ON public.message_reactions FROM PUBLIC, anon, authenticated;
+GRANT SELECT, INSERT, DELETE ON public.message_reactions TO authenticated;
+
 -- The same runaway guard `messages` has. A reaction is a tap, and sixty a
 -- minute is well past the pace of one; the UNIQUE above bounds repeats of a
 -- single emoji but not a loop cycling through different ones.
@@ -997,6 +1017,9 @@ DROP POLICY IF EXISTS "receipts_delete_own" ON public.message_receipts;
 CREATE POLICY "receipts_delete_own" ON public.message_receipts
   FOR DELETE TO authenticated
   USING ((select auth.uid()) = user_id);
+
+REVOKE ALL ON public.message_receipts FROM PUBLIC, anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.message_receipts TO authenticated;
 
 /*
   Clients race: a realtime handler and a focus handler can write in either
@@ -1719,6 +1742,13 @@ DROP POLICY IF EXISTS rooms_delete_creator ON public.rooms;
 CREATE POLICY rooms_delete_creator ON public.rooms
   FOR DELETE TO authenticated USING (created_by = (SELECT auth.uid()));
 
+-- No UPDATE grant, because there is no UPDATE policy (0052). The title has
+-- never been changeable, and the picture and the timer are written by
+-- `set_room_avatar()` and `set_room_timer()` — definer functions that name the
+-- columns they write, which is the whole reason `rooms` has no UPDATE policy.
+REVOKE ALL ON public.rooms FROM PUBLIC, anon, authenticated;
+GRANT SELECT, INSERT, DELETE ON public.rooms TO authenticated;
+
 DROP POLICY IF EXISTS participants_select_member ON public.room_participants;
 CREATE POLICY participants_select_member ON public.room_participants
   FOR SELECT TO authenticated USING (public.is_room_member(room_id));
@@ -1755,6 +1785,9 @@ CREATE POLICY participants_delete_owner_or_self ON public.room_participants
     END
   );
 
+REVOKE ALL ON public.room_participants FROM PUBLIC, anon, authenticated;
+GRANT SELECT, INSERT, DELETE ON public.room_participants TO authenticated;
+
 -- A member may read only their OWN sealed copy. Someone else's would be
 -- useless (it is sealed to their key) but there is no reason to hand it over.
 DROP POLICY IF EXISTS keys_select_own ON public.room_keys;
@@ -1772,6 +1805,10 @@ CREATE POLICY keys_insert_sealer ON public.room_keys
 DROP POLICY IF EXISTS keys_delete_owner ON public.room_keys;
 CREATE POLICY keys_delete_owner ON public.room_keys
   FOR DELETE TO authenticated USING (public.is_room_owner(room_id));
+
+-- Sealed keys are written and dropped, never edited in place.
+REVOKE ALL ON public.room_keys FROM PUBLIC, anon, authenticated;
+GRANT SELECT, INSERT, DELETE ON public.room_keys TO authenticated;
 
 DROP POLICY IF EXISTS room_messages_select_member ON public.room_messages;
 CREATE POLICY room_messages_select_member ON public.room_messages
@@ -1798,7 +1835,9 @@ CREATE POLICY room_messages_update_sender ON public.room_messages
   — reactions and receipts cascade off these rows, and only `expire_messages()`
   removes the attachment in Storage.
 */
-REVOKE DELETE ON public.room_messages FROM anon, authenticated;
+-- As on `messages`: DELETE is absent from the GRANT and that is the revocation.
+REVOKE ALL ON public.room_messages FROM PUBLIC, anon, authenticated;
+GRANT SELECT, INSERT, UPDATE ON public.room_messages TO authenticated;
 
 /*
   `room_id` decides who may read the row and `sender_id` is what the signature
@@ -1856,14 +1895,17 @@ BEGIN
     IF NEW.deleted_at IS NULL THEN
       RAISE EXCEPTION 'a deleted message cannot be restored';
     END IF;
-    IF NEW.ciphertext IS NOT NULL OR NEW.media_path IS NOT NULL THEN
+    IF NEW.ciphertext IS NOT NULL
+       OR NEW.media_path IS NOT NULL
+       OR NEW.media_thumb_path IS NOT NULL THEN
       RAISE EXCEPTION 'a deleted message cannot be given a new body';
     END IF;
   END IF;
 
   IF NEW.deleted_at IS NULL
      AND (NEW.ciphertext IS DISTINCT FROM OLD.ciphertext
-          OR NEW.media_path IS DISTINCT FROM OLD.media_path) THEN
+          OR NEW.media_path IS DISTINCT FROM OLD.media_path
+          OR NEW.media_thumb_path IS DISTINCT FROM OLD.media_thumb_path) THEN
     NEW.edited_at := now();
   END IF;
 
@@ -2230,6 +2272,9 @@ CREATE POLICY timers_select_participant ON public.conversation_timers
 -- No INSERT or UPDATE policy: writes go through set_conversation_timer(),
 -- which is the only thing that can normalize the pair correctly and record
 -- who changed it.
+-- Read-only to the client for the same reason (0052).
+REVOKE ALL ON public.conversation_timers FROM PUBLIC, anon, authenticated;
+GRANT SELECT ON public.conversation_timers TO authenticated;
 
 /*
   A timer the sender can decline to honour is not a timer. The trigger reads
@@ -2352,15 +2397,22 @@ AS $$
 DECLARE
   doomed text[];
 BEGIN
-  SELECT coalesce(array_agg(media_path), '{}')
+  -- Both objects per row (0051). `unnest` rather than four UNION branches, so
+  -- the pair stays written once per table and a third object — if one is ever
+  -- added — is one more element rather than one more branch.
+  SELECT coalesce(array_agg(path), '{}')
     INTO doomed
     FROM (
-      SELECT media_path FROM public.messages
+      SELECT unnest(ARRAY[media_path, media_thumb_path]) AS path
+        FROM public.messages
        WHERE expires_at IS NOT NULL AND expires_at <= now() AND media_path IS NOT NULL
       UNION ALL
-      SELECT media_path FROM public.room_messages
+      SELECT unnest(ARRAY[media_path, media_thumb_path])
+        FROM public.room_messages
        WHERE expires_at IS NOT NULL AND expires_at <= now() AND media_path IS NOT NULL
-    ) expiring;
+    ) expiring
+   -- Null on a voice note and on every row written before 0044.
+   WHERE expiring.path IS NOT NULL;
 
   DELETE FROM public.messages      WHERE expires_at IS NOT NULL AND expires_at <= now();
   DELETE FROM public.room_messages WHERE expires_at IS NOT NULL AND expires_at <= now();
@@ -2577,6 +2629,7 @@ CREATE TABLE IF NOT EXISTS public.message_pushes (
   sent_at    timestamptz NOT NULL DEFAULT now()
 );
 ALTER TABLE public.message_pushes ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.message_pushes FROM PUBLIC, anon, authenticated;
 
 /*
   When a conversation last made a receiver's phone make a noise, and how many
@@ -2628,6 +2681,10 @@ CREATE TABLE IF NOT EXISTS public.push_config (
   updated_at     timestamptz NOT NULL DEFAULT now()
 );
 ALTER TABLE public.push_config ENABLE ROW LEVEL SECURITY;
+-- The secret that authorizes the database's own call into `send-push`, and so
+-- the highest-value row here. Its three sibling push tables have carried this
+-- REVOKE since 0035 and 0037; it did not, until 0052.
+REVOKE ALL ON public.push_config FROM PUBLIC, anon, authenticated;
 
 CREATE OR REPLACE FUNCTION public.notify_push_on_message()
 RETURNS trigger

@@ -60,3 +60,5 @@
 0048_pinned_messages.sql
 0049_pin_sender_column.sql
 0050_pin_realtime.sql
+0051_expiry_sweeps_the_thumbnail.sql
+0052_grant_hygiene.sql
