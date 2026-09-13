@@ -293,6 +293,7 @@ export const ru: Catalog = {
   'preview.video': 'Видео',
   'preview.voice': 'Голосовое сообщение',
   'preview.sticker': 'Стикер',
+  'preview.media': 'Вложение',
   'preview.fromYou': 'Ты: {body}',
   'preview.encrypted': 'Зашифрованное сообщение',
   'preview.selfEmpty': 'Заметки, ссылки, напоминания. Их видишь только ты',
@@ -751,6 +752,8 @@ export const ru: Catalog = {
   'room.nameNote': 'Это имя видят все в группе.',
   'room.unknownSender':
     'Отправитель не опубликовал ключ подписи, так что сверить это сообщение не с чем.',
+  'room.unverifiedSender':
+    'Неподтверждённый отправитель. Это сообщение выдаёт себя за сообщение от {name}, но его подпись не совпадает с ключом. Оно не было открыто.',
   'room.memberCount#one': '{count} участник',
   'room.memberCount#few': '{count} участника',
   'room.memberCount#many': '{count} участников',

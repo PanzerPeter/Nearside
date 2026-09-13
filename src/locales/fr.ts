@@ -294,6 +294,7 @@ export const fr: Catalog = {
   'preview.video': 'Vidéo',
   'preview.voice': 'Message vocal',
   'preview.sticker': 'Sticker',
+  'preview.media': 'Pièce jointe',
   'preview.fromYou': 'Toi : {body}',
   'preview.encrypted': 'Message chiffré',
   'preview.selfEmpty': 'Notes, liens, rappels. Toi seul vois ça',
@@ -758,6 +759,8 @@ export const fr: Catalog = {
   'room.nameNote': 'Tout le monde dans le groupe voit ce nom.',
   'room.unknownSender':
     'Cet expéditeur n’a publié aucune clé de signature, il n’y a donc rien à quoi comparer ce message.',
+  'room.unverifiedSender':
+    'Expéditeur non vérifié. Ce message prétend venir de {name}, mais sa signature ne correspond pas à sa clé. Il n’a pas été ouvert.',
   'room.memberCount#one': '{count} membre',
   'room.memberCount#few': '{count} membres',
   'room.memberCount#many': '{count} membres',

@@ -294,6 +294,7 @@ export const zh: Catalog = {
   'preview.video': '视频',
   'preview.voice': '语音消息',
   'preview.sticker': '贴纸',
+  'preview.media': '附件',
   'preview.fromYou': '你：{body}',
   'preview.encrypted': '加密消息',
   'preview.selfEmpty': '笔记、链接、提醒。只有你看得到',
@@ -758,6 +759,8 @@ export const zh: Catalog = {
   'room.nameNote': '群里每个人都看得到这个名字。',
   'room.unknownSender':
     '这位发送者没有发布签名密钥，所以没有东西可以用来核对这条消息。',
+  'room.unverifiedSender':
+    '未验证的发送者。这条消息自称来自 {name}，但其签名与该密钥不符。消息未被打开。',
   'room.memberCount#one': '{count}名成员',
   'room.memberCount#few': '{count}名成员',
   'room.memberCount#many': '{count}名成员',

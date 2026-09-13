@@ -12,6 +12,7 @@ import {
   ROOM_COLOURS,
   openRoomFileKey,
   openRoomRows,
+  roomAsMessage,
   roomColour,
   roomMediaPath,
   sealRoomFileKey,
@@ -764,5 +765,88 @@ describe('the local mirror of a group', () => {
 
     expect(await searchCached('r1', 'six')).toHaveLength(0);
     expect((await cachedPreview('r1'))?.text).toBe('seven oclock');
+  });
+});
+
+/**
+ * The adapter the thread renders through. These are not shape-for-shape
+ * restatements of the function: each one is a field whose absence or wrong
+ * default was a visible bug in the bubble before the two renderers were one.
+ */
+describe('roomAsMessage', () => {
+  const base: RoomMessage = {
+    id: 'm1',
+    room_id: 'r1',
+    sender_id: 'alice',
+    ciphertext: 'c',
+    nonce: 'n',
+    signature: 's',
+    created_at: '2026-09-13T10:00:00.000Z',
+  };
+
+  it('carries the author across the rename', () => {
+    // `sender_id` here, `user_id` there. Every own-message branch in the
+    // bubble — which side it sits on, whether it can be edited, whether it
+    // gets a status tick — turns on this one field.
+    expect(roomAsMessage({ ...base, text: 'hi', sender: 'verified' }, 'r1').user_id).toBe('alice');
+  });
+
+  it('addresses the message to the room', () => {
+    expect(roomAsMessage(base, 'r1').receiver_id).toBe('r1');
+  });
+
+  it('grades a signature failure instead of calling it undecryptable', () => {
+    // An unverified row must not also draw the generic "can't decrypt" line:
+    // the bubble says the signature does not match, which is a different and
+    // much more serious thing than a key this device never had.
+    const unverified = roomAsMessage({ ...base, text: null, sender: 'unverified' }, 'r1');
+    expect(unverified.sender_trust).toBe('unverified');
+    expect(unverified.decrypt_failed).toBe(false);
+  });
+
+  it('reports a verified row this device could not open as undecryptable', () => {
+    const sealed = roomAsMessage({ ...base, text: null, sender: 'verified' }, 'r1');
+    expect(sealed.decrypt_failed).toBe(true);
+  });
+
+  it('leaves a captionless attachment out of the undecryptable branch', () => {
+    // No ciphertext at all is a picture sent without a caption, not a body
+    // that failed to open — the distinction `decrypt_failed` exists for.
+    const photo = roomAsMessage(
+      { ...base, ciphertext: null, nonce: null, text: null, sender: 'verified', media_path: 'p', media_type: 'image' },
+      'r1'
+    );
+    expect(photo.decrypt_failed).toBe(false);
+    expect(photo.media_type).toBe('image');
+  });
+
+  it('defaults a row with no grade to unknown rather than to trusted', () => {
+    // `sender` is optional on the wire type. Defaulting the other way would
+    // paint an ungraded row as verified, which is the one mistake this whole
+    // field exists to prevent.
+    expect(roomAsMessage(base, 'r1').sender_trust).toBe('unknown');
+  });
+
+  it('never claims a room row is a sealed question', () => {
+    // `sealed_prompt` routes the row to a different renderer entirely.
+    expect(roomAsMessage({ ...base, text: 'q', sender: 'verified' }, 'r1').sealed_prompt).toBe(false);
+  });
+
+  it('carries the opened file key across its rename', () => {
+    const key = new Uint8Array([1, 2, 3]);
+    expect(roomAsMessage({ ...base, mediaKey: key, sender: 'verified' }, 'r1').media_key).toBe(key);
+  });
+
+  it('turns absent optional flags into the nulls the bubble expects', () => {
+    // The room type leaves these `undefined`; the bubble tests them with `!!`
+    // and `??`, and a stray `undefined` reaching a `MediaAttachment` prop was
+    // how a forwarded notice once rendered on a row that was not forwarded.
+    const plain = roomAsMessage({ ...base, text: 'hi', sender: 'verified' }, 'r1');
+    expect(plain.forwarded).toBe(false);
+    expect(plain.media_path).toBeNull();
+    expect(plain.reply_to_id).toBeNull();
+    expect(plain.edited_at).toBeNull();
+    expect(plain.deleted_at).toBeNull();
+    expect(plain.expires_at).toBeNull();
   });
 });

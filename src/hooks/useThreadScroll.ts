@@ -52,6 +52,18 @@ interface ThreadScrollOptions {
   /** The peer's typing bubble, which is part of the thread's height and so
    *  part of what "the bottom" means. */
   peerTyping: boolean;
+  /**
+   * The message the "new messages" line sits above, if there is one.
+   *
+   * The first scroll into a conversation lands there instead of at the newest
+   * message. The line was drawn long before anything scrolled to it, so
+   * opening a chat with forty unread put the reader at the bottom and left
+   * them to hunt upwards for a divider the app already knew the id of.
+   *
+   * Resolved asynchronously (it waits on the read watermark), so it can arrive
+   * after the first page — which is why this is watched rather than read once.
+   */
+  unreadDividerId?: string | null;
 }
 
 export function useThreadScroll({
@@ -60,6 +72,7 @@ export function useThreadScroll({
   messages,
   pending,
   peerTyping,
+  unreadDividerId,
 }: ThreadScrollOptions): ThreadScroll {
   const [atBottom, setAtBottom] = useState(true);
   const [newSinceScroll, setNewSinceScroll] = useState(0);
@@ -71,6 +84,14 @@ export function useThreadScroll({
   const skipAutoScroll = useRef(false);
   // Reset per conversation: the first scroll into a chat should not animate.
   const didFirstScroll = useRef(false);
+  // Whether this conversation's entry jump has already happened. One per
+  // conversation: landing on the unread line is what opening a chat does, not
+  // something that should happen again when the line later clears.
+  const landedOnUnread = useRef(false);
+  // Set the moment the reader scrolls away from the bottom themselves. The
+  // divider can resolve a beat after the first page, and moving somebody who
+  // has already started reading is worse than not landing at all.
+  const readerHasScrolled = useRef(false);
   // Pending clear for `highlightId`, tracked so a second jump landing before
   // the first flash finishes can cancel and restart it cleanly.
   const highlightTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -95,6 +116,8 @@ export function useThreadScroll({
 
   useEffect(() => {
     didFirstScroll.current = false;
+    landedOnUnread.current = false;
+    readerHasScrolled.current = false;
     resetPosition();
     setHighlightId(null);
     clearHighlightTimer();
@@ -110,6 +133,26 @@ export function useThreadScroll({
     if (skipAutoScroll.current) {
       skipAutoScroll.current = false;
       return;
+    }
+    // Land on the "new messages" line rather than the newest message, once per
+    // conversation. Guarded on the element actually being rendered: a divider
+    // pointing outside the loaded window leaves this untouched and the normal
+    // bottom scroll below runs, so nothing is worse than it was and the jump
+    // is retried if that message pages in.
+    if (!landedOnUnread.current && unreadDividerId && !readerHasScrolled.current) {
+      const target = document.getElementById(`msg-${unreadDividerId}`);
+      if (target) {
+        landedOnUnread.current = true;
+        didFirstScroll.current = true;
+        // 'start', not 'center': the question the line answers is "where was
+        // I", so the unread messages belong below it and on screen.
+        target.scrollIntoView({ behavior: 'auto', block: 'start' });
+        // The view is no longer at the bottom, and the bookkeeping has to say
+        // so or the jump-to-latest button — the way back down — never appears.
+        atBottomRef.current = false;
+        setAtBottom(false);
+        return;
+      }
     }
     // `pending` only ever shrinks here from a successful flush or a
     // MAX_ATTEMPTS drop — cleanup of a bubble already on screen, not
@@ -136,7 +179,7 @@ export function useThreadScroll({
       didFirstScroll.current = true;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [messages, pending]);
+  }, [messages, pending, unreadDividerId]);
 
   // The typing bubble appearing grows the list by its own height. A reader
   // sitting at the bottom would otherwise have it land under the fold, which
@@ -156,6 +199,7 @@ export function useThreadScroll({
     const nowAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < AT_BOTTOM_SLACK_PX;
     atBottomRef.current = nowAtBottom;
     setAtBottom(nowAtBottom);
+    if (!nowAtBottom) readerHasScrolled.current = true;
     if (nowAtBottom) setNewSinceScroll(0);
   }
 

@@ -44,6 +44,15 @@ export interface Message {
    *  open it. Distinct from a null `text`, which is an ordinary captionless
    *  media message. */
   decrypt_failed?: boolean;
+  /** Client-only, never a column: how much this device can vouch for the
+   *  authorship of a ROOM message, set by `roomAsMessage`. Absent on a 1:1
+   *  row, where there is nothing to grade — `crypto_box` authenticates the
+   *  sender by construction, so a peer message that opens at all was written
+   *  by the peer. Every member of a room holds the room key, so only the
+   *  Ed25519 signature establishes who wrote what, and the bubble renders an
+   *  unverified row as a warning rather than hiding it: hiding it would
+   *  conceal an attack in progress. */
+  sender_trust?: 'verified' | 'unverified' | 'unknown';
   media_path: string | null;
   media_type: MediaType | null;
   /** A small sealed copy of the attachment, under the SAME per-file key, which

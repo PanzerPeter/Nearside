@@ -17,7 +17,30 @@ const GROUP_WINDOW_MS = 5 * 60 * 1000;
 
 interface MessageThreadProps {
   me: string;
+  /** How to name the other participant, for the empty state and the typing
+   *  line. In a room, the group's own name is not what either of those want,
+   *  so a room passes a label and supplies `emptyState` and `typingLabel`
+   *  itself. */
   peerLabel: string;
+  /** How to name whoever wrote a given message. A 1:1 thread passes a function
+   *  that ignores its argument; a room looks the member up. */
+  nameFor: (userId: string) => string;
+  /** Print the author's name above each run of messages. True in a room, where
+   *  a message that doesn't say who wrote it is worse than one in a box; false
+   *  in a 1:1, where the bubble's side already answers it. Also decides
+   *  whether the typing line names names. */
+  showSenderNames: boolean;
+  /** Text colour class per author, so a group's members stay tellable apart
+   *  (`roomColour`). Unused in a 1:1. */
+  colourFor?: (userId: string) => string | undefined;
+  /** Display names present in this conversation, for `@name` — see
+   *  `lib/mentions.ts`. Rooms pass their member list. */
+  handles?: string[];
+  /** My own display name, so a mention of me reads louder. */
+  myHandle?: string;
+  /** Stands in for the default "start the conversation" block. A room's is a
+   *  different sentence about a different thing. */
+  emptyState?: React.ReactNode;
   isSelf: boolean;
   /** Rendered as given — `ChatRoom` has already put back the media columns of
    *  any row the sender trimmed and this device pinned. */
@@ -27,11 +50,16 @@ interface MessageThreadProps {
    *  match a real row's id and folding it in would leave a duplicate bubble
    *  once the realtime INSERT lands. */
   queued: PendingMessage[];
-  /** The peer is typing right now. False in the self-chat, where the only
+  /** The sentence to show while somebody is typing, already composed by the
+   *  caller — a room has to name names ("Anna and Bo are typing") and a 1:1
+   *  does not. Null when nobody is, and in the self-chat, where the only
    *  person typing is you. */
-  friendTyping: boolean;
+  typingLabel: string | null;
   hasMore: boolean;
   loadingOlder: boolean;
+  /** Null in a room: every member has their own watermark, and a single tick
+   *  meaning "the server has this row" is the most a group bubble can honestly
+   *  claim. `statusFor` returns exactly that for a null receipt. */
   peerReceipt: Receipt | null;
   /** The message the "new messages" line sits above, or null when there is
    *  nothing the reader missed. */
@@ -48,11 +76,12 @@ interface MessageThreadProps {
   editingId: string | null;
   editingText: string;
   /** Answers to the sealed questions in this thread, by prompt id — only the
-   *  ones the server has released to this account. */
-  sealedAnswers: Map<string, OpenedAnswer[]>;
+   *  ones the server has released to this account. Absent in a room: the
+   *  policy that makes the feature work is written over a pair of people. */
+  sealedAnswers?: Map<string, OpenedAnswer[]>;
   /** Prompt ids with a write in flight. */
-  sealedBusy: Set<string>;
-  onAnswerSealed: (promptId: string, text: string) => void;
+  sealedBusy?: Set<string>;
+  onAnswerSealed?: (promptId: string, text: string) => void;
   /** False for a message that was on screen before this conversation's first
    *  paint, which is what keeps opening a chat from cascading the entrance
    *  animation across every message in it. */
@@ -113,10 +142,16 @@ function TimerNotice({ label }: { label: string }) {
 export function MessageThread({
   me,
   peerLabel,
+  nameFor,
+  showSenderNames,
+  colourFor,
+  handles,
+  myHandle,
+  emptyState,
   isSelf,
   messages,
   queued,
-  friendTyping,
+  typingLabel,
   hasMore,
   loadingOlder,
   peerReceipt,
@@ -213,7 +248,7 @@ export function MessageThread({
                 the fold of a thread with nothing in it to scroll. */}
             {timerChange && <TimerNotice label={timerChange.label} />}
             <div className="text-center px-6">
-              {isSelf ? (
+              {emptyState ?? (isSelf ? (
                 <>
                   <p className="text-muted text-body">{t('thread.selfEmpty')}</p>
                   {/* "Your words", not "everything": the text is sealed with
@@ -227,7 +262,7 @@ export function MessageThread({
                 <p className="text-muted text-body">
                   {t('thread.startWith', { name: peerLabel })}
                 </p>
-              )}
+              ))}
             </div>
           </div>
         )}
@@ -275,14 +310,14 @@ export function MessageThread({
                 {/* A sealed exchange is a two-sided object with a state, not
                     something one person said, so it takes the whole width
                     instead of hanging off the asker's edge. */}
-                {msg.sealed_prompt ? (
+                {msg.sealed_prompt && onAnswerSealed ? (
                   <SealedExchange
                     msg={msg}
                     me={me}
                     peerLabel={peerLabel}
                     isOwn={isOwn}
-                    answers={sealedAnswers.get(msg.id) ?? []}
-                    busy={sealedBusy.has(msg.id)}
+                    answers={sealedAnswers?.get(msg.id) ?? []}
+                    busy={sealedBusy?.has(msg.id) ?? false}
                     onAnswer={onAnswerSealed}
                     onCancel={onDelete}
                     formatTime={formatTime}
@@ -292,8 +327,11 @@ export function MessageThread({
                   msg={msg}
                   isOwn={isOwn}
                   me={me}
-                  peerLabel={peerLabel}
-                  showHeader={!groupedWithPrev}
+                  nameFor={nameFor}
+                  showHeader={showSenderNames && !groupedWithPrev}
+                  senderColour={colourFor?.(msg.user_id)}
+                  handles={handles}
+                  myHandle={myHandle}
                   isEditing={editingId === msg.id}
                   editingText={editingText}
                   reactions={reactions.get(msg.id) ?? []}
@@ -364,8 +402,8 @@ export function MessageThread({
                   msg={pendingAsMessage(msg)}
                   isOwn
                   me={me}
-                  peerLabel={peerLabel}
-                  showHeader={!groupedWithPrev}
+                  nameFor={nameFor}
+                  showHeader={false}
                   isEditing={false}
                   editingText=""
                   reactions={[]}
@@ -425,7 +463,9 @@ export function MessageThread({
               belongs where the message being written will appear, and putting
               it after the sentinel would leave it below the point every
               auto-scroll aims at. */}
-          {friendTyping && <TypingIndicator peerLabel={peerLabel} />}
+          {typingLabel && (
+            <TypingIndicator label={typingLabel} showLabel={showSenderNames} />
+          )}
         </div>
         <div ref={scroll.bottomRef} />
       </main>

@@ -305,6 +305,7 @@ export const en = {
   'preview.video': 'Video',
   'preview.voice': 'Voice message',
   'preview.sticker': 'Sticker',
+  'preview.media': 'Attachment',
   'preview.fromYou': 'You: {body}',
   'preview.encrypted': 'Encrypted message',
   'preview.selfEmpty': 'Notes, links, reminders. Only you see this',
@@ -775,6 +776,8 @@ export const en = {
   'room.nameNote': 'Everyone in the group sees this name.',
   'room.unknownSender':
     'This sender has published no signing key, so there is nothing to check this message against.',
+  'room.unverifiedSender':
+    'Unverified sender. This message claims to be from {name}, but its signature does not match their key. It has not been opened.',
   'room.memberCount#one': '{count} member',
   'room.memberCount#few': '{count} members',
   'room.memberCount#many': '{count} members',

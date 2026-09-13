@@ -206,18 +206,22 @@ describe('messageSnippet', () => {
       .toBe('look');
   });
 
+  // The glyph, not the word beside it: the words go through the catalog now,
+  // so asserting them here would pin the suite to English and fail the moment
+  // somebody runs the app in another language.
   it('names media that has no caption of its own', () => {
-    expect(messageSnippet(message({ media_path: 'a.webm', media_type: 'audio' }))).toBe(
-      '🎤 Voice message'
-    );
-    expect(messageSnippet(message({ media_path: 'p.jpg', media_type: 'image' }))).toBe('📷 Photo');
-    expect(messageSnippet(message({ media_path: 'v.mp4', media_type: 'video' }))).toBe('🎬 Video');
+    expect(messageSnippet(message({ media_path: 'a.webm', media_type: 'audio' }))).toMatch(/^🎤 \S/);
+    expect(messageSnippet(message({ media_path: 'p.jpg', media_type: 'image' }))).toMatch(/^📷 \S/);
+    expect(messageSnippet(message({ media_path: 'v.mp4', media_type: 'video' }))).toMatch(/^🎬 \S/);
+    expect(messageSnippet(message({ media_path: 's.webp', media_type: 'sticker' }))).toMatch(/^🩷 \S/);
   });
 
   it('never leaks the body of a deleted message', () => {
-    expect(messageSnippet(message({ text: 'oops', deleted_at: new Date().toISOString() }))).toBe(
-      'Deleted message'
-    );
+    // What matters is the absence of the words, not the sentence standing in
+    // for them — a tombstone that quoted its own body would undo the delete.
+    const snippet = messageSnippet(message({ text: 'oops', deleted_at: new Date().toISOString() }));
+    expect(snippet).not.toContain('oops');
+    expect(snippet.length).toBeGreaterThan(0);
   });
 });
 

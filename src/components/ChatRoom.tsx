@@ -714,10 +714,18 @@ export function ChatRoom({ session, friend, identity, openAt, onBack }: ChatRoom
             setSelectedIds((current) => toggleSelected(current ?? new Set(), msg.id))
           }
           peerLabel={peerLabel}
+          // One person is on the other side, and the bubble's own side already
+          // says which. Printing their name above every run of messages spent
+          // a line of the thread on something the reader knew before they
+          // opened the conversation — it is the group thread that needs it.
+          nameFor={() => peerLabel}
+          showSenderNames={false}
           isSelf={isSelf}
           messages={shown}
           queued={queued}
-          friendTyping={thread.friendTyping && !isSelf}
+          typingLabel={
+            thread.friendTyping && !isSelf ? t('thread.typing', { name: peerLabel }) : null
+          }
           hasMore={thread.hasMore}
           loadingOlder={thread.loadingOlder}
           peerReceipt={thread.peerReceipt}

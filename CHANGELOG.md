@@ -14,6 +14,45 @@ one of them drifts.
 
 ## [Unreleased]
 
+## [1.15.0] — 2026-09-13
+
+### Added
+
+- Group conversations now have the date separators, message grouping and
+  jump-to-latest button that one-to-one chats have always had. Scrolling back
+  through a busy group used to give no clue what day anything was said on, and
+  every message in a run repeated the sender's name.
+- Your own messages in a group carry a delivery tick, so a send that quietly
+  failed is no longer indistinguishable from one that worked.
+- Opening a conversation with unread messages now lands on the "new messages"
+  line instead of at the very bottom. The line was already being drawn; nothing
+  ever scrolled to it, so the answer to "where was I" was there and you had to
+  hunt upwards for it.
+
+### Changed
+
+- A group no longer drags you to the newest message every time somebody says
+  something. It follows the conversation only when you are already at the
+  bottom — which is what a one-to-one chat has always done, and what makes
+  reading back through a busy group possible at all.
+- One-to-one chats no longer print the other person's name above every group of
+  their messages. There is one person over there and the message is already on
+  their side of the screen; the line is spent on the conversation instead.
+- Quoting a photo, a video or a voice note now says so in your own language
+  everywhere. In a one-to-one chat the quote was English whatever the app was
+  set to.
+
+### Fixed
+
+- A group message from someone whose signature does not check out no longer
+  offers to reply to it, react to it or pass it on. It was already shown as a
+  warning, but the actions around it were live, and forwarding one would have
+  carried it onward with the warning stripped off.
+- Opening a group no longer runs the arrival animation down its whole first
+  page of history.
+- A group message sealed under a key your device was never given now says that,
+  rather than nothing.
+
 ## [1.14.1] — 2026-09-13
 
 ### Fixed

@@ -289,6 +289,7 @@ export const es: Catalog = {
   'preview.video': 'Vídeo',
   'preview.voice': 'Mensaje de voz',
   'preview.sticker': 'Sticker',
+  'preview.media': 'Adjunto',
   'preview.fromYou': 'Tú: {body}',
   'preview.encrypted': 'Mensaje cifrado',
   'preview.selfEmpty': 'Notas, enlaces, recordatorios. Solo tú los ves',
@@ -751,6 +752,8 @@ export const es: Catalog = {
   'room.nameNote': 'Todos los del grupo ven este nombre.',
   'room.unknownSender':
     'Quien envía esto no ha publicado clave de firma, así que no hay nada con lo que comprobar el mensaje.',
+  'room.unverifiedSender':
+    'Remitente sin verificar. Este mensaje dice ser de {name}, pero su firma no coincide con su clave. No se ha abierto.',
   'room.memberCount#one': '{count} miembro',
   'room.memberCount#few': '{count} miembros',
   'room.memberCount#many': '{count} miembros',

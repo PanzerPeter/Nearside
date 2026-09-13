@@ -21,22 +21,41 @@ import {
   CheckSquare,
   Copy,
   CornerUpRight,
+  Lock,
   MoreVertical,
   Pencil,
   Pin,
+  Reply,
+  ShieldAlert,
+  ShieldQuestion,
   SmilePlus,
   Trash2,
-  Reply,
 } from 'lucide-react';
 
 interface MessageBubbleProps {
   msg: Message;
   isOwn: boolean;
   me: string;
-  /** How to name the other participant — a nickname if one is set,
-   *  `@display_name` otherwise. Formatted by the caller. */
-  peerLabel: string;
+  /** How to name whoever wrote a message — a nickname if one is set,
+   *  `@display_name` otherwise. A function rather than a string because a room
+   *  has as many authors as members: a 1:1 thread passes one that ignores its
+   *  argument, a room passes one that looks the id up. It names the author of
+   *  the reply quote too, which is why a group used to quote every message as
+   *  though the peer had written it. */
+  nameFor: (userId: string) => string;
+  /** Whether to print the author's name above the bubble. False in a 1:1,
+   *  where one person is on the other side and the bubble's own side already
+   *  says which. */
   showHeader: boolean;
+  /** Text colour class for the author's name, so a group's members stay
+   *  tellable apart at a glance (`roomColour`). Unused in a 1:1. */
+  senderColour?: string;
+  /** Display names present in this conversation, for `@name`. Rooms pass their
+   *  member list; a 1:1 passes nothing. See `lib/mentions.ts`. */
+  handles?: string[];
+  /** My own display name, so a mention of me reads louder than a mention of
+   *  somebody else. */
+  myHandle?: string;
   isEditing: boolean;
   editingText: string;
   reactions: Reaction[];
@@ -92,8 +111,11 @@ export function MessageBubble({
   msg,
   isOwn,
   me,
-  peerLabel,
+  nameFor,
   showHeader,
+  senderColour,
+  handles,
+  myHandle,
   isEditing,
   editingText,
   reactions,
@@ -120,10 +142,30 @@ export function MessageBubble({
   formatTime,
 }: MessageBubbleProps) {
   const isDeleted = !!msg.deleted_at;
+  /**
+   * A room message this device cannot vouch for: the signature does not check
+   * out against the sender's published key, or they have published none.
+   *
+   * Nothing in it is rendered — not the text, not the attachment, not the
+   * reply quote. A forged row is a claim about who said something, and drawing
+   * its picture beside a small warning would be showing the payload anyway.
+   * It keeps its place in the thread rather than being hidden, because hiding
+   * it conceals an attack in progress.
+   *
+   * Always false on a 1:1 row, which carries no `sender_trust` at all:
+   * `crypto_box` establishes the author by construction, so a peer message
+   * that opens was written by the peer.
+   */
+  const untrusted = msg.sender_trust === 'unverified' || msg.sender_trust === 'unknown';
+  /** Signed by the right person, but sealed under a key this device was never
+   *  given — what a member who joined after a key rotation sees. Distinct from
+   *  a 1:1 row that failed to open, and it gets its own sentence below. */
+  const sealedBeforeJoining = !!msg.sender_trust && !untrusted && !!msg.decrypt_failed;
   // A picture or a video — the two that fill the bubble edge to edge. A voice
   // note is a control with its own padding and behaves like text here.
   const hasVisualMedia =
     !isDeleted &&
+    !untrusted &&
     !!msg.media_path &&
     !!msg.media_type &&
     msg.media_type !== 'audio' &&
@@ -142,6 +184,7 @@ export function MessageBubble({
    */
   const stickerAlone =
     !isDeleted &&
+    !untrusted &&
     msg.media_type === 'sticker' &&
     !!msg.media_path &&
     !msg.text &&
@@ -159,6 +202,7 @@ export function MessageBubble({
    */
   const jumboEmoji =
     !isDeleted &&
+    !untrusted &&
     !!msg.text &&
     !msg.media_path &&
     !msg.forwarded &&
@@ -180,8 +224,11 @@ export function MessageBubble({
   // Chips straddle the bubble's bottom edge and need the padded band under the
   // content to land on, so a reacted-to picture keeps its ordinary footer row.
   const floatFooter = mediaAlone && !hasReactions;
-  // A queued message has no server row yet, so nothing can be done to it.
-  const hasMenu = !isDeleted && status !== 'pending';
+  // A queued message has no server row yet, so nothing can be done to it — and
+  // neither reply, reaction nor forward is offered on a row whose author is not
+  // established: forwarding re-seals the body as yours, which would carry an
+  // unverified message onward with its warning stripped off.
+  const hasMenu = !isDeleted && !untrusted && status !== 'pending';
   // The seal sweep, fired once when the server accepts an own message.
   // Keyed on the transition rather than on the value: a message loaded from
   // history mounts already `sent` and never passes through `pending`, so opening
@@ -346,7 +393,7 @@ export function MessageBubble({
   // While a selection is open a tap means "pick this one", so every other
   // gesture the bubble answers is off: a swipe that replied and also selected
   // would be one movement answering two questions.
-  const canReply = !isDeleted && !isEditing && status !== 'pending' && !selecting;
+  const canReply = !isDeleted && !untrusted && !isEditing && status !== 'pending' && !selecting;
   // The friend's messages sit on the left and swipe right, own messages sit on
   // the right and swipe left. Both swipe away from their anchored edge.
   const direction = isOwn ? -1 : 1;
@@ -386,12 +433,20 @@ export function MessageBubble({
           {selected ? t('message.selected') : t('message.notSelected')}
         </span>
       )}
-      {/* Alignment alone already says who spoke in a two-person DM; the
-          friend's name is still worth one anchor per group, but own messages
-          need no label at all — time and status now live in the bubble's
-          own footer below. */}
+      {/* Only where it answers a question. In a group the name is the whole
+          point — a message that doesn't say who wrote it is worse than one in
+          a box — so it leads each run of messages, in that member's own
+          colour. In a 1:1 the caller passes `showHeader` false throughout:
+          one person is over there, the bubble's side already says which, and
+          printing their name above every run spent a line of the thread
+          repeating something the reader knew before they opened it.
+
+          Own messages never get a label anywhere; time and status live in the
+          bubble's own footer below. */}
       {!isOwn && showHeader && (
-        <div className="text-meta text-muted mb-0.5 px-1">{peerLabel}</div>
+        <div className={`text-meta mb-0.5 px-1 font-medium ${senderColour ?? 'text-muted'}`}>
+          {nameFor(msg.user_id)}
+        </div>
       )}
 
       {isEditing ? (
@@ -569,7 +624,15 @@ export function MessageBubble({
             } ${
               isDeleted
                 ? 'bg-base-300/60 text-muted italic'
-                : bareGlyph
+                : // A forgery and an uncheckable sender get their own fills
+                  // rather than the sender's usual one: the warning has to be
+                  // visible as a shape in the scrollback, not only as a
+                  // sentence somebody has to stop and read.
+                  msg.sender_trust === 'unverified'
+                  ? 'bg-error/10 border border-error/40 text-base-content'
+                  : msg.sender_trust === 'unknown'
+                    ? 'bg-warning/10 border border-warning/40 text-base-content'
+                    : bareGlyph
                   ? // No bubble colour at all. The footer below reads against the
                     // thread background instead, which is why it is given its own
                     // treatment there rather than inheriting `text-*-content`.
@@ -600,6 +663,19 @@ export function MessageBubble({
           >
             {isDeleted ? (
               t('message.deleted')
+            ) : msg.sender_trust === 'unverified' ? (
+              // Named, because the claim is the attack: somebody wrote a row
+              // under this person's id and the signature does not back it up.
+              // The body stays sealed and undrawn.
+              <p className="flex items-start gap-1.5 text-body text-error">
+                <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" aria-hidden />
+                <span>{t('room.unverifiedSender', { name: nameFor(msg.user_id) })}</span>
+              </p>
+            ) : msg.sender_trust === 'unknown' ? (
+              <p className="flex items-start gap-1.5 text-body text-warning">
+                <ShieldQuestion className="w-4 h-4 shrink-0 mt-0.5" aria-hidden />
+                <span>{t('room.unknownSender')}</span>
+              </p>
             ) : (
               <div className="space-y-1.5">
                 {/* Says how the message got here, not where it came from —
@@ -629,7 +705,11 @@ export function MessageBubble({
                     {/* Whose message is being quoted — judged against the
                         viewer, not against the author of the reply. */}
                     <span className="font-medium">
-                      {repliedTo ? (repliedTo.user_id === me ? t('common.you') : peerLabel) : ''}
+                      {repliedTo
+                        ? repliedTo.user_id === me
+                          ? t('common.you')
+                          : nameFor(repliedTo.user_id)
+                        : ''}
                     </span>
                     <span className="ml-1 line-clamp-2">
                       {repliedTo
@@ -711,15 +791,27 @@ export function MessageBubble({
                       {msg.text.trim()}
                     </div>
                   ) : (
-                    <MessageText text={msg.text} />
+                    <MessageText text={msg.text} handles={handles} myHandle={myHandle} />
                   ))}
-                {/* Sealed, and this device could not open it — most likely a
-                    vault written under a key this phone was never given. Said
-                    out loud, because an empty bubble would read as a message
-                    someone actually sent as empty. */}
-                {msg.decrypt_failed && (
-                  <p className="text-body italic opacity-70">{t('message.undecryptable')}</p>
-                )}
+                {/* Sealed, and this device could not open it. Said out loud,
+                    because an empty bubble would read as a message someone
+                    actually sent as empty.
+
+                    A group says something more specific: the signature checked
+                    out, so this is a real message from a real member, sealed
+                    under a room key this phone was never given — what somebody
+                    who joined after a rotation sees looking back. "Can't
+                    decrypt" would read there as a fault, and it is the feature
+                    working. */}
+                {msg.decrypt_failed &&
+                  (sealedBeforeJoining ? (
+                    <p className="flex items-start gap-1.5 text-body italic opacity-70">
+                      <Lock className="w-4 h-4 shrink-0 mt-0.5" aria-hidden />
+                      <span>{t('room.beforeYouJoined')}</span>
+                    </p>
+                  ) : (
+                    <p className="text-body italic opacity-70">{t('message.undecryptable')}</p>
+                  ))}
               </div>
             )}
 

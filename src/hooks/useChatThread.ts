@@ -183,6 +183,7 @@ export function useChatThread({
     messages,
     pending: outbox.pending,
     peerTyping: friendTyping,
+    unreadDividerId,
   });
 
   useEffect(() => {

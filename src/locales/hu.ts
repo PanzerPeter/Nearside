@@ -294,6 +294,7 @@ export const hu: Catalog = {
   'preview.video': 'Videó',
   'preview.voice': 'Hangüzenet',
   'preview.sticker': 'Matrica',
+  'preview.media': 'Melléklet',
   'preview.fromYou': 'Te: {body}',
   'preview.encrypted': 'Titkosított üzenet',
   'preview.selfEmpty': 'Jegyzetek, linkek, emlékeztetők. Csak te látod',
@@ -758,6 +759,8 @@ export const hu: Catalog = {
   'room.nameNote': 'A csoportban mindenki látja ezt a nevet.',
   'room.unknownSender':
     'Ez a feladó nem tett közzé aláírókulcsot, így nincs mihez hasonlítani ezt az üzenetet.',
+  'room.unverifiedSender':
+    'Nem hitelesített feladó. Ez az üzenet {name} nevében érkezett, de az aláírása nem egyezik a kulcsával. Nem lett megnyitva.',
   'room.memberCount#one': '{count} tag',
   'room.memberCount#few': '{count} tag',
   'room.memberCount#many': '{count} tag',

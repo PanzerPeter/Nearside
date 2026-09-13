@@ -292,6 +292,7 @@ export const pl: Catalog = {
   'preview.video': 'Wideo',
   'preview.voice': 'Wiadomość głosowa',
   'preview.sticker': 'Naklejka',
+  'preview.media': 'Załącznik',
   'preview.fromYou': 'Ty: {body}',
   'preview.encrypted': 'Zaszyfrowana wiadomość',
   'preview.selfEmpty': 'Notatki, linki, przypomnienia. Widzisz to tylko ty',
@@ -756,6 +757,8 @@ export const pl: Catalog = {
   'room.nameNote': 'Tę nazwę widzi każdy w grupie.',
   'room.unknownSender':
     'Ten nadawca nie opublikował klucza podpisu, więc nie ma do czego porównać tej wiadomości.',
+  'room.unverifiedSender':
+    'Niezweryfikowany nadawca. Ta wiadomość podaje się za wiadomość od {name}, ale jej podpis nie zgadza się z kluczem. Nie została otwarta.',
   'room.memberCount#one': '{count} członek',
   'room.memberCount#few': '{count} członkowie',
   'room.memberCount#many': '{count} członków',

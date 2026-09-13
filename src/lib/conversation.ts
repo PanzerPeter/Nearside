@@ -1,3 +1,4 @@
+import { t } from './i18n';
 import type { Message } from './types';
 
 /**
@@ -5,17 +6,23 @@ import type { Message } from './types';
  * than render it: the composer's reply bar and the quote inside a reply
  * bubble. Uncaptioned media is named by kind rather than quoted as an empty
  * string.
+ *
+ * Translated, which it was not until the group thread and the 1:1 thread
+ * became one renderer. `RoomView` carried its own copy of this function that
+ * went through the catalog, so quoting a photo said "Fotó" in a group and
+ * "📷 Photo" in a DM on the same phone — the kind of drift a second
+ * implementation produces quietly, and the reason there is now only one.
  */
 export function messageSnippet(
   msg: Pick<Message, 'text' | 'media_type' | 'media_path' | 'deleted_at'>
 ): string {
-  if (msg.deleted_at) return 'Deleted message';
+  if (msg.deleted_at) return t('message.deleted');
   if (msg.text) return msg.text;
-  if (msg.media_type === 'audio') return '🎤 Voice message';
-  if (msg.media_type === 'video') return '🎬 Video';
-  if (msg.media_type === 'image') return '📷 Photo';
-  if (msg.media_type === 'sticker') return '🩷 Sticker';
-  if (msg.media_path) return '📎 Media';
+  if (msg.media_type === 'audio') return `🎤 ${t('preview.voice')}`;
+  if (msg.media_type === 'video') return `🎬 ${t('preview.video')}`;
+  if (msg.media_type === 'image') return `📷 ${t('preview.photo')}`;
+  if (msg.media_type === 'sticker') return `🩷 ${t('preview.sticker')}`;
+  if (msg.media_path) return `📎 ${t('preview.media')}`;
   return '';
 }
 

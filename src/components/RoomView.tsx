@@ -1,22 +1,16 @@
-import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { RealtimeChannel, Session } from '@supabase/supabase-js';
 import {
   ArrowLeft,
   BellRing,
-  CheckSquare,
   CornerUpRight,
   FileDown,
   Image as ImageIcon,
   Lock,
   LogOut,
   MoreVertical,
-  Pencil,
-  Pin,
   Search,
-  Reply,
   ShieldAlert,
-  ShieldQuestion,
-  SmilePlus,
   Timer,
   Trash2,
   UserMinus,
@@ -34,6 +28,7 @@ import {
   roomKeyFor,
   removeMember,
   markRoomRead,
+  roomAsMessage,
   roomMembers,
   roomReadAt,
   roomSigningKeys,
@@ -46,7 +41,6 @@ import { formatDisplayName, nicknameFor } from '../lib/nicknames';
 import {
   describeTimerChange,
   formatTtl,
-  timerChangeIndex,
   loadRoomTimer,
   saveRoomTimer,
   TTL_OPTIONS,
@@ -62,9 +56,7 @@ import {
   unpinRoomMessage,
   type PinnedMessage,
 } from '../lib/pinned-message';
-import { MAX_MESSAGE_LENGTH, canEditBody, isBodyOptional } from '../lib/conversation';
-import { formatTime } from '../lib/time';
-import { prefersReducedMotion } from '../lib/motion';
+import { isBodyOptional, messageSnippet } from '../lib/conversation';
 import { tapSend } from '../lib/haptics';
 import { notifyRoom } from '../lib/push';
 import { forgetChannel, reportChannelStatus, useConnection } from '../lib/connection';
@@ -72,13 +64,11 @@ import { useToast } from '../hooks/useToast';
 import { useMediaSend } from '../hooks/useMediaSend';
 import { useStickers } from '../hooks/useStickers';
 import { useReactions } from '../hooks/useReactions';
-import { useSwipeToReply } from '../hooks/useSwipeToReply';
 import { useDraft } from '../hooks/useDraft';
 import { draftKey } from '../lib/drafts';
 import { privacyPrefs } from '../lib/privacy-prefs';
-import type { Profile, Reaction } from '../lib/types';
-import { Composer, MAX_TEXTAREA_PX, type ComposerHandle } from './Composer';
-import { MediaAttachment } from './MediaAttachment';
+import type { PendingMessage, Profile } from '../lib/types';
+import { Composer, type ComposerHandle } from './Composer';
 import { GalleryProvider } from '../hooks/useGallery';
 import { useShortcut } from '../hooks/useShortcut';
 import { useExportChat } from '../hooks/useExportChat';
@@ -92,22 +82,15 @@ import {
   subscribeChatFlags,
   type AlertLevel,
 } from '../lib/chat-flags';
-import { MessageText } from './MessageText';
-import { jumboEmojiCount } from '../lib/emoji-only';
-import { ReactionBar } from './ReactionBar';
-import { ReactionChips } from './ReactionChips';
+import { MessageThread } from './MessageThread';
+import { useThreadScroll } from '../hooks/useThreadScroll';
 import { ForwardModal } from './ForwardModal';
 import { ReactionSheet } from './ReactionSheet';
 import { isRoomForwardable, roomSource } from '../lib/forward';
-import { StickerAttachment } from './StickerAttachment';
 import { ConversationSearch } from './ConversationSearch';
 import { StickerPicker } from './StickerPicker';
-import { VoiceNote } from './VoiceNote';
 import { useUnreadDivider } from '../hooks/useUnreadDivider';
 import { useT } from '../hooks/useT';
-// `roomSnippet` is a helper rather than a component, so it reaches the catalog
-// directly; aliased to stay distinct from the hook's `t`.
-import { t as translate } from '../lib/i18n';
 
 interface RoomViewProps {
   session: Session;
@@ -119,6 +102,15 @@ interface RoomViewProps {
   onBack: () => void;
   onLeft: () => void;
 }
+
+/** A group has no outbox. One frozen array rather than a literal in the call,
+ *  so the scroll hook's "did pending grow?" check is not handed a new identity
+ *  on every render. */
+const NO_PENDING: PendingMessage[] = [];
+
+/** Stable identity for "nothing picked", so the thread is not handed a new Set
+ *  on every render. */
+const EMPTY_SELECTION: ReadonlySet<string> = new Set();
 
 const PAGE_SIZE = 50;
 /** How far back a search result may drag the thread. The same cap the 1:1
@@ -177,10 +169,19 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
   const [typingBy, setTypingBy] = useState<Map<string, number>>(new Map());
   const channelRef = useRef<RealtimeChannel | null>(null);
   const lastTypingSent = useRef(0);
-  const listRef = useRef<HTMLDivElement>(null);
-  /** Set immediately before older messages are prepended, so the scroll effect
-   *  below knows not to chase the bottom on that particular update. */
-  const skipAutoScroll = useRef(false);
+  /**
+   * Ids already painted, gating the bubble's entrance animation.
+   *
+   * Every *fetch* seeds its rows here as they merge, so a page of history never
+   * reads as new — opening a group used to cascade the animation down all fifty
+   * of its messages, because the group thread drew `animate-message-in` on
+   * every row unconditionally. A realtime arrival is deliberately left
+   * unseeded: that is the one path an animation is for.
+   *
+   * The effect below then replaces the set with what is on screen, which both
+   * marks that arrival seen and bounds the set to the loaded window.
+   */
+  const seenIds = useRef<Set<string>>(new Set());
   const [members, setMembers] = useState<RoomParticipant[]>([]);
   const [forwarding, setForwarding] = useState<RoomMessage | null>(null);
   /** Whose reactions the sheet is showing, by message id: the rows are rebuilt
@@ -215,7 +216,6 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
   const jumpInFlight = useRef(false);
   /** Who is mid-removal, so their row can show it and not be tapped twice. */
   const [removing, setRemoving] = useState<string | null>(null);
-  const bottomRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<ComposerHandle>(null);
   const toast = useToast();
   const { generation, live } = useConnection();
@@ -322,23 +322,72 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
   /** Loaded messages by id, for resolving a quote without a second query. A
    *  reply whose target is outside the window renders as unavailable. */
   const byId = useMemo(() => new Map(messages.map((m) => [m.id, m])), [messages]);
-  // `openRoomRows` hands back the opened file key as `mediaKey`; every 1:1 row
-  // in the app calls the same thing `media_key`, and the gallery reads the
-  // second name because that is the shape `lib/types.ts` defines.
-  const galleryRows = useMemo(
-    () => messages.map((m) => ({ ...m, media_key: m.mediaKey ?? null })),
-    [messages]
-  );
   /** What the thread draws: everything except the messages whose delete is
    *  still inside its undo window. */
   const shown = useMemo(() => messages.filter((m) => !deleting.has(m.id)), [messages, deleting]);
 
-  const jumpTo = useCallback((id: string) => {
-    document.getElementById(`room-msg-${id}`)?.scrollIntoView({
-      behavior: prefersReducedMotion() ? 'auto' : 'smooth',
-      block: 'center',
-    });
-  }, []);
+  /**
+   * The same rows in the shape the thread renders.
+   *
+   * `MessageThread` and `MessageBubble` are the app's only message renderer —
+   * a group used to have its own, which is how it came to be missing date
+   * dividers, message grouping, the jump-to-latest button, a delivery tick and
+   * the proper action menu while the 1:1 thread had all five. One renderer,
+   * and an adapter at its edge; see `roomAsMessage`.
+   */
+  const shownMessages = useMemo(
+    () => shown.map((m) => roomAsMessage(m, room.id)),
+    [shown, room.id]
+  );
+
+  // Declared above the scroll hook, which lands the first scroll of a group on
+  // this line rather than at the newest message.
+  const dividerRows = useMemo(
+    () => messages.map((m) => ({ id: m.id, from: m.sender_id, created_at: m.created_at })),
+    [messages]
+  );
+  const unreadDividerId = useUnreadDivider(room.id, me, dividerRows, readAtOnOpen);
+
+  /**
+   * Where the list is looking — the hook the 1:1 thread has always used.
+   *
+   * What a group gets out of this that it did not have: the view follows new
+   * messages only when the reader is already at the bottom. Before, every
+   * arrival called `scrollIntoView` unconditionally, so reading back through a
+   * busy group meant being yanked to the newest message every time somebody
+   * said anything. The jump-to-latest button and its unread counter come with
+   * it, and so does the ring a search result lands on.
+   */
+  const scroll = useThreadScroll({
+    peerId: room.id,
+    me,
+    messages: shownMessages,
+    // A group has no outbox yet: a send that fails says so and leaves the words
+    // in the composer, rather than queueing them the way a 1:1 does.
+    pending: NO_PENDING,
+    peerTyping: typingBy.size > 0,
+    unreadDividerId,
+  });
+
+  /**
+   * Quote resolution, against the loaded window alone.
+   *
+   * The 1:1 thread fetches a quote's parent when it falls outside the window;
+   * a group cannot use that hook as it stands — it queries `messages` with a
+   * pair filter — so a reply to something older still renders as unavailable
+   * here, exactly as it did before. Shaped as a `ReplyTargets` so the thread
+   * does not have to know which of the two it was handed.
+   */
+  const replyTargets = useMemo(
+    () => ({
+      get: (id: string) => {
+        const row = byId.get(id);
+        return row ? roomAsMessage(row, room.id) : null;
+      },
+      isLoading: () => false,
+    }),
+    [byId, room.id]
+  );
 
   const colourFor = useMemo(() => {
     const map = new Map(members.map((m) => [m.user_id, roomColour(m.colour_index)]));
@@ -371,13 +420,6 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [timer, me, members]
   );
-  const noticeIndex = timerChange
-    ? timerChangeIndex(
-        shown.map((m) => m.created_at),
-        timerChange.at
-      )
-    : -1;
-
   // Re-read on every wake, like every other fetch beside a subscription.
   useEffect(() => {
     let alive = true;
@@ -408,8 +450,8 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
   const pinnedSnippet = useMemo(() => {
     if (!pinned) return null;
     const row = messages.find((m) => m.id === pinned.messageId);
-    return row ? roomSnippet(row) : null;
-  }, [pinned, messages]);
+    return row ? messageSnippet(roomAsMessage(row, room.id)) : null;
+  }, [pinned, messages, room.id]);
 
   async function togglePin(id: string) {
     setPinBusy(true);
@@ -588,7 +630,9 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
     const page = (data as unknown as RoomMessage[] | null) ?? [];
     setHasMore(page.length > PAGE_SIZE);
     const rows = page.slice(0, PAGE_SIZE).reverse();
-    setMessages(await openPage(rows, roomKey));
+    const opened = await openPage(rows, roomKey);
+    for (const m of opened) seenIds.current.add(m.id);
+    setMessages(opened);
   }, [room.id, roomKey, openPage]);
 
   /**
@@ -614,14 +658,15 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
       setHasMore(page.length > PAGE_SIZE);
       const older = await openPage(page.slice(0, PAGE_SIZE).reverse(), roomKey);
       if (older.length === 0) return;
+      for (const m of older) seenIds.current.add(m.id);
 
       // The browser keeps the scroll offset, not the content under it, so
       // prepending would silently carry the reader up the thread. Measured
       // before the commit and restored after it, which is what makes paging
       // look like the list simply got longer above.
-      const list = listRef.current;
+      const list = scroll.listRef.current;
       const before = list?.scrollHeight ?? 0;
-      skipAutoScroll.current = true;
+      scroll.skipAutoScroll.current = true;
       setMessages((current) => {
         const known = new Set(current.map((m) => m.id));
         return [...older.filter((m) => !known.has(m.id)), ...current];
@@ -633,7 +678,7 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
     } finally {
       setLoadingOlder(false);
     }
-  }, [room.id, roomKey, messages, loadingOlder, openPage]);
+  }, [room.id, roomKey, messages, loadingOlder, openPage, scroll.listRef, scroll.skipAutoScroll]);
 
   /**
    * Follow a search result back to its message, loading pages until it is on
@@ -650,7 +695,7 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
       jumpInFlight.current = true;
       try {
         if (messages.some((m) => m.id === id)) {
-          jumpTo(id);
+          scroll.scrollToMessage(id);
           return;
         }
         if (!roomKey || !hasMore) {
@@ -679,7 +724,8 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
             more = false;
             break;
           }
-          skipAutoScroll.current = true;
+          for (const m of older) seenIds.current.add(m.id);
+          scroll.skipAutoScroll.current = true;
           setMessages((prev) => {
             const known = new Set(prev.map((m) => m.id));
             return [...older.filter((m) => !known.has(m.id)), ...prev];
@@ -695,13 +741,13 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
         setLoadingOlder(false);
 
         // Let the merged pages paint before measuring where to scroll to.
-        if (found) requestAnimationFrame(() => jumpTo(id));
+        if (found) requestAnimationFrame(() => scroll.scrollToMessage(id));
         else toast.error(t('search.tooFarBack'));
       } finally {
         jumpInFlight.current = false;
       }
     },
-    [room.id, roomKey, messages, hasMore, openPage, jumpTo, toast, t]
+    [room.id, roomKey, messages, hasMore, openPage, scroll, toast, t]
   );
 
   // Land on the message a search result named, once, after the first page is
@@ -874,12 +920,6 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
     };
   }, [room.id, me]);
 
-  const dividerRows = useMemo(
-    () => messages.map((m) => ({ id: m.id, from: m.sender_id, created_at: m.created_at })),
-    [messages]
-  );
-  const unreadDividerId = useUnreadDivider(room.id, me, dividerRows, readAtOnOpen);
-
   /**
    * Mark the group read up to its newest message.
    *
@@ -895,18 +935,13 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
     void markRoomRead(room.id, me, newest);
   }, [room.id, me, messages, readAtOnOpen]);
 
+  // Commit-phase half of the entrance-animation gate. In an effect rather than
+  // inline for the reason `useChatThread` gives: done during render it silences
+  // the animation under StrictMode, where the discarded first pass claims the
+  // id and the committed pass then reads the message as already seen.
   useEffect(() => {
-    // A page of older messages is the one update that must not move the view:
-    // it is the reader's own scroll that asked for it.
-    if (skipAutoScroll.current) {
-      skipAutoScroll.current = false;
-      return;
-    }
-    bottomRef.current?.scrollIntoView({
-      behavior: prefersReducedMotion() ? 'auto' : 'smooth',
-      block: 'end',
-    });
-  }, [messages.length]);
+    seenIds.current = new Set(messages.map((m) => m.id));
+  }, [messages]);
 
   /**
    * Tell the group this device is typing.
@@ -1310,7 +1345,7 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
         <ForwardModal
           me={me}
           sources={[roomSource(forwarding)]}
-          preview={roomSnippet(forwarding)}
+          preview={messageSnippet(roomAsMessage(forwarding, room.id))}
           fromKey={room.id}
           identity={identity}
           onClose={() => setForwarding(null)}
@@ -1358,128 +1393,87 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
         </div>
       )}
 
-      {background.url && (
-        <>
-          {/* Decoration only, behind the list — the same two layers the 1:1
-              thread uses, including the scrim that keeps bare text (the date
-              dividers, the empty state, the load-older button) legible over a
-              light photograph. */}
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-0 bg-cover bg-center"
-            style={{ backgroundImage: `url("${background.url}")` }}
-          />
-          <div aria-hidden className="pointer-events-none absolute inset-0 bg-base-200/65" />
-        </>
-      )}
-      <div
-        ref={listRef}
-        className="relative flex-1 overflow-y-auto px-3 sm:px-4 py-4 min-h-0"
-      >
-        {hasMore && (
-          <div className="flex justify-center pb-3">
-            <button
-              type="button"
-              className="btn btn-ghost btn-xs"
-              onClick={() => void loadOlder()}
-              disabled={loadingOlder}
-            >
-              {loadingOlder ? (
-                <span className="loading loading-spinner loading-xs" />
-              ) : (
-                t('thread.loadOlder')
-              )}
-            </button>
-          </div>
-        )}
-        {messages.length === 0 && !keyMissing && (
-          <div className="h-full flex flex-col items-center justify-center text-center px-6">
-            <span className="w-16 h-16 rounded-box bg-base-content/5 flex items-center justify-center mb-3">
-              <Lock className="w-7 h-7 text-muted" />
-            </span>
-            <p className="text-body font-medium text-muted">{t('room.emptyTitle')}</p>
-            <p className="text-meta text-muted mt-1 max-w-xs">{t('room.emptyBody')}</p>
-          </div>
-        )}
-
-        {/* The group's pictures, so the viewer opened from one of them can
-            step to the next (`lib/gallery.ts`). A group row carries its
-            opened file key under a different name than a 1:1 row does. */}
-        <GalleryProvider messages={galleryRows}>
-          <ul className="space-y-2.5">
-            {shown.map((m) => (
-              <Fragment key={m.id}>
-                {m.id === unreadDividerId && (
-                  <li className="flex items-center gap-2 py-1">
-                    <span className="flex-1 h-px bg-primary/40" />
-                    <span className="text-micro font-semibold uppercase tracking-wide text-primary">
-                      {t('thread.newMessages')}
-                    </span>
-                    <span className="flex-1 h-px bg-primary/40" />
-                  </li>
-                )}
-              <RoomBubble
-                m={m}
-                me={me}
-                senderName={nameFor(m.sender_id)}
-                senderColour={colourFor(m.sender_id)}
-                reactions={reactions.byMessage.get(m.id) ?? []}
-                handles={handles}
-                myHandle={myHandle}
-                repliedTo={m.reply_to_id ? (byId.get(m.reply_to_id) ?? null) : null}
-                repliedToName={
-                  m.reply_to_id ? nameFor(byId.get(m.reply_to_id)?.sender_id ?? '') : ''
-                }
-                isEditing={editingId === m.id}
-                editingText={editingText}
-                onToggleReaction={(emoji) => void reactions.toggle(m.id, emoji)}
-                onReply={() => setReplyingTo(m)}
-                onJumpTo={jumpTo}
-                onStartEdit={() => startEdit(m)}
-                onEditingTextChange={setEditingText}
-                onSaveEdit={() => void saveEdit(m.id)}
-                onCancelEdit={cancelEdit}
-                onDelete={() => requestDelete(m)}
-                onForward={() => setForwarding(m)}
-                onShowReactions={() => setShowingReactions(m.id)}
-                isPinned={pinned?.messageId === m.id}
-                onTogglePin={() => void togglePin(m.id)}
-                onStartSelecting={() => setSelectedIds(new Set([m.id]))}
-                selecting={selectedIds !== null}
-                selected={selectedIds?.has(m.id) ?? false}
-                onToggleSelected={() =>
-                  setSelectedIds((current) => toggleSelected(current ?? new Set(), m.id))
-                }
-              />
-              </Fragment>
-            ))}
-            {timerChange && noticeIndex === shown.length && shown.length > 0 && (
-              <TimerNotice label={timerChange.label} />
-            )}
-          </ul>
-        </GalleryProvider>
-        {typingNames.length > 0 && (
-          <div className="flex items-center gap-2 mt-3" aria-live="polite" aria-atomic="true">
-            {/* The incoming bubble's fill, minus the padding a line of text
-                needs — the dots are the content. */}
-            <div
-              className="flex items-center gap-1 px-3 py-2.5 rounded-box rounded-bl-md bg-base-100 border border-hairline"
-              aria-hidden="true"
-            >
-              <span className="typing-dot" />
-              <span className="typing-dot" />
-              <span className="typing-dot" />
-            </div>
-            <span className="text-meta text-muted truncate">
-              {typingNames.length === 1
+      {/* The group's pictures, so the viewer opened from any one of them can
+          step to the next without closing (`lib/gallery.ts`). Over what is
+          drawn, not over everything held: a message inside its delete-undo
+          window is not on screen and must not be a stop in the viewer. */}
+      <GalleryProvider messages={shownMessages}>
+        <MessageThread
+          me={me}
+          // Not the group's own name: this is what the typing line and the
+          // default empty state would say, and a room supplies both itself.
+          peerLabel={room.title}
+          nameFor={nameFor}
+          // The whole reason a group bubble carries a header: a message that
+          // does not say who wrote it is worse than one in a box.
+          showSenderNames
+          colourFor={colourFor}
+          handles={handles}
+          myHandle={myHandle}
+          emptyState={
+            <>
+              <span className="w-16 h-16 rounded-box bg-base-content/5 flex items-center justify-center mb-3 mx-auto">
+                <Lock className="w-7 h-7 text-muted" />
+              </span>
+              <p className="text-body font-medium text-muted">{t('room.emptyTitle')}</p>
+              <p className="text-meta text-muted mt-1 max-w-xs">{t('room.emptyBody')}</p>
+            </>
+          }
+          isSelf={false}
+          messages={shownMessages}
+          queued={NO_PENDING}
+          typingLabel={
+            typingNames.length === 0
+              ? null
+              : typingNames.length === 1
                 ? t('thread.typing', { name: typingNames[0] })
-                : t('room.typingMany', { names: typingNames.join(', ') })}
-            </span>
-          </div>
-        )}
-
-        <div ref={bottomRef} />
-      </div>
+                : t('room.typingMany', { names: typingNames.join(', ') })
+          }
+          hasMore={hasMore}
+          loadingOlder={loadingOlder}
+          // Every member keeps their own watermark, so a single tick meaning
+          // "the server has this row" is the most a group bubble can honestly
+          // claim — which is what `statusFor` returns for a null receipt.
+          peerReceipt={null}
+          unreadDividerId={unreadDividerId}
+          reactions={reactions.byMessage}
+          replyTargets={replyTargets}
+          scroll={scroll}
+          backgroundUrl={background.url}
+          timerChange={timerChange}
+          editingId={editingId}
+          editingText={editingText}
+          isAlreadySeen={(id) => seenIds.current.has(id)}
+          onLoadOlder={() => void loadOlder()}
+          onToggleReaction={(messageId, emoji) => void reactions.toggle(messageId, emoji)}
+          onReply={(msg) => setReplyingTo(byId.get(msg.id) ?? null)}
+          onForward={(msg) => setForwarding(byId.get(msg.id) ?? null)}
+          onShowReactions={(msg) => setShowingReactions(msg.id)}
+          onJumpToReplied={(target) => scroll.scrollToMessage(target.id)}
+          selecting={selectedIds !== null}
+          selectedIds={selectedIds ?? EMPTY_SELECTION}
+          onStartSelecting={(msg) => setSelectedIds(new Set([msg.id]))}
+          onToggleSelected={(msg) =>
+            setSelectedIds((current) => toggleSelected(current ?? new Set(), msg.id))
+          }
+          pinnedId={pinned?.messageId ?? null}
+          onTogglePin={(msg) => void togglePin(msg.id)}
+          onEditingTextChange={setEditingText}
+          onSaveEdit={(id) => void saveEdit(id)}
+          onCancelEdit={cancelEdit}
+          onStartEdit={(msg) => {
+            const row = byId.get(msg.id);
+            if (row) startEdit(row);
+          }}
+          onDelete={(msg) => {
+            const row = byId.get(msg.id);
+            if (row) requestDelete(row);
+          }}
+          // A group has no outbox, so nothing ever reaches these.
+          onRetryQueued={() => {}}
+          onDiscardQueued={() => {}}
+        />
+      </GalleryProvider>
 
       {/* While messages are being picked out the bar stands in for the
           composer, the same way it does in a 1:1 thread. */}
@@ -1539,7 +1533,7 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
           replyingTo
             ? {
                 display_name: nameFor(replyingTo.sender_id),
-                snippet: roomSnippet(replyingTo),
+                snippet: messageSnippet(roomAsMessage(replyingTo, room.id)),
               }
             : null
         }
@@ -1571,501 +1565,5 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
       </>
       )}
     </div>
-  );
-}
-
-/** What a quoted room message reads as in the composer and in the quote block.
- *  A caption-less attachment has no text to show, so it is named by kind. */
-/** The timer change, in the middle of the thread where it happened — the same
- *  pill the 1:1 thread draws, because it is the same kind of thing: not
- *  something a member said, but something that happened to the group. */
-function TimerNotice({ label }: { label: string }) {
-  return (
-    <li className="my-3 flex justify-center">
-      <span className="inline-flex items-center gap-1.5 rounded-full bg-base-300/80 px-3 py-1 text-micro font-medium text-muted ring-1 ring-base-content/5 backdrop-blur-xs">
-        <Timer className="h-3 w-3 shrink-0" />
-        {label}
-      </span>
-    </li>
-  );
-}
-
-function roomSnippet(m: RoomMessage): string {
-  if (m.deleted_at) return translate('message.deleted');
-  if (m.text) return m.text;
-  if (m.media_type === 'audio') return `🎤 ${translate('preview.voice')}`;
-  if (m.media_type === 'sticker') return translate('preview.sticker');
-  if (m.media_type === 'video') return `🎬 ${translate('preview.video')}`;
-  if (m.media_type) return `📷 ${translate('preview.photo')}`;
-  return translate('themes.sampleComposer');
-}
-
-interface RoomBubbleProps {
-  m: RoomMessage;
-  me: string;
-  senderName: string;
-  senderColour: string;
-  reactions: Reaction[];
-  /** Display names in this room, for highlighting `@name`. Only a name
-   *  somebody here holds counts — see lib/mentions.ts. */
-  handles: string[];
-  myHandle: string;
-  /** The quoted message, when it is inside the loaded window. Null renders as
-   *  "Message unavailable" rather than as a blank quote — a quote pointing at
-   *  nothing must say so. */
-  repliedTo: RoomMessage | null;
-  repliedToName: string;
-  /** True while this row is the one being rewritten. The text lives in
-   *  `RoomView`, because the composer holds Save and Cancel. */
-  isEditing: boolean;
-  editingText: string;
-  onToggleReaction: (emoji: string) => void;
-  onReply: () => void;
-  onJumpTo: (id: string) => void;
-  onStartEdit: () => void;
-  onEditingTextChange: (v: string) => void;
-  onSaveEdit: () => void;
-  onCancelEdit: () => void;
-  onDelete: () => void;
-  /** Pass this message on to another conversation. Only offered for a row this
-   *  device can vouch for — see `isRoomForwardable`. */
-  onForward: () => void;
-  /** Show who reacted. The chips say how many; in a group of eight that is not
-   *  the useful half. */
-  onShowReactions: () => void;
-  /** Whether this is the message held at the top of the group. */
-  isPinned: boolean;
-  onTogglePin: () => void;
-  /** Start picking messages out, with this one already picked. */
-  onStartSelecting: () => void;
-  /** True while a selection is open. Every other gesture the bubble answers is
-   *  off then: in this mode a tap means "pick this one". */
-  selecting: boolean;
-  selected: boolean;
-  onToggleSelected: () => void;
-}
-
-/**
- * One room message.
- *
- * Its own component because each row owns state a `.map()` cannot hold: the
- * swipe in progress and whether this bubble's reaction bar is open.
- */
-function RoomBubble({
-  m,
-  me,
-  senderName,
-  senderColour,
-  reactions,
-  handles,
-  myHandle,
-  repliedTo,
-  repliedToName,
-  isEditing,
-  editingText,
-  onToggleReaction,
-  onReply,
-  onJumpTo,
-  onStartEdit,
-  onEditingTextChange,
-  onSaveEdit,
-  onCancelEdit,
-  onDelete,
-  onForward,
-  onShowReactions,
-  isPinned,
-  onTogglePin,
-  onStartSelecting,
-  selecting,
-  selected,
-  onToggleSelected,
-}: RoomBubbleProps) {
-  const t = useT();
-  const mine = m.sender_id === me;
-  const [menuOpen, setMenuOpen] = useState(false);
-  const readable = m.sender !== 'unverified' && m.sender !== 'unknown';
-  const isDeleted = !!m.deleted_at;
-  const editRef = useRef<HTMLTextAreaElement>(null);
-
-  // Auto-grow the editor, the same reset-then-measure the composer does. The
-  // ref is null while this row is not being edited, so it is a no-op then.
-  useLayoutEffect(() => {
-    const el = editRef.current;
-    if (!el) return;
-    el.style.height = 'auto';
-    el.style.height = `${Math.min(el.scrollHeight, MAX_TEXTAREA_PX)}px`;
-  }, [editingText, isEditing]);
-
-  // Caret after the last character, not in front of it: `autoFocus` alone puts
-  // it at index 0, which types the edit backwards into the sentence.
-  useEffect(() => {
-    if (!isEditing) return;
-    const el = editRef.current;
-    if (!el) return;
-    el.focus();
-    const end = el.value.length;
-    el.setSelectionRange(end, end);
-  }, [isEditing]);
-
-  // A row being edited, or one that has just become a tombstone, has no menu
-  // left to show.
-  useEffect(() => {
-    if (isEditing || isDeleted) setMenuOpen(false);
-  }, [isEditing, isDeleted]);
-  // A body of nothing but one to three emoji, drawn large and without the
-  // bubble — the same treatment `MessageBubble` gives it in a 1:1 thread, so a
-  // reaction sent as a message looks the same in both places. The sender's name
-  // stays: it reads on the thread background in its own colour, and a group
-  // message that doesn't say who sent it is worse than one in a box.
-  const jumboEmoji =
-    readable && !isDeleted && m.text && !m.media_path && !m.reply_to_id
-      ? jumboEmojiCount(m.text)
-      : 0;
-
-  const swipe = useSwipeToReply({
-    enabled: readable && !isDeleted && !isEditing && !selecting,
-    onReply,
-    direction: mine ? -1 : 1,
-  });
-
-  return (
-    <li
-      id={`room-msg-${m.id}`}
-      // Same side marker as MessageBubble — see index.css.
-      data-own={mine}
-      className={`flex ${mine ? 'justify-end' : 'justify-start'} animate-message-in ${
-        selecting ? 'cursor-pointer rounded-box transition-colors' : ''
-      } ${selected ? 'bg-primary/10' : ''}`}
-      // The whole row is the target while a selection is open — see the same
-      // handler on `MessageBubble` for why it is not a checkbox.
-      onClickCapture={
-        selecting
-          ? (e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              onToggleSelected();
-            }
-          : undefined
-      }
-    >
-      <div className="max-w-[85%] sm:max-w-[70%] flex flex-col gap-1">
-        {menuOpen && readable && !isDeleted && (
-          <div
-            // Both class names written out: Tailwind scans source text, so a
-            // class built by interpolation is a class that never gets
-            // generated.
-            className={`flex items-center gap-1 rounded-full bg-base-100 border border-hairline shadow-lg ${
-              mine ? 'self-end' : 'self-start'
-            }`}
-          >
-            <ReactionBar
-              onReact={(emoji) => {
-                onToggleReaction(emoji);
-                setMenuOpen(false);
-              }}
-            />
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm btn-circle"
-              title={t('message.reply')}
-              aria-label={t('message.reply')}
-              onClick={() => {
-                onReply();
-                setMenuOpen(false);
-              }}
-            >
-              <Reply className="w-4 h-4" />
-            </button>
-            {/* Either side's messages can be passed on — but only ones this
-                device could verify. Forwarding re-seals and re-signs the body
-                as yours, so an unverified row would arrive somewhere else with
-                the warning stripped off it. */}
-            {isRoomForwardable(m) && (
-              <button
-                type="button"
-                className="btn btn-ghost btn-sm btn-circle"
-                title={t('message.forward')}
-                aria-label={t('message.forward')}
-                onClick={() => {
-                  onForward();
-                  setMenuOpen(false);
-                }}
-              >
-                <CornerUpRight className="w-4 h-4" />
-              </button>
-            )}
-            {/* A chip's tap already means "add or remove mine", so who-reacted
-                gets its own control rather than a second meaning on the chip.
-                Absent when nobody has reacted. */}
-            {reactions.length > 0 && (
-              <button
-                type="button"
-                className="btn btn-ghost btn-sm btn-circle"
-                title={t('reactions.title')}
-                aria-label={t('reactions.title')}
-                onClick={() => {
-                  onShowReactions();
-                  setMenuOpen(false);
-                }}
-              >
-                <SmilePlus className="w-4 h-4" />
-              </button>
-            )}
-            {/* Own rows only: you cannot rewrite a message you did not sign.
-                A caption sits in the same two sealed columns as a body, so the
-                words under a picture are editable exactly as text is. */}
-            {mine &&
-              canEditBody({
-                text: m.text ?? null,
-                media_path: m.media_path ?? null,
-                media_type: m.media_type ?? null,
-                deleted_at: m.deleted_at ?? null,
-              }) && (
-                <button
-                  type="button"
-                  className="btn btn-ghost btn-sm btn-circle"
-                  title={m.media_path ? t('message.editCaption') : t('message.edit')}
-                  aria-label={m.media_path ? t('message.editCaption') : t('message.edit')}
-                  onClick={() => {
-                    onStartEdit();
-                    setMenuOpen(false);
-                  }}
-                >
-                  <Pencil className="w-4 h-4" />
-                </button>
-              )}
-            {mine && (
-              <button
-                type="button"
-                className="btn btn-ghost btn-sm btn-circle text-error"
-                title={t('common.delete')}
-                aria-label={t('common.delete')}
-                onClick={() => {
-                  onDelete();
-                  setMenuOpen(false);
-                }}
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-            )}
-            {/* Either side's messages: the useful line in a group is as often
-                somebody else's as your own. */}
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm btn-circle"
-              title={isPinned ? t('pin.unpin') : t('pin.pin')}
-              aria-label={isPinned ? t('pin.unpin') : t('pin.pin')}
-              onClick={() => {
-                onTogglePin();
-                setMenuOpen(false);
-              }}
-            >
-              <Pin className="w-4 h-4" />
-            </button>
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm btn-circle mr-1"
-              title={t('message.select')}
-              aria-label={t('message.select')}
-              onClick={() => {
-                onStartSelecting();
-                setMenuOpen(false);
-              }}
-            >
-              <CheckSquare className="w-4 h-4" />
-            </button>
-          </div>
-        )}
-
-        <div
-          role="button"
-          tabIndex={0}
-          onClick={() => {
-            // Not while the editor is open: the tap belongs to the caret.
-            if (!isEditing) setMenuOpen((v) => !v);
-          }}
-          onKeyDown={(e) => {
-            if (isEditing) return;
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              setMenuOpen((v) => !v);
-            }
-          }}
-          style={{
-            transform: swipe.offset ? `translateX(${(mine ? -1 : 1) * swipe.offset}px)` : undefined,
-          }}
-          {...swipe.handlers}
-          className={`selection-on-fill text-left rounded-box ${
-            isEditing ? 'w-[85vw] max-w-md ring-2 ring-primary/60 ' : ''
-          }${jumboEmoji > 0 ? 'px-0 py-0' : 'px-3 py-2'} ${
-            m.sender === 'unverified'
-              ? 'bg-error/10 border border-error/40'
-              : m.sender === 'unknown'
-                ? 'bg-warning/10 border border-warning/40'
-                : jumboEmoji > 0
-                  ? 'text-base-content'
-                  : mine
-                    ? 'bg-primary text-primary-content'
-                    : 'bg-base-100 border border-hairline'
-          }`}
-        >
-          {!mine && (
-            <p className={`text-micro font-semibold mb-0.5 ${senderColour}`}>{senderName}</p>
-          )}
-
-          {/* Says how the message got here, not where it came from — naming the
-              original sender would disclose a conversation the rest of this
-              group is not part of. See migration 0018, and 0046 for why the
-              flag is inside the signature. */}
-          {m.forwarded && !isDeleted && (
-            <p className="flex items-center gap-1 mb-1 text-meta italic opacity-70">
-              <CornerUpRight className="w-3 h-3 shrink-0" aria-hidden />
-              {t('message.forwarded')}
-            </p>
-          )}
-
-          {m.reply_to_id && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                if (repliedTo) onJumpTo(repliedTo.id);
-              }}
-              className={`block w-full text-left mb-1 rounded-field border-l-2 pl-2 py-0.5 text-meta ${
-                mine
-                  ? 'border-primary-content/50 text-primary-content/80'
-                  : 'border-primary/60 text-strong'
-              }`}
-            >
-              {repliedTo ? (
-                <>
-                  <span className="font-semibold">{repliedToName}</span>
-                  <span className="block truncate">{roomSnippet(repliedTo)}</span>
-                </>
-              ) : (
-                <span className="italic">{translate('message.unavailable')}</span>
-              )}
-            </button>
-          )}
-
-          {isDeleted ? (
-            // A tombstone, not a removal: the row keeps its place in the thread
-            // and says what happened to it.
-            <p className={`text-body italic ${mine ? 'text-primary-content/70' : 'text-muted'}`}>
-              {t('message.deleted')}
-            </p>
-          ) : m.sender === 'unverified' ? (
-            <p className="flex items-start gap-1.5 text-body text-error">
-              <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" />
-              <span>
-                Unverified sender. This message claims to be from {senderName}, but its signature
-                does not match their key. It has not been opened.
-              </span>
-            </p>
-          ) : m.sender === 'unknown' ? (
-            <p className="flex items-start gap-1.5 text-body text-warning">
-              <ShieldQuestion className="w-4 h-4 shrink-0 mt-0.5" />
-              <span>{t('room.unknownSender')}</span>
-            </p>
-          ) : (
-            <>
-              {m.media_path && m.media_type === 'sticker' ? (
-                <StickerAttachment messageId={m.id} path={m.media_path} mediaKey={m.mediaKey} />
-              ) : m.media_path && m.media_type === 'audio' ? (
-                <VoiceNote
-                  messageId={m.id}
-                  path={m.media_path}
-                  expiresAt={m.expires_at}
-                  caption={m.text}
-                  mediaKey={m.mediaKey}
-                  durationMs={m.media_duration_ms ?? null}
-                />
-              ) : m.media_path && m.media_type ? (
-                // Pulled out to the bubble's edges, the way the 1:1 bubble
-                // frames a picture.
-                <div className="-mx-3 -mt-2 mb-1.5 overflow-hidden rounded-t-xl">
-                  <MediaAttachment
-                    messageId={m.id}
-                    path={m.media_path}
-                    expiresAt={m.expires_at}
-                    thumbPath={m.media_thumb_path}
-                    type={m.media_type === 'video' ? 'video' : 'image'}
-                    mediaKey={m.mediaKey}
-                    // Recorded with a pin, so the words under the picture are
-                    // kept with it — the same bargain the 1:1 bubble makes.
-                    caption={m.text}
-                    fill
-                  />
-                </div>
-              ) : null}
-
-              {isEditing ? (
-                <textarea
-                  ref={editRef}
-                  rows={1}
-                  placeholder={m.media_path ? t('message.captionPlaceholder') : undefined}
-                  // Transparent and borderless: the bubble around it is the
-                  // box, and the caret takes the bubble's own text colour,
-                  // which is the only thing keeping it visible on the fill.
-                  className="block w-full bg-transparent border-0 outline-hidden resize-none p-0 text-base leading-6 caret-current placeholder:opacity-60 scrollbar-none [&::-webkit-scrollbar]:hidden"
-                  value={editingText}
-                  onClick={(e) => e.stopPropagation()}
-                  onChange={(e) => onEditingTextChange(e.target.value)}
-                  onKeyDown={(e) => {
-                    e.stopPropagation();
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      onSaveEdit();
-                    }
-                    if (e.key === 'Escape') onCancelEdit();
-                  }}
-                  maxLength={MAX_MESSAGE_LENGTH}
-                />
-              ) : m.text === null && !m.media_path ? (
-                <p className="flex items-start gap-1.5 text-body italic text-muted">
-                  <Lock className="w-4 h-4 shrink-0 mt-0.5" />
-                  <span>{t('room.beforeYouJoined')}</span>
-                </p>
-              ) : jumboEmoji > 0 && m.text ? (
-                // Straight through, no linkify and no mention pass: a body that
-                // reached here is emoji and nothing else.
-                <div
-                  className={
-                    jumboEmoji === 1
-                      ? 'text-jumbo-1'
-                      : jumboEmoji === 2
-                        ? 'text-jumbo-2'
-                        : 'text-jumbo-3'
-                  }
-                >
-                  {m.text.trim()}
-                </div>
-              ) : m.text ? (
-                <div className="text-body whitespace-pre-wrap wrap-break-word">
-                  <MessageText text={m.text} handles={handles} myHandle={myHandle} />
-                </div>
-              ) : null}
-            </>
-          )}
-
-          <p
-            className={`text-micro mt-1 text-right ${
-              mine && m.sender === 'verified' && jumboEmoji === 0
-                ? 'text-primary-content/60'
-                : 'text-muted'
-            }`}
-          >
-            {formatTime(m.created_at)}
-            {m.edited_at && !isDeleted && <span className="ml-1">{t('message.editedMark')}</span>}
-          </p>
-        </div>
-
-        {!isDeleted && (
-          <div className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
-            <ReactionChips reactions={reactions} me={me} onToggle={onToggleReaction} />
-          </div>
-        )}
-      </div>
-    </li>
   );
 }

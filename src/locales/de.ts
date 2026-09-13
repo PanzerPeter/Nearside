@@ -292,6 +292,7 @@ export const de: Catalog = {
   'preview.video': 'Video',
   'preview.voice': 'Sprachnachricht',
   'preview.sticker': 'Sticker',
+  'preview.media': 'Anhang',
   'preview.fromYou': 'Du: {body}',
   'preview.encrypted': 'Verschlüsselte Nachricht',
   'preview.selfEmpty': 'Notizen, Links, Erinnerungen. Das siehst nur du',
@@ -763,6 +764,8 @@ export const de: Catalog = {
   'room.nameNote': 'Alle in der Gruppe sehen diesen Namen.',
   'room.unknownSender':
     'Der Absender hat keinen Signaturschlüssel veröffentlicht, es gibt also nichts, woran sich diese Nachricht prüfen ließe.',
+  'room.unverifiedSender':
+    'Nicht verifizierter Absender. Diese Nachricht gibt vor, von {name} zu sein, aber ihre Signatur passt nicht zu deren Schlüssel. Sie wurde nicht geöffnet.',
   'room.memberCount#one': '{count} Mitglied',
   'room.memberCount#few': '{count} Mitglieder',
   'room.memberCount#many': '{count} Mitglieder',

@@ -24,6 +24,7 @@ import {
 } from './crypto/seal';
 import { supabase } from './supabase';
 import { cacheMessage, forgetCachedMessage } from './localdb';
+import type { Message } from './types';
 
 export interface RoomSummary {
   id: string;
@@ -88,6 +89,60 @@ export interface RoomMessage {
    *                 than hidden, since hiding it conceals an attack in progress
    *    'unknown'    the sender has published no signing key to check against */
   sender?: 'verified' | 'unverified' | 'unknown';
+}
+
+/**
+ * A room row in the shape the thread renders.
+ *
+ * `MessageBubble` and `MessageThread` are the app's only message renderer, and
+ * they read a `Message`. A room row holds the same things under different
+ * names — `sender_id` for the author, `mediaKey` for the opened file key — so
+ * rather than keep a second bubble in step with the first, the row is
+ * translated here. The same trick `pendingAsMessage` plays for the outbox, for
+ * the same reason: one renderer, adapters at its edges.
+ *
+ * `receiver_id` is the room id. Nothing in the thread reads it — a room message
+ * is addressed to a group, not to a person — but the field is not optional and
+ * the room id is the honest answer to "who was this sent to".
+ *
+ * `sender_trust` is the one thing a room row carries that a 1:1 row cannot, and
+ * it is why this returns a `Message` with a client-only field rather than
+ * pretending the two are the same: a peer message that opens at all was written
+ * by the peer, and a room message that opens tells you nothing until its
+ * signature is checked.
+ */
+export function roomAsMessage(m: RoomMessage, roomId: string): Message {
+  return {
+    id: m.id,
+    user_id: m.sender_id,
+    receiver_id: roomId,
+    ciphertext: m.ciphertext,
+    nonce: m.nonce,
+    text: m.text ?? null,
+    sender_trust: m.sender ?? 'unknown',
+    // A room row's failure to open is graded, not boolean: 'unverified' and
+    // 'unknown' are their own warnings in the bubble and must not also draw the
+    // generic "can't decrypt this message" line under them. Only a verified
+    // signature over a body this device still could not open is that.
+    decrypt_failed: m.sender === 'verified' && !!m.ciphertext && m.text == null,
+    media_path: m.media_path ?? null,
+    media_type: m.media_type ?? null,
+    media_thumb_path: m.media_thumb_path ?? null,
+    media_key_ciphertext: m.media_key_ciphertext ?? null,
+    media_key_nonce: m.media_key_nonce ?? null,
+    media_key: m.mediaKey ?? null,
+    media_duration_ms: m.media_duration_ms ?? null,
+    reply_to_id: m.reply_to_id ?? null,
+    forwarded: !!m.forwarded,
+    // Rooms have no sealed exchange: the SELECT policy that makes the feature
+    // work is written over a pair of people, and "neither reads the other's
+    // until both exist" has no meaning with nine members.
+    sealed_prompt: false,
+    edited_at: m.edited_at ?? null,
+    deleted_at: m.deleted_at ?? null,
+    expires_at: m.expires_at ?? null,
+    created_at: m.created_at,
+  };
 }
 
 /** Every column a room message read has to select. One constant, because a
