@@ -582,7 +582,21 @@ export function MessageBubble({
               // bubble; the ring is what keeps it visibly attached to the
               // message it acts on.
               menuOpen ? 'ring-2 ring-primary/60' : ''
-            } selection-on-fill relative overflow-hidden ${sealing ? 'seal-sweep' : ''}`}
+            } selection-on-fill relative ${
+              // Never on a bare glyph. With no padding, the footer sits flush
+              // against a `rounded-box` corner and the emoji's ink runs past
+              // its own line box, so the clip took the end off the timestamp
+              // and the bottom off the glyph — the box that isn't supposed to
+              // be there, making itself felt by cutting things. Nothing in a
+              // bare glyph wants clipping anyway: a sticker is its own shape,
+              // and the sweep that needed the clip is off below.
+              bareGlyph ? '' : 'overflow-hidden'
+            } ${
+              // The seal sweep is a shine travelling across the bubble's fill.
+              // A bare glyph has no fill, and without the clip above the shine
+              // would leave the message and cross its neighbours.
+              sealing && !bareGlyph ? 'seal-sweep' : ''
+            }`}
           >
             {isDeleted ? (
               t('message.deleted')

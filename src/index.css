@@ -438,13 +438,20 @@
   /* Off the ladder on purpose: these are not a text role, they are the size an
      emoji sent on its own is drawn at (`lib/emoji-only.ts`). Three rungs rather
      than one because three glyphs at the size of one run past the bubble's
-     width on a phone, and the count is known before the size is picked. */
+     width on a phone, and the count is known before the size is picked.
+
+     1.3, not the 1.1 a line of text would take: a colour emoji font draws past
+     the em box it is asked for — Noto Color Emoji wants about 1.2em of it and
+     Apple's about 1.26 — so a tighter line box has the glyph's own ink hanging
+     out of the bottom of it. In the 1:1 bubble that ink met `overflow-hidden`
+     and the thumb came back with its tip shaved off; in a group, where nothing
+     clips, it landed on the timestamp underneath instead. */
   --text-jumbo-1: 3.25rem;
-  --text-jumbo-1--line-height: 1.1;
+  --text-jumbo-1--line-height: 1.3;
   --text-jumbo-2: 2.5rem;
-  --text-jumbo-2--line-height: 1.1;
+  --text-jumbo-2--line-height: 1.3;
   --text-jumbo-3: 2rem;
-  --text-jumbo-3--line-height: 1.1;
+  --text-jumbo-3--line-height: 1.3;
 
   /* The desktop chrome bands.
      -----------------------------------------------------------------------

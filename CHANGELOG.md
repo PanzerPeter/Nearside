@@ -14,6 +14,17 @@ one of them drifts.
 
 ## [Unreleased]
 
+## [1.14.1] — 2026-09-13
+
+### Fixed
+
+- An emoji sent on its own is no longer drawn with a piece missing. The bubble
+  is taken away at that size, but the box it left behind was still cropping
+  what sat in it: the bottom of the glyph in a 1:1 chat, and the last digits of
+  the timestamp where the rounded corner passed through them. A colour emoji is
+  taller than the line it is given — the line is now cut to the glyph's real
+  height, and nothing crops it in either kind of conversation.
+
 ## [1.14.0] — 2026-09-12
 
 ### Added
