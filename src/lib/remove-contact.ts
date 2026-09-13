@@ -15,6 +15,7 @@ import { supabase } from './supabase';
 import { clearConversation, forgetChatFlags } from './localdb';
 import { setDismissed } from './chat-flags';
 import { clearNickname } from './nicknames';
+import { t } from './i18n';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -55,7 +56,7 @@ export async function removeContact(me: string, peer: string): Promise<string | 
     .or(friendshipPairFilter(me, peer));
   if (error) {
     console.error('remove contact failed', error);
-    return 'Could not remove this contact. Check your connection and try again.';
+    return t('contact.removeFailed');
   }
 
   // Dismissed before the flags are dropped, because dismissal is the one flag

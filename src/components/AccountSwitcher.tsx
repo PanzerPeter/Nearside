@@ -41,12 +41,9 @@ export function AccountSwitcher({
         confirmingForget === account.userId ? (
           <div key={account.userId} className="rounded-field bg-base-200/50 p-2 space-y-2">
             <p className="text-meta text-muted">
-              Removes{' '}
-              <span className="font-medium text-strong">
-                {account.display_name || 'this account'}
-              </span>{' '}
-              from this device: its recovery phrase, offline search index and app lock. The account
-              itself is untouched; you can sign back in with your twelve words.
+              {t('accounts.forgetBody', {
+                name: account.display_name || t('accounts.thisAccount'),
+              })}
             </p>
             <div className="flex items-center gap-2">
               <button className="btn btn-ghost btn-xs" onClick={() => setConfirmingForget(null)}>
@@ -96,7 +93,7 @@ export function AccountSwitcher({
         // A cap on how many resumable sessions one stolen device yields. Saying
         // so beats a button that silently drops somebody else's account.
         <p className="px-2 text-meta text-subtle">
-          {MAX_ACCOUNTS} accounts is the limit on one device. Remove one to add another.
+          {t('accounts.limit', { count: MAX_ACCOUNTS })}
         </p>
       ) : (
         <button

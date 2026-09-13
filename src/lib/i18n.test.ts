@@ -112,6 +112,11 @@ describe('catalogs', () => {
       'storage.conversations#few',
       'storage.conversations#many',
       'storage.conversations#other',
+      'media.nounPhoto',
+      'transcript.messages#one',
+      'transcript.messages#few',
+      'transcript.messages#many',
+      'transcript.messages#other',
     ]);
     for (const code of TRANSLATED) {
       const untranslated = Object.keys(en).filter(

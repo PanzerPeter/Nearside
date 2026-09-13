@@ -32,6 +32,7 @@ import { useConnection } from '../lib/connection';
 import { peerPublicKey } from '../lib/peer-keys';
 import { verificationState } from '../lib/verification';
 import { nicknameFor } from '../lib/nicknames';
+import { t } from '../lib/i18n';
 import { tapWarning } from '../lib/haptics';
 import { iceServers } from '../lib/call/ice';
 import { openSignalHub, type SignalHub } from '../lib/call/signaling';
@@ -384,7 +385,7 @@ export function CallProvider({
       const shown = {
         callId: offer.callId,
         peerId: offer.peerId,
-        peerName: nick ?? 'Someone',
+        peerName: nick ?? t('call.someone'),
         kind: offer.kind,
       };
       // A call answered from a notification is already in state, under this
@@ -516,7 +517,7 @@ export function CallProvider({
         type: 'answering',
         callId,
         peerId,
-        peerName: nicknameFor(peerId) ?? 'Someone',
+        peerName: nicknameFor(peerId) ?? t('call.someone'),
         kind,
       });
 

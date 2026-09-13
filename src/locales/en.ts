@@ -586,6 +586,7 @@ export const en = {
   'theme.graphite': 'No colour at all. Greys, square corners, nothing shouting.',
 
   // ------------------------------------------------------------ the call
+  'call.someone': 'Someone',
   'call.calling': 'Calling…',
   'call.incomingVoice': 'Incoming voice call',
   'call.incomingVideo': 'Incoming video call',
@@ -1084,4 +1085,84 @@ export const en = {
   'storage.clearAutoKeptHint': 'Only the ones kept automatically.',
   'storage.clearAutoKeptBody': 'Files you pinned by hand stay where they are. Anything kept automatically is removed, and the server\'s copy may already be gone.',
   'storage.autoKeptCleared': 'Kept attachments removed.',
+  // -------------------------------- the vault, the switcher, and the cropper
+  'chat.selfLabel': 'Your vault',
+  'accounts.forgetBody':
+    'Removes {name} from this device: its recovery phrase, offline search index and app lock. The account itself is untouched; you can sign back in with your twelve words.',
+  'accounts.limit': '{count} accounts is the limit on one device. Remove one to add another.',
+  'cropper.use': 'Use photo',
+  'cropper.zoom': 'Zoom',
+
+  // ------------------------------------------------- groups, media, stickers
+  'rooms.create': 'Create',
+  'rooms.noKeyPublished': 'no key published',
+  'rooms.keyNotPublished': 'Your key has not finished publishing yet. Try again in a moment.',
+  'media.openPhoto': 'Open photo',
+  'media.playVideo': 'Play video',
+  'media.nounPhoto': 'photo',
+  'media.nounVideo': 'video',
+  'media.nounVoice': 'voice message',
+  'media.nounSticker': 'sticker',
+  'media.nounFile': 'file',
+  'media.goneNotice': 'This {noun} is no longer available',
+  'media.sealedNotice': 'This device has no key for this {noun}',
+  'media.cannotShow': "This {noun}'s format can't be shown here",
+  'media.cannotPlay': "This {noun}'s format can't be played here",
+  'media.unsupportedType': 'Unsupported file type. Use an image, video or voice message.',
+  'media.noRoomKey': 'This device has no key for this room.',
+  'media.tooLargeSealed': 'That file is too large to send once encrypted.',
+  'media.stickerUnopenable': 'That sticker could not be opened on this device.',
+  'stickers.notReady': 'Not ready yet.',
+  'stickers.limit': 'You can keep {count} stickers.',
+  'stickers.addFailed': 'Could not add that sticker.',
+  'stickers.mustBeImage': 'Stickers have to be a PNG, JPEG, WebP or GIF.',
+  'stickers.farTooLarge': 'That image is far too large for a sticker.',
+  'stickers.stillTooLarge': 'That image is still too large after shrinking.',
+  'stickers.saveFailed': 'Could not save that sticker.',
+
+  // --------------------------------------- what the composer refuses, and why
+  'staging.finishVoice': 'Send or discard the voice message first.',
+  'staging.skipped': 'Skipped: {reasons}.',
+  'staging.notImageOrVideo': '{names} is not an image or video',
+  'staging.overLimit': '{names} is over 50 MB',
+  'staging.batchLimit': 'only {count} files can go at once',
+  'staging.fileCount': '{count} files',
+
+  // ------------------------------------ reactions, replies, and the QR reader
+  'reactions.chipAdd': '{emoji} {count}, tap to add a reaction',
+  'reactions.chipRemove': '{emoji} {count}, tap to remove your reaction',
+  'connect.notNearsideCode': 'That QR isn’t a Nearside code.',
+  'sealed.askedSealed': '{name} asked, sealed',
+  'sealed.questionFailed': 'Could not send that question.',
+  'sealed.answerFailed': 'Could not send that answer.',
+  'message.editFailed': 'Could not edit message.',
+  'message.deleteFailed': 'Could not delete message.',
+  'notification.newMessage': 'New message',
+
+  // ---------------------------------- backgrounds, nicknames, contacts, admin
+  'background.mustBeImage': 'Background must be an image (PNG, JPEG, WebP or GIF).',
+  'background.saveFailed': 'Could not save the background.',
+  'background.notSetUp': 'Chat backgrounds are not set up on the server yet.',
+  'background.noPermission': 'No permission to change this chat background.',
+  'background.changeFailed': 'Could not change the background for this chat.',
+  'nickname.saveFailed': 'Could not save the nickname.',
+  'nickname.notSetUp': 'Nicknames are not set up on the server yet.',
+  'nickname.noPermission': 'No permission to set a nickname for this person.',
+  'nickname.empty': 'Enter a nickname, or remove the one you have.',
+  'contact.removeFailed': 'Could not remove this contact. Check your connection and try again.',
+  'profile.avatarAlt': 'avatar',
+  'permissions.androidSettings': 'Android’s app settings for Nearside',
+  'permissions.browserSettings': 'your browser settings',
+  'tier.tipName': 'Tip',
+  'tier.hostingName': 'Round of hosting',
+  'tier.patronName': 'Patron',
+
+  // ------------------------------------------- the header of an exported chat
+  'transcript.exported': 'Exported {when} ({zone})',
+  'transcript.messages#one': '{count} message',
+  'transcript.messages#few': '{count} messages',
+  'transcript.messages#many': '{count} messages',
+  'transcript.messages#other': '{count} messages',
+  'transcript.note':
+    'This is what this device decrypted. Messages it never received, and any it has since been told to forget, are not here. Photos, videos and voice notes are not included — only the words.',
 } as const;

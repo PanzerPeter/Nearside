@@ -23,6 +23,7 @@
 // `sealed-exchange.ts`. Opening happens at the component boundary, which is the
 // only layer holding an identity.
 import { supabase } from './supabase';
+import { t } from './i18n';
 import { openForSelf, sealForSelf } from './crypto/seal';
 import { fromBase64, toBase64, type Identity } from './crypto/keys';
 import { openFile, sealFile } from './media-crypto';
@@ -117,12 +118,12 @@ export function normalizeLabel(raw: string): string {
 /** Whether a picked file can become a sticker, and why not when it cannot. */
 export function stickerRejection(file: File): string | null {
   if (!STICKER_SOURCE_TYPES.includes(file.type)) {
-    return 'Stickers have to be a PNG, JPEG, WebP or GIF.';
+    return t('stickers.mustBeImage');
   }
   // Checked before compression as a cheap early exit; the post-compression size
   // is what the bucket actually sees and is checked again at upload.
   if (file.size > STICKER_MAX_BYTES * 8) {
-    return 'That image is far too large for a sticker.';
+    return t('stickers.farTooLarge');
   }
   return null;
 }
@@ -216,7 +217,7 @@ export async function uploadSticker(
   const shrunk = await compressImage(file, { maxEdge: STICKER_MAX_EDGE });
   const bytes = new Uint8Array(await shrunk.arrayBuffer());
   if (bytes.byteLength > STICKER_MAX_BYTES) {
-    throw new Error('That image is still too large after shrinking.');
+    throw new Error(t('stickers.stillTooLarge'));
   }
 
   const { blob, key } = await sealFile(bytes);
@@ -253,7 +254,7 @@ export async function uploadSticker(
     // Removing them keeps the bucket from filling with objects that cannot be
     // reached from anywhere.
     await supabase.storage.from('stickers').remove([path]);
-    throw new Error(error?.message ?? 'Could not save that sticker.');
+    throw new Error(error?.message ?? t('stickers.saveFailed'));
   }
 
   return { ...data, label: normalizeLabel(label), key };

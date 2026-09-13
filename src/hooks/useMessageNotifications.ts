@@ -10,6 +10,7 @@ import { advanceDelivered } from '../lib/receipts';
 import { useConnection } from '../lib/connection';
 import { nicknameFor } from '../lib/nicknames';
 import { isMutedNow } from '../lib/mute';
+import { t } from '../lib/i18n';
 
 // Short-lived so a rename shows up promptly, but still long enough to spare a
 // lookup on each message of a burst. An unbounded cache pinned the old handle
@@ -141,14 +142,14 @@ export function useMessageNotifications(
       // and it costs nothing.
       const body =
         msg.media_type === 'image'
-          ? '📷 Photo'
+          ? `📷 ${t('preview.photo')}`
           : msg.media_type === 'video'
-            ? '🎥 Video'
+            ? `🎥 ${t('preview.video')}`
             : msg.media_type === 'audio'
-              ? '🎤 Voice message'
+              ? `🎤 ${t('preview.voice')}`
               : msg.media_type === 'sticker'
-                ? '🩷 Sticker'
-                : 'New message';
+                ? `🩷 ${t('preview.sticker')}`
+                : t('notification.newMessage');
       await showNotification(title, body, `dm:${msg.user_id}`);
     }
 

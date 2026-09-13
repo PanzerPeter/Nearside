@@ -13,6 +13,7 @@ import { peerPublicKey } from '../lib/peer-keys';
 import { forgetCachedMessage } from '../lib/localdb';
 import { repinCaption } from '../lib/pins';
 import type { Identity } from '../lib/crypto/keys';
+import { t } from '../lib/i18n';
 
 export interface MessageEditing {
   editingId: string | null;
@@ -101,7 +102,7 @@ export function useMessageEditing({
     // afterwards threw away the text the user had just typed, leaving a toast
     // and the old message as the only trace of it.
     if (updateError) {
-      onError('Could not edit message.');
+      onError(t('message.editFailed'));
       return;
     }
     // The two local copies of the plaintext, which no realtime UPDATE reaches.
@@ -123,7 +124,7 @@ export function useMessageEditing({
       .update(tombstonePatch())
       .eq('id', msg.id);
     if (deleteError) {
-      onError('Could not delete message.');
+      onError(t('message.deleteFailed'));
       return;
     }
     // The server's copy is stripped; this device's decrypted copy has to go

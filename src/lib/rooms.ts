@@ -25,6 +25,7 @@ import {
 import { supabase } from './supabase';
 import { cacheMessage, forgetCachedMessage } from './localdb';
 import type { Message } from './types';
+import { t } from './i18n';
 
 export interface RoomSummary {
   id: string;
@@ -254,7 +255,7 @@ export async function createRoom(
   const skipped = members.filter((id) => !keys.get(id)?.public_key);
 
   if (!keys.get(me)?.public_key) {
-    throw new Error('Your key has not finished publishing yet. Try again in a moment.');
+    throw new Error(t('rooms.keyNotPublished'));
   }
 
   const roomId = crypto.randomUUID();

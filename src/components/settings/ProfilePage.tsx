@@ -175,7 +175,11 @@ export function ProfilePage({ session, profile, onUpdated }: ProfilePageProps) {
           <div className="avatar placeholder">
             <div className="brand-gradient w-24 h-24 rounded-full text-primary-content overflow-hidden ring-3 ring-base-content/5">
               {avatarUrl ? (
-                <img src={avatarUrl} alt="avatar" className="w-full h-full object-cover" />
+                <img
+                  src={avatarUrl}
+                  alt={t('profile.avatarAlt')}
+                  className="w-full h-full object-cover"
+                />
               ) : (
                 <span className="text-3xl font-semibold">{initial(display_name)}</span>
               )}

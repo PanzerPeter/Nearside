@@ -111,7 +111,7 @@ export function SupportNearside({ onBack }: SupportNearsideProps) {
               </span>
 
               <span className="flex-1 min-w-0">
-                <span className="block text-body font-medium">{tier.name}</span>
+                <span className="block text-body font-medium">{t(tier.name)}</span>
                 <span className="block text-meta text-muted">{t(tier.blurb)}</span>
               </span>
 

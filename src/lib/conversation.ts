@@ -78,8 +78,15 @@ export function isSelfChat(me: string, peerId: string | null | undefined): boole
 }
 
 /** Default name for the self-chat, when the user has not given it their own
- *  (a nickname on the self row overrides it — see lib/nicknames.ts). */
-export const SELF_CHAT_LABEL = 'Your vault';
+ *  (a nickname on the self row overrides it — see lib/nicknames.ts).
+ *
+ *  A function rather than a constant: a module-level const is evaluated once,
+ *  at import, which is before `initLocale` has run and long before anybody can
+ *  change the language. It was the one name in the sidebar that stayed English
+ *  in every catalog. */
+export function selfChatLabel(): string {
+  return t('chat.selfLabel');
+}
 
 /** The minimum of a sidebar row that ordering depends on. */
 interface Orderable {

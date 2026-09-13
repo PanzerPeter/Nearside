@@ -14,6 +14,30 @@ one of them drifts.
 
 ## [Unreleased]
 
+## [1.16.0] — 2026-09-13
+
+### Fixed
+
+- The chat with yourself is called "Your vault" in every language now. It was
+  the one name in the sidebar that stayed English whatever the phone was set
+  to, because the label was worked out once when the app loaded — before there
+  was a language to work it out in.
+- Everything else that had been left in English: the button that confirms a
+  cropped profile picture, Cancel and Create and Send on half the dialogs, the
+  warning before you remove an account from the device, the notice when a group
+  member has published no key, the "asked, sealed" line above a sealed
+  question, and the screen-reader labels on photos, videos and reaction chips.
+- The reasons a message, sticker, nickname, chat background or contact change
+  can fail now arrive translated. A toast that only ever spoke English was the
+  most likely thing to appear at the worst moment.
+- Attachments that will not load say so in your language, and name themselves
+  correctly — a photo, a video, a voice message or a sticker rather than one
+  English word for all four.
+- Notification banners say "New message" in your language, as do the kind of
+  thing that arrived.
+- An exported conversation carries its header and its two caveats in the
+  language you read the app in, rather than in English.
+
 ## [1.15.0] — 2026-09-13
 
 ### Added

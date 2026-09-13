@@ -15,6 +15,8 @@
 // device already, and a transcript that silently omits half a conversation's
 // pictures would be worse than one that says so.
 
+import { t } from './i18n';
+
 /** A row as the mirror holds it — decrypted text and who wrote it. */
 export interface TranscriptRow {
   user_id: string;
@@ -104,14 +106,16 @@ export function formatTranscript(
 
   const header = [
     `Nearside — ${title}`,
-    `Exported ${stampFor(exportedAt.toISOString())} (${zoneLabel(exportedAt)})`,
-    `${lines.length} message${lines.length === 1 ? '' : 's'}`,
+    t('transcript.exported', {
+      when: stampFor(exportedAt.toISOString()),
+      zone: zoneLabel(exportedAt),
+    }),
+    t('transcript.messages', { count: lines.length }),
     '',
     // The two limits that make this file what it is, said in the file rather
-    // than only in a dialog nobody keeps.
-    'This is what this device decrypted. Messages it never received, and any it',
-    'has since been told to forget, are not here. Photos, videos and voice notes',
-    'are not included — only the words.',
+    // than only in a dialog nobody keeps. One line rather than three: the
+    // hand-wrapping only held for the English wording.
+    t('transcript.note'),
     '',
     '---',
     '',

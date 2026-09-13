@@ -63,7 +63,7 @@ export function SettingsModal({
       className="max-w-md"
       actions={
         <button className="btn btn-ghost" onClick={onClose}>
-          Close
+          {t('common.close')}
         </button>
       }
     >

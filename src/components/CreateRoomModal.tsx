@@ -102,14 +102,14 @@ export function CreateRoomModal({ me, identity, onCreated, onClose }: CreateRoom
       actions={
         <>
           <button className="btn btn-ghost" onClick={onClose} disabled={busy}>
-            Cancel
+            {t('common.cancel')}
           </button>
           <button
             className="btn btn-primary"
             onClick={() => void create()}
             disabled={busy || !title.trim() || picked.size === 0}
           >
-            {busy ? <span className="loading loading-spinner loading-sm" /> : 'Create'}
+            {busy ? <span className="loading loading-spinner loading-sm" /> : t('rooms.create')}
           </button>
         </>
       }
@@ -168,7 +168,7 @@ export function CreateRoomModal({ me, identity, onCreated, onClose }: CreateRoom
                   </span>
                   {blocked ? (
                     <span className="text-micro text-muted shrink-0">
-                      no key published
+                      {t('rooms.noKeyPublished')}
                     </span>
                   ) : (
                     <input

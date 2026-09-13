@@ -1,5 +1,6 @@
 import { classifyMedia, mediaPath } from './conversation';
 import { roomMediaPath } from './rooms';
+import { t } from './i18n';
 
 /**
  * Chat background helpers. Each user has their own background per conversation;
@@ -54,7 +55,7 @@ export function roomBackgroundPath(roomId: string, ext: string): string {
  */
 export function validateBackgroundFile(file: File): string | null {
   if (classifyMedia(file) !== 'image') {
-    return 'Background must be an image (PNG, JPEG, WebP or GIF).';
+    return t('background.mustBeImage');
   }
   if (file.size > MAX_BACKGROUND_BYTES) {
     const mb = Math.round(MAX_BACKGROUND_BYTES / (1024 * 1024));
@@ -122,20 +123,20 @@ export interface WriteError {
  * to the server's own text rather than a guess.
  */
 export function describeWriteError(error: WriteError | null | undefined): string {
-  if (!error) return 'Could not save the background.';
+  if (!error) return t('background.saveFailed');
   switch (error.code) {
     // Table missing from PostgREST's schema cache: 0012 has not been run, or
     // has not been picked up yet.
     case 'PGRST205':
-      return 'Chat backgrounds are not set up on the server yet.';
+      return t('background.notSetUp');
     // Postgres "permission denied": the role lacks table privileges. Distinct
     // from an RLS denial, which returns 0 rows or a 42501 from the policy.
     case '42501':
-      return 'No permission to change this chat background.';
+      return t('background.noPermission');
     // No row satisfied the policy — the usual cause is no longer being friends.
     case 'PGRST116':
-      return 'Could not change the background for this chat.';
+      return t('background.changeFailed');
     default:
-      return error.message?.trim() || 'Could not save the background.';
+      return error.message?.trim() || t('background.saveFailed');
   }
 }

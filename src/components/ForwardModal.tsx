@@ -233,7 +233,7 @@ export function ForwardModal({
       actions={
         <>
           <button type="button" className="btn btn-ghost btn-sm" onClick={onClose}>
-            Cancel
+            {t('common.cancel')}
           </button>
           <button
             type="button"
@@ -246,7 +246,7 @@ export function ForwardModal({
             ) : selected.size > 1 ? (
               t('forward.sendToCount', { count: selected.size })
             ) : (
-              'Send'
+              t('common.send')
             )}
           </button>
         </>

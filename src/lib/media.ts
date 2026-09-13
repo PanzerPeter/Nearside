@@ -1,5 +1,6 @@
 import { AUDIO_KEEP_LIMIT, MEDIA_KEEP_LIMIT } from './conversation';
 import type { MediaType } from './types';
+import { t, type MessageKey } from './i18n';
 
 /** How many over-limit rows one cleanup pass will trim. */
 const MEDIA_TRIM_BATCH = 20;
@@ -147,12 +148,14 @@ export type MediaFailure =
    *  is worth saving; this build just cannot paint it. */
   | 'undecodable';
 
-/** What each kind of attachment is called in a sentence. */
-const MEDIA_NOUN: Record<MediaType, string> = {
-  image: 'photo',
-  video: 'video',
-  audio: 'voice message',
-  sticker: 'sticker',
+/** What each kind of attachment is called in a sentence, as a key rather than
+ *  a word: the noun is read at render time so it follows the language, and a
+ *  Record of literals would have frozen these four in English. */
+const MEDIA_NOUN: Record<MediaType, MessageKey> = {
+  image: 'media.nounPhoto',
+  video: 'media.nounVideo',
+  audio: 'media.nounVoice',
+  sticker: 'media.nounSticker',
 };
 
 /**
@@ -163,19 +166,19 @@ const MEDIA_NOUN: Record<MediaType, string> = {
  * it happened to a photo in the thread, a sticker, or a voice note.
  */
 export function mediaFailureNotice(failure: MediaFailure, kind?: MediaType | null): string {
-  const noun = MEDIA_NOUN[kind ?? 'image'] ?? 'file';
+  const noun = t(MEDIA_NOUN[kind ?? 'image'] ?? 'media.nounFile');
 
   switch (failure) {
     case 'gone':
-      return `This ${noun} is no longer available`;
+      return t('media.goneNotice', { noun });
     case 'sealed':
-      return `This device has no key for this ${noun}`;
+      return t('media.sealedNotice', { noun });
     case 'undecodable':
       // Named as a limit of this build, and phrased so the answer — save it,
       // open it elsewhere — is implied rather than a dead end.
-      return `This ${noun}'s format can't be ${
-        kind === 'audio' || kind === 'video' ? 'played' : 'shown'
-      } here`;
+      return kind === 'audio' || kind === 'video'
+        ? t('media.cannotPlay', { noun })
+        : t('media.cannotShow', { noun });
   }
 }
 

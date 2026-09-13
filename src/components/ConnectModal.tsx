@@ -304,7 +304,7 @@ function AddSomeone({ me, onConnected, toastError, toastSuccess }: AddSomeonePro
 
       const parsed = parseConnectPayload(result.value);
       if (!parsed) {
-        toastError("That QR isn't a Nearside code.");
+        toastError(t('connect.notNearsideCode'));
         return;
       }
       await connect(parsed.token, parsed.publicKey);

@@ -21,6 +21,7 @@ import {
   type OpenedAnswer,
   type SealedAnswerRow,
 } from '../lib/sealed-exchange';
+import { t } from '../lib/i18n';
 
 export interface SealedExchange {
   /** Answers this device is allowed to see, by prompt id. A prompt with no
@@ -182,7 +183,7 @@ export function useSealedExchange({
         await refresh(id);
         return row;
       } catch {
-        onError('Could not send that question.');
+        onError(t('sealed.questionFailed'));
         return null;
       } finally {
         mark(id, false);
@@ -198,7 +199,7 @@ export function useSealedExchange({
         await answerSealed(identity, await peerPublicKey(peerId), me, peerId, promptId, text);
         await refresh(promptId);
       } catch {
-        onError('Could not send that answer.');
+        onError(t('sealed.answerFailed'));
       } finally {
         mark(promptId, false);
       }

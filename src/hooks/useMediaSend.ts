@@ -181,7 +181,7 @@ export function useMediaSend({
       for (const [index, item] of staged.entries()) {
         const kind = classifyMedia(item.file);
         if (!kind) {
-          onError('Unsupported file type. Use an image, video or voice message.');
+          onError(t('media.unsupportedType'));
           break;
         }
         // The caption and the reply belong to the batch, not to every file in
@@ -273,7 +273,7 @@ export function useMediaSend({
     const room = target.kind === 'room' ? target : null;
     const peer = target.kind === 'peer' ? target : null;
     const roomKey = room?.roomKey ?? null;
-    if (room && !roomKey) return fail('This device has no key for this room.');
+    if (room && !roomKey) return fail(t('media.noRoomKey'));
 
     // The same predicate `sealBody` branches on, so the two cannot disagree
     // about whether a key is needed: the self-chat seals under the vault key
@@ -362,7 +362,7 @@ export function useMediaSend({
     // staged at exactly the limit is over it by the time it goes up — and
     // finding that out from the server costs the whole upload first.
     if (sealedUpload.size > MEDIA_MAX_BYTES) {
-      return fail('That file is too large to send once encrypted.');
+      return fail(t('media.tooLargeSealed'));
     }
 
     // The extension is kept for the download filename only — the object itself
@@ -445,7 +445,7 @@ export function useMediaSend({
       } else {
         // Narrowing only: the refusal at the top already returned for a room
         // with no key, and neither branch is reachable without one of the two.
-        if (!room || !roomKey) return fail('This device has no key for this room.');
+        if (!room || !roomKey) return fail(t('media.noRoomKey'));
         prepared = {
           kind: 'room',
           roomId: room.roomId,
@@ -569,7 +569,7 @@ export function useMediaSend({
     try {
       const file = await stickerFile(sticker);
       if (!file) {
-        onError('That sticker could not be opened on this device.');
+        onError(t('media.stickerUnopenable'));
         return;
       }
       const id = await uploadStaged({ id: sticker.id, file, durationMs: null }, 'sticker', '', replyToId);

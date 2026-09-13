@@ -96,7 +96,7 @@ export function SealedExchange({
             )}
           </span>
           <span className="text-meta font-medium text-muted">
-            {asker} asked, sealed
+            {t('sealed.askedSealed', { name: asker })}
           </span>
           <span className="ml-auto text-micro text-faint">
             {formatTime(msg.created_at)}

@@ -277,10 +277,10 @@ export function AvatarCropper({ file, onCropped, onCancel }: AvatarCropperProps)
       actions={
         <>
           <button className="btn btn-ghost" onClick={onCancel} disabled={working}>
-            Cancel
+            {t('common.cancel')}
           </button>
           <button className="btn btn-primary" onClick={() => void confirm()} disabled={!ready || working}>
-            {working ? <span className="loading loading-spinner loading-sm" /> : 'Use photo'}
+            {working ? <span className="loading loading-spinner loading-sm" /> : t('cropper.use')}
           </button>
         </>
       }
@@ -326,7 +326,7 @@ export function AvatarCropper({ file, onCropped, onCancel }: AvatarCropperProps)
         </div>
 
         <label className="flex items-center gap-3">
-          <span className="text-meta text-muted w-10 shrink-0">Zoom</span>
+          <span className="text-meta text-muted w-10 shrink-0">{t('cropper.zoom')}</span>
           <input
             type="range"
             className="range range-primary range-sm"

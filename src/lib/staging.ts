@@ -7,6 +7,7 @@
 
 import { classifyMedia, MEDIA_BATCH_LIMIT, MEDIA_MAX_BYTES } from './conversation';
 import { SEAL_OVERHEAD_BYTES } from './media-crypto';
+import { localeTag, t } from './i18n';
 
 /** What a file may weigh at the picker. The bucket's limit is on the sealed
  *  object, which is this plus a nonce and a tag — refusing at the door beats
@@ -64,7 +65,7 @@ export function stageFiles(
   if (stagedIsRecording(staged)) {
     return {
       staged: [...staged],
-      error: 'Send or discard the voice message first.',
+      error: t('staging.finishVoice'),
     };
   }
 
@@ -93,15 +94,22 @@ export function stageFiles(
   }
 
   const reasons: string[] = [];
-  if (unsupported.length) reasons.push(`${list(unsupported)} is not an image or video`);
-  if (tooLarge.length) reasons.push(`${list(tooLarge)} is over 50 MB`);
-  if (overflowed) reasons.push(`only ${MEDIA_BATCH_LIMIT} files can go at once`);
+  if (unsupported.length) reasons.push(t('staging.notImageOrVideo', { names: list(unsupported) }));
+  if (tooLarge.length) reasons.push(t('staging.overLimit', { names: list(tooLarge) }));
+  if (overflowed) reasons.push(t('staging.batchLimit', { count: MEDIA_BATCH_LIMIT }));
 
-  return { staged: next, error: reasons.length ? `Skipped: ${reasons.join('; ')}.` : null };
+  return {
+    staged: next,
+    error: reasons.length ? t('staging.skipped', { reasons: reasons.join('; ') }) : null,
+  };
 }
 
 /** Names for a toast: all of them while there are few, a count past that. */
 function list(names: readonly string[]): string {
-  if (names.length <= 2) return names.join(' and ');
-  return `${names.length} files`;
+  // Intl does the joining word, so "a and b" becomes "a und b" without this
+  // module owning a conjunction per language.
+  if (names.length <= 2) {
+    return new Intl.ListFormat(localeTag(), { type: 'conjunction' }).format(names);
+  }
+  return t('staging.fileCount', { count: names.length });
 }

@@ -24,6 +24,7 @@ import {
   type Sticker,
 } from '../lib/stickers';
 import type { Identity } from '../lib/crypto/keys';
+import { t } from '../lib/i18n';
 
 export interface StickerDrawer {
   stickers: Sticker[];
@@ -143,8 +144,8 @@ export function useStickers(userId: string | null, identity: Identity | null): S
   /** Returns an error message, or null when the sticker went in. */
   const add = useCallback(
     async (file: File, label: string): Promise<string | null> => {
-      if (!userId || !identity) return 'Not ready yet.';
-      if (stickers.length >= STICKER_LIMIT) return `You can keep ${STICKER_LIMIT} stickers.`;
+      if (!userId || !identity) return t('stickers.notReady');
+      if (stickers.length >= STICKER_LIMIT) return t('stickers.limit', { count: STICKER_LIMIT });
       const rejection = stickerRejection(file);
       if (rejection) return rejection;
       try {
@@ -152,7 +153,7 @@ export function useStickers(userId: string | null, identity: Identity | null): S
         setStickers((current) => sortStickers([...current, added]));
         return null;
       } catch (error) {
-        return error instanceof Error ? error.message : 'Could not add that sticker.';
+        return error instanceof Error ? error.message : t('stickers.addFailed');
       }
     },
     [userId, identity, stickers]

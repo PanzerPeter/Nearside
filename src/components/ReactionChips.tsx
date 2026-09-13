@@ -1,4 +1,5 @@
 import { Reaction } from '../lib/types';
+import { useT } from '../hooks/useT';
 
 interface ReactionChipsProps {
   reactions: Reaction[];
@@ -7,6 +8,7 @@ interface ReactionChipsProps {
 }
 
 export function ReactionChips({ reactions, me, onToggle }: ReactionChipsProps) {
+  const t = useT();
   if (reactions.length === 0) return null;
 
   const counts = new Map<string, { count: number; mine: boolean }>();
@@ -23,7 +25,7 @@ export function ReactionChips({ reactions, me, onToggle }: ReactionChipsProps) {
         <button
           key={emoji}
           onClick={() => onToggle(emoji)}
-          aria-label={`${emoji} ${count}, tap to ${mine ? 'remove your' : 'add a'} reaction`}
+          aria-label={t(mine ? 'reactions.chipRemove' : 'reactions.chipAdd', { emoji, count })}
           // Matched to the enlarged quick-react bar: a chip is the control for
           // *undoing* a reaction, so it can't be meaningfully harder to hit
           // than the one that added it. min-h-7 keeps a one-emoji chip from

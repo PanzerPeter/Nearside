@@ -155,7 +155,7 @@ export function MediaAttachment({
           e.stopPropagation();
           setViewing(true);
         }}
-        aria-label={type === 'image' ? 'Open photo' : 'Play video'}
+        aria-label={type === 'image' ? t('media.openPhoto') : t('media.playVideo')}
       >
         {type === 'image' ? (
           <img

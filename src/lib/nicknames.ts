@@ -20,8 +20,9 @@
 import { useEffect, useState } from 'react';
 import { Session } from '@supabase/supabase-js';
 import { supabase } from './supabase';
+import { t } from './i18n';
 import { useConnection } from './connection';
-import { SELF_CHAT_LABEL } from './conversation';
+import { selfChatLabel } from './conversation';
 import { openForSelf, sealForSelf } from './crypto/seal';
 import type { Identity } from './crypto/keys';
 
@@ -146,9 +147,9 @@ export function formatDisplayName(
 ): string {
   const nick = nickname?.trim();
   if (nick) return nick;
-  if (selfChat) return SELF_CHAT_LABEL;
+  if (selfChat) return selfChatLabel();
   const name = display_name?.trim();
-  return name ? name : 'unknown';
+  return name ? name : t('requests.unknown');
 }
 
 /** The nickname held for `peerId`, or null. For code outside the React tree. */
@@ -301,21 +302,21 @@ interface WriteError {
  * a specific message and everything else falls through to the server's text.
  */
 function describeNicknameError(error: WriteError | null | undefined): string {
-  if (!error) return 'Could not save the nickname.';
+  if (!error) return t('nickname.saveFailed');
   switch (error.code) {
     // Table missing from PostgREST's schema cache: 0016 has not been run, or
     // has not been picked up yet.
     case 'PGRST205':
-      return 'Nicknames are not set up on the server yet.';
+      return t('nickname.notSetUp');
     // A CHECK constraint rejected the value — length or a control character.
     case '23514':
       return `A nickname has to be 1 to ${MAX_NICKNAME_LENGTH} characters on one line.`;
     // Postgres "permission denied": the role lacks table privileges. Distinct
     // from an RLS denial, which returns 0 rows.
     case '42501':
-      return 'No permission to set a nickname for this person.';
+      return t('nickname.noPermission');
     default:
-      return error.message?.trim() || 'Could not save the nickname.';
+      return error.message?.trim() || t('nickname.saveFailed');
   }
 }
 
@@ -334,7 +335,7 @@ export async function saveNickname(
   identity: Identity
 ): Promise<string | null> {
   const nickname = normalizeNickname(raw);
-  if (!nickname) return 'Enter a nickname, or remove the one you have.';
+  if (!nickname) return t('nickname.empty');
 
   const previous = nicknames;
   const next = new Map(previous);

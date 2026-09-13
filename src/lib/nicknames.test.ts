@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SELF_CHAT_LABEL } from './conversation';
+import { selfChatLabel } from './conversation';
 import sodium from 'libsodium-wrappers';
 import {
   MAX_NICKNAME_LENGTH,
@@ -99,7 +99,7 @@ describe('formatDisplayName', () => {
   });
 
   it('names the self-chat rather than showing your own handle back to you', () => {
-    expect(formatDisplayName(null, 'me', true)).toBe(SELF_CHAT_LABEL);
+    expect(formatDisplayName(null, 'me', true)).toBe(selfChatLabel());
   });
 
   it('lets a nickname override the self-chat label', () => {

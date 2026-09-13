@@ -352,7 +352,11 @@ export function MediaLightbox({
           backdrop does that. */}
       <div className="max-w-full max-h-full p-4" onClick={(e) => e.stopPropagation()}>
         {type === 'image' ? (
-          <img src={url} alt="attachment" className="max-w-full max-h-[85dvh] object-contain" />
+          <img
+            src={url}
+            alt={t('media.attachment')}
+            className="max-w-full max-h-[85dvh] object-contain"
+          />
         ) : noPicture ? (
           // The file is here and intact — it is this build that has no decoder
           // for it. Say that, rather than "no longer available", and point at

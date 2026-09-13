@@ -23,7 +23,9 @@ export const DONATIONS_OFFERING = 'donations';
 export interface DonationTier {
   /** The RevenueCat product id. */
   id: string;
-  name: string;
+  /** A message key, like `blurb`: the tiers are three English words otherwise,
+   *  sitting above three translated sentences. */
+  name: MessageKey;
   /** A message key. Same reason as `ThemeOption.description`. */
   blurb: MessageKey;
   /** Grants `ALL_PACKS_ENTITLEMENT`, so this tier is a non-consumable and its
@@ -42,17 +44,17 @@ export interface DonationTier {
 export const DONATION_TIERS: DonationTier[] = [
   {
     id: 'donate.tip',
-    name: 'Tip',
+    name: 'tier.tipName',
     blurb: 'tier.tip',
   },
   {
     id: 'donate.round',
-    name: 'Round of hosting',
+    name: 'tier.hostingName',
     blurb: 'tier.hosting',
   },
   {
     id: 'donate.patron',
-    name: 'Patron',
+    name: 'tier.patronName',
     blurb: 'tier.patron',
     unlocksPacks: true,
   },

@@ -1,4 +1,5 @@
 import { isMobileNative } from './platform';
+import { t } from './i18n';
 /**
  * Input-capability probes. Both are asked about the *device*, not the browser
  * brand: a Chromebook with a touchscreen and an Android phone want different
@@ -14,8 +15,8 @@ import { isMobileNative } from './platform';
  */
 export function permissionSettingsLocation(): string {
   return isMobileNative()
-    ? "Android's app settings for Nearside"
-    : 'your browser settings';
+    ? t('permissions.androidSettings')
+    : t('permissions.browserSettings');
 }
 
 /**
