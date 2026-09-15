@@ -14,6 +14,7 @@ import {
   putConversationList,
   putSealedRows,
   SEALED_KEEP,
+  SEALED_PAGE,
   sealedNewestByPeer,
 } from './localdb';
 import type { ConversationSummary, Message } from './types';
@@ -47,6 +48,14 @@ function row(id: string, at: string, extra: Partial<Message> = {}): Message {
     created_at: at,
     ...extra,
   };
+}
+
+/** `count` messages a minute apart, oldest first. Zero-padded in both the id
+ *  and the timestamp, because the store sorts both as strings. */
+function ladder(count: number): Message[] {
+  return Array.from({ length: count }, (_, i) =>
+    row(`m${String(i).padStart(4, '0')}`, `2026-08-06T10:00:00.${String(i).padStart(4, '0')}Z`)
+  );
 }
 
 const summary = (peer: string, at: string | null): ConversationSummary => ({
@@ -94,24 +103,46 @@ describe('the sealed page', () => {
     expect((await cachedSealedRows(PEER)).map((r) => r.id)).toEqual(['a']);
   });
 
-  it('keeps a bound per conversation, so one busy chat cannot evict the rest', async () => {
-    const many = Array.from({ length: SEALED_KEEP + 10 }, (_, i) =>
-      row(`m${String(i).padStart(3, '0')}`, `2026-08-06T${String(i).padStart(2, '0')}:00:00Z`)
+  it('reads one window at a time, not the whole archive', async () => {
+    // The default is what opening a chat paints. Reading the cap instead would
+    // decrypt a conversation's whole history to fill one screen of it.
+    await putSealedRows(PEER, ladder(SEALED_PAGE + 20));
+    expect(await cachedSealedRows(PEER)).toHaveLength(SEALED_PAGE);
+  });
+
+  it('pages older than a cursor, tie-breaking on id like the server does', async () => {
+    const tied = '2026-08-06T10:00:00.0000Z';
+    await putSealedRows(PEER, [row('b', tied), row('a', tied), row('c', tied)]);
+    // Newest first is c, b, a; asking for what is older than c must not step
+    // over b just because the three share a timestamp.
+    const older = await cachedSealedRows(PEER, 10, { created_at: tied, id: 'c' });
+    expect(older.map((r) => r.id)).toEqual(['b', 'a']);
+  });
+
+  it('hands back consecutive windows with nothing skipped between them', async () => {
+    await putSealedRows(PEER, ladder(25));
+    const first = await cachedSealedRows(PEER, 10);
+    const second = await cachedSealedRows(PEER, 10, first[first.length - 1]);
+    const third = await cachedSealedRows(PEER, 10, second[second.length - 1]);
+    expect([...first, ...second, ...third].map((r) => r.id)).toEqual(
+      ladder(25)
+        .map((r) => r.id)
+        .reverse()
     );
-    await putSealedRows(PEER, many);
+  });
+
+  it('keeps a bound per conversation, so one busy chat cannot evict the rest', async () => {
+    await putSealedRows(PEER, ladder(SEALED_KEEP + 10));
     await putSealedRows(OTHER_PEER, [row('kept', '2026-08-06T10:00:00Z')]);
-    expect(await cachedSealedRows(PEER)).toHaveLength(SEALED_KEEP);
+    expect(await cachedSealedRows(PEER, SEALED_KEEP * 2)).toHaveLength(SEALED_KEEP);
     expect(await cachedSealedRows(OTHER_PEER)).toHaveLength(1);
   });
 
   it('drops the oldest when it prunes, never the newest', async () => {
-    const many = Array.from({ length: SEALED_KEEP + 5 }, (_, i) =>
-      row(`m${String(i).padStart(3, '0')}`, `2026-08-06T${String(i).padStart(2, '0')}:00:00Z`)
-    );
-    await putSealedRows(PEER, many);
-    const kept = (await cachedSealedRows(PEER)).map((r) => r.id);
-    expect(kept[0]).toBe(`m${String(SEALED_KEEP + 4).padStart(3, '0')}`);
-    expect(kept).not.toContain('m000');
+    await putSealedRows(PEER, ladder(SEALED_KEEP + 5));
+    const kept = (await cachedSealedRows(PEER, SEALED_KEEP * 2)).map((r) => r.id);
+    expect(kept[0]).toBe(`m${String(SEALED_KEEP + 4).padStart(4, '0')}`);
+    expect(kept).not.toContain('m0000');
   });
 
   it('does not show one account another account’s conversation', async () => {

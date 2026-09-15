@@ -14,6 +14,32 @@ one of them drifts.
 
 ## [Unreleased]
 
+## [1.17.0] — 2026-09-15
+
+### Changed
+
+- A conversation you have already read opens from the phone rather than from
+  the network. Everything the thread has ever shown you is kept on the device
+  now, so opening a chat paints immediately, scrolling back through it costs
+  nothing, and both work with no signal at all — on a plane, in a lift, on a
+  train through a tunnel. Previously only the last two screens were kept and
+  everything behind them had to be fetched again, which meant scrolling back
+  simply stopped working the moment the connection did.
+- Opening a chat no longer re-downloads messages you already have. The app asks
+  only what has happened since it last looked, which on most opens is nothing
+  at all — one small request instead of re-fetching and re-decrypting the last
+  thirty messages every time.
+- Searching inside a conversation reads the same on-device copy, so a search
+  after that first walk through the history is answered without the network
+  too.
+
+### Fixed
+
+- A message the other person deleted or edited while your phone was off now
+  catches up when the app comes back. It used to be noticed only if it was
+  among the newest messages, so an older one could go on showing its old text
+  — or go on showing at all — until something else happened in that chat.
+
 ## [1.16.0] — 2026-09-13
 
 ### Fixed

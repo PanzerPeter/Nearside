@@ -149,13 +149,27 @@ export const EXPORT_LIMIT = 100_000;
 /**
  * How many sealed rows one conversation keeps on this device.
  *
- * Two pages. One is what opening the chat paints; the second is what the first
- * flick back finds already there, which is the whole difference between a
- * thread that scrolls and a thread that stops to load. Beyond that the network
- * is doing the work anyway, and this store is not an archive — the plaintext
- * mirror is what search reads, and it keeps everything.
+ * This was two pages, on the reasoning that the network could do the rest.
+ * "The rest" is exactly what a phone with no signal cannot ask for, so it is
+ * an archive now: every page the thread scrolls past and every page the
+ * history walk fetches is written here, and scrolling back through a
+ * conversation costs nothing and works with the radio off.
+ *
+ * A cap and not "all of it", for the same reason `EXPORT_LIMIT` is a number:
+ * the store is per conversation, so a cap here cannot let one busy chat evict
+ * another. The plaintext mirror beside it is already unbounded and holds the
+ * same messages in a smaller form, so this was never the larger of the two.
  */
-export const SEALED_KEEP = 60;
+export const SEALED_KEEP = 2_000;
+
+/**
+ * How much of that archive one read takes.
+ *
+ * Two pages — what opening the chat paints, and what the first flick back
+ * finds already there. Reading the cap instead would decrypt a conversation's
+ * whole history to paint one screen of it.
+ */
+export const SEALED_PAGE = 60;
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS messages_cache (
@@ -537,20 +551,46 @@ function trimSealedMemory(store: Map<string, SealedEntry>, peerId: string): void
   for (const [id] of mine.slice(SEALED_KEEP)) store.delete(id);
 }
 
-/** The newest cached rows for a conversation, newest first — the same order
- *  and shape `fetchLatestPage` returns. */
-export async function cachedSealedRows(peerId: string, limit = SEALED_KEEP): Promise<SealedRow[]> {
+/**
+ * A window of a conversation, newest first — the same order and shape
+ * `fetchLatestPage` and `fetchOlderPage` return.
+ *
+ * `before` is the keyset cursor "load older" pages on, and both halves of it
+ * matter for the reason `Cursor` in `message-queries.ts` gives: two messages
+ * sent in the same instant share a `created_at`, and paging on that column
+ * alone drops whichever of them sits on the page boundary.
+ */
+export async function cachedSealedRows(
+  peerId: string,
+  limit = SEALED_PAGE,
+  before?: { created_at: string; id: string }
+): Promise<SealedRow[]> {
   if (!native()) {
-    return [...(sealedStore()?.values() ?? [])]
-      .filter((e) => e.peer_id === peerId)
-      .sort((a, b) => (a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : 0))
+    // Ordering and cursor are spelled out twice, here and in the SQL below,
+    // and the two must agree: the suite only ever runs this branch, so a
+    // difference is a bug it could never see.
+    return [...(sealedStore()?.entries() ?? [])]
+      .filter(
+        ([id, e]) =>
+          e.peer_id === peerId &&
+          (!before ||
+            e.created_at < before.created_at ||
+            (e.created_at === before.created_at && id < before.id))
+      )
+      .sort(([aId, a], [bId, b]) =>
+        a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : bId.localeCompare(aId)
+      )
       .slice(0, limit)
-      .map((e) => e.row);
+      .map(([, e]) => e.row);
   }
+  const keyset = before ? ' AND (created_at < ? OR (created_at = ? AND id < ?))' : '';
+  const params = before
+    ? [peerId, before.created_at, before.created_at, before.id, limit]
+    : [peerId, limit];
   const res = await db?.query(
-    `SELECT row FROM messages_sealed WHERE peer_id = ?
+    `SELECT row FROM messages_sealed WHERE peer_id = ?${keyset}
       ORDER BY created_at DESC, id DESC LIMIT ?`,
-    [peerId, limit]
+    params
   );
   const rows = (res?.values as { row: string }[]) ?? [];
   // A row that will not parse is dropped rather than rendered — the network

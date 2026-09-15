@@ -20,6 +20,7 @@ import {
 import { PinnedBanner } from './PinnedBanner';
 import { describeTimerChange } from '../lib/disappearing';
 import { openRows } from '../lib/sealed-body';
+import { putSealedRows } from '../lib/localdb';
 import { PAGE_SIZE, fetchLatestPage, fetchOlderPage } from '../lib/message-queries';
 import { peerPublicKey } from '../lib/peer-keys';
 import type { Identity } from '../lib/crypto/keys';
@@ -190,6 +191,11 @@ export function ChatRoom({ session, friend, identity, openAt, onBack }: ChatRoom
           ? await fetchOlderPage(me, friend.id, cursor)
           : await fetchLatestPage(me, friend.id);
         await open(page);
+        // Sealed as well as opened. Opening mirrors the plaintext search reads;
+        // this keeps the row the thread can actually render — with its
+        // attachment, its reply and its reactions — so the walk that makes a
+        // conversation searchable also makes it scrollable with no signal.
+        await putSealedRows(friend.id, page);
         return page;
       },
       [me, friend.id, open]

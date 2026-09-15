@@ -113,11 +113,18 @@ export async function fetchOlderPage(
 }
 
 /**
- * Everything in this conversation at or after `sinceIso`, oldest first.
+ * Everything that has happened in this conversation since `sinceIso`, oldest
+ * first — arrivals, and also edits and deletions of messages older than that.
  *
  * `gte`, not `gt`: two messages can share a timestamp to the microsecond, and
  * `gt` would step over the one that isn't ours. Re-fetching the cursor row
  * itself is the cost, and `mergeMessages` de-dupes it by id.
+ *
+ * The three columns rather than `created_at` alone, because this is the only
+ * thing that runs while realtime is not: a message the peer deleted an hour
+ * ago has a `created_at` from last week, and asking on that column alone is
+ * how a deletion made while a phone was asleep never reached it. Callers hold
+ * a window and must drop what falls outside it — see `loadLatest`.
  */
 export async function fetchSince(
   me: string,
@@ -129,7 +136,9 @@ export async function fetchSince(
     .from('messages')
     .select('*')
     .or(conversationFilter(me, peerId))
-    .gte('created_at', sinceIso)
+    .or(
+      `created_at.gte.${sinceIso},edited_at.gte.${sinceIso},deleted_at.gte.${sinceIso}`
+    )
     .order('created_at', { ascending: true })
     .order('id', { ascending: true })
     .limit(limit);

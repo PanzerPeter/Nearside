@@ -36,6 +36,7 @@ import {
   type ConversationTimer,
 } from '../lib/disappearing';
 import { cachedSealedRows, putSealedRows } from '../lib/localdb';
+import type { SealedRow } from '../lib/sealed-row';
 
 /** Bounds how many pages a search jump will fetch looking for an old message,
  *  so a hit deep in history can't page indefinitely. */
@@ -301,28 +302,32 @@ export function useChatThread({
   }
 
   /**
-   * Paint whatever this device already holds for the conversation.
+   * Paint whatever this device already holds for the conversation, and say how
+   * much that was.
    *
    * Awaited before the fetch rather than raced with it. A SQLite read of sixty
    * rows lands in a millisecond or two, and letting the two paints race meant
    * the cached copy could land *after* the server's and merge a stale row back
    * over an edit. Ordering them costs nothing and removes the whole class.
    *
-   * `hasMore` is not set here: whether there is history behind this page is the
-   * server's answer, and claiming it from a cache that is capped at two pages
-   * would offer a "load older" that the network has to be there to satisfy.
+   * The count is the caller's answer to two questions the network used to own:
+   * what to ask the server for, and whether to offer "load older". A full
+   * window means the store has the pages behind it too — `loadOlder` reads the
+   * same archive — so neither answer needs a round trip any more.
    */
-  async function paintCached(forFriend: string) {
+  async function paintCached(forFriend: string): Promise<SealedRow[]> {
     try {
       const cached = await cachedSealedRows(forFriend);
-      if (cached.length === 0 || loadedFor.current !== forFriend) return;
+      if (cached.length === 0 || loadedFor.current !== forFriend) return [];
       const rows = await open(cached as Message[]);
       markSeen(rows.map((m) => m.id));
       setMessages((prev) => mergeMessages(prev, rows));
+      return cached;
     } catch {
       // The disk copy is an optimisation, never a requirement. A store that
       // cannot be read leaves the conversation exactly as it was before there
       // was one: waiting on the network.
+      return [];
     }
   }
 
@@ -332,28 +337,85 @@ export function useChatThread({
     // Opening a chat used to show nothing at all until a round trip came back
     // — a spinner on a slow link, and an empty thread with no link, over
     // messages this device had already decrypted once.
-    await paintCached(forFriend);
+    const cached = await paintCached(forFriend);
 
-    const data = await fetchLatestPage(me, forFriend);
+    // A short window is not a window: it means this conversation is shorter
+    // than a page, or that expiry has eaten into the store, and neither says
+    // anything about how far back the server goes. Those load the ordinary way.
+    const warm = cached.length >= PAGE_SIZE;
+
+    // With a window already on screen the server is asked only for what has
+    // happened since — usually nothing at all. Asking for the newest page
+    // regardless re-downloaded and re-decrypted thirty rows this device had on
+    // disk, every single time a chat was opened.
+    const data = warm
+      ? await fetchSince(me, forFriend, cached[0].created_at, CATCHUP_LIMIT)
+      : await fetchLatestPage(me, forFriend);
 
     if (loadedFor.current !== forFriend) return;
-    const rows = await open(data);
+
+    // A full catch-up means more arrived while this device was away than one
+    // can carry, so stitching it onto the cached window would leave a hole in
+    // the middle that "load older" pages straight past. Same answer `pullNew`
+    // gives: rebuild from the server's newest page.
+    if (warm && data.length >= CATCHUP_LIMIT) {
+      setMessages([]);
+      seenMessageIdsRef.current = new Set();
+      scroll.resetPosition();
+      const page = await fetchLatestPage(me, forFriend);
+      if (loadedFor.current !== forFriend) return;
+      await commitFirstPage(forFriend, page, page.length === PAGE_SIZE);
+      return;
+    }
+
+    await commitFirstPage(
+      forFriend,
+      data,
+      warm || data.length === PAGE_SIZE,
+      // What the delta is allowed to paint. It reaches back past the window on
+      // screen — that is how a deletion made while this phone was off arrives
+      // — and those rows are corrected on disk without being spliced in.
+      warm ? cached[cached.length - 1].created_at : ''
+    );
+  }
+
+  /** Fold a first page into the thread: decrypt, seed the animation gate,
+   *  record it on disk and acknowledge whatever arrived while the app was shut.
+   *  Shared by the cached open and the cold one, which differ only in what they
+   *  asked the network for. */
+  async function commitFirstPage(
+    forFriend: string,
+    data: Message[],
+    more: boolean,
+    windowFrom = ''
+  ) {
+    // Sealed, not opened: what goes to disk is what the server sent. See
+    // `lib/sealed-row.ts` for why the opened row must not. Everything fetched
+    // is recorded, including the rows below the window — a tombstone left in
+    // the archive is a deleted message that comes back when somebody scrolls.
+    void putSealedRows(forFriend, data);
+
+    const visible = windowFrom ? data.filter((m) => m.created_at >= windowFrom) : data;
+    const rows = await open(visible);
+    if (loadedFor.current !== forFriend) return;
     // Seed before the state update lands, or the entrance animation cascades
     // across the whole initial page.
     markSeen(rows.map((m) => m.id));
     setMessages((prev) => mergeMessages(prev, rows));
-    setHasMore(data.length === PAGE_SIZE);
-    // Sealed, not opened: what goes to disk is what the server sent. See
-    // `lib/sealed-row.ts` for why the opened row must not.
-    void putSealedRows(forFriend, data);
+    setHasMore(more);
 
-    // Messages that arrived while the app was closed count as delivered on
-    // this fetch, not only over the live INSERT path. `data` is newest-first.
+    // Messages that arrived while the app was closed count as delivered on this
+    // fetch, not only over the live INSERT path. Picked by timestamp rather
+    // than by position: `fetchLatestPage` answers newest-first and `fetchSince`
+    // oldest-first, and taking the wrong end of one of them would walk the
+    // watermark backwards.
     // In your own notes there is nothing inbound, and `no_self_receipt` would
     // reject the write anyway.
     if (isSelf) return;
-    const newestInbound = data.find((m) => m.user_id === peerId);
-    if (newestInbound) void advanceDelivered(peerId, newestInbound.created_at);
+    const inbound = visible.filter((m) => m.user_id === peerId);
+    if (inbound.length === 0) return;
+    const newest = inbound.reduce((a, b) => (a.created_at > b.created_at ? a : b));
+    void advanceDelivered(peerId, newest.created_at);
   }
 
   /**
@@ -425,7 +487,14 @@ export function useChatThread({
         // thread already holds. Opening it again re-decrypted a body every 45
         // seconds, and every 6 while realtime is down, to produce state
         // identical to what was already on screen.
-        ingest(await open(unseenRows(messagesRef.current, fetched)));
+        const changed = unseenRows(messagesRef.current, fetched);
+        // An edit or a deletion of something older than the loaded window
+        // belongs on disk but not on screen: the thread has not paged back to
+        // it, and merging one in would hang a year-old message above today's.
+        const oldest = messagesRef.current[0]?.created_at ?? '';
+        const below = changed.filter((m) => m.created_at < oldest);
+        if (below.length > 0) void putSealedRows(forFriend, below);
+        ingest(await open(changed.filter((m) => m.created_at >= oldest)));
         return;
       }
 
@@ -441,11 +510,33 @@ export function useChatThread({
     }
   }
 
+  /**
+   * The page older than the one on screen, from the disk archive when it has
+   * it and from the server when it does not.
+   *
+   * Disk first is the whole point: every page this thread has ever painted is
+   * written back, so going back through a conversation a second time costs
+   * nothing and works with no signal at all. A partial window means the archive
+   * ran out there, and the network is asked from the same cursor rather than
+   * from where the archive stopped — so the two never leave a gap between them.
+   * With nothing to ask, the partial window is still better than nothing.
+   */
+  async function pageOlder(forFriend: string, cursor: Cursor) {
+    const cached = await cachedSealedRows(forFriend, PAGE_SIZE, cursor);
+    if (cached.length === PAGE_SIZE) return { data: cached as Message[], more: true };
+
+    const page = await fetchOlderPage(me, forFriend, cursor);
+    if (page.length === 0) return { data: cached as Message[], more: false };
+    void putSealedRows(forFriend, page);
+    return { data: page, more: page.length === PAGE_SIZE };
+  }
+
   async function loadOlder() {
     if (messages.length === 0) return;
     const forFriend = peerId;
     setLoadingOlder(true);
-    const older = await open(await fetchOlderPage(me, forFriend, messages[0]));
+    const page = await pageOlder(forFriend, messages[0]);
+    const older = await open(page.data);
     if (loadedFor.current !== forFriend) {
       setLoadingOlder(false);
       return;
@@ -455,7 +546,7 @@ export function useChatThread({
     scroll.skipAutoScroll.current = true;
     markSeen(older.map((m) => m.id));
     setMessages((prev) => mergeMessages(prev, older));
-    setHasMore(older.length === PAGE_SIZE);
+    setHasMore(page.more);
     setLoadingOlder(false);
 
     requestAnimationFrame(() => {
@@ -498,14 +589,17 @@ export function useChatThread({
       let found = false;
 
       for (let page = 0; page < MAX_JUMP_PAGES && more && cursor; page++) {
-        const data = await fetchOlderPage(me, forFriend, cursor);
+        // Through the same disk-first source as `loadOlder`: a jump into a
+        // conversation this device has already walked is twenty pages the
+        // network never has to send.
+        const fetched = await pageOlder(forFriend, cursor);
 
         if (loadedFor.current !== forFriend) {
           setLoadingOlder(false); // else it's stuck true for whichever conversation loads next
           return;
         }
 
-        const older: Message[] = await open(data);
+        const older: Message[] = await open(fetched.data);
         if (older.length === 0) {
           more = false;
           break;
@@ -514,7 +608,7 @@ export function useChatThread({
         scroll.skipAutoScroll.current = true;
         markSeen(older.map((m) => m.id));
         setMessages((prev) => mergeMessages(prev, older));
-        more = older.length === PAGE_SIZE;
+        more = fetched.more;
         setHasMore(more);
         found = older.some((m) => m.id === messageId);
         cursor = older[older.length - 1];
