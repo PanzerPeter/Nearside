@@ -14,6 +14,18 @@ one of them drifts.
 
 ## [Unreleased]
 
+## [1.17.2] — 2026-09-17
+
+### Changed
+
+- Routine maintenance: the pieces Nearside is built on — the layer that talks
+  to Android and iOS, the one that delivers notifications, and the one that
+  handles subscriptions — moved up to their latest patch releases. Nothing in
+  the app works differently on purpose; the point of staying current is that
+  the fixes in those releases are already in your hands when a phone update
+  needs them. A handful of icons were redrawn upstream and may look very
+  slightly different.
+
 ## [1.17.1] — 2026-09-17
 
 ### Fixed
