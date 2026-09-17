@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  bubbleSource,
   fileExtension,
   keyToken,
   mediaFailureNotice,
@@ -287,5 +288,35 @@ describe('mediaFailureNotice', () => {
 
   it('still reads as a sentence for a row whose kind was never recorded', () => {
     expect(mediaFailureNotice('gone', null)).toBe('This photo is no longer available');
+  });
+});
+
+describe('bubbleSource', () => {
+  // The regression this function exists for. A poster is a WebP still, so a
+  // <video> refuses it, burns both re-signs and reports the *video* as gone —
+  // which is the one thing it is not.
+  it('reports a video thumbnail as a still, not as a video', () => {
+    const drawn = bubbleSource('me/you/clip.mp4', 'me/you/poster.webp', 'video');
+    expect(drawn.path).toBe('me/you/poster.webp');
+    expect(drawn.still).toBe(true);
+  });
+
+  it('leaves a video with no thumbnail to the player', () => {
+    const drawn = bubbleSource('me/you/clip.mp4', null, 'video');
+    expect(drawn.path).toBe('me/you/clip.mp4');
+    expect(drawn.still).toBe(false);
+  });
+
+  // A pin holds the full file and never the preview, so a restored row must not
+  // reach for an object the sender's trim already deleted.
+  it('ignores the thumbnail of a restored row', () => {
+    const drawn = bubbleSource('me/you/clip.mp4', 'me/you/poster.webp', 'video', true);
+    expect(drawn.path).toBe('me/you/clip.mp4');
+    expect(drawn.still).toBe(false);
+  });
+
+  it('draws a photo as a still either way', () => {
+    expect(bubbleSource('a.jpg', 'a-thumb.webp', 'image').still).toBe(true);
+    expect(bubbleSource('a.jpg', null, 'image').still).toBe(true);
   });
 });

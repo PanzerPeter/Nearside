@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { VisualMediaType } from '../lib/types';
 import { useSignedMediaUrl } from '../hooks/useSignedMediaUrl';
 import { MediaLightbox } from './MediaLightbox';
-import { mediaFailureNotice, videoTrackIsUnsupported } from '../lib/media';
+import { bubbleSource, mediaFailureNotice, videoTrackIsUnsupported } from '../lib/media';
 import { ImageOff, Play, VideoOff } from 'lucide-react';
 import { useT } from '../hooks/useT';
 import { useGallery } from '../hooks/useGallery';
@@ -74,10 +74,10 @@ export function MediaAttachment({
   square,
 }: MediaAttachmentProps) {
   const t = useT();
-  // The thumbnail when there is one, the full object when there is not. A
-  // pinned copy is exempt: `restored` means the server object is gone and the
-  // kept bytes are the only source, and this device pinned the full file.
-  const drawPath = !restored && thumbPath ? thumbPath : path;
+  // The thumbnail when there is one, the full object when there is not, and
+  // which of the two decides the element below: a thumbnail is a WebP frame
+  // even for a video, so `still` follows the object rather than `type`.
+  const { path: drawPath, still } = bubbleSource(path, thumbPath, type, restored);
   // Deferred: the placeholder below reserves the slot at the right size, so
   // nothing jumps when the picture lands, and a page of thirty messages stops
   // downloading the twenty-five attachments that are nowhere near the screen.
@@ -127,6 +127,16 @@ export function MediaAttachment({
     );
   }
 
+  // Drawn over whichever element ended up carrying the picture: a poster and a
+  // first frame are both something you tap to play.
+  const playBadge = (
+    <span className="absolute inset-0 flex items-center justify-center">
+      <span className="flex h-12 w-12 items-center justify-center rounded-full bg-black/55">
+        <Play className="w-6 h-6 ml-0.5 text-white fill-current" />
+      </span>
+    </span>
+  );
+
   // `w-full` on a replaced element still contributes its intrinsic width to the
   // bubble's shrink-to-fit sizing, so a wide photo keeps setting the bubble's
   // width and only a picture narrower than the caption is stretched up to it.
@@ -157,17 +167,20 @@ export function MediaAttachment({
         }}
         aria-label={type === 'image' ? t('media.openPhoto') : t('media.playVideo')}
       >
-        {type === 'image' ? (
-          <img
-            src={url}
-            alt={t('media.attachment')}
-            loading="lazy"
-            // `block`: an inline image leaves a baseline gap under it, which
-            // used to hide inside the bubble's padding and now would show as a
-            // strip of bubble colour along the bottom edge.
-            className={frame}
-            onError={reload}
-          />
+        {still ? (
+          <>
+            <img
+              src={url}
+              alt={t('media.attachment')}
+              loading="lazy"
+              // `block`: an inline image leaves a baseline gap under it, which
+              // used to hide inside the bubble's padding and now would show as a
+              // strip of bubble colour along the bottom edge.
+              className={frame}
+              onError={reload}
+            />
+            {type === 'video' && playBadge}
+          </>
         ) : noPicture ? (
           // Still a button, and still opening the viewer: saving the file is
           // the only thing left that can be done with it, and the viewer is
@@ -201,11 +214,7 @@ export function MediaAttachment({
                 if (videoTrackIsUnsupported(e.currentTarget)) setNoPicture(true);
               }}
             />
-            <span className="absolute inset-0 flex items-center justify-center">
-              <span className="flex h-12 w-12 items-center justify-center rounded-full bg-black/55">
-                <Play className="w-6 h-6 ml-0.5 text-white fill-current" />
-              </span>
-            </span>
+            {playBadge}
           </>
         )}
       </button>

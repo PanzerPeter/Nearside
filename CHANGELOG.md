@@ -14,6 +14,19 @@ one of them drifts.
 
 ## [Unreleased]
 
+## [1.17.1] — 2026-09-17
+
+### Fixed
+
+- A video you send now shows its preview frame again instead of reading "This
+  video is no longer available". The file was never gone: it uploaded, it
+  arrived, and it played perfectly the moment you tapped it. What broke was the
+  small preview picture introduced alongside it — the conversation tried to
+  play that still image as if it were the video, gave up, and reported the
+  whole message as lost. Everyone saw it, including the person who sent it,
+  which is what made it look like the send had failed. Videos already in your
+  conversations come back on their own; nothing needs re-sending.
+
 ## [1.17.0] — 2026-09-15
 
 ### Changed

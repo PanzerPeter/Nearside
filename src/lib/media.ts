@@ -1,5 +1,5 @@
 import { AUDIO_KEEP_LIMIT, MEDIA_KEEP_LIMIT } from './conversation';
-import type { MediaType } from './types';
+import type { MediaType, VisualMediaType } from './types';
 import { t, type MessageKey } from './i18n';
 
 /** How many over-limit rows one cleanup pass will trim. */
@@ -208,6 +208,32 @@ export function videoTrackIsUnsupported(el: {
   // node-tested and has no DOM to read the constant off.
   const HAVE_METADATA = 1;
   return el.readyState >= HAVE_METADATA && el.videoWidth === 0;
+}
+
+/**
+ * Which object a bubble draws for an attachment, and whether that object is a
+ * still picture.
+ *
+ * A thumbnail is always a WebP frame, whatever it stands in for — see
+ * `lib/thumbnail.ts`. The element that draws it therefore follows the *object*,
+ * never the row's media type. It used to follow the type: a video's poster was
+ * handed to a `<video>`, which cannot decode a WebP, so it errored, spent both
+ * re-signs on a URL that was never the problem, and settled on "this video is
+ * no longer available" — for a file sitting intact in the bucket, on every
+ * device including the sender's. Every video sent after 0044 read as lost.
+ *
+ * `restored` means the server object is gone and this device's pin is the only
+ * source. A pin holds the full file and never the preview, so the thumbnail is
+ * ignored for one.
+ */
+export function bubbleSource(
+  path: string,
+  thumbPath: string | null | undefined,
+  type: VisualMediaType,
+  restored?: boolean
+): { path: string; still: boolean } {
+  const thumb = restored ? null : (thumbPath ?? null);
+  return { path: thumb ?? path, still: thumb !== null || type === 'image' };
 }
 
 /**
