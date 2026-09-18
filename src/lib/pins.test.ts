@@ -11,6 +11,7 @@ import {
   subscribePins,
   unpinMedia,
 } from './pins';
+import { __base64ForTests } from './pins';
 import { restorePinned } from './pin-restore';
 import type { Message } from './types';
 
@@ -177,5 +178,32 @@ describe('clearPinnedMediaFor', () => {
     await clearPinnedMediaFor(OTHER, null);
     expect(pinsSnapshot().size).toBe(0);
     expect(pinsLoaded()).toBe(false);
+  });
+});
+
+describe('base64 round trip', () => {
+  const { toBase64, fromBase64 } = __base64ForTests;
+
+  // A pinned file crosses the Capacitor bridge as text, so both directions work
+  // a piece at a time to keep a video from needing three copies of itself in
+  // memory at once. The chunk boundaries and the three padding remainders are
+  // where a piecewise encoder goes wrong, so those are the lengths driven here.
+  const lengths = [0, 1, 2, 3, 4, 5, 0x8000 * 3 - 1, 0x8000 * 3, 0x8000 * 3 + 1, 0x8000 * 6 + 2];
+
+  it.each(lengths)('survives %i bytes unchanged', (length) => {
+    const bytes = new Uint8Array(length);
+    for (let i = 0; i < length; i += 1) bytes[i] = (i * 7 + (i % 13)) & 0xff;
+
+    expect([...fromBase64(toBase64(bytes))]).toEqual([...bytes]);
+  });
+
+  it('encodes exactly what one unchunked call would have', () => {
+    const bytes = new Uint8Array(0x8000 * 3 + 7);
+    for (let i = 0; i < bytes.length; i += 1) bytes[i] = (i * 31) & 0xff;
+
+    let binary = '';
+    for (let i = 0; i < bytes.length; i += 1) binary += String.fromCharCode(bytes[i]);
+
+    expect(toBase64(bytes)).toBe(btoa(binary));
   });
 });

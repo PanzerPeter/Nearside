@@ -154,17 +154,33 @@ export function isConversationFolder(folder: string, uid: string): boolean {
   return parts.length === 2 && (parts[0] === uid || parts[1] === uid);
 }
 
-const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
-const VIDEO_TYPES = ['video/mp4', 'video/webm', 'video/quicktime'];
+/*
+  What the picker is allowed through, and the only list that says so.
+
+  Exported because it is not the only place these types have to be known: a
+  sealed object announces nothing, so `lib/media.ts` has to be able to write
+  every one of them into an object name and read it back out again. Those two
+  maps and this door were three hand-kept lists that had to agree and had
+  nothing tying them together — `media.test.ts` walks this one now, so widening
+  the door fails the suite until the name mapping has been widened with it.
+*/
+export const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'] as const;
+export const VIDEO_TYPES = ['video/mp4', 'video/webm', 'video/quicktime'] as const;
 /** Voice-note containers. The browser picks which one a recording lands in
  *  (see `pickAudioMime`), so all are accepted here and on the bucket. The mime
  *  rather than the container is what separates a voice note from a video. */
-const AUDIO_TYPES = ['audio/webm', 'audio/ogg', 'audio/mp4', 'audio/aac', 'audio/mpeg'];
+export const AUDIO_TYPES = [
+  'audio/webm',
+  'audio/ogg',
+  'audio/mp4',
+  'audio/aac',
+  'audio/mpeg',
+] as const;
 
 export function classifyMedia(file: File): 'image' | 'video' | 'audio' | null {
-  if (IMAGE_TYPES.includes(file.type)) return 'image';
-  if (VIDEO_TYPES.includes(file.type)) return 'video';
-  if (AUDIO_TYPES.includes(file.type)) return 'audio';
+  if ((IMAGE_TYPES as readonly string[]).includes(file.type)) return 'image';
+  if ((VIDEO_TYPES as readonly string[]).includes(file.type)) return 'video';
+  if ((AUDIO_TYPES as readonly string[]).includes(file.type)) return 'audio';
   return null;
 }
 

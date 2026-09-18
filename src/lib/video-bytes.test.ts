@@ -156,6 +156,36 @@ describe('stripVideoMetadata', () => {
     expect(stripVideoMetadata(file, 'video/mp4')).toBe(file);
   });
 
+  it('leaves the caller\u2019s own array alone by default', () => {
+    const file = concat(FTYP, box('moov', box('udta', XYZ)), box('mdat', [0]));
+    const before = [...file];
+
+    const out = stripVideoMetadata(file, 'video/mp4');
+
+    expect(out).not.toBe(file);
+    expect(holds(out, '+51.5074')).toBe(false);
+    expect([...file]).toEqual(before);
+  });
+
+  it('redacts the caller\u2019s own array when asked to work in place', () => {
+    // The send path's case: it owns the buffer outright, and the copy the
+    // default makes is a whole video on a phone's heap.
+    const file = concat(FTYP, box('moov', box('udta', XYZ)), box('mdat', [0]));
+
+    const out = stripVideoMetadata(file, 'video/mp4', true);
+
+    expect(out).toBe(file);
+    expect(holds(file, '+51.5074')).toBe(false);
+  });
+
+  it('still hands back the input untouched in place when there is nothing to do', () => {
+    const file = concat(FTYP, box('moov', trak('vide')), box('mdat', [1]));
+    const before = [...file];
+
+    expect(stripVideoMetadata(file, 'video/mp4', true)).toBe(file);
+    expect([...file]).toEqual(before);
+  });
+
   it('leaves a file that is not ISO base media alone', () => {
     // WebM's magic, in a file claiming to be an MP4.
     const file = concat(new Uint8Array([0x1a, 0x45, 0xdf, 0xa3]), box('udta', XYZ));

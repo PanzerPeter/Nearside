@@ -10,7 +10,13 @@ import {
   selectStaleMedia,
   type MediaRow,
 } from './media';
-import { AUDIO_KEEP_LIMIT, MEDIA_KEEP_LIMIT } from './conversation';
+import {
+  AUDIO_KEEP_LIMIT,
+  AUDIO_TYPES,
+  IMAGE_TYPES,
+  MEDIA_KEEP_LIMIT,
+  VIDEO_TYPES,
+} from './conversation';
 import type { MediaType } from './types';
 
 function file(name: string, type: string): File {
@@ -66,19 +72,15 @@ describe('the object name round-trips', () => {
   // sealed object announces nothing, so what the sender wrote into the name is
   // the only thing the reader has. Every type the picker accepts has to survive
   // the trip.
+  // Taken from the door itself rather than typed out again. The list used to be
+  // a copy, which meant a type added to `classifyMedia` was a type this file
+  // silently stopped covering — and the failure that hides behind that is an
+  // object whose name nothing can read back, decided at upload time and
+  // unfixable afterwards.
   const cases: [string, MediaType][] = [
-    ['image/png', 'image'],
-    ['image/jpeg', 'image'],
-    ['image/webp', 'image'],
-    ['image/gif', 'image'],
-    ['video/mp4', 'video'],
-    ['video/webm', 'video'],
-    ['video/quicktime', 'video'],
-    ['audio/webm', 'audio'],
-    ['audio/ogg', 'audio'],
-    ['audio/mp4', 'audio'],
-    ['audio/aac', 'audio'],
-    ['audio/mpeg', 'audio'],
+    ...IMAGE_TYPES.map((type): [string, MediaType] => [type, 'image']),
+    ...VIDEO_TYPES.map((type): [string, MediaType] => [type, 'video']),
+    ...AUDIO_TYPES.map((type): [string, MediaType] => [type, 'audio']),
   ];
 
   it.each(cases)('%s survives being written into an object name', (type, kind) => {
@@ -318,5 +320,15 @@ describe('bubbleSource', () => {
   it('draws a photo as a still either way', () => {
     expect(bubbleSource('a.jpg', 'a-thumb.webp', 'image').still).toBe(true);
     expect(bubbleSource('a.jpg', null, 'image').still).toBe(true);
+  });
+
+  // How `MediaAttachment` gives up on a preview: it passes null for the
+  // thumbnail rather than keeping a second idea of which object is being drawn.
+  // The element has to follow it back, or the fallback hands the full video to
+  // the <img> the poster had chosen — the same mismatch, one layer along.
+  it('goes back to the player when the preview is abandoned', () => {
+    const drawn = bubbleSource('me/you/clip.mp4', null, 'video');
+    expect(drawn.path).toBe('me/you/clip.mp4');
+    expect(drawn.still).toBe(false);
   });
 });

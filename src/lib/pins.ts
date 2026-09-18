@@ -105,23 +105,57 @@ function pinPath(messageId: string, objectPath: string): string {
   return `${PIN_DIR}/${messageId}${ext ? `.${ext}` : ''}`;
 }
 
+/*
+  Base64 both ways, in pieces rather than in one breath.
+
+  Capacitor's Filesystem takes and returns base64, so a pinned file crosses the
+  bridge as text — and text in this engine is two bytes a character. Building
+  one whole intermediate string first is what made pinning a video the same
+  problem as sending one: a 50 MB file went through a 100 MB binary string on
+  its way to a 134 MB base64 one, and the phone had to hold both at once.
+
+  Both loops therefore carry one small piece at a time. The chunk sizes are what
+  make that exact: 3 bytes encode to 4 characters, so a chunk that is a multiple
+  of 3 produces a whole number of base64 quads with no padding of its own, and
+  the pieces concatenate to precisely what one call would have returned. The
+  decode chunks in multiples of 4 for the same reason. Padding only ever appears
+  at the very end, which is what lets the output be sized up front instead of
+  grown.
+*/
+const B64_ENCODE_CHUNK = 0x8000 * 3;
+const B64_DECODE_CHUNK = 0x8000 * 4;
+
 function toBase64(bytes: Uint8Array): string {
-  let binary = '';
-  // Chunked: `String.fromCharCode(...bytes)` blows the argument limit on
-  // anything larger than a small image, which is most of what gets pinned.
-  const CHUNK = 0x8000;
-  for (let i = 0; i < bytes.length; i += CHUNK) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+  let out = '';
+  for (let i = 0; i < bytes.length; i += B64_ENCODE_CHUNK) {
+    const part = bytes.subarray(i, i + B64_ENCODE_CHUNK);
+    let binary = '';
+    // `String.fromCharCode(...bytes)` blows the argument limit on anything
+    // larger than a small image, which is most of what gets pinned.
+    for (let j = 0; j < part.length; j += 0x8000) {
+      binary += String.fromCharCode(...part.subarray(j, j + 0x8000));
+    }
+    out += btoa(binary);
   }
-  return btoa(binary);
+  return out;
 }
 
 function fromBase64(text: string): Uint8Array {
-  const binary = atob(text);
-  const out = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i += 1) out[i] = binary.charCodeAt(i);
-  return out;
+  const padding = text.endsWith('==') ? 2 : text.endsWith('=') ? 1 : 0;
+  const out = new Uint8Array(Math.max(0, (text.length / 4) * 3 - padding));
+  let at = 0;
+  for (let i = 0; i < text.length; i += B64_DECODE_CHUNK) {
+    const binary = atob(text.slice(i, i + B64_DECODE_CHUNK));
+    for (let j = 0; j < binary.length; j += 1) out[at++] = binary.charCodeAt(j);
+  }
+  // A file written by anything but `toBase64` above — an unpadded encoder, a
+  // truncated read — would leave the tail zeroed rather than announce itself.
+  return at === out.length ? out : out.subarray(0, at);
 }
+
+/** Exported for the test that proves the two agree over the awkward lengths:
+ *  the chunk boundaries, and the three remainders that decide the padding. */
+export const __base64ForTests = { toBase64, fromBase64 };
 
 export async function isPinned(messageId: string): Promise<boolean> {
   return (await cachedPin(messageId)) !== null;

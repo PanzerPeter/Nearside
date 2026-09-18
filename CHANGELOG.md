@@ -14,6 +14,29 @@ one of them drifts.
 
 ## [Unreleased]
 
+## [1.17.3] — 2026-09-19
+
+### Fixed
+
+- Sending a video asks the phone for a good deal less memory than it did. A
+  video was being copied once more than it needed to be on its way out, and the
+  preview frame was being drawn at the exact moment the phone was carrying the
+  most — the file, its encrypted twin and the encryption's own working copies,
+  all at once. On a phone with room to spare none of that showed; on one
+  without, sending a long clip could take the app down with no message at all,
+  which looked like the send failing for no reason. The whole video is also let
+  go of now as soon as it has been encrypted, rather than being held for the
+  minutes the upload takes.
+- A video whose small preview picture cannot be loaded now shows the video
+  itself instead of reporting the message as lost. The preview is a separate
+  file from the video, and losing it never meant losing the video — but the
+  conversation gave up on the message on the strength of its thumbnail.
+- Keeping a video on your device — pinning one, or having Nearside keep it for
+  you — no longer needs roughly three copies of it in memory to write one file.
+- The full-size viewer retries a picture or video that fails to appear, the way
+  the conversation already did. Left open for a long time it could end up
+  showing a black screen with nothing to press.
+
 ## [1.17.2] — 2026-09-17
 
 ### Changed

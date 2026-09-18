@@ -2,7 +2,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { VisualMediaType } from '../lib/types';
 import { useSignedMediaUrl } from '../hooks/useSignedMediaUrl';
 import { MediaLightbox } from './MediaLightbox';
-import { bubbleSource, mediaFailureNotice, videoTrackIsUnsupported } from '../lib/media';
+import {
+  bubbleSource,
+  mediaFailureNotice,
+  videoTrackIsUnsupported,
+  type MediaFailure,
+} from '../lib/media';
 import { ImageOff, Play, VideoOff } from 'lucide-react';
 import { useT } from '../hooks/useT';
 import { useGallery } from '../hooks/useGallery';
@@ -74,10 +79,21 @@ export function MediaAttachment({
   square,
 }: MediaAttachmentProps) {
   const t = useT();
+  // A preview that would not load. The full object is a different object and is
+  // very often still there, so a dead thumbnail must not condemn the message:
+  // it falls back to what every row written before 0044 draws. Without this the
+  // bubble reported the attachment as gone on the strength of its postage stamp.
+  const [previewFailed, setPreviewFailed] = useState(false);
   // The thumbnail when there is one, the full object when there is not, and
   // which of the two decides the element below: a thumbnail is a WebP frame
   // even for a video, so `still` follows the object rather than `type`.
-  const { path: drawPath, still } = bubbleSource(path, thumbPath, type, restored);
+  const { path: drawPath, still } = bubbleSource(
+    path,
+    previewFailed ? null : thumbPath,
+    type,
+    restored
+  );
+  const drawingPreview = drawPath !== path;
   // Deferred: the placeholder below reserves the slot at the right size, so
   // nothing jumps when the picture lands, and a page of thirty messages stops
   // downloading the twenty-five attachments that are nowhere near the screen.
@@ -85,10 +101,32 @@ export function MediaAttachment({
     drawPath,
     mediaKey,
     type,
-    messageId,
+    // Withheld while a preview is being drawn. `messageId` is what lets the
+    // hook answer a missing object with this device's pinned copy, and a pin
+    // holds the full file and never the preview — so offering it here put a
+    // whole video behind the `<img>` that `still` had already chosen, which
+    // cannot decode one. That is the 1.17.1 failure arriving through the pin.
+    drawingPreview ? undefined : messageId,
     true,
     restored
   );
+  // Why the *attachment* cannot be shown, which is not the same question as the
+  // hook's `failure`: that one is about whichever object is currently being
+  // fetched, and a dead preview is answered by fetching the other one. Reading
+  // it straight would also paint the preview's notice for the one frame between
+  // the fallback being decided and the hook being pointed at the full object.
+  const [fullFailure, setFullFailure] = useState<MediaFailure | null>(null);
+  useEffect(() => {
+    if (!failure) return;
+    if (drawingPreview) setPreviewFailed(true);
+    else setFullFailure(failure);
+  }, [failure, drawingPreview]);
+  // A different attachment in the same slot starts over: the thread reuses
+  // these components as it pages.
+  useEffect(() => {
+    setPreviewFailed(false);
+    setFullFailure(null);
+  }, [path, thumbPath]);
   const [viewing, setViewing] = useState(false);
   // Set when this platform demuxed the file but could not decode its picture —
   // an HEVC clip in the desktop shell. Without it the thumbnail is a grey box
@@ -99,17 +137,17 @@ export function MediaAttachment({
   // The caller pulls this component out to the bubble's edges with a negative
   // margin; the placeholder and the failure notice are text, and text wants the
   // padding back.
-  if (failure) {
+  if (fullFailure) {
     // A video this build cannot decode gets the video glyph, matching the
     // notice the viewer already draws for the same file (`MediaLightbox`).
-    const FailIcon = type === 'video' && failure === 'undecodable' ? VideoOff : ImageOff;
+    const FailIcon = type === 'video' && fullFailure === 'undecodable' ? VideoOff : ImageOff;
     return (
       // The bubble may be floating its timestamp over the bottom-right corner
       // on the assumption that a picture is there; the extra right pad keeps
       // the words clear of it.
       <div className="flex items-center gap-2 py-2 pl-3.5 pr-16 text-meta text-muted">
         <FailIcon className="w-4 h-4 shrink-0" />
-        {mediaFailureNotice(failure, type)}
+        {mediaFailureNotice(fullFailure, type)}
       </div>
     );
   }
@@ -310,7 +348,7 @@ function FullSizeViewer({
   // thumbnail, so nothing above this point holds the real file; opening one is
   // the moment the whole object exists on the device, and keeping it here costs
   // no download that was not already happening.
-  const { url, failure } = useSignedMediaUrl(
+  const { url, failure, reload } = useSignedMediaUrl(
     current.path,
     current.mediaKey,
     current.type,
@@ -367,6 +405,7 @@ function FullSizeViewer({
       caption={current.caption}
       // Only the picture the bubble itself drew has already told us this.
       noPicture={current.messageId === messageId ? noPicture : false}
+      onError={reload}
       position={{ index: atIndex + 1, total: items.length }}
       onPrev={atIndex > 0 ? () => step(-1) : undefined}
       onNext={atIndex < items.length - 1 ? () => step(1) : undefined}

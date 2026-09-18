@@ -36,6 +36,12 @@ interface MediaLightboxProps {
    *  the file. Passed so the viewer never mounts a player that would play the
    *  soundtrack of a video it cannot show. */
   noPicture?: boolean;
+  /** The player could not load `url`. The URL belongs to the media cache, and an
+   *  eviction revokes it under whatever is pointing at it — the bubble has had
+   *  this retry since there were signed URLs to expire, and the viewer, which is
+   *  open for far longer, had none: a revoked blob left a black rectangle with
+   *  no message and nothing to press. */
+  onError?: () => void;
   /** Where this file sits among the conversation's pictures, 1-based, and how
    *  many there are. Both null when the viewer was opened from somewhere with
    *  no thread behind it — the pinned-media screen — which is also when the
@@ -72,6 +78,7 @@ export function MediaLightbox({
   position,
   onPrev,
   onNext,
+  onError,
   onClose,
 }: MediaLightboxProps) {
   const t = useT();
@@ -356,6 +363,7 @@ export function MediaLightbox({
             src={url}
             alt={t('media.attachment')}
             className="max-w-full max-h-[85dvh] object-contain"
+            onError={onError}
           />
         ) : noPicture ? (
           // The file is here and intact — it is this build that has no decoder
@@ -381,6 +389,7 @@ export function MediaLightbox({
             // of them would otherwise land on the next video.
             onPointerDown={(e) => e.stopPropagation()}
             onPointerUp={(e) => e.stopPropagation()}
+            onError={onError}
             onLoadedMetadata={(e) => {
               if (videoTrackIsUnsupported(e.currentTarget)) setNoPicture(true);
             }}

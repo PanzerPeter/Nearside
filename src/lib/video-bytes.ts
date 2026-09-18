@@ -209,8 +209,21 @@ export function isStrippableVideo(type: string): boolean {
  * take off. Never throws: a video that cannot be parsed is sent as it is, the
  * same way an unrecognised image is, because refusing to send somebody's video
  * is a worse answer than the one the file already had.
+ *
+ * `inPlace` redacts the caller's own buffer instead of copying it first, and is
+ * only for a caller that owns those bytes outright. The send path is one: the
+ * array came straight off `File.arrayBuffer()` one statement earlier and
+ * nothing else has ever seen it. It matters because the copy this skips is a
+ * whole video — 50 MB on the device least able to spare it, at the moment the
+ * seal is about to ask for three more of them. `lib/media-crypto.ts` declines a
+ * copy on this same path for this same reason; this was the one still being
+ * made.
  */
-export function stripVideoMetadata(bytes: Uint8Array, type: string): Uint8Array {
+export function stripVideoMetadata(
+  bytes: Uint8Array,
+  type: string,
+  inPlace = false
+): Uint8Array {
   if (!isStrippableVideo(type)) return bytes;
   let targets: Box[];
   try {
@@ -220,7 +233,7 @@ export function stripVideoMetadata(bytes: Uint8Array, type: string): Uint8Array 
   }
   if (targets.length === 0) return bytes;
 
-  const out = new Uint8Array(bytes);
+  const out = inPlace ? bytes : new Uint8Array(bytes);
   for (const box of targets) neutralize(out, box);
   return out;
 }

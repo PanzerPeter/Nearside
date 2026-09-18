@@ -97,6 +97,12 @@ export type MediaTarget =
    *  upload refuses rather than trusting the caller to have checked. */
   | { kind: 'room'; roomId: string; roomKey: Uint8Array | null };
 
+/** What the send path puts in place of a plaintext it is done with, so the
+ *  bytes become collectable while the function that read them is still running.
+ *  A `let` holds its value until the call returns, and for a video that value
+ *  is tens of megabytes sitting beside its own ciphertext. */
+const EMPTY_BYTES = new Uint8Array(0);
+
 /** An attachment with no caption. Both columns null, which `has_body` allows
  *  precisely because the row carries a `media_path` instead. */
 type NoBody = { ciphertext: null; nonce: null };
@@ -342,7 +348,45 @@ export function useMediaSend({
       // onto a canvas. Rebuilding a `File` around a 50 MB video to keep the two
       // identical would put a second copy of it on the heap beside the one
       // about to be sealed, on the device least able to afford it.
-      bytes = stripVideoMetadata(bytes, body.type);
+      //
+      // Redacted in place for the same reason. Nothing else has ever held this
+      // array — it came off `arrayBuffer()` one statement ago — and the copy
+      // the pure form would make is another whole video on the heap.
+      //
+      // WebM is accepted by `classifyMedia` and is not an ISO base media file,
+      // so this returns it untouched. That is honest rather than silent: a WebM
+      // comes from a screen recorder or a desktop file rather than a camera,
+      // and it is the one accepted video container this cannot clean.
+      bytes = stripVideoMetadata(bytes, body.type, true);
+    }
+
+    // Read once, because the plaintext itself is released below and a video's
+    // length is still needed after it is gone.
+    const sourceBytes = bytes.byteLength;
+
+    /**
+     * The small copy the conversation will actually draw — see `lib/thumbnail.ts`.
+     *
+     * Drawn *before* the seal, not after. It used to sit below, which put a
+     * video decoder and a canvas on the heap at the exact moment it was already
+     * carrying the plaintext, libsodium's two copies and the ciphertext. Here
+     * the only large thing alive is the file itself.
+     *
+     * Every step of this is allowed to come back empty, and the send carries on
+     * without one: the column stays null, and null is what every row written
+     * before 0044 says. A preview is not worth failing a message over, and the
+     * fallback it lands on is the behaviour this whole feature replaced.
+     */
+    let rawThumb: Blob | null = null;
+    if (shouldMakeThumbnail(kind, sourceBytes, false)) {
+      try {
+        rawThumb = kind === 'video' ? await videoPoster(body) : await imageThumbnail(body, bytes);
+      } catch {
+        // A codec this device does not have, a canvas that would not draw, a
+        // video that never seeks. All of them mean "no preview", never "no
+        // message".
+        rawThumb = null;
+      }
     }
 
     // Sealed after compression, never before: compressImage decodes an image,
@@ -356,6 +400,19 @@ export function useMediaSend({
     } catch (error) {
       return fail(describeMediaError(error), error);
     }
+    // The plaintext is not needed again, and an upload is the longest-running
+    // step in a send: holding a whole video here would keep it resident beside
+    // its own ciphertext for however many minutes the bytes take to leave the
+    // phone. `sourceBytes` above is the only thing anything below still wants.
+    //
+    // The rule is right that nothing reads the value, and that is the point —
+    // what is being written is the *reference*. This function suspends at every
+    // `await` below, and a suspended async frame keeps every binding it declared
+    // alive whether or not anything will read it again, so dropping the last
+    // pointer is the only thing that lets a video be collected before the
+    // upload finishes.
+    // eslint-disable-next-line no-useless-assignment
+    bytes = EMPTY_BYTES;
 
     // The bucket's own ceiling, checked before the upload rather than left to
     // Storage. The seal adds a nonce and an authentication tag, so a file that
@@ -372,28 +429,15 @@ export function useMediaSend({
     // visible to anyone who can list the bucket.
     const filename = `${crypto.randomUUID()}.${fileExtension(body)}`;
 
-    /**
-     * The small copy the conversation will actually draw, sealed under the same
-     * key as the object it belongs to — see `lib/thumbnail.ts`.
-     *
-     * Every step of this is allowed to come back empty, and the send carries on
-     * without one: the column stays null, and null is what every row written
-     * before 0044 says. A preview is not worth failing a message over, and the
-     * fallback it lands on is the behaviour this whole feature replaced.
-     */
+    // Sealed under the same key as the object it belongs to, which is why this
+    // half waits for `sealFile` above while the drawing did not. Checked
+    // against the *compressed* source, which is what the reader would otherwise
+    // have downloaded.
     let sealedThumb: Blob | null = null;
-    if (shouldMakeThumbnail(kind, bytes.byteLength, false)) {
+    if (rawThumb && worthUploading(sourceBytes, rawThumb.size)) {
       try {
-        const raw = kind === 'video' ? await videoPoster(body) : await imageThumbnail(body, bytes);
-        // Checked against the *compressed* source, which is what the reader
-        // would otherwise have downloaded.
-        if (raw && worthUploading(bytes.byteLength, raw.size)) {
-          sealedThumb = await sealFileWith(new Uint8Array(await raw.arrayBuffer()), fileKey);
-        }
+        sealedThumb = await sealFileWith(new Uint8Array(await rawThumb.arrayBuffer()), fileKey);
       } catch {
-        // A codec this device does not have, a canvas that would not draw, a
-        // video that never seeks. All of them mean "no preview", never "no
-        // message".
         sealedThumb = null;
       }
     }
