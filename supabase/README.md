@@ -34,6 +34,36 @@ SELECT cron.schedule('nearside-expire', '* * * * *',
 nothing about the shapes that came before, so it must never be run against a
 database that already holds data.
 
+Then, in the dashboard, **Authentication → URL Configuration**: add your site
+URL and a `/*` redirect so password-reset links come back, and add both deep
+links to **Additional Redirect URLs**. GoTrue rejects any `redirect_to` not on
+the list, and the emailed link then falls back to the site URL, which no phone
+can open:
+
+```
+app.nearside://auth/confirm
+app.nearside://auth/recovery
+```
+
+Last, the edge functions. `delete-account` needs no configuration; the other
+three are optional and inert until their secrets are set:
+
+```bash
+supabase functions deploy send-push --no-verify-jwt
+supabase secrets set ONESIGNAL_APP_ID=... ONESIGNAL_REST_API_KEY=...
+
+supabase functions deploy call-ring     # the push that wakes a locked phone
+supabase functions deploy call-ice      # short-lived TURN credentials per call
+supabase secrets set CLOUDFLARE_TURN_KEY_ID=... CLOUDFLARE_TURN_API_TOKEN=...
+```
+
+Both keys are server-side only. Vite inlines every `VITE_`-prefixed variable
+into the bundle, so either one in `.env` ships inside every APK — a long-lived
+TURN secret there is a free relay for anyone who unzips it. Without `call-ring`
+a call only reaches a friend who already has the app open; without `call-ice`
+calls fall back to STUN alone and the ones behind carrier-grade NAT never
+connect. What is deployed on the live project is [`SETUP.md`](SETUP.md).
+
 ## Changing the live project
 
 `migrations/` is the only safe path, and it is applied **by hand in the SQL
