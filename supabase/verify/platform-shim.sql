@@ -119,6 +119,30 @@ GRANT USAGE ON SCHEMA storage TO anon, authenticated, service_role;
 GRANT ALL ON storage.objects TO anon, authenticated, service_role;
 GRANT ALL ON storage.buckets TO anon, authenticated, service_role;
 
+-- The platform's delete guard, as supabase/storage migration 0055 installs it.
+-- Without it here the smoke test passed a sweep that the live project had been
+-- rolling back every minute: a statement trigger, so it raises even when the
+-- DELETE would match nothing, and it takes the whole transaction with it.
+CREATE OR REPLACE FUNCTION storage.protect_delete()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF COALESCE(current_setting('storage.allow_delete_query', true), 'false') != 'true' THEN
+    RAISE EXCEPTION 'Direct deletion from storage tables is not allowed. Use the Storage API instead.'
+      USING ERRCODE = '42501';
+  END IF;
+  RETURN NULL;
+END;
+$$;
+
+CREATE TRIGGER protect_buckets_delete
+  BEFORE DELETE ON storage.buckets
+  FOR EACH STATEMENT EXECUTE FUNCTION storage.protect_delete();
+CREATE TRIGGER protect_objects_delete
+  BEFORE DELETE ON storage.objects
+  FOR EACH STATEMENT EXECUTE FUNCTION storage.protect_delete();
+
 -- ---------------------------------------------------------------------------
 -- pg_net. Not installable here, and 0014's trigger is the only caller. The
 -- replay strips its CREATE EXTENSION line (see verify.sh) and uses this stub,

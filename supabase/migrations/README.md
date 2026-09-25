@@ -84,6 +84,7 @@ current state; this table is about what each file *does*.
 | 53 | `0051_expiry_sweeps_the_thumbnail.sql` | The expiry sweep deletes an attachment's thumbnail as well as the full-size object |
 | 54 | `0052_grant_hygiene.sql` | Narrows the privileges on the oldest tables to what their policies allow |
 | 55 | `0053_blocks_and_reports.sql` | `blocks`, enforced on every write into a 1:1 conversation; `reports`, the ticket log for `report-user`. `set_conversation_timer()` now requires a contact. **Deploy `report-user` and redeploy `call-ring` after this** |
+| 56 | `0054_expiry_past_the_storage_guard.sql` | `expire_messages()` sets the flag Supabase's storage delete guard requires. Without it every sweep with an attachment to collect rolled back, and expired messages stayed on the server |
 
 ## The two files that do not follow the numbering
 

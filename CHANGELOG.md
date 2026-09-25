@@ -34,6 +34,12 @@ one of them drifts.
 
 ### Fixed
 
+- Disappearing messages are deleted from the server again. A storage
+  safeguard Supabase added made the minute-by-minute cleanup fail whenever an
+  expired message had a photo, video or file attached, and the failure undid
+  the whole run, text messages included. Nothing expired reappeared in the
+  app, but it stayed on the server until now. The first cleanup after the
+  update removes everything that piled up.
 - Changing the disappearing-messages timer in a one-to-one chat now says so
   when it fails, instead of doing nothing.
 - Accepting or declining a request that did not reach the server now says so.

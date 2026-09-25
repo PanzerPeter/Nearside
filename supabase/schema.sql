@@ -2554,7 +2554,13 @@ BEGIN
 
   -- Best effort. The rows above held the only copies of these files' keys, so
   -- the bytes are already unopenable; this reclaims the listing.
+  --
+  -- The flag is what the Storage API sets for itself (0054). Without it the
+  -- platform's `protect_delete` trigger raises, and the raise rolls back every
+  -- delete above: expired messages stayed on the server, retried every minute.
+  -- Transaction-local, so it opens nothing beyond this call.
   IF array_length(doomed, 1) > 0 THEN
+    PERFORM set_config('storage.allow_delete_query', 'true', true);
     DELETE FROM storage.objects
      WHERE bucket_id = 'chat-media' AND name = ANY (doomed);
   END IF;

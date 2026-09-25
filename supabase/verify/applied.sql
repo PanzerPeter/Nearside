@@ -233,6 +233,8 @@ checks(ord, migration, proves, ok) AS (VALUES
        (SELECT count(*) = 2 FROM tbls WHERE name IN ('blocks','reports'))
         AND EXISTS (SELECT 1 FROM fns WHERE name = 'is_blocked_pair')
         AND EXISTS (SELECT 1 FROM pubs WHERE name = 'blocks')),
+  (56, '0054_expiry_past_the_storage_guard', 'expire_messages() sets storage.allow_delete_query',
+       EXISTS (SELECT 1 FROM fns WHERE name = 'expire_messages' AND src LIKE '%allow_delete_query%')),
 
   -- Not migrations, but the same question: applied by hand, and nothing
   -- complains when they were not.

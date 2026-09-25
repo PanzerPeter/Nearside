@@ -63,3 +63,4 @@
 0051_expiry_sweeps_the_thumbnail.sql
 0052_grant_hygiene.sql
 0053_blocks_and_reports.sql
+0054_expiry_past_the_storage_guard.sql
