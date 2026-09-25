@@ -51,14 +51,14 @@ as "Unavailable" rather than as an error:
 
 ### What a purchase actually does
 
-`purchasePack()` hands the RevenueCat package to Play's billing sheet. On
+`purchasePack()` hands the RevenueCat package to the store's billing sheet. On
 success the entitlement id, which is the pack id, appears in
 `customerInfo.entitlements.active`, `ThemeStore` adds it to the owned set and
 applies the theme immediately. Nothing is written to Supabase: ownership is
 RevenueCat's record, keyed to the Supabase user id through `Purchases.logIn()`,
 so the pack follows the account rather than the phone. Reinstalling, or signing
-in on a second device, needs **Restore purchases**; Play requires that button to
-exist and a user on a new phone genuinely needs it.
+in on a second device, needs **Restore purchases**. Both stores expect that button,
+and a user on a new phone needs it.
 
 At boot `ownedPacks()` reconciles: a stored theme whose pack is no longer owned
 falls back to the default, so a refund does not leave the paid-for look in

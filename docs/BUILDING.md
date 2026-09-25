@@ -5,17 +5,22 @@ run a Vite build with `NEARSIDE_NATIVE=1` and copy it into the native project.
 That flag disables the PWA service worker: a Workbox precache inside a WebView
 keeps serving the previous build after an app update.
 
+The Electron desktop shell is a convenience build, not a shipping target, and
+is covered in [commands.md](../commands.md).
+
 ## Android
 
-`applicationId` `app.nearside`, compile and target SDK 36, JDK 21.
+`applicationId` `app.nearside`, compile and target SDK 36, minimum SDK 24,
+JDK 21.
 
 ```bash
 npm run android:sync
-cd android && JAVA_HOME=/usr/lib/jvm/java-21-openjdk ./gradlew assembleDebug
+cd android && JAVA_HOME=/usr/lib/jvm/java-21-openjdk ./gradlew assembleDebug    # emulator
+cd android && JAVA_HOME=/usr/lib/jvm/java-21-openjdk ./gradlew assembleRelease  # phone
 ```
 
 Set `JAVA_HOME` explicitly wherever the system default JDK is newer than 21.
-Gradle 8.14 fails at configuration time on a newer JDK, without a useful
+The Gradle 8.14 wrapper fails at configuration time on a newer JDK, without a useful
 message. It finds the SDK through `android/local.properties`, gitignored, one
 line:
 
@@ -41,6 +46,19 @@ keyPassword=…
 ```
 
 Release builds are unsigned without it. Debug builds do not need it.
+
+### Which build goes where
+
+The emulator carries the debug-signed app; the release APK is signed with the
+upload key and belongs on a physical phone. Installing a release build over a
+debug one fails with `INSTALL_FAILED_UPDATE_INCOMPATIBLE`. **Do not fix that
+with `adb uninstall`.** The identity seed lives in the Android Keystore, it is
+the only copy, and uninstalling deletes it. The account on that device is then
+recoverable only from its twelve words. Build the matching variant instead:
+
+```bash
+~/Android/Sdk/platform-tools/adb install -r android/app/build/outputs/apk/debug/app-debug.apk
+```
 
 ## iOS
 

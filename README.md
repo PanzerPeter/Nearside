@@ -13,7 +13,7 @@ the device and nothing readable on the server.
 **The server holds no message bodies.** Not encrypted-at-rest by the operator:
 absent. Migration `0023` dropped the `content` column and the server-side search
 that read it, so there is no column a plaintext could arrive in. The cost is
-paid openly — search and previews read a local SQLite mirror of what *this
+paid openly: search and previews read a local SQLite mirror of what *this
 device* decrypted, so a conversation is unsearchable on a phone that never
 loaded it.
 
@@ -48,8 +48,8 @@ note-to-self vault pinned to the top of the list.
 
 **Rooms.** One symmetric key per room, sealed to each member, so adding someone
 is one row rather than a re-encryption of the history. A message whose signature
-fails renders as a warning rather than disappearing — a dropped message is an
-attack the user never learns about. `@` completes against the member list on the
+fails renders as a warning rather than disappearing, because a dropped message
+is an attack the user never learns about. `@` completes against the member list on the
 device, since the mention travels inside the sealed body.
 
 **Media.** Images re-encode to WebP on the device, which drops EXIF on the way;
@@ -72,7 +72,8 @@ is no `calls` table and no record a call happened. A locked phone rings through
 a full-screen notification and answering goes straight to "Connecting…".
 
 **Trust.** Safety numbers, a verified badge in the header, and a blocked
-composer when a contact's key changes.
+composer when a contact's key changes. The app does not guess whether that was
+a reinstall or an interception.
 
 **Block and report.** A block is enforced by the database, not the app: no
 message, edit, reaction, pin, timer change or call gets through in either
@@ -81,12 +82,11 @@ Each direction is its own row, so when both have blocked, one unblocking does
 not reopen the conversation. A report is emailed to the team as a ticket, and
 the reporter chooses whether to include the last 30 messages. That choice is
 the only way a message body ever leaves a device in readable form, and the
-database keeps a who-reported-whom row and none of the text. The app does not guess whether that was a
-reinstall or an interception.
+database keeps a who-reported-whom row and none of the text.
 
 **Sealed exchange.** A question carrying the asker's own answer, where neither
 side reads the other's until both exist. The referee is the SELECT policy on
-`sealed_answers`, not a client-side check — this repository is public, and a
+`sealed_answers`, not a client-side check. This repository is public, and a
 check in the client is one anyone can delete.
 
 **In this conversation.** A panel pulling the days somebody named and the links
@@ -126,7 +126,7 @@ key, and a vault key for your own data.
 | --- | --- |
 | Self-chat | `crypto_secretbox` under the vault key |
 | One-to-one | `crypto_box` to the peer's published public key |
-| Room | one room key sealed per member, plus an Ed25519 signature **verified before decryption** — every member holds the room key, so only the signature establishes authorship |
+| Room | one room key sealed per member, plus an Ed25519 signature **verified before decryption**, since every member holds the room key and only the signature establishes authorship |
 | Attachment | a random per-file key, uploaded as `application/octet-stream` with the nonce prepended, the key travelling sealed in the message row |
 | Sticker, chat background, private nickname | the owner's vault key, label and nickname sealed alongside the file |
 
@@ -162,7 +162,7 @@ The app ships a screen saying this too.
 
 ## Quick start
 
-Node 22, and a Supabase project.
+You need Node 22 and a Supabase project.
 
 ```bash
 npm install
@@ -170,17 +170,17 @@ cp .env.example .env      # VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY
 npm run dev
 ```
 
-The server side — schema, buckets, `pg_cron`, the auth redirect URLs and the
-five edge functions — is [`supabase/README.md`](supabase/README.md). Read it
+Server setup (schema, buckets, `pg_cron`, the auth redirect URLs and the five
+edge functions) is in [`supabase/README.md`](supabase/README.md). Read it
 before touching a live project: apply order is not numeric order, and
 `npm run db:verify` is the dry-run.
 
 Native builds need Android SDK 36 with JDK 21, or macOS with Xcode 15+ and
-CocoaPods. `npm run android:sync` then `./gradlew assembleDebug`;
-[docs/BUILDING.md](docs/BUILDING.md) has signing, the R8 rules a missing entry
+CocoaPods. `npm run android:sync` then `./gradlew assembleDebug`.
+[docs/BUILDING.md](docs/BUILDING.md) covers signing, the R8 rules a missing entry
 turns into a runtime crash, and the iOS project, which is configured but has
 never been compiled. The Electron shell in `electron/` is a convenience build
-with no Keystore, no local mirror and no QR scanning — [commands.md](commands.md).
+with no Keystore, no local mirror and no QR scanning; see [commands.md](commands.md).
 
 | Command | Purpose |
 | --- | --- |
