@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { EyeOff } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { loadChatFlags, setDismissed } from '../../lib/chat-flags';
@@ -6,6 +6,9 @@ import type { Profile } from '../../lib/types';
 import { Card, Note, SettingsPage } from './SettingsUi';
 import { Avatar } from '../Avatar';
 import { useT } from '../../hooks/useT';
+import { useToast } from '../../hooks/useToast';
+import { useBlockRows } from '../../hooks/useBlocks';
+import { unblockUser } from '../../lib/blocks';
 
 interface HiddenRequestsProps {
   onBack: () => void;
@@ -23,6 +26,44 @@ export function HiddenRequests({ onBack }: HiddenRequestsProps) {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
   const t = useT();
+  const toast = useToast();
+
+  // The people this account has blocked. Listed here as well as in their
+  // conversation, because "Delete chat" removes the conversation and leaves
+  // the block — and a block with no screen is one nobody can lift.
+  const [me, setMe] = useState<string | null>(null);
+  const [blockedProfiles, setBlockedProfiles] = useState<Profile[]>([]);
+  const blockRows = useBlockRows();
+  const blockedIds = useMemo(
+    () => (me ? blockRows.filter((r) => r.blocker_id === me).map((r) => r.blocked_id) : []),
+    [blockRows, me]
+  );
+  useEffect(() => {
+    void supabase.auth.getSession().then(({ data }) => setMe(data.session?.user.id ?? null));
+  }, []);
+  useEffect(() => {
+    if (blockedIds.length === 0) {
+      setBlockedProfiles([]);
+      return;
+    }
+    let alive = true;
+    void supabase
+      .from('profiles')
+      .select('id, display_name, avatar_url')
+      .in('id', blockedIds)
+      .then(({ data }) => {
+        if (!alive) return;
+        const found = (data as Profile[] | null) ?? [];
+        setBlockedProfiles(
+          blockedIds.map(
+            (id) => found.find((p) => p.id === id) ?? { id, display_name: '', avatar_url: null }
+          )
+        );
+      });
+    return () => {
+      alive = false;
+    };
+  }, [blockedIds]);
 
   const load = useCallback(async () => {
     const flags = await loadChatFlags();
@@ -55,6 +96,27 @@ export function HiddenRequests({ onBack }: HiddenRequestsProps) {
 
   return (
     <SettingsPage title={t('hidden.title')} onBack={onBack}>
+      {blockedProfiles.length > 0 && me && (
+        <Card title={t('block.settingsTitle')}>
+          {blockedProfiles.map((profile) => (
+            <div key={profile.id} className="flex items-center gap-3 px-3 py-2.5">
+              <Avatar display_name={profile.display_name} url={profile.avatar_url} size={32} />
+              <span className="flex-1 min-w-0 truncate text-body">
+                {profile.display_name ? `@${profile.display_name}` : t('hidden.deletedAccount')}
+              </span>
+              <button
+                className="btn btn-ghost btn-xs"
+                onClick={async () => {
+                  if (!(await unblockUser(me, profile.id))) toast.error(t('block.failed'));
+                }}
+              >
+                {t('chat.unblock')}
+              </button>
+            </div>
+          ))}
+        </Card>
+      )}
+
       <Card>
         {loading ? (
           <p className="px-3 py-3 text-body text-muted">{t('common.loading')}</p>

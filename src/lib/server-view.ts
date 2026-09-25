@@ -97,6 +97,24 @@ export const TABLE_REPORTS: TableSpec[] = [
     note: 'server.friendships.note',
   },
   {
+    table: 'blocks',
+    group: 'about-you',
+    label: 'server.blocks.label',
+    readable: ['blocker_id', 'blocked_id', 'created_at'],
+    opaque: [],
+    note: 'server.blocks.note',
+  },
+  {
+    table: 'reports',
+    group: 'about-you',
+    label: 'server.reports.label',
+    readable: ['id', 'reporter_id', 'reported_id', 'created_at'],
+    // Nothing sealed, and nothing written: the complaint and any quoted
+    // messages go by email and never reach a column.
+    opaque: [],
+    note: 'server.reports.note',
+  },
+  {
     table: 'messages',
     group: 'content',
     label: 'server.messages.label',

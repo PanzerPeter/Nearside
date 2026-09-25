@@ -62,3 +62,4 @@
 0050_pin_realtime.sql
 0051_expiry_sweeps_the_thumbnail.sql
 0052_grant_hygiene.sql
+0053_blocks_and_reports.sql

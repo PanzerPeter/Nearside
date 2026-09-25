@@ -52,9 +52,11 @@ function ensureConfigured(): Config | null {
 
 const AVATARS_BUCKET = "avatars";
 const MEDIA_BUCKET = "chat-media";
-// Personal scale (<50 accounts, <20 friends each), so one page is the whole
-// listing; a larger page would still be a single round trip either way.
-const LIST_LIMIT = 1000;
+const STICKERS_BUCKET = "stickers";
+// Storage lists and removes in pages. A long conversation holds thousands of
+// objects — every photo is two, the file and its thumbnail — so one page was
+// never the whole folder, and the rest outlived the account that owned it.
+const PAGE = 1000;
 
 function json(body: unknown, status: number) {
   return new Response(JSON.stringify(body), {
@@ -85,21 +87,27 @@ function isConversationFolder(folder: string, uid: string): boolean {
 }
 
 async function listNames(storage: StorageClient, bucket: string, prefix: string) {
-  const { data, error } = await storage.from(bucket).list(prefix, { limit: LIST_LIMIT });
-  if (error) throw new Error(`listing ${bucket}/${prefix}: ${error.message}`);
-  const entries = data ?? [];
-  // A full page means there may be more we never asked for — at this scale
-  // that means a listing (and therefore the delete) silently missed objects,
-  // which is the one failure mode this function can't detect for itself.
-  if (entries.length === LIST_LIMIT) {
-    console.warn(`listing ${bucket}/${prefix} returned ${LIST_LIMIT} entries — possible truncation`);
+  const entries: { name: string; id: string | null }[] = [];
+  for (let offset = 0; ; offset += PAGE) {
+    const { data, error } = await storage.from(bucket).list(prefix, { limit: PAGE, offset });
+    if (error) throw new Error(`listing ${bucket}/${prefix}: ${error.message}`);
+    const page = data ?? [];
+    entries.push(...page);
+    if (page.length < PAGE) return entries;
   }
-  return entries;
 }
 
 /** Every object path under `avatars/{uid}/`. */
 async function avatarPaths(storage: StorageClient, uid: string): Promise<string[]> {
   const entries = await listNames(storage, AVATARS_BUCKET, uid);
+  return entries.map((e) => `${uid}/${e.name}`);
+}
+
+/** Every object under `stickers/{uid}/` — the sticker library, which is
+ *  owner-only and so goes with its owner. Sealed under a vault key that no
+ *  longer exists after this, but still bytes billed to nobody. */
+async function stickerPaths(storage: StorageClient, uid: string): Promise<string[]> {
+  const entries = await listNames(storage, STICKERS_BUCKET, uid);
   return entries.map((e) => `${uid}/${e.name}`);
 }
 
@@ -141,9 +149,10 @@ async function roomMediaPaths(
 }
 
 async function removeAll(storage: StorageClient, bucket: string, paths: string[]) {
-  if (paths.length === 0) return;
-  const { error } = await storage.from(bucket).remove(paths);
-  if (error) throw new Error(`removing from ${bucket}: ${error.message}`);
+  for (let i = 0; i < paths.length; i += PAGE) {
+    const { error } = await storage.from(bucket).remove(paths.slice(i, i + PAGE));
+    if (error) throw new Error(`removing from ${bucket}: ${error.message}`);
+  }
 }
 
 Deno.serve(async (req) => {
@@ -177,6 +186,7 @@ Deno.serve(async (req) => {
     await removeAll(admin.storage, AVATARS_BUCKET, await avatarPaths(admin.storage, uid));
     await removeAll(admin.storage, MEDIA_BUCKET, await mediaPaths(admin.storage, uid));
     await removeAll(admin.storage, MEDIA_BUCKET, await roomMediaPaths(admin, uid));
+    await removeAll(admin.storage, STICKERS_BUCKET, await stickerPaths(admin.storage, uid));
 
     // There is no table to clear by hand before this. The invite_codes cleanup
     // that used to sit here outlived its table — 0019 opened signup and dropped

@@ -46,7 +46,7 @@ app.nearside://auth/recovery
 ```
 
 Last, the edge functions. `delete-account` needs no configuration; the other
-three are optional and inert until their secrets are set:
+four are optional and inert until their secrets are set:
 
 ```bash
 supabase functions deploy send-push --no-verify-jwt
@@ -55,6 +55,9 @@ supabase secrets set ONESIGNAL_APP_ID=... ONESIGNAL_REST_API_KEY=...
 supabase functions deploy call-ring     # the push that wakes a locked phone
 supabase functions deploy call-ice      # short-lived TURN credentials per call
 supabase secrets set CLOUDFLARE_TURN_KEY_ID=... CLOUDFLARE_TURN_API_TOKEN=...
+
+supabase functions deploy report-user   # Report → email ticket to the inbox
+supabase secrets set RESEND_API_KEY=...
 ```
 
 Both keys are server-side only. Vite inlines every `VITE_`-prefixed variable

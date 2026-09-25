@@ -277,7 +277,12 @@ function AddSomeone({ me, onConnected, toastError, toastSuccess }: AddSomeonePro
                 // second, independently acceptable row.
                 /duplicate key|unique constraint/i.test(error.message)
                 ? t('connect.raced')
-                : error.message
+                : // `friendships_insert_own` refuses a pair with a block in
+                  // either direction (0053). Postgres names that as a policy
+                  // violation, which is no sentence to show anybody.
+                  /row-level security/i.test(error.message)
+                  ? t('connect.unavailable')
+                  : error.message
           );
           return;
         }

@@ -16,8 +16,8 @@
 //
 // Authorisation is the part worth reading twice. Anyone could otherwise ring
 // any account, repeatedly, from a script — a notification-spam primitive with
-// no message to report. So the caller must be signed in *and* an accepted
-// friend of the person being rung.
+// no message to report. So the caller must be signed in, an accepted friend of
+// the person being rung, and not on either side of a block.
 //
 // Required Edge Function secrets:
 //   ONESIGNAL_APP_ID       — same id the client ships (VITE_ONESIGNAL_APP_ID)
@@ -56,6 +56,8 @@ const ANDROID_CHANNEL_ID = "93c11c0a-4c75-4c56-9c38-dd235fbed183";
  *  ended two minutes ago. */
 const TTL_SECONDS = 45;
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 function json(body: unknown, status: number): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -77,6 +79,10 @@ Deno.serve(async (req) => {
       kind?: string;
     };
     if (!peer_id || !call_id) return json({ error: "peer_id and call_id required" }, 400);
+    // Checked, not escaped: `peer_id` is spliced into the `.or()` filter
+    // strings below, and a value carrying a comma or a paren would end the
+    // expression early and match a wider set than the pair.
+    if (!UUID.test(peer_id)) return json({ error: "peer_id must be a uuid" }, 400);
 
     const asUser = createClient(SUPABASE_URL, ANON, {
       global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } },
@@ -103,6 +109,20 @@ Deno.serve(async (req) => {
       )
       .maybeSingle();
     if (!friendship) return json({ error: "not-a-contact" }, 403);
+
+    // A block keeps the friendship (0053), so it has to be asked for on its
+    // own. Either direction: a blocked person cannot ring, and nobody rings a
+    // person they have blocked without unblocking first.
+    const { data: block } = await admin
+      .from("blocks")
+      .select("blocker_id")
+      .or(
+        `and(blocker_id.eq.${caller},blocked_id.eq.${peer_id}),` +
+          `and(blocker_id.eq.${peer_id},blocked_id.eq.${caller})`
+      )
+      .limit(1)
+      .maybeSingle();
+    if (block) return json({ error: "blocked" }, 403);
 
     const { data: profile } = await admin
       .from("profiles")

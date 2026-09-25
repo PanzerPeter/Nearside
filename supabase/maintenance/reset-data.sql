@@ -66,7 +66,8 @@
 -- Every table in `public` reaches `auth.users` by a chain of
 -- `REFERENCES ... ON DELETE CASCADE` — through `profiles` for the messaging
 -- tables, directly for `connect_tokens`, `rooms` and the three room tables.
--- So this one statement empties `profiles`, `friendships`, `connect_tokens`,
+-- So this one statement empties `profiles`, `friendships`, `blocks`, `reports`,
+-- `connect_tokens`,
 -- `messages`, `message_reactions`, `message_receipts`, `receipt_prefs`,
 -- `sealed_answers`, `stickers`, `chat_backgrounds`, `friend_nicknames`, `rooms`,
 -- `room_participants`, `room_keys`, `room_messages`, `room_message_reactions`,
@@ -103,6 +104,8 @@ DELETE FROM auth.users;
 SELECT 'auth.users'            AS relation, count(*) FROM auth.users
 UNION ALL SELECT 'profiles',            count(*) FROM public.profiles
 UNION ALL SELECT 'friendships',         count(*) FROM public.friendships
+UNION ALL SELECT 'blocks',              count(*) FROM public.blocks
+UNION ALL SELECT 'reports',             count(*) FROM public.reports
 UNION ALL SELECT 'connect_tokens',      count(*) FROM public.connect_tokens
 UNION ALL SELECT 'messages',            count(*) FROM public.messages
 UNION ALL SELECT 'message_reactions',   count(*) FROM public.message_reactions

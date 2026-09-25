@@ -256,10 +256,17 @@ export function useChatThread({
   const changeTimer = useCallback(
     async (seconds: number | null) => {
       if (!peerId) return;
-      await saveConversationTimer(peerId, seconds);
-      setTimer(await loadConversationTimer(me, peerId));
+      // The caller fires this and forgets it, so a refusal here — offline, a
+      // removed contact, a block — used to be an unhandled rejection and a
+      // menu that silently did nothing.
+      try {
+        await saveConversationTimer(peerId, seconds);
+        setTimer(await loadConversationTimer(me, peerId));
+      } catch {
+        onError(t('room.timerFailed'));
+      }
     },
-    [me, peerId]
+    [me, peerId, onError]
   );
 
   // Fast while realtime is down, which some networks and VPN routes cause by

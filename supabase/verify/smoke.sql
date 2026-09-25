@@ -172,4 +172,78 @@ BEGIN
 END;
 $$;
 
+-- ---------------------------------------------------------------------------
+-- Blocks (0053), checked through RLS rather than around it: the policies are
+-- the feature, so these run as `authenticated` with the caller set by claim.
+--
+-- The case worth a test is the one people get wrong. Both have blocked; one
+-- unblocks; the conversation must stay shut, because the other row stands.
+-- ---------------------------------------------------------------------------
+
+INSERT INTO public.friendships (requester_id, addressee_id, status) VALUES
+  ('aaaaaaaa-0000-0000-0000-000000000001', 'bbbbbbbb-0000-0000-0000-000000000002', 'accepted');
+INSERT INTO public.blocks (blocker_id, blocked_id) VALUES
+  ('aaaaaaaa-0000-0000-0000-000000000001', 'bbbbbbbb-0000-0000-0000-000000000002'),
+  ('bbbbbbbb-0000-0000-0000-000000000002', 'aaaaaaaa-0000-0000-0000-000000000001');
+
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000002';
+
+-- Bob lifts his own block, and cannot lift Alice's.
+DELETE FROM public.blocks WHERE blocker_id = 'bbbbbbbb-0000-0000-0000-000000000002';
+DELETE FROM public.blocks WHERE blocker_id = 'aaaaaaaa-0000-0000-0000-000000000001';
+
+DO $$
+DECLARE
+  refused boolean := false;
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM public.blocks
+                  WHERE blocker_id = 'aaaaaaaa-0000-0000-0000-000000000001') THEN
+    RAISE EXCEPTION 'blocks: the blocked person removed the blocker''s row';
+  END IF;
+  BEGIN
+    INSERT INTO public.messages (user_id, receiver_id, ciphertext, nonce) VALUES
+      ('bbbbbbbb-0000-0000-0000-000000000002',
+       'aaaaaaaa-0000-0000-0000-000000000001', 'sealed', 'nonce');
+  EXCEPTION WHEN insufficient_privilege THEN
+    refused := true;
+  END;
+  IF NOT refused THEN
+    RAISE EXCEPTION 'blocks: a message got through while the other side still blocks';
+  END IF;
+  -- The history stays readable to the blocked side.
+  IF NOT EXISTS (SELECT 1 FROM public.messages
+                  WHERE id = 'cccccccc-0000-0000-0000-000000000003') THEN
+    RAISE EXCEPTION 'blocks: the blocked side lost the conversation history';
+  END IF;
+END;
+$$;
+
+SET LOCAL request.jwt.claim.sub = 'aaaaaaaa-0000-0000-0000-000000000001';
+
+DO $$
+DECLARE
+  refused boolean := false;
+BEGIN
+  BEGIN
+    PERFORM public.set_conversation_pin(
+      'bbbbbbbb-0000-0000-0000-000000000002',
+      'cccccccc-0000-0000-0000-000000000003');
+  EXCEPTION WHEN OTHERS THEN
+    refused := true;
+  END;
+  IF NOT refused THEN
+    RAISE EXCEPTION 'blocks: set_conversation_pin() pinned into a blocked conversation';
+  END IF;
+END;
+$$;
+
+-- Alice lifts hers; now nobody blocks and the conversation opens again.
+DELETE FROM public.blocks WHERE blocker_id = 'aaaaaaaa-0000-0000-0000-000000000001';
+INSERT INTO public.messages (user_id, receiver_id, ciphertext, nonce) VALUES
+  ('aaaaaaaa-0000-0000-0000-000000000001',
+   'bbbbbbbb-0000-0000-0000-000000000002', 'sealed', 'nonce');
+
+RESET ROLE;
+
 ROLLBACK;

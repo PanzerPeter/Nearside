@@ -168,6 +168,14 @@ export const privacySections: LegalSection[] = [
           model, and the operating system version. They contain no message content.
         </p>
         <p>
+          A report you file about another person is emailed to us through Resend. It carries your
+          complaint, both accounts&rsquo; display names and identifiers, and, only if you choose to
+          include them, the last 30 messages of that conversation as your device decrypted them.
+          This is the only way anyone at Nearside ever reads a message, and it happens only when
+          you send it. The text is not stored in our database; we keep a record that a report was
+          filed, by whom, about whom, and when.
+        </p>
+        <p>
           Theme purchases and voluntary contributions go through the app store&rsquo;s billing and
           are tracked by RevenueCat, which receives your account identifier and the purchase
           receipt. Neither ever sees a message, and neither tells us your name, your address, or

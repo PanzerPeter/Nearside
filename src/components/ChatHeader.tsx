@@ -7,9 +7,11 @@ import { formatLastSeen } from '../lib/time';
 import { useConnection, useDegraded } from '../lib/connection';
 import {
   ArrowLeft,
+  Ban,
   BellRing,
   CalendarClock,
   FileDown,
+  Flag,
   Image as ImageIcon,
   Lock,
   MoreVertical,
@@ -24,6 +26,7 @@ import {
 } from 'lucide-react';
 import type { CallKind } from '../lib/call/types';
 import type { AlertLevel } from '../lib/chat-flags';
+import type { BlockStatus } from '../lib/blocks';
 import { formatTtl, TTL_OPTIONS, type ConversationTimer } from '../lib/disappearing';
 import { useT } from '../hooks/useT';
 
@@ -74,6 +77,12 @@ interface ChatHeaderProps {
    *  key — a call is sealed to that key exactly like a message, so there is
    *  nothing to dial. */
   canCall: boolean;
+  /** Where a block stands between the two of you. Anything but 'none' closes
+   *  the conversation to new writes, so the entries that write are hidden. */
+  blockStatus: BlockStatus;
+  onBlock: () => void;
+  onUnblock: () => void;
+  onReport: () => void;
 }
 
 /** How long realtime has to stay down before this header mentions it. The app
@@ -112,6 +121,10 @@ export function ChatHeader({
   onSetTimer,
   onCall,
   canCall,
+  blockStatus,
+  onBlock,
+  onUnblock,
+  onReport,
 }: ChatHeaderProps) {
   // The only place in the app that mentions its own connection, and it borrows
   // a line that already exists rather than covering the top of the screen. Both
@@ -119,6 +132,8 @@ export function ChatHeader({
   // and lift the phone passes through, and it is the larger claim of the two.
   const t = useT();
   const { online } = useConnection();
+  const blocked = blockStatus !== 'none';
+  const blockedByMe = blockStatus === 'byMe' || blockStatus === 'both';
   const connectionNote = useDegraded(CONNECTION_NOTICE_MS)
     ? online
       ? t('chat.connecting')
@@ -201,6 +216,14 @@ export function ChatHeader({
             // itself; what is worth saying here is that nobody else can read
             // any of it.
             <span>{t('chat.onlyYou')}</span>
+          ) : blocked ? (
+            // No presence across a block, in either direction: the app stops
+            // listening for it, and a stale "last seen" would be the one
+            // thing still reporting on the other person.
+            <span className="inline-flex items-center gap-1.5">
+              <Ban className="w-3 h-3" />
+              {t('chat.blocked')}
+            </span>
           ) : friendStatus ? (
             <span className="inline-flex min-w-0 items-center gap-1.5">
               <StatusDot status={friendStatus} size={8} pulse />
@@ -275,7 +298,7 @@ export function ChatHeader({
               something rather than configures something. Absent in the
               self-chat: an exchange with yourself has nothing to withhold, and
               the CHECK constraint on `sealed_prompt` refuses the row anyway. */}
-          {!isSelf && (
+          {!isSelf && !blocked && (
             <li>
               <button
                 onClick={() => {
@@ -330,6 +353,7 @@ export function ChatHeader({
               </button>
             </li>
           )}
+          {!blocked && (
           <li>
             <details>
               <summary>
@@ -356,6 +380,7 @@ export function ChatHeader({
               </ul>
             </details>
           </li>
+          )}
           <li>
             <button
               onClick={() => {
@@ -415,6 +440,36 @@ export function ChatHeader({
               {t('chat.export')}
             </button>
           </li>
+          {/* Last, and apart from the rest: these two are about the person,
+              not the conversation's settings. */}
+          {!isSelf && (
+            <>
+              <li>
+                <button
+                  onClick={() => {
+                    closeMenu();
+                    if (blockedByMe) onUnblock();
+                    else onBlock();
+                  }}
+                >
+                  <Ban className="w-4 h-4" />
+                  {blockedByMe ? t('chat.unblock') : t('chat.block')}
+                </button>
+              </li>
+              <li>
+                <button
+                  className="text-error"
+                  onClick={() => {
+                    closeMenu();
+                    onReport();
+                  }}
+                >
+                  <Flag className="w-4 h-4" />
+                  {t('chat.report')}
+                </button>
+              </li>
+            </>
+          )}
         </ul>
       </div>
     </header>

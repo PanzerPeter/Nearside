@@ -169,9 +169,77 @@ CREATE TABLE IF NOT EXISTS public.friendships (
 );
 
 /*
+  Blocks. Declared here for the same reason as `friendships`: the profiles
+  policy below reads it. One row per direction — A blocking B is (A, B), and
+  B blocking A back is a second row — so when both have blocked and one of
+  them unblocks, the other row still stands and the conversation stays shut.
+
+  The friendship is left in place by a block. It keeps the conversation in
+  both lists and the history readable; the gates are on the writes, through
+  `is_blocked_pair` (0053). The row is visible to both people: the blocked
+  person is told, by design, rather than left retrying into silence.
+*/
+CREATE TABLE IF NOT EXISTS public.blocks (
+  blocker_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  blocked_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (blocker_id, blocked_id),
+  CONSTRAINT no_self_block CHECK (blocker_id <> blocked_id)
+);
+
+-- The PK leads with blocker_id; this covers the other direction and the FK.
+CREATE INDEX IF NOT EXISTS blocks_blocked_idx ON public.blocks (blocked_id);
+
+/*
+  Whether either of two people has blocked the other.
+
+  SECURITY INVOKER, deliberately. Every caller in a policy is one of the two
+  people, and the SELECT policy below already shows them both directions, so
+  no elevated rights are needed — and a definer version would answer the
+  question for any two accounts, to anyone who asked.
+*/
+CREATE OR REPLACE FUNCTION public.is_blocked_pair(a uuid, b uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SET search_path = ''
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.blocks bl
+    WHERE (bl.blocker_id = a AND bl.blocked_id = b)
+       OR (bl.blocker_id = b AND bl.blocked_id = a)
+  );
+$$;
+
+REVOKE ALL ON FUNCTION public.is_blocked_pair(uuid, uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.is_blocked_pair(uuid, uuid) TO authenticated;
+
+ALTER TABLE public.blocks ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "blocks_select_party" ON public.blocks;
+CREATE POLICY "blocks_select_party" ON public.blocks
+  FOR SELECT TO authenticated
+  USING ((select auth.uid()) IN (blocker_id, blocked_id));
+
+DROP POLICY IF EXISTS "blocks_insert_own" ON public.blocks;
+CREATE POLICY "blocks_insert_own" ON public.blocks
+  FOR INSERT TO authenticated
+  WITH CHECK ((select auth.uid()) = blocker_id);
+
+DROP POLICY IF EXISTS "blocks_delete_own" ON public.blocks;
+CREATE POLICY "blocks_delete_own" ON public.blocks
+  FOR DELETE TO authenticated
+  USING ((select auth.uid()) = blocker_id);
+
+-- A block is placed or lifted, never edited.
+REVOKE ALL ON public.blocks FROM PUBLIC, anon, authenticated;
+GRANT SELECT, INSERT, DELETE ON public.blocks TO authenticated;
+
+/*
   There is no directory. SELECT reaches yourself and anyone you have a
   friendship row with in either direction — including a pending one, so a
-  request can show who sent it. A window with no SELECT policy fails closed,
+  request can show who sent it — and anyone you have blocked, so Settings can
+  still name them after the chat was deleted. A window with no SELECT policy fails closed,
   which is the correct direction to fail.
 
   The single UPDATE policy covers the key columns too: RLS is per row, not per
@@ -188,6 +256,10 @@ CREATE POLICY "profiles_select_connected" ON public.profiles
       SELECT 1 FROM public.friendships f
       WHERE (f.requester_id = (select auth.uid()) AND f.addressee_id = profiles.id)
          OR (f.addressee_id = (select auth.uid()) AND f.requester_id = profiles.id)
+    )
+    OR EXISTS (
+      SELECT 1 FROM public.blocks bl
+      WHERE bl.blocker_id = (select auth.uid()) AND bl.blocked_id = profiles.id
     )
   );
 
@@ -297,15 +369,22 @@ CREATE POLICY "friendships_select_own" ON public.friendships
   USING ((select auth.uid()) IN (requester_id, addressee_id));
 
 DROP POLICY IF EXISTS "friendships_insert_own" ON public.friendships;
+-- A block is not undone by removing the contact and asking again.
 CREATE POLICY "friendships_insert_own" ON public.friendships
   FOR INSERT TO authenticated
-  WITH CHECK ((select auth.uid()) = requester_id);
+  WITH CHECK (
+    (select auth.uid()) = requester_id
+    AND NOT public.is_blocked_pair(requester_id, addressee_id)
+  );
 
 DROP POLICY IF EXISTS "friendships_update_addressee" ON public.friendships;
 CREATE POLICY "friendships_update_addressee" ON public.friendships
   FOR UPDATE TO authenticated
   USING ((select auth.uid()) = addressee_id)
-  WITH CHECK ((select auth.uid()) = addressee_id);
+  WITH CHECK (
+    (select auth.uid()) = addressee_id
+    AND NOT public.is_blocked_pair(requester_id, addressee_id)
+  );
 
 DROP POLICY IF EXISTS "friendships_delete_own" ON public.friendships;
 CREATE POLICY "friendships_delete_own" ON public.friendships
@@ -492,6 +571,32 @@ REVOKE ALL ON FUNCTION public.redeem_connect_code(text) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.mint_connect_code() TO authenticated;
 GRANT EXECUTE ON FUNCTION public.redeem_connect_code(text) TO authenticated;
 
+-- ---------------------------------------------------------------------------
+-- 4a. Reports
+-- ---------------------------------------------------------------------------
+
+/*
+  The ticket log for `report-user`, and nothing else. The complaint and the
+  quoted messages go out by email; they are never written here, so this
+  database still holds no message body anywhere. What is kept is who reported
+  whom and when — enough to see a pattern against one account and to rate-limit
+  the function. No policy and no client grant: only the service role reads or
+  writes it.
+*/
+CREATE TABLE IF NOT EXISTS public.reports (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  reporter_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  reported_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  created_at  timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT no_self_report CHECK (reporter_id <> reported_id)
+);
+
+CREATE INDEX IF NOT EXISTS reports_reporter_time ON public.reports (reporter_id, created_at);
+CREATE INDEX IF NOT EXISTS reports_reported_idx  ON public.reports (reported_id);
+
+ALTER TABLE public.reports ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.reports FROM PUBLIC, anon, authenticated;
+
 -- ===========================================================================
 -- 5. Messages
 -- ===========================================================================
@@ -630,22 +735,30 @@ CREATE POLICY "messages_insert_sender" ON public.messages
     AND (
       -- The self-chat. No friendship exists or can exist for this pair.
       receiver_id = user_id
-      OR EXISTS (
-        SELECT 1 FROM public.friendships f
-        WHERE f.status = 'accepted'
-          AND (
-            (f.requester_id = (select auth.uid()) AND f.addressee_id = receiver_id)
-            OR (f.requester_id = receiver_id AND f.addressee_id = (select auth.uid()))
-          )
+      OR (
+        EXISTS (
+          SELECT 1 FROM public.friendships f
+          WHERE f.status = 'accepted'
+            AND (
+              (f.requester_id = (select auth.uid()) AND f.addressee_id = receiver_id)
+              OR (f.requester_id = receiver_id AND f.addressee_id = (select auth.uid()))
+            )
+        )
+        AND NOT public.is_blocked_pair((select auth.uid()), receiver_id)
       )
     )
   );
 
+-- An edit is a new body in front of the other person, so it is refused while
+-- either side has blocked (0053); a tombstone is not, and stays allowed.
 DROP POLICY IF EXISTS "messages_update_sender" ON public.messages;
 CREATE POLICY "messages_update_sender" ON public.messages
   FOR UPDATE TO authenticated
   USING ((select auth.uid()) = user_id)
-  WITH CHECK ((select auth.uid()) = user_id);
+  WITH CHECK (
+    (select auth.uid()) = user_id
+    AND (deleted_at IS NOT NULL OR NOT public.is_blocked_pair(user_id, receiver_id))
+  );
 
 /*
   No DELETE policy, and no DELETE privilege either.
@@ -846,6 +959,7 @@ CREATE POLICY "reactions_insert_own" ON public.message_reactions
       SELECT 1 FROM public.messages m
       WHERE m.id = message_id
         AND (select auth.uid()) IN (m.user_id, m.receiver_id)
+        AND NOT public.is_blocked_pair(m.user_id, m.receiver_id)
     )
   );
 
@@ -1169,6 +1283,7 @@ CREATE POLICY "sealed_answers_insert_participant" ON public.sealed_answers
         AND m.deleted_at IS NULL
         AND m.user_id <> m.receiver_id
         AND (select auth.uid()) IN (m.user_id, m.receiver_id)
+        AND NOT public.is_blocked_pair(m.user_id, m.receiver_id)
     )
   );
 
@@ -2343,6 +2458,20 @@ BEGIN
   IF ttl IS NOT NULL AND ttl <= 0 THEN
     RAISE EXCEPTION 'timer must be positive or null';
   END IF;
+  -- Only a contact, and only while neither side has blocked (0053). Before,
+  -- any account could call this with any peer id, and a contact removed from
+  -- the list could go on changing the timer on the old conversation.
+  IF peer <> me AND NOT EXISTS (
+    SELECT 1 FROM public.friendships f
+    WHERE f.status = 'accepted'
+      AND ((f.requester_id = me AND f.addressee_id = peer)
+        OR (f.requester_id = peer AND f.addressee_id = me))
+  ) THEN
+    RAISE EXCEPTION 'not a contact';
+  END IF;
+  IF public.is_blocked_pair(me, peer) THEN
+    RAISE EXCEPTION 'conversation is blocked';
+  END IF;
 
   INSERT INTO public.conversation_timers (user_a, user_b, ttl_seconds, set_by, updated_at)
   VALUES (least(me, peer), greatest(me, peer), ttl, me, now())
@@ -2511,6 +2640,11 @@ DECLARE
 BEGIN
   IF me IS NULL THEN
     RAISE EXCEPTION 'not authenticated';
+  END IF;
+
+  -- A pin is a line on the other person's screen; a block closes that too.
+  IF public.is_blocked_pair(me, peer) THEN
+    RAISE EXCEPTION 'conversation is blocked';
   END IF;
 
   -- The message must be one of this conversation's, not merely one the caller
@@ -3197,6 +3331,9 @@ ALTER TABLE public.room_message_reactions REPLICA IDENTITY FULL;
 ALTER TABLE public.conversation_pins REPLICA IDENTITY FULL;
 ALTER TABLE public.room_pins         REPLICA IDENTITY FULL;
 
+-- Unblocking is a DELETE, and the other side has to hear the block lift.
+ALTER TABLE public.blocks REPLICA IDENTITY FULL;
+
 DO $$
 DECLARE
   t text;
@@ -3219,7 +3356,9 @@ BEGIN
     -- A pin is one person putting a line on everybody's screen, so both sides
     -- have to hear it land and hear it go.
     'conversation_pins',
-    'room_pins'
+    'room_pins',
+    -- Both people's screens change the moment a block is placed or lifted.
+    'blocks'
   ] LOOP
     IF NOT EXISTS (
       SELECT 1 FROM pg_publication_tables

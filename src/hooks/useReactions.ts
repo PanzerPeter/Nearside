@@ -130,7 +130,13 @@ export function useReactions(
       );
       if (mine) {
         setReactions((prev) => prev.filter((r) => r.id !== mine.id));
-        await supabase.from(table).delete().eq('id', mine.id);
+        const { error } = await supabase.from(table).delete().eq('id', mine.id);
+        // Optimistic, so a delete that did not land has to be put back: the
+        // row is still on the server, and the chip would otherwise reappear
+        // on the next wake with nothing to say why.
+        if (error) {
+          setReactions((prev) => (prev.some((x) => x.id === mine.id) ? prev : [...prev, mine]));
+        }
       } else {
         const { data } = await supabase
           .from(table)

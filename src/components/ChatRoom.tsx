@@ -68,6 +68,12 @@ import { draftKey } from '../lib/drafts';
 import { useSealedExchange } from '../hooks/useSealedExchange';
 import { useCall } from '../hooks/useCall';
 import { isEngaged } from '../lib/call/state';
+import { useBlockStatus } from '../hooks/useBlocks';
+import { blockUser, unblockUser } from '../lib/blocks';
+import { reportExcerpt, sendReport } from '../lib/report';
+import { BlockedNotice } from './BlockedNotice';
+import { ReportModal } from './ReportModal';
+import type { MessageKey } from '../lib/i18n';
 
 interface ChatRoomProps {
   session: Session;
@@ -122,6 +128,13 @@ export function ChatRoom({ session, friend, identity, openAt, onBack }: ChatRoom
   const [profileOpen, setProfileOpen] = useState(false);
   const [verifyOpen, setVerifyOpen] = useState(false);
   const [askSealedOpen, setAskSealedOpen] = useState(false);
+  const [confirmBlock, setConfirmBlock] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [blockBusy, setBlockBusy] = useState(false);
+  // Either direction closes the conversation to new writes; see lib/blocks.ts.
+  // The self-chat cannot hold a block (`no_self_block`), so it reads 'none'.
+  const blockStatus = useBlockStatus(me, friend.id);
+  const blocked = blockStatus !== 'none';
   // The message whose "Forward" was chosen, and so the one the picker will
   // copy. Null when the picker is closed.
   const [forwarding, setForwarding] = useState<Message | null>(null);
@@ -508,6 +521,37 @@ export function ChatRoom({ session, friend, identity, openAt, onBack }: ChatRoom
   const merged = new Set(thread.messages.map((m) => m.id));
   const queued = thread.outbox.pending.filter((m) => !merged.has(m.id));
 
+  async function setBlocked(on: boolean): Promise<boolean> {
+    setBlockBusy(true);
+    const ok = on ? await blockUser(me, friend.id) : await unblockUser(me, friend.id);
+    setBlockBusy(false);
+    if (!ok) toast.error(t('block.failed'));
+    else toast.success(t(on ? 'block.done' : 'block.undone', { name: peerLabel }));
+    return ok;
+  }
+
+  async function submitReport(
+    reason: string,
+    includeMessages: boolean,
+    alsoBlock: boolean
+  ): Promise<boolean> {
+    try {
+      const ticket = await sendReport(
+        friend.id,
+        reason,
+        includeMessages ? reportExcerpt(thread.messages) : []
+      );
+      toast.success(t('report.sent', { ticket: `#${ticket}` }));
+    } catch (error) {
+      toast.error(t((error as Error).message as MessageKey));
+      return false;
+    }
+    // After the report, not before: a block that landed first and a report
+    // that then failed would leave the person blocked with nothing filed.
+    if (alsoBlock) await setBlocked(true);
+    return true;
+  }
+
   async function handleSend() {
     // Fired here rather than inside the two send paths, and before either
     // runs: the confirmation the thumb wants is "I registered that", not "the
@@ -555,9 +599,59 @@ export function ChatRoom({ session, friend, identity, openAt, onBack }: ChatRoom
         onCall={(kind) => call.placeCall(friend, kind)}
         // A call is sealed to the peer's published key exactly like a message,
         // so no key means nothing to dial. `isEngaged` keeps the button from
-        // starting a second call over a live one.
-        canCall={!!peerKey && !isEngaged(call.state)}
+        // starting a second call over a live one, and a block closes calls
+        // like everything else (`call-ring` refuses them too).
+        canCall={!!peerKey && !isEngaged(call.state) && !blocked}
+        blockStatus={blockStatus}
+        onBlock={() => setConfirmBlock(true)}
+        onUnblock={() => void setBlocked(false)}
+        onReport={() => setReportOpen(true)}
       />
+
+      {confirmBlock && (
+        <Modal
+          title={t('block.confirmTitle', { name: peerLabel })}
+          onClose={() => (blockBusy ? undefined : setConfirmBlock(false))}
+          actions={
+            <>
+              <button
+                className="btn btn-ghost btn-sm"
+                onClick={() => setConfirmBlock(false)}
+                disabled={blockBusy}
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                className="btn btn-error btn-sm"
+                disabled={blockBusy}
+                onClick={() =>
+                  void setBlocked(true).then((ok) => {
+                    if (ok) setConfirmBlock(false);
+                  })
+                }
+              >
+                {blockBusy ? (
+                  <span className="loading loading-spinner loading-xs" />
+                ) : (
+                  t('chat.block')
+                )}
+              </button>
+            </>
+          }
+        >
+          <p className="text-body text-strong">{t('block.confirmBody')}</p>
+        </Modal>
+      )}
+
+      {reportOpen && (
+        <ReportModal
+          peerLabel={peerLabel}
+          messageCount={reportExcerpt(thread.messages).length}
+          alreadyBlocked={blockStatus === 'byMe' || blockStatus === 'both'}
+          onSend={submitReport}
+          onClose={() => setReportOpen(false)}
+        />
+      )}
 
       {verifyOpen && peerKey && (
         <VerifyContact
@@ -730,7 +824,9 @@ export function ChatRoom({ session, friend, identity, openAt, onBack }: ChatRoom
           messages={shown}
           queued={queued}
           typingLabel={
-            thread.friendTyping && !isSelf ? t('thread.typing', { name: peerLabel }) : null
+            thread.friendTyping && !isSelf && !blocked
+              ? t('thread.typing', { name: peerLabel })
+              : null
           }
           hasMore={thread.hasMore}
           loadingOlder={thread.loadingOlder}
@@ -837,6 +933,15 @@ export function ChatRoom({ session, friend, identity, openAt, onBack }: ChatRoom
             </button>
           )}
         </div>
+      ) : blockStatus !== 'none' ? (
+        // Before the key-change notice: a verified key does not reopen a
+        // conversation somebody has closed.
+        <BlockedNotice
+          status={blockStatus}
+          peerLabel={peerLabel}
+          busy={blockBusy}
+          onUnblock={() => void setBlocked(false)}
+        />
       ) : trust === 'changed' ? (
         <KeyChangedNotice peerKey={peerKey} onVerify={() => setVerifyOpen(true)} />
       ) : (
@@ -859,7 +964,8 @@ export function ChatRoom({ session, friend, identity, openAt, onBack }: ChatRoom
           replyingTo={
             replyingTo
               ? {
-                  display_name: replyingTo.user_id === me ? 'yourself' : peerLabel,
+                  display_name: peerLabel,
+                  self: replyingTo.user_id === me,
                   snippet: messageSnippet(replyingTo),
                 }
               : null

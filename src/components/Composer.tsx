@@ -40,7 +40,9 @@ interface ComposerProps {
   sentCount: number;
   sending: boolean;
   uploading: boolean;
-  replyingTo: { display_name: string; snippet: string } | null;
+  /** `self` when the quoted message is your own: "Replying to yourself" is its
+   *  own sentence in every language, not the name slot filled with a word. */
+  replyingTo: { display_name: string; snippet: string; self?: boolean } | null;
   onCancelReply: () => void;
   /** The edit in progress, when the thread has one, and null otherwise.
    *
@@ -416,7 +418,9 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
         <div className="flex items-center gap-2 mb-2 px-3 py-2 rounded-field bg-base-200/70 border-l-2 border-primary">
           <div className="min-w-0 flex-1">
             <p className="text-meta font-medium text-primary">
-              {t('composer.replyingTo', { name: replyingTo.display_name })}
+              {replyingTo.self
+                ? t('composer.replyingToSelf')
+                : t('composer.replyingTo', { name: replyingTo.display_name })}
             </p>
             <p className="text-meta text-muted truncate">{replyingTo.snippet}</p>
           </div>

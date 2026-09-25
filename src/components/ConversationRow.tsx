@@ -5,7 +5,7 @@ import { formatUnread } from '../lib/receipts';
 import { isSelfChat } from '../lib/conversation';
 import { formatDisplayName, useNickname } from '../lib/nicknames';
 import type { ConversationSummary, MediaType } from '../lib/types';
-import { BellOff, NotebookPen, Pin } from 'lucide-react';
+import { Ban, BellOff, NotebookPen, Pin } from 'lucide-react';
 import { peekDraft } from '../lib/drafts';
 import { useT } from '../hooks/useT';
 
@@ -28,6 +28,9 @@ interface ConversationRowProps {
    *  rather than a number, because inventing "1" would be the app claiming a
    *  message that does not exist. */
   markedUnread?: boolean;
+  /** Either side has blocked. The row stays — the history is still there to
+   *  read — and says so, in place of the preview. */
+  blocked?: boolean;
 }
 
 /** One line of the sidebar: who, what they last said, when, and how many unread. */
@@ -41,6 +44,7 @@ export function ConversationRow({
   pinned = false,
   muted = false,
   markedUnread = false,
+  blocked = false,
 }: ConversationRowProps) {
   const t = useT();
   const { display_name, avatar_url, last_media_type, last_sender_id, last_at } = conversation;
@@ -121,6 +125,9 @@ export function ConversationRow({
               <span className="min-w-0 truncate text-micro text-subtle">{handle}</span>
             )}
           </span>
+          {blocked && (
+            <Ban className="shrink-0 w-3 h-3 text-subtle" aria-label={t('chat.blocked')} />
+          )}
           {muted && (
             <BellOff
               className="shrink-0 w-3 h-3 text-subtle"
@@ -141,8 +148,16 @@ export function ConversationRow({
             draft ? 'text-muted' : unread > 0 ? 'text-strong font-medium' : 'text-muted'
           }`}
         >
-          {draft && <span className="text-error font-medium">{t('preview.draftLabel')} </span>}
-          {draft ? draft : preview}
+          {blocked ? (
+            t('chat.blocked')
+          ) : (
+            <>
+              {draft && (
+                <span className="text-error font-medium">{t('preview.draftLabel')} </span>
+              )}
+              {draft ? draft : preview}
+            </>
+          )}
         </span>
       </span>
       {unread > 0 ? (

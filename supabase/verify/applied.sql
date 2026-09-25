@@ -225,6 +225,14 @@ checks(ord, migration, proves, ok) AS (VALUES
        (SELECT count(*) = 2 FROM pubs WHERE name IN ('conversation_pins','room_pins'))
         AND (SELECT count(*) = 2 FROM tbls
               WHERE name IN ('conversation_pins','room_pins') AND ri = 'f')),
+  (53, '0051_expiry_sweeps_the_thumbnail', 'expire_messages() collects media_thumb_path too',
+       EXISTS (SELECT 1 FROM fns WHERE name = 'expire_messages' AND src LIKE '%media_thumb_path%')),
+  (54, '0052_grant_hygiene',         'no DELETE privilege on messages for client roles',
+       NOT has_table_privilege('authenticated', 'public.messages', 'DELETE')),
+  (55, '0053_blocks_and_reports',    'blocks + reports + is_blocked_pair(), blocks published',
+       (SELECT count(*) = 2 FROM tbls WHERE name IN ('blocks','reports'))
+        AND EXISTS (SELECT 1 FROM fns WHERE name = 'is_blocked_pair')
+        AND EXISTS (SELECT 1 FROM pubs WHERE name = 'blocks')),
 
   -- Not migrations, but the same question: applied by hand, and nothing
   -- complains when they were not.

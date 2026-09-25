@@ -72,7 +72,16 @@ is no `calls` table and no record a call happened. A locked phone rings through
 a full-screen notification and answering goes straight to "Connecting…".
 
 **Trust.** Safety numbers, a verified badge in the header, and a blocked
-composer when a contact's key changes. The app does not guess whether that was a
+composer when a contact's key changes.
+
+**Block and report.** A block is enforced by the database, not the app: no
+message, edit, reaction, pin, timer change or call gets through in either
+direction, while both people keep the history and the blocked side is told.
+Each direction is its own row, so when both have blocked, one unblocking does
+not reopen the conversation. A report is emailed to the team as a ticket, and
+the reporter chooses whether to include the last 30 messages. That choice is
+the only way a message body ever leaves a device in readable form, and the
+database keeps a who-reported-whom row and none of the text. The app does not guess whether that was a
 reinstall or an interception.
 
 **Sealed exchange.** A question carrying the asker's own answer, where neither
@@ -146,6 +155,10 @@ The app ships a screen saying this too.
 - A rooted or jailbroken phone can reach the seed. A compromised device is a
   compromised account.
 - Removing someone from a room does not claw back what they already hold.
+- A block covers one-to-one conversations. In a group you share with someone
+  you blocked, their messages still reach you; leaving the group is the fix.
+- A report with messages attached sends them to the team in readable form, by
+  email. The app asks first, every time.
 
 ## Quick start
 
@@ -158,7 +171,7 @@ npm run dev
 ```
 
 The server side — schema, buckets, `pg_cron`, the auth redirect URLs and the
-four edge functions — is [`supabase/README.md`](supabase/README.md). Read it
+five edge functions — is [`supabase/README.md`](supabase/README.md). Read it
 before touching a live project: apply order is not numeric order, and
 `npm run db:verify` is the dry-run.
 

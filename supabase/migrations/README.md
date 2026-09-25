@@ -81,6 +81,9 @@ current state; this table is about what each file *does*.
 | 50 | `0048_pinned_messages.sql` | `conversation_pins` and `room_pins`: one message held at the top, stored as a pointer. **Its 1:1 function is broken — see `0049`** |
 | 51 | `0049_pin_sender_column.sql` | Repairs `set_conversation_pin()`, which asked `messages` for `room_messages`' `sender_id` column and so failed on every call |
 | 52 | `0050_pin_realtime.sql` | Puts the two pin tables in the realtime publication, with `REPLICA IDENTITY FULL` so an unpin reaches the other side. 0048 subscribed to changes it never published |
+| 53 | `0051_expiry_sweeps_the_thumbnail.sql` | The expiry sweep deletes an attachment's thumbnail as well as the full-size object |
+| 54 | `0052_grant_hygiene.sql` | Narrows the privileges on the oldest tables to what their policies allow |
+| 55 | `0053_blocks_and_reports.sql` | `blocks`, enforced on every write into a 1:1 conversation; `reports`, the ticket log for `report-user`. `set_conversation_timer()` now requires a contact. **Deploy `report-user` and redeploy `call-ring` after this** |
 
 ## The two files that do not follow the numbering
 

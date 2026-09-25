@@ -76,13 +76,17 @@ export const termsSections: LegalSection[] = [
           Message content is encrypted on your device and the server holds only ciphertext, so
           nobody operating Nearside can read a message, open an attachment, or moderate what is
           said. This is deliberate, and it is a real limitation: a report about the content of a
-          conversation cannot be verified, only acted on against the account behaviour around it.
+          conversation cannot be verified from our side. You can choose to send us the last 30
+          messages with a report; we can confirm those messages exist, who sent them and when,
+          but not their wording, because we never hold a key to it.
         </p>
         <p>
           Accounts can still be suspended or removed for abuse that is visible without reading
           anything, such as mass account creation, sending at machine speed, or a pattern of
-          reports. Blocking is on your side: nobody can message you or call you until you have
-          connected with them, and you can delete the connection at any time.
+          reports. Nobody can message you or call you until you have connected with them. You can
+          block someone at any time: the server then refuses every message, call and reaction
+          between you in either direction until you unblock them, and they are shown that you
+          blocked them.
         </p>
       </>
     ),

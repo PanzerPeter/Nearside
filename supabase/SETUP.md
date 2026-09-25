@@ -428,7 +428,8 @@ each is declared in [`config.toml`](config.toml).
 - **`delete-account`** — needed. Settings → Danger zone calls it, and the call
   fails until it is deployed. It resolves the caller from their JWT, removes
   their `avatars/{uid}/` objects and every `chat-media` conversation folder they
-  participate in, then deletes the `auth.users` row (cascading messages,
+  participate in, and their `stickers/{uid}/` library, then deletes the
+  `auth.users` row (cascading messages,
   friendships, reactions, receipts and room membership through `profiles.id`).
   Storage is cleared before the auth user, because the paths are derived from
   ids that disappear with the account; a failure after that point leaves the
@@ -444,7 +445,7 @@ each is declared in [`config.toml`](config.toml).
 
 - **`call-ring`** — needed for calls to reach a phone that is not already
   showing the app. It resolves the caller from their JWT, checks the two are
-  friends, and sends a OneSignal push carrying a caller id, a display name, a
+  friends and that neither has blocked the other, and sends a OneSignal push carrying a caller id, a display name, a
   call id and `voice`/`video`, and nothing else, because there is nothing else
   about a call the server holds. `CallNotificationExtension` intercepts it on the
   device and raises a full-screen ring in its place.
@@ -456,6 +457,27 @@ each is declared in [`config.toml`](config.toml).
   Shares `ONESIGNAL_APP_ID` and `ONESIGNAL_REST_API_KEY` with `send-push`.
   Without it a call still rings a friend who has the app open, since the offer
   goes over the realtime topic either way, and reaches nobody else.
+
+- **`report-user`** — needed for Report in a conversation's menu. It checks
+  the reporter and the reported person are connected (or have a block), keeps a
+  who-reported-whom row in `reports`, and emails the complaint to the
+  moderation inbox through [Resend](https://resend.com). If the reporter chose
+  to include them, the email carries their own decrypted copy of the last 30
+  messages; each is matched by id against `messages`, so who sent it and when
+  come from the server, and only the text comes from the reporter's device.
+
+  ```bash
+  supabase functions deploy report-user --project-ref "$SUPABASE_PROJECT_REF"
+  supabase secrets set RESEND_API_KEY=...
+  # optional; the defaults are shown
+  supabase secrets set REPORT_EMAIL_TO=hi.nearside@gmail.com \
+                       REPORT_EMAIL_FROM='Nearside Reports <onboarding@resend.dev>'
+  ```
+
+  `onboarding@resend.dev` only delivers to the address the Resend account was
+  registered with, so either register it with the inbox above or verify a
+  sending domain and set `REPORT_EMAIL_FROM`. Without `RESEND_API_KEY` the app
+  says the report could not be sent, and nothing is recorded.
 
 - **`call-ice`** — needed for calls behind carrier-grade NAT, which on mobile
   networks is most of them. It mints Cloudflare TURN credentials against the

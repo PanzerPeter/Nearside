@@ -1533,6 +1533,7 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
           replyingTo
             ? {
                 display_name: nameFor(replyingTo.sender_id),
+                self: replyingTo.sender_id === me,
                 snippet: messageSnippet(roomAsMessage(replyingTo, room.id)),
               }
             : null

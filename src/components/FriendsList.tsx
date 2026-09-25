@@ -59,6 +59,8 @@ import type { Identity } from '../lib/crypto/keys';
 import type { RoomSummary } from '../lib/rooms';
 import { useT } from '../hooks/useT';
 import { useToast } from '../hooks/useToast';
+import { useBlockRows, useBlocksSync } from '../hooks/useBlocks';
+import { blockStatus, blockedPeers } from '../lib/blocks';
 
 /** Conversation-list refresh cadence while realtime is healthy — a backstop for
  *  the one failure realtime cannot report about itself, not a delivery
@@ -152,6 +154,10 @@ export function FriendsList({
    *  state where the first-run card offers to create the first room. */
   const [creatingRoom, setCreatingRoom] = useState(false);
   const { generation, live } = useConnection();
+  // Owned here because this list lives for the whole session — see its
+  // comment on staying mounted behind the settings tab.
+  useBlocksSync(me);
+  const blockRows = useBlockRows();
 
   // Live refs so the realtime handler always sees current friends and
   // selection. Assigned during render rather than in an effect, so they are
@@ -318,12 +324,17 @@ export function FriendsList({
   }, [me, generation, fetchConversations, fetchPendingRequests]);
 
   // The self-chat row is not a friend: presence would otherwise open a channel
-  // to watch this user's own devices, and report them back as a peer.
+  // to watch this user's own devices, and report them back as a peer. Nor is
+  // anyone on either side of a block: this set is what presence and the call
+  // hub listen to, and a block closes both.
   useEffect(() => {
+    const shut = blockedPeers(blockRows, me);
     onFriendsChange?.(
-      conversations.map((c) => c.peer_id).filter((id) => !isSelfChat(me, id))
+      conversations
+        .map((c) => c.peer_id)
+        .filter((id) => !isSelfChat(me, id) && !shut.has(id))
     );
-  }, [conversations, onFriendsChange, me]);
+  }, [conversations, onFriendsChange, me, blockRows]);
 
   useEffect(() => {
     let total = 0;
@@ -772,6 +783,7 @@ export function FriendsList({
             selected={selectedFriendId === peerId}
             pinned={pinned}
             muted={muted}
+            blocked={!self && blockStatus(blockRows, me, peerId) !== 'none'}
             onSelect={() => {
               // A rail left open behind a chat is a state the user cannot see
               // and will not expect on the way back.
@@ -808,13 +820,24 @@ export function FriendsList({
   }
 
   async function acceptRequest(friendshipId: string) {
-    await supabase.from('friendships').update({ status: 'accepted' }).eq('id', friendshipId);
+    // Checked, where it used to be ignored: a refused accept left the request
+    // sitting there as though the tap had not registered.
+    const { error } = await supabase
+      .from('friendships')
+      .update({ status: 'accepted' })
+      .eq('id', friendshipId);
+    if (error) toast.error(t('requests.failed'));
     void fetchConversations();
     void fetchPendingRequests();
   }
 
   async function declineRequest(friendshipId: string, requesterId: string | undefined) {
-    await supabase.from('friendships').delete().eq('id', friendshipId);
+    const { error } = await supabase.from('friendships').delete().eq('id', friendshipId);
+    // Nothing was declined, so nothing is hidden and nothing is announced.
+    if (error) {
+      toast.error(t('requests.failed'));
+      return;
+    }
     // Declining hides them too. `friendships_insert_own` only checks that the
     // requester is themself, so without this a declined request can be sent
     // again immediately, and again after that.

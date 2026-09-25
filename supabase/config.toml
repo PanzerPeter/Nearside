@@ -16,7 +16,7 @@ project_id = "nearside"
 # ---------------------------------------------------------------------------
 # Edge functions
 #
-# `verify_jwt` is the whole authentication story for three of these four: they
+# `verify_jwt` is the whole authentication story for four of these five: they
 # resolve the caller from the token the gateway has already checked, and none
 # of them accepts a user id as an argument. See SETUP.md for what each needs in
 # the way of secrets, and which are actually deployed.
@@ -36,6 +36,12 @@ verify_jwt = true
 # Mints short-lived Cloudflare TURN credentials, one set per call. A long-lived
 # TURN secret inside the APK would be a free relay for anyone who unzips it.
 [functions.call-ice]
+verify_jwt = true
+
+# Mails a report to the moderation inbox: the complaint, and — only if the
+# reporter chose to include them — their own decrypted copy of the last 30
+# messages. Keeps a who-reported-whom row in `reports` and no text.
+[functions.report-user]
 verify_jwt = true
 
 # The older Web Push transport, called by a database trigger rather than by a

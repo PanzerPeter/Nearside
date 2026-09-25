@@ -56,6 +56,7 @@ import { clearSeed } from './lib/keystore';
 import { clearPinnedMedia, clearPinnedMediaFor, forgetPinIndex } from './lib/pins';
 import { forgetAllPeerKeys } from './lib/peer-keys';
 import { forgetAllPublishedKeys, forgetAllRoomKeys } from './lib/rooms';
+import { forgetBlocks } from './lib/blocks';
 import { forgetStickers } from './lib/stickers';
 import { forgetStickerRecents } from './lib/sticker-recents';
 import { forgetAllMedia } from './lib/media-cache';
@@ -292,6 +293,9 @@ function App() {
     // Decrypted sticker images, held in memory under the vault key of the
     // account being left. Every new per-account cache belongs in this chain.
     forgetStickers();
+    // Who this account has blocked, and who has blocked it. The next account
+    // on the phone must not open its first chat against these rows.
+    forgetBlocks();
     // Decrypted attachments from the conversations of the account being left —
     // photos, videos and voice notes, in memory, same rule.
     forgetAllMedia();

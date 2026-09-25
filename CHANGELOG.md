@@ -14,6 +14,39 @@ one of them drifts.
 
 ## [Unreleased]
 
+### Added
+
+- Block, from a conversation's menu. Neither of you can message, call, react,
+  pin or change the timer until the block is lifted, and the server enforces
+  it, not just the app. The conversation stays in both lists and both of you
+  can still read what was said before. You see "You blocked …" with an Unblock
+  button where the message box was; they see that you blocked them. If you
+  have both blocked each other, one of you unblocking does not reopen the
+  conversation. People you blocked are also listed under Settings → Privacy →
+  Hidden and blocked, so a block outlives a deleted chat and can still be
+  lifted.
+- Report, from the same menu. You write what happened and can choose to send
+  the last 30 messages with it. They are end-to-end encrypted, so ticking the
+  box is the only way anyone at Nearside ever reads them, and the box says so.
+  The report arrives as an email ticket. The server checks that each quoted
+  message is really from that conversation, and who sent it and when, but
+  keeps none of the text. You can block the person in the same step.
+
+### Fixed
+
+- Changing the disappearing-messages timer in a one-to-one chat now says so
+  when it fails, instead of doing nothing.
+- Accepting or declining a request that did not reach the server now says so.
+  Declining one that failed no longer claims the person was hidden.
+- A reaction you removed while offline no longer comes back on its own later.
+- "Replying to yourself" above the message box is translated. It was English in
+  every language.
+- A removed contact can no longer change the disappearing-messages timer on
+  the conversation you used to have with them.
+- Deleting your account now deletes your sticker library too, and every file
+  in a conversation with more than a thousand of them. Before, the rest stayed
+  in storage.
+
 ## [1.17.3] — 2026-09-19
 
 ### Fixed
