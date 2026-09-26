@@ -6,6 +6,7 @@ import type { VerificationState } from '../lib/verification';
 import type { PresenceStatus } from '../lib/presence-model';
 import { formatLastSeen } from '../lib/time';
 import { Avatar } from './Avatar';
+import { avatarSrc } from '../lib/avatar-url';
 import { Modal } from './Modal';
 import { StatusDot, presenceLabels } from './StatusDot';
 import { useT } from '../hooks/useT';
@@ -90,6 +91,8 @@ export function ProfileCard({
   }, [load]);
 
   const bio = profile.bio?.trim();
+  // The zoomed copy is a second <img>, so it takes the same guard `Avatar` does.
+  const photo = avatarSrc(profile.avatar_url);
 
   return (
     <Modal title={t('profileCard.title')} onClose={onClose}>
@@ -97,8 +100,8 @@ export function ProfileCard({
         <button
           type="button"
           onClick={() => setZoomed(true)}
-          disabled={!profile.avatar_url}
-          title={profile.avatar_url ? t('profileCard.viewPhoto') : undefined}
+          disabled={!photo}
+          title={photo ? t('profileCard.viewPhoto') : undefined}
           className="rounded-full ring-3 ring-base-content/5 disabled:cursor-default"
         >
           <Avatar display_name={profile.display_name} url={profile.avatar_url} size={96} />
@@ -195,13 +198,13 @@ export function ProfileCard({
         {isSelf && <p className="text-meta text-subtle">{t('profileCard.selfHint')}</p>}
       </div>
 
-      {zoomed && profile.avatar_url && (
+      {zoomed && photo && (
         <div
           className="fixed inset-0 z-60 flex items-center justify-center bg-black/95 p-6"
           onClick={() => setZoomed(false)}
         >
           <img
-            src={profile.avatar_url}
+            src={photo}
             alt=""
             className="max-h-[80dvh] max-w-full rounded-field object-contain"
           />

@@ -370,10 +370,17 @@ CREATE POLICY "friendships_select_own" ON public.friendships
 
 DROP POLICY IF EXISTS "friendships_insert_own" ON public.friendships;
 -- A block is not undone by removing the contact and asking again.
+--
+-- And an insert is a request, never an answer (0055). `status` is a column
+-- like any other: inserted as 'accepted' it was a friendship with somebody who
+-- had never been asked, and every policy below that gates on one trusted it.
+-- Only the addressee turns a request into a friendship, through the UPDATE
+-- policy.
 CREATE POLICY "friendships_insert_own" ON public.friendships
   FOR INSERT TO authenticated
   WITH CHECK (
     (select auth.uid()) = requester_id
+    AND status = 'pending'
     AND NOT public.is_blocked_pair(requester_id, addressee_id)
   );
 
@@ -701,6 +708,20 @@ CREATE TABLE IF NOT EXISTS public.messages (
   CONSTRAINT sealed_prompt_shape CHECK (
     NOT sealed_prompt
     OR (ciphertext IS NOT NULL AND media_path IS NULL AND user_id <> receiver_id)
+  ),
+
+  -- A row names objects in its own conversation's folder and nowhere else
+  -- (0055). `expire_messages()` deletes what an expiring row names, as the
+  -- owner, so a path that was only the client's word let a self-note on a
+  -- short timer delete any object whose name was known — a group's included.
+  -- The folder is the sorted pair, `mediaPath` in src/lib/conversation.ts.
+  CONSTRAINT messages_media_in_conversation CHECK (
+    (media_path IS NULL
+      OR split_part(media_path, '/', 1)
+         = least(user_id, receiver_id)::text || '_' || greatest(user_id, receiver_id)::text)
+    AND (media_thumb_path IS NULL
+      OR split_part(media_thumb_path, '/', 1)
+         = least(user_id, receiver_id)::text || '_' || greatest(user_id, receiver_id)::text)
   )
 );
 
@@ -1226,8 +1247,10 @@ CREATE INDEX IF NOT EXISTS sealed_answers_prompt_idx
   evaluating the policy runs the subquery, which evaluates the policy. A
   definer-rights function is not subject to RLS and so terminates.
 
-  It answers one bit — "has this person answered this prompt" — and that bit is
-  already implied by what the caller can see, so granting it costs nothing.
+  It answers one bit, and only about the caller (0055). The policy never asks
+  about anyone else; asked about the other side, the same bit was "have they
+  answered yet?" — the ordering the exchange exists to withhold — and it was
+  executable by anyone, for any pair of ids.
 */
 CREATE OR REPLACE FUNCTION public.has_answered(prompt uuid, who uuid)
 RETURNS boolean
@@ -1236,7 +1259,7 @@ STABLE
 SECURITY DEFINER
 SET search_path = ''
 AS $$
-  SELECT EXISTS (
+  SELECT who = (SELECT auth.uid()) AND EXISTS (
     SELECT 1 FROM public.sealed_answers a
     WHERE a.prompt_id = prompt AND a.user_id = who
   );
@@ -1790,7 +1813,15 @@ CREATE TABLE IF NOT EXISTS public.room_messages (
 
   -- A row claiming a version no builder exists for would verify against
   -- nothing at all.
-  CONSTRAINT room_messages_sig_v_known CHECK (sig_v IN (1, 2, 3, 4))
+  CONSTRAINT room_messages_sig_v_known CHECK (sig_v IN (1, 2, 3, 4)),
+
+  -- The room's own folder only, for the reason `messages_media_in_conversation`
+  -- gives (0055): room folders have no DELETE policy so that no member can clear
+  -- the group's history, and the sweep must not be a way round that.
+  CONSTRAINT room_messages_media_in_room CHECK (
+    (media_path IS NULL OR split_part(media_path, '/', 1) = room_id::text)
+    AND (media_thumb_path IS NULL OR split_part(media_thumb_path, '/', 1) = room_id::text)
+  )
 );
 CREATE INDEX IF NOT EXISTS room_messages_room_time
   ON public.room_messages (room_id, created_at DESC);
@@ -1868,9 +1899,31 @@ DROP POLICY IF EXISTS participants_select_member ON public.room_participants;
 CREATE POLICY participants_select_member ON public.room_participants
   FOR SELECT TO authenticated USING (public.is_room_member(room_id));
 
+/*
+  The owner adds themselves and their own contacts, and nobody on either side
+  of a block (0055). Any account at all, before: a room was the way round the
+  friendship gate and the block both, since somebody you had blocked could put
+  you in a group, write to you there under a title of their choosing, and add
+  you back every time you left.
+*/
 DROP POLICY IF EXISTS participants_insert_creator ON public.room_participants;
 CREATE POLICY participants_insert_creator ON public.room_participants
-  FOR INSERT TO authenticated WITH CHECK (public.is_room_owner(room_id));
+  FOR INSERT TO authenticated
+  WITH CHECK (
+    public.is_room_owner(room_id)
+    AND (
+      user_id = (SELECT auth.uid())
+      OR (
+        EXISTS (
+          SELECT 1 FROM public.friendships f
+          WHERE f.status = 'accepted'
+            AND ((f.requester_id = (SELECT auth.uid()) AND f.addressee_id = user_id)
+              OR (f.requester_id = user_id AND f.addressee_id = (SELECT auth.uid())))
+        )
+        AND NOT public.is_blocked_pair((SELECT auth.uid()), user_id)
+      )
+    )
+  );
 
 /*
   The creator removes members; anyone else may remove themselves. Leaving is

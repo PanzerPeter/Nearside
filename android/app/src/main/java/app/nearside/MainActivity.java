@@ -49,6 +49,12 @@ public class MainActivity extends BridgeActivity {
         if (intent == null) return;
         String callId = intent.getStringExtra(CallNotifications.EXTRA_CALL_ID);
         if (callId == null) return;
+        // Launched by another app with call extras of its own making: opening
+        // Nearside is fine, answering on its say-so is not. See EXTRA_TOKEN.
+        if (!CallNotifications.isOwnIntent(this, intent)) {
+            clearCallExtras(intent);
+            return;
+        }
         String action = intent.getStringExtra(CallNotifications.EXTRA_ACTION);
 
         showOverLockScreen();
@@ -70,10 +76,15 @@ public class MainActivity extends BridgeActivity {
             action
         );
 
+        clearCallExtras(intent);
+    }
+
+    private static void clearCallExtras(Intent intent) {
         intent.removeExtra(CallNotifications.EXTRA_CALL_ID);
         intent.removeExtra(CallNotifications.EXTRA_PEER_ID);
         intent.removeExtra(CallNotifications.EXTRA_KIND);
         intent.removeExtra(CallNotifications.EXTRA_ACTION);
+        intent.removeExtra(CallNotifications.EXTRA_TOKEN);
     }
 
     /**

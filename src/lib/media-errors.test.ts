@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { describeMediaError } from './media-errors';
 import { NO_PEER_KEY } from './sealed-body';
+import { KEY_CHANGED } from './verification';
 
 describe('describeMediaError', () => {
   it('names the rate limit before anything else', () => {
@@ -13,6 +14,13 @@ describe('describeMediaError', () => {
     // The remedy belongs to the other person, so the sentence has to say so —
     // otherwise it reads as this device being broken.
     expect(message).toMatch(/their device/i);
+  });
+
+  it('says a changed key is why, not that the send failed', () => {
+    // Retrying cannot fix it; comparing safety numbers can.
+    const message = describeMediaError(new Error(KEY_CHANGED));
+    expect(message).toMatch(/key changed/i);
+    expect(message).toMatch(/safety numbers/i);
   });
 
   it('tells a cloud-only gallery item apart from a failed send', () => {

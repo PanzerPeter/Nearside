@@ -264,6 +264,14 @@ export const de: Catalog = {
     'Dein Schlüssel verlässt dieses Gerät nie, deshalb können wir ihn nicht für dich zurücksetzen. Deine Wiederherstellungsphrase ist der einzige Weg zurück, und jedes Konto auf diesem Telefon braucht seine eigene.',
   'identity.createKey': 'Neuen Schlüssel erstellen',
   'identity.havePhrase': 'Ich habe eine Wiederherstellungsphrase',
+  'identity.hasKey':
+    'Dieses Konto hat bereits einen Schlüssel. Stelle ihn mit deiner Wiederherstellungsphrase wieder her, um deine Nachrichten zu behalten.',
+  'identity.replaceWarning':
+    'Ein neuer Schlüssel kann nichts öffnen, was bisher an dieses Konto gesendet wurde – weder auf diesem noch auf einem anderen Telefon –, und deinen Kontakten wird mitgeteilt, dass sich dein Schlüssel geändert hat. Tu das nur, wenn die Wiederherstellungsphrase verloren ist.',
+  'identity.replaceConfirm':
+    'Trotzdem neuen Schlüssel erstellen',
+  'identity.phraseOtherKey':
+    'Diese Wörter gehören zu einem anderen Schlüssel als dem, den dieses Konto verwendet. Vergleiche sie mit deiner Abschrift.',
   'identity.writeDown': 'Schreibe diese {count} Wörter auf',
   'identity.writeDownBody':
     'Auf Papier. Nicht als Screenshot und nicht in einer anderen App auf diesem Telefon — beides geht mit dem Telefon selbst verloren.',

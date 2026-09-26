@@ -264,6 +264,14 @@ export const pl: Catalog = {
     'Twój klucz nigdy nie opuszcza tego urządzenia, więc nie zresetujemy go za ciebie. Fraza odzyskiwania to jedyna droga powrotna, a każde konto na tym telefonie potrzebuje własnej.',
   'identity.createKey': 'Utwórz nowy klucz',
   'identity.havePhrase': 'Mam frazę odzyskiwania',
+  'identity.hasKey':
+    'To konto ma już klucz. Przywróć go frazą odzyskiwania, aby zachować swoje wiadomości.',
+  'identity.replaceWarning':
+    'Nowy klucz nie otworzy niczego, co zostało dotąd wysłane na to konto – ani na tym telefonie, ani na innym – a Twoje kontakty zobaczą, że Twój klucz się zmienił. Zrób to tylko, jeśli fraza odzyskiwania przepadła.',
+  'identity.replaceConfirm':
+    'Mimo to utwórz nowy klucz',
+  'identity.phraseOtherKey':
+    'Te słowa należą do innego klucza niż ten, którego używa to konto. Porównaj je ze swoją zapisaną kopią.',
   'identity.writeDown': 'Zapisz te słowa: {count}',
   'identity.writeDownBody':
     'Na papierze. Nie na zrzucie ekranu ani w innej aplikacji na tym telefonie, bo jedno i drugie przepada razem z telefonem.',

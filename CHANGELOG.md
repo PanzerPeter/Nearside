@@ -14,6 +14,8 @@ one of them drifts.
 
 ## [Unreleased]
 
+## [1.18.0] — 2026-09-26
+
 ### Added
 
 - Block, from a conversation's menu. Neither of you can message, call, react,
@@ -32,8 +34,43 @@ one of them drifts.
   message is really from that conversation, and who sent it and when, but
   keeps none of the text. You can block the person in the same step.
 
+### Security
+
+- Nobody can make themselves your contact without you accepting. A request
+  could be written to the server already marked as accepted, which made its
+  sender a contact who could message you, call you and see your profile —
+  and all it took was your account id, which is in every connect QR code. A
+  request is now only a request until you accept it.
+- Nobody can put you in a group unless you are one of their contacts, and
+  nobody on either side of a block can. Before, anyone with your account id
+  could add you to a group and write to you there, even after you blocked
+  them, and add you back every time you left.
+- A group member can no longer delete the group's photos and videos. A message
+  could name any file on the server, and a disappearing message that named
+  someone else's file had that file deleted when it expired.
+- When a contact's key changes, nothing more goes to them until you compare
+  safety numbers, and not only from the message box. Messages still waiting to
+  send, forwards, edits, answers to a sealed question and calls all used to go
+  ahead using the new key. Calls to or from that contact wait for the same
+  check.
+- A contact's profile picture is shown only when it is stored with Nearside.
+  A picture address pointing anywhere else let whoever ran that server see your
+  IP address every time you looked at the contact.
+- Another app on your Android phone can no longer make Nearside answer a call.
+  Only Nearside's own ring can.
+- Whether the other person has answered a sealed question can no longer be
+  looked up before you have answered it yourself.
+
 ### Fixed
 
+- Setting up Nearside on a new phone for an account you already use now asks
+  for your recovery phrase first. Making a new key is still possible, behind a
+  warning, because a new key cannot open anything sent to you before — on this
+  phone or any other — and your contacts are told your key changed. A recovery
+  phrase that belongs to a different key is refused rather than quietly
+  replacing yours.
+- On Android, muting a contact now also silences their calls, and muting a
+  group silences its notifications. Both still rang.
 - Disappearing messages are deleted from the server again. A storage
   safeguard Supabase added made the minute-by-minute cleanup fail whenever an
   expired message had a photo, video or file attached, and the failure undid

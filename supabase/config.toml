@@ -44,9 +44,10 @@ verify_jwt = true
 [functions.report-user]
 verify_jwt = true
 
-# The older Web Push transport, called by a database trigger rather than by a
-# signed-in user — so there is no JWT to verify, and `PUSH_TRIGGER_SECRET` in a
-# header is what authenticates the caller instead. Superseded by OneSignal and
-# not currently deployed.
+# The OneSignal sender, and the live path for every message notification: the
+# sending device invokes it right after an insert (`src/lib/push.ts`). No JWT
+# check at the gateway because its other caller, the database trigger, has
+# none; the function checks the caller authored the message itself, or accepts
+# `PUSH_TRIGGER_SECRET` in a header. Deploy it — without it no push is sent.
 [functions.send-push]
 verify_jwt = false

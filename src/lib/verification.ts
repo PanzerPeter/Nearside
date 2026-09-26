@@ -10,6 +10,7 @@
 //
 // State lives in the local store only (spec §7). A server-held "verified" flag
 // would be a claim from exactly the party this check exists to distrust.
+import { toBase64 } from './crypto/keys';
 import { cachedContact, putContact } from './localdb';
 
 export type VerificationState = 'unverified' | 'verified' | 'changed';
@@ -22,6 +23,25 @@ export async function verificationState(
   if (!known) return 'unverified';
   if (known.public_key !== currentKey) return 'changed';
   return known.verified_at ? 'verified' : 'unverified';
+}
+
+/**
+ * What sealing to a peer throws while their published key is not the one this
+ * device recorded. Exported so callers can tell it from a network failure: it
+ * will not fix itself on a retry, and its remedy is verifying the contact.
+ */
+export const KEY_CHANGED = 'peer key changed since it was recorded';
+
+/**
+ * Whether `key` differs from the key recorded for this peer — the state that
+ * blocks the composer, asked by the paths the composer is not on. The outbox,
+ * a forward, an edit, a sealed answer and a call signal all used to seal to
+ * whatever the server published, so a swapped key was only refused where the
+ * user was typing. No record is not a change: that is first use.
+ */
+export async function keyChanged(peerId: string, key: Uint8Array): Promise<boolean> {
+  const known = await cachedContact(peerId);
+  return !!known && known.public_key !== (await toBase64(key));
 }
 
 /**

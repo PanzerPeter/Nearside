@@ -276,6 +276,14 @@ export const en = {
     'Your key never leaves this device, so we cannot reset it for you. Your recovery phrase is the only way back in, and every account on this phone needs its own.',
   'identity.createKey': 'Create a new key',
   'identity.havePhrase': 'I have a recovery phrase',
+  'identity.hasKey':
+    'This account already has a key. Restore it with your recovery phrase to keep your messages.',
+  'identity.replaceWarning':
+    'A new key cannot open anything sent to this account before now, on this phone or any other, and your contacts will be told your key changed. Only do this if the recovery phrase is lost.',
+  'identity.replaceConfirm':
+    'Create a new key anyway',
+  'identity.phraseOtherKey':
+    'Those words belong to a different key than the one this account uses. Check them against your written copy.',
   'identity.writeDown': 'Write these {count} words down',
   'identity.writeDownBody':
     'On paper. Not in a screenshot, and not in another app on this phone, because both go missing with the phone itself.',

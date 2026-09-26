@@ -119,13 +119,16 @@ $$;
 ALTER TABLE public.messages      DISABLE TRIGGER messages_stamp_expiry;
 ALTER TABLE public.room_messages DISABLE TRIGGER room_messages_stamp_expiry;
 
+-- Real folders, not a made-up one: since 0055 a row may only name an object
+-- in its own conversation's folder (or its own room's), which is what stops a
+-- row pointing the sweep at somebody else's file.
 INSERT INTO storage.objects (bucket_id, name) VALUES
-  ('chat-media', 'sweep/full.bin'),
-  ('chat-media', 'sweep/thumb.bin'),
-  ('chat-media', 'sweep/room-full.bin'),
-  ('chat-media', 'sweep/room-thumb.bin'),
+  ('chat-media', 'aaaaaaaa-0000-0000-0000-000000000001_bbbbbbbb-0000-0000-0000-000000000002/full.bin'),
+  ('chat-media', 'aaaaaaaa-0000-0000-0000-000000000001_bbbbbbbb-0000-0000-0000-000000000002/thumb.bin'),
+  ('chat-media', 'dddddddd-0000-0000-0000-000000000004/room-full.bin'),
+  ('chat-media', 'dddddddd-0000-0000-0000-000000000004/room-thumb.bin'),
   -- A bystander: proof the sweep deletes what expired and not the bucket.
-  ('chat-media', 'sweep/keep.bin');
+  ('chat-media', 'aaaaaaaa-0000-0000-0000-000000000001_bbbbbbbb-0000-0000-0000-000000000002/keep.bin');
 
 INSERT INTO public.messages
   (id, user_id, receiver_id, media_path, media_thumb_path, media_type, expires_at)
@@ -133,7 +136,8 @@ VALUES
   ('cccccccc-0000-0000-0000-00000000000e',
    'aaaaaaaa-0000-0000-0000-000000000001',
    'bbbbbbbb-0000-0000-0000-000000000002',
-   'sweep/full.bin', 'sweep/thumb.bin', 'image', now() - interval '1 minute');
+   'aaaaaaaa-0000-0000-0000-000000000001_bbbbbbbb-0000-0000-0000-000000000002/full.bin',
+   'aaaaaaaa-0000-0000-0000-000000000001_bbbbbbbb-0000-0000-0000-000000000002/thumb.bin', 'image', now() - interval '1 minute');
 
 INSERT INTO public.room_messages
   (id, room_id, sender_id, signature, media_path, media_thumb_path, media_type, expires_at)
@@ -141,7 +145,8 @@ VALUES
   ('eeeeeeee-0000-0000-0000-00000000000f',
    'dddddddd-0000-0000-0000-000000000004',
    'aaaaaaaa-0000-0000-0000-000000000001', 'sig',
-   'sweep/room-full.bin', 'sweep/room-thumb.bin', 'image', now() - interval '1 minute');
+   'dddddddd-0000-0000-0000-000000000004/room-full.bin',
+   'dddddddd-0000-0000-0000-000000000004/room-thumb.bin', 'image', now() - interval '1 minute');
 
 SELECT public.expire_messages();
 
@@ -159,14 +164,14 @@ BEGIN
   SELECT string_agg(name, ', ') INTO orphan
     FROM storage.objects
    WHERE bucket_id = 'chat-media'
-     AND name IN ('sweep/full.bin', 'sweep/thumb.bin',
-                  'sweep/room-full.bin', 'sweep/room-thumb.bin');
+     AND name IN ('aaaaaaaa-0000-0000-0000-000000000001_bbbbbbbb-0000-0000-0000-000000000002/full.bin', 'aaaaaaaa-0000-0000-0000-000000000001_bbbbbbbb-0000-0000-0000-000000000002/thumb.bin',
+                  'dddddddd-0000-0000-0000-000000000004/room-full.bin', 'dddddddd-0000-0000-0000-000000000004/room-thumb.bin');
   IF orphan IS NOT NULL THEN
     RAISE EXCEPTION 'expire_messages() orphaned %', orphan;
   END IF;
 
   IF NOT EXISTS (SELECT 1 FROM storage.objects
-                  WHERE bucket_id = 'chat-media' AND name = 'sweep/keep.bin') THEN
+                  WHERE bucket_id = 'chat-media' AND name = 'aaaaaaaa-0000-0000-0000-000000000001_bbbbbbbb-0000-0000-0000-000000000002/keep.bin') THEN
     RAISE EXCEPTION 'expire_messages() deleted an object no expired row named';
   END IF;
 END;
@@ -243,6 +248,106 @@ DELETE FROM public.blocks WHERE blocker_id = 'aaaaaaaa-0000-0000-0000-0000000000
 INSERT INTO public.messages (user_id, receiver_id, ciphertext, nonce) VALUES
   ('aaaaaaaa-0000-0000-0000-000000000001',
    'bbbbbbbb-0000-0000-0000-000000000002', 'sealed', 'nonce');
+
+-- ---------------------------------------------------------------------------
+-- Consent and folders (0055), through RLS like the block checks above.
+--
+-- Carol is a stranger to Alice: no friendship row, pending or otherwise. Each
+-- block below is a write that used to succeed and must now be refused.
+-- ---------------------------------------------------------------------------
+
+RESET ROLE;
+INSERT INTO auth.users (id, email) VALUES
+  ('ffffffff-0000-0000-0000-000000000007', 'c@verify.test');
+INSERT INTO storage.objects (bucket_id, name) VALUES
+  ('chat-media', 'dddddddd-0000-0000-0000-000000000004/victim.bin');
+-- Bob has answered a sealed prompt; Alice has not. That ordering is exactly
+-- what the exchange withholds from her.
+INSERT INTO public.messages (id, user_id, receiver_id, ciphertext, nonce, sealed_prompt) VALUES
+  ('cccccccc-0000-0000-0000-000000000009', 'aaaaaaaa-0000-0000-0000-000000000001',
+   'bbbbbbbb-0000-0000-0000-000000000002', 'sealed', 'nonce', true);
+INSERT INTO public.sealed_answers (prompt_id, user_id, ciphertext, nonce) VALUES
+  ('cccccccc-0000-0000-0000-000000000009', 'bbbbbbbb-0000-0000-0000-000000000002', 'sealed', 'nonce');
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claim.sub = 'aaaaaaaa-0000-0000-0000-000000000001';
+
+DO $$
+DECLARE
+  refused boolean;
+BEGIN
+  -- A request is a question. Arriving already answered, it is a friendship
+  -- with somebody who was never asked, and every policy trusts that row.
+  refused := false;
+  BEGIN
+    INSERT INTO public.friendships (requester_id, addressee_id, status) VALUES
+      ('aaaaaaaa-0000-0000-0000-000000000001', 'ffffffff-0000-0000-0000-000000000007', 'accepted');
+  EXCEPTION WHEN insufficient_privilege THEN
+    refused := true;
+  END;
+  IF NOT refused THEN
+    RAISE EXCEPTION 'consent: a friendship was inserted already accepted';
+  END IF;
+
+  -- A room is not a way round the friendship gate: its owner may add
+  -- themselves and their contacts, not whoever they have an id for.
+  INSERT INTO public.rooms (id, title, created_by) VALUES
+    ('12121212-0000-0000-0000-000000000008', 'consent room',
+     'aaaaaaaa-0000-0000-0000-000000000001');
+  INSERT INTO public.room_participants (room_id, user_id) VALUES
+    ('12121212-0000-0000-0000-000000000008', 'aaaaaaaa-0000-0000-0000-000000000001'),
+    ('12121212-0000-0000-0000-000000000008', 'bbbbbbbb-0000-0000-0000-000000000002');
+  refused := false;
+  BEGIN
+    INSERT INTO public.room_participants (room_id, user_id) VALUES
+      ('12121212-0000-0000-0000-000000000008', 'ffffffff-0000-0000-0000-000000000007');
+  EXCEPTION WHEN insufficient_privilege THEN
+    refused := true;
+  END;
+  IF NOT refused THEN
+    RAISE EXCEPTION 'consent: a room owner added a stranger';
+  END IF;
+
+  -- A row names an object in its own folder and nowhere else. Otherwise a
+  -- self-note on a short timer points the sweep at any file whose name is
+  -- known, including a room's, which has no DELETE policy for that reason.
+  refused := false;
+  BEGIN
+    INSERT INTO public.messages (user_id, receiver_id, media_path, media_type) VALUES
+      ('aaaaaaaa-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001',
+       'dddddddd-0000-0000-0000-000000000004/victim.bin', 'image');
+  EXCEPTION WHEN check_violation THEN
+    refused := true;
+  END;
+  IF NOT refused THEN
+    RAISE EXCEPTION 'folders: a message named an object outside its conversation';
+  END IF;
+
+  refused := false;
+  BEGIN
+    INSERT INTO public.room_messages (id, room_id, sender_id, signature, media_path, media_type)
+    VALUES (gen_random_uuid(), '12121212-0000-0000-0000-000000000008',
+            'aaaaaaaa-0000-0000-0000-000000000001', 'sig',
+            'dddddddd-0000-0000-0000-000000000004/victim.bin', 'image');
+  EXCEPTION WHEN check_violation THEN
+    refused := true;
+  END;
+  IF NOT refused THEN
+    RAISE EXCEPTION 'folders: a room message named an object outside its room';
+  END IF;
+
+  -- The ordinary shapes still land: the self-chat folder is the pair of you.
+  INSERT INTO public.messages (user_id, receiver_id, media_path, media_type) VALUES
+    ('aaaaaaaa-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001',
+     'aaaaaaaa-0000-0000-0000-000000000001_aaaaaaaa-0000-0000-0000-000000000001/note.bin', 'image');
+
+  -- Whether someone answered is theirs to reveal by answering, not a bit
+  -- anybody can poll (0055).
+  IF public.has_answered('cccccccc-0000-0000-0000-000000000009',
+                         'bbbbbbbb-0000-0000-0000-000000000002') IS NOT FALSE THEN
+    RAISE EXCEPTION 'has_answered: answered about someone other than the caller';
+  END IF;
+END;
+$$;
 
 RESET ROLE;
 

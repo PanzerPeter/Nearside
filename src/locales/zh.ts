@@ -266,6 +266,14 @@ export const zh: Catalog = {
     '你的密钥从不离开这台设备，所以我们没法替你重置。助记词是唯一的回头路，而这台手机上的每个账号都需要各自的一组。',
   'identity.createKey': '创建新密钥',
   'identity.havePhrase': '我有助记词',
+  'identity.hasKey':
+    '此账号已有密钥。请用助记词恢复它，以保留你的消息。',
+  'identity.replaceWarning':
+    '新密钥无法打开此前发送到此账号的任何内容（无论在这台手机还是其他设备上），你的联系人也会看到你的密钥已更改。只有在助记词丢失时才这样做。',
+  'identity.replaceConfirm':
+    '仍然创建新密钥',
+  'identity.phraseOtherKey':
+    '这些词对应的密钥与此账号使用的不同。请与你手写的副本核对。',
   'identity.writeDown': '把这{count}个词抄下来',
   'identity.writeDownBody':
     '抄在纸上。别截图，也别放进这台手机的另一个应用里，这两样都会跟着手机一起消失。',

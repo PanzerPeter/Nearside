@@ -266,6 +266,14 @@ export const fr: Catalog = {
     'Ta clé ne quitte jamais cet appareil, donc nous ne pouvons pas la réinitialiser pour toi. Ta phrase de récupération est le seul chemin de retour, et chaque compte sur ce téléphone a besoin de la sienne.',
   'identity.createKey': 'Créer une nouvelle clé',
   'identity.havePhrase': 'J’ai une phrase de récupération',
+  'identity.hasKey':
+    'Ce compte a déjà une clé. Restaurez-la avec votre phrase de récupération pour garder vos messages.',
+  'identity.replaceWarning':
+    'Une nouvelle clé ne peut rien ouvrir de ce qui a été envoyé à ce compte jusqu’ici, sur ce téléphone ou un autre, et vos contacts seront avertis que votre clé a changé. Ne le faites que si la phrase de récupération est perdue.',
+  'identity.replaceConfirm':
+    'Créer quand même une nouvelle clé',
+  'identity.phraseOtherKey':
+    'Ces mots correspondent à une autre clé que celle de ce compte. Comparez-les avec votre copie écrite.',
   'identity.writeDown': 'Note ces {count} mots',
   'identity.writeDownBody':
     'Sur papier. Pas en capture d’écran, ni dans une autre application de ce téléphone : les deux disparaissent avec le téléphone lui-même.',

@@ -593,6 +593,7 @@ function App() {
         onConfirm={confirmIdentity}
         onRestore={restoreIdentity}
         account={myProfile?.display_name ?? session.user.email ?? t('accounts.thisAccount')}
+        userId={session.user.id}
         onSignOut={() => void signOut()}
         secureStorage={isSecureStorageAvailable()}
       />

@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { Eye, ShieldAlert } from 'lucide-react';
 import { setScreenGuard } from '../lib/screen-guard';
 import { restoreErrorMessage } from '../lib/restore-error';
+import { phraseMatchesKey, publishedBoxKey } from '../lib/identity-sync';
+import { isValidMnemonic } from '../lib/crypto/mnemonic';
 import { useT } from '../hooks/useT';
 
 interface Props {
@@ -15,19 +17,22 @@ interface Props {
    *  for — restoring the wrong phrase into the wrong account is silent
    *  otherwise, and only shows up later as messages that will not open. */
   account: string;
+  /** The account's id, to ask whether it already publishes a key. */
+  userId: string;
   /** The only way off this screen without finishing. Without it, signing in as
    *  the wrong account strands the user on a phrase prompt with no exit. */
   onSignOut: () => void;
   secureStorage: boolean;
 }
 
-type Stage = 'choose' | 'show' | 'confirm' | 'restore';
+type Stage = 'choose' | 'replace' | 'show' | 'confirm' | 'restore';
 
 export function IdentitySetup({
   onCreate,
   onConfirm,
   onRestore,
   account,
+  userId,
   onSignOut,
   secureStorage,
 }: Props) {
@@ -37,6 +42,24 @@ export function IdentitySetup({
   const [typed, setTyped] = useState('');
   const [error, setError] = useState('');
   const [revealed, setRevealed] = useState(false);
+  /**
+   * The key this account already publishes: null when it has none, undefined
+   * while unknown — still loading, or the read failed. Only a confirmed null
+   * gets the one-tap "create", because a new key is published over whatever
+   * is there and every message sealed to the old one stops opening, on every
+   * device. A new phone for an existing account is exactly where that happens.
+   */
+  const [existingKey, setExistingKey] = useState<string | null | undefined>(undefined);
+
+  useEffect(() => {
+    let cancelled = false;
+    publishedBoxKey(userId)
+      .then((key) => !cancelled && setExistingKey(key))
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
 
   // Held for the 'show' and 'confirm' stages, not just 'show': the confirm stage
   // can send the user back for another look, and a flag toggled off in between
@@ -66,6 +89,13 @@ export function IdentitySetup({
 
   async function restore() {
     try {
+      // A valid phrase for some other key would publish that key over this
+      // account's: the restore would "work" and every message would stop opening.
+      // An invalid phrase goes on to `onRestore`, whose error names the bad word.
+      if (existingKey && isValidMnemonic(typed) && !(await phraseMatchesKey(typed, existingKey))) {
+        setError(t('identity.phraseOtherKey'));
+        return;
+      }
       await onRestore(typed);
     } catch (e) {
       setError(restoreErrorMessage(typed, e));
@@ -102,14 +132,47 @@ export function IdentitySetup({
             <>
               <h1 className="card-title">{t('identity.yourKey')}</h1>
               <p className="text-body text-strong">{t('identity.yourKeyBody')}</p>
-              <button className="btn btn-primary" onClick={begin}>
-                {t('identity.createKey')}
-              </button>
-              <button className="btn btn-ghost" onClick={() => setStage('restore')}>
-                {t('identity.havePhrase')}
-              </button>
+              {existingKey ? (
+                <>
+                  <p className="text-body text-strong">{t('identity.hasKey')}</p>
+                  <button className="btn btn-primary" onClick={() => setStage('restore')}>
+                    {t('identity.havePhrase')}
+                  </button>
+                  <button className="btn btn-ghost" onClick={() => setStage('replace')}>
+                    {t('identity.createKey')}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => (existingKey === null ? void begin() : setStage('replace'))}
+                  >
+                    {t('identity.createKey')}
+                  </button>
+                  <button className="btn btn-ghost" onClick={() => setStage('restore')}>
+                    {t('identity.havePhrase')}
+                  </button>
+                </>
+              )}
               <button className="btn btn-ghost btn-sm" onClick={onSignOut}>
                 {t('common.signOut')}
+              </button>
+            </>
+          )}
+
+          {stage === 'replace' && (
+            <>
+              <h1 className="card-title">{t('identity.createKey')}</h1>
+              <p className="flex items-start gap-2 text-body text-strong">
+                <ShieldAlert className="w-5 h-5 shrink-0 mt-px text-error" />
+                <span>{t('identity.replaceWarning')}</span>
+              </p>
+              <button className="btn btn-error" onClick={() => void begin()}>
+                {t('identity.replaceConfirm')}
+              </button>
+              <button className="btn btn-ghost" onClick={() => setStage('choose')}>
+                {t('common.back')}
               </button>
             </>
           )}

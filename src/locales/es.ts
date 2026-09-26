@@ -261,6 +261,14 @@ export const es: Catalog = {
     'Tu clave nunca sale de este dispositivo, así que no podemos restablecerla por ti. Tu frase de recuperación es la única forma de volver a entrar, y cada cuenta de este teléfono necesita la suya.',
   'identity.createKey': 'Crear una clave nueva',
   'identity.havePhrase': 'Ya tengo una frase de recuperación',
+  'identity.hasKey':
+    'Esta cuenta ya tiene una clave. Restáurala con tu frase de recuperación para conservar tus mensajes.',
+  'identity.replaceWarning':
+    'Una clave nueva no puede abrir nada de lo enviado a esta cuenta hasta ahora, ni en este teléfono ni en otro, y tus contactos verán que tu clave ha cambiado. Hazlo solo si has perdido la frase de recuperación.',
+  'identity.replaceConfirm':
+    'Crear una clave nueva de todos modos',
+  'identity.phraseOtherKey':
+    'Esas palabras corresponden a una clave distinta de la que usa esta cuenta. Compáralas con tu copia escrita.',
   'identity.writeDown': 'Apunta estas {count} palabras',
   'identity.writeDownBody':
     'En papel. Ni en una captura ni en otra app de este teléfono, porque las dos se pierden junto con el teléfono.',

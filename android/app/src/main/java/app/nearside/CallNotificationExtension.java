@@ -38,7 +38,14 @@ public class CallNotificationExtension implements INotificationServiceExtension 
         // then being rung by them at three in the morning is not what the
         // toggle promised. There is no server-side mute list on purpose, so the
         // phone pays for the delivery and then throws it away.
-        String from = data.optString("senderId", data.optString("roomId", ""));
+        // The conversation, which is what mute and loudness are keyed on: the
+        // room for a room message (it carries its sender too, and asking for
+        // that first meant a muted group never matched), the sender for a
+        // direct one, and the caller for a ring, which `call-ring` names
+        // `peerId` — read by nobody, so every muted contact still rang.
+        String from = data.has("roomId")
+            ? data.optString("roomId", "")
+            : data.optString("senderId", data.optString("peerId", ""));
         if (MuteStore.isMuted(event.getContext(), from)) {
             event.preventDefault(true);
             return;

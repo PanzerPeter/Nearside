@@ -115,6 +115,22 @@ for the app-lock verifier. Nonces are random per seal. No primitive here is
 home-made, and a report that one is being used incorrectly is exactly the kind
 this file is asking for.
 
+Three limits of that design, stated here so nobody has to find them:
+
+- **No forward secrecy.** Peer messages are `crypto_box` between long-lived
+  identity keys, with no ratchet. Someone who records ciphertext today and
+  obtains a seed later can open what was sealed to or from it.
+- **Removing someone from a room does not rotate its key.** They stop receiving
+  rows because RLS stops serving them, not because they can no longer decrypt.
+  Messages sent afterwards are kept from them by the server, not by the
+  cryptography.
+- **Room keys are not pinned.** A 1:1 chat records a peer's key on first use and
+  refuses to seal to a different one until it is verified again. Rooms read
+  members' encryption and signing keys from `profiles` each session, and the
+  safety number covers the encryption key only, so a server that substituted
+  keys could read a room created afterwards or sign a message as a member. This
+  is in scope, and pinning both keys is the fix.
+
 ## Supported versions
 
 Only the current `main` and the most recent build from it. There is no backport

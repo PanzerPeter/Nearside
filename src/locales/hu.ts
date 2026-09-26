@@ -266,6 +266,14 @@ export const hu: Catalog = {
     'A kulcsod soha nem hagyja el ezt a készüléket, ezért nem tudjuk visszaállítani helyetted. A helyreállítási kifejezés az egyetlen út vissza, és a telefonon lévő minden fióknak sajátra van szüksége.',
   'identity.createKey': 'Új kulcs létrehozása',
   'identity.havePhrase': 'Van helyreállítási kifejezésem',
+  'identity.hasKey':
+    'Ennek a fióknak már van kulcsa. Állítsd vissza a helyreállítási kifejezéssel, hogy megmaradjanak az üzeneteid.',
+  'identity.replaceWarning':
+    'Egy új kulcs semmit sem tud megnyitni abból, amit eddig erre a fiókra küldtek – sem ezen, sem más telefonon –, és a partnereid értesülnek arról, hogy a kulcsod megváltozott. Csak akkor tedd ezt, ha a helyreállítási kifejezés elveszett.',
+  'identity.replaceConfirm':
+    'Új kulcs létrehozása mégis',
+  'identity.phraseOtherKey':
+    'Ezek a szavak egy másik kulcshoz tartoznak, mint amit ez a fiók használ. Vesd össze őket a leírt példánnyal.',
   'identity.writeDown': 'Írd le ezt a {count} szót',
   'identity.writeDownBody':
     'Papírra. Ne képernyőképre és ne a telefon másik alkalmazásába, mert mindkettő a telefonnal együtt vész el.',

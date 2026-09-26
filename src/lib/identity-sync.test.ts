@@ -15,7 +15,9 @@ vi.mock('./supabase', () => ({
   },
 }));
 
-import { publicKeyPayload } from './identity-sync';
+import { phraseMatchesKey, publicKeyPayload } from './identity-sync';
+import { identityFromSeed, toBase64 } from './crypto/keys';
+import { generateMnemonic, seedFromMnemonic } from './crypto/mnemonic';
 
 describe('identity sync', () => {
   it('publishes only public halves', async () => {
@@ -35,5 +37,25 @@ describe('identity sync', () => {
       const b64 = Buffer.from(secret).toString('base64');
       expect(serialized).not.toContain(b64);
     }
+  });
+});
+
+// Restoring into an account that already publishes a key: the phrase has to be
+// that key's, or the restore would publish a second one over it and every
+// message sealed to the first becomes unreadable on every device.
+describe('phraseMatchesKey', () => {
+  it('accepts the phrase the published key came from', async () => {
+    const phrase = generateMnemonic();
+    const identity = await identityFromSeed(await seedFromMnemonic(phrase));
+    expect(await phraseMatchesKey(phrase, await toBase64(identity.boxPublic))).toBe(true);
+  });
+
+  it('refuses a valid phrase that belongs to a different key', async () => {
+    const theirs = await identityFromSeed(await seedFromMnemonic(generateMnemonic()));
+    expect(await phraseMatchesKey(generateMnemonic(), await toBase64(theirs.boxPublic))).toBe(false);
+  });
+
+  it('refuses a phrase that is not one', async () => {
+    expect(await phraseMatchesKey('not twelve words', 'irrelevant')).toBe(false);
   });
 });

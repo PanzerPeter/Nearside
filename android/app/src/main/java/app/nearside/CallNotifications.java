@@ -6,12 +6,17 @@ import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.media.AudioAttributes;
 import android.media.RingtoneManager;
 import android.os.Build;
+import android.util.Base64;
 
 import androidx.core.app.NotificationCompat;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.SecureRandom;
 import java.util.ArrayDeque;
 
 /**
@@ -51,6 +56,21 @@ final class CallNotifications {
      * — during those seconds rather than after them.
      */
     static final String EXTRA_KIND = "app.nearside.CALL_KIND";
+
+    /**
+     * Proof that an intent came from one of this class's own notifications.
+     *
+     * MainActivity is exported — it is the launcher — so any installed app can
+     * start it with whatever extras it likes. Without this, one carrying
+     * `accept` and a contact's id made Nearside join that contact's call topic,
+     * open the microphone or camera and answer their next offer, over the lock
+     * screen, with nobody touching the phone. The token is a per-install secret
+     * kept in app-private preferences and placed only inside the immutable
+     * PendingIntents built below, which no other app can read.
+     */
+    static final String EXTRA_TOKEN = "app.nearside.CALL_TOKEN";
+    private static final String TOKEN_PREFS = "nearside_call_intents";
+    private static final String TOKEN_KEY = "token";
 
     static final String ACTION_ACCEPT = "accept";
     static final String ACTION_DECLINE = "decline";
@@ -147,6 +167,28 @@ final class CallNotifications {
         nm.createNotificationChannel(ongoing);
     }
 
+    /** This install's intent secret, minted on first use. See EXTRA_TOKEN. */
+    static synchronized String intentToken(Context context) {
+        SharedPreferences prefs = context.getSharedPreferences(TOKEN_PREFS, Context.MODE_PRIVATE);
+        String token = prefs.getString(TOKEN_KEY, null);
+        if (token == null) {
+            byte[] bytes = new byte[32];
+            new SecureRandom().nextBytes(bytes);
+            token = Base64.encodeToString(bytes, Base64.NO_WRAP);
+            prefs.edit().putString(TOKEN_KEY, token).apply();
+        }
+        return token;
+    }
+
+    /** Whether `intent` was built by `activityFor`, rather than by some other app. */
+    static boolean isOwnIntent(Context context, Intent intent) {
+        String token = intent.getStringExtra(EXTRA_TOKEN);
+        return token != null && MessageDigest.isEqual(
+            token.getBytes(StandardCharsets.UTF_8),
+            intentToken(context).getBytes(StandardCharsets.UTF_8)
+        );
+    }
+
     /** Immutable, because none of these intents is filled in by the system. */
     private static int pendingFlags() {
         return PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE;
@@ -170,6 +212,7 @@ final class CallNotifications {
         intent.putExtra(EXTRA_PEER_ID, peerId);
         intent.putExtra(EXTRA_KIND, kind);
         intent.putExtra(EXTRA_ACTION, action);
+        intent.putExtra(EXTRA_TOKEN, intentToken(context));
         return PendingIntent.getActivity(context, requestCode, intent, pendingFlags());
     }
 

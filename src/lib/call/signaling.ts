@@ -34,6 +34,7 @@ import { openFrom, sealFor } from '../crypto/seal';
 import { conversationKey } from '../conversation';
 import { supabase } from '../supabase';
 import { peerPublicKey } from '../peer-keys';
+import { keyChanged } from '../verification';
 import { ENVELOPE_VERSION, isEnvelope, isSignal, type Envelope, type Signal } from './types';
 
 /** One broadcast event carries every signal type; the type itself is sealed. */
@@ -156,6 +157,10 @@ export function openSignalHub({
         void (async () => {
           const peerPublic = await peerPublicKey(peerId);
           if (!peerPublic || closed) return;
+          // A key that is not the recorded one is an impersonation until the
+          // contact is verified again, and a call is the last thing to take
+          // from it: the SDP carries the DTLS fingerprint the media is keyed on.
+          if (await keyChanged(peerId, peerPublic)) return;
           const signal = await openSignal(identity, peerPublic, payload);
           if (!signal || closed) return;
           onSignal({ peerId, callId: payload.callId, signal });
@@ -190,6 +195,8 @@ export function openSignalHub({
       // The same refusal `sealBody` makes. There is no plaintext path for a
       // signal either, so a peer with no published key simply cannot be called.
       if (!peerPublic) return false;
+      // Nor is one sealed to a key the composer would refuse — see above.
+      if (await keyChanged(peerId, peerPublic)) return false;
       const payload = await sealSignal(identity, peerPublic, me, callId, signal);
       try {
         const result = await channel.send({ type: 'broadcast', event: EVENT, payload });

@@ -16,6 +16,7 @@
 // for, and pasted into an issue.
 
 import { NO_PEER_KEY } from './sealed-body';
+import { KEY_CHANGED } from './verification';
 import { t } from './i18n';
 
 /** The union of what actually reaches a catch here: PostgREST returns a plain
@@ -59,6 +60,12 @@ export function describeMediaError(error: unknown, fallback = t('media.sendFaile
   // has to say whose problem it is, or it reads as this device being broken.
   if (message.includes(NO_PEER_KEY)) {
     return t('media.noPeerKey');
+  }
+
+  // The key they publish is not the one this device recorded. A retry cannot
+  // fix that; comparing safety numbers is the only way on, so say so.
+  if (message.includes(KEY_CHANGED)) {
+    return `${t('keyChanged.title')} ${t('keyChanged.compare')}.`;
   }
 
   // The file stopped being readable between the pick and the send. On Android a

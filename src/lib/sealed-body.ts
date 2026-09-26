@@ -2,6 +2,7 @@ import { fromBase64, toBase64, type Identity } from './crypto/keys';
 import { openForSelf, openFrom, sealFor, sealForSelf } from './crypto/seal';
 import { isSelfChat } from './conversation';
 import { cacheMessage, forgetCachedMessage } from './localdb';
+import { KEY_CHANGED, keyChanged } from './verification';
 
 export interface BodyColumns {
   ciphertext: string;
@@ -49,6 +50,10 @@ export async function sealBody(
   // Throwing beats degrading: a fallback to plaintext here would be invisible
   // to the sender and would quietly falsify the product's central claim.
   if (!peerPublic) throw new Error(NO_PEER_KEY);
+  // The same refusal the composer's banner makes, here because every other send
+  // path — outbox, forward, edit, sealed answer, file key — arrives through
+  // this function and none of them passes the banner.
+  if (await keyChanged(peerId, peerPublic)) throw new Error(KEY_CHANGED);
   return sealFor(identity.boxPrivate, peerPublic, text);
 }
 

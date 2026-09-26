@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { identityFromSeed } from './crypto/keys';
+import { identityFromSeed, toBase64 } from './crypto/keys';
 import { generateMnemonic, seedFromMnemonic } from './crypto/mnemonic';
 import { openBody, openMediaKey, openRows, sealBody, sealMediaKey } from './sealed-body';
 import { cachedPreview, clearLocalDb, openLocalDb, searchCached } from './localdb';
+import { KEY_CHANGED, markVerified, recordPeerKey } from './verification';
 
 const ME = '11111111-1111-1111-1111-111111111111';
 const PEER = '22222222-2222-2222-2222-222222222222';
@@ -206,5 +207,45 @@ describe('deleted rows and the local mirror', () => {
     expect(row.decrypt_failed).toBe(false);
     expect(await searchCached(PEER_B, 'delete me')).toHaveLength(0);
     expect(await cachedPreview(PEER_B)).toBeNull();
+  });
+});
+
+// SECURITY.md: "a key change is accepted silently rather than blocking the
+// composer" is in scope. The composer was the only thing that blocked; the
+// outbox, forwards, edits and sealed answers sealed to whatever key the server
+// published. The seal boundary is where all of them meet.
+describe('a changed key', () => {
+  beforeEach(async () => {
+    await openLocalDb(ME);
+    await clearLocalDb();
+  });
+
+  it('refuses to seal to a key other than the one recorded for the peer', async () => {
+    const me = await identity();
+    const recorded = await identity();
+    const swapped = await identity();
+    await recordPeerKey(PEER, await toBase64(recorded.boxPublic));
+
+    await expect(sealBody(me, swapped.boxPublic, ME, PEER, 'hello')).rejects.toThrow(KEY_CHANGED);
+    await expect(sealBody(me, recorded.boxPublic, ME, PEER, 'hello')).resolves.toBeTruthy();
+  });
+
+  it('seals again once the new key has been verified', async () => {
+    const me = await identity();
+    const swapped = await identity();
+    await recordPeerKey(PEER, await toBase64((await identity()).boxPublic));
+    await markVerified(PEER, await toBase64(swapped.boxPublic));
+
+    await expect(sealBody(me, swapped.boxPublic, ME, PEER, 'hello')).resolves.toBeTruthy();
+  });
+
+  it('holds file keys to the same rule', async () => {
+    const me = await identity();
+    await recordPeerKey(PEER, await toBase64((await identity()).boxPublic));
+    const swapped = await identity();
+
+    await expect(
+      sealMediaKey(me, swapped.boxPublic, ME, PEER, new Uint8Array(32))
+    ).rejects.toThrow(KEY_CHANGED);
   });
 });
