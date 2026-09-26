@@ -87,13 +87,22 @@ SELECT '## policy ' || schemaname || '.' || tablename || '.' || policyname
 
 -- Function bodies included: a policy is only as good as the SECURITY DEFINER
 -- function it delegates to, and `SET search_path` is part of that.
+--
+-- The body is hashed without its `--` comments and with whitespace collapsed.
+-- Two live functions once held exactly the migration's code minus its comments,
+-- and a raw hash reported both as WRONG BODY: an alarm about text that never
+-- runs buries the one about code that does. The strip is blind to quoting, so
+-- a string literal containing `--` would lose its tail on both sides alike; no
+-- body here has one.
 SELECT '## function ' || p.proname || '(' || pg_get_function_identity_arguments(p.oid) || ')'
        || ' returns=' || pg_get_function_result(p.oid)
        || ' lang=' || l.lanname
        || ' volatile=' || p.provolatile::text
        || ' definer=' || p.prosecdef::text
        || ' config=' || coalesce(array_to_string(p.proconfig, ','), '-')
-       || ' body=' || md5(p.prosrc)
+       || ' body=' || md5(btrim(regexp_replace(
+                        regexp_replace(p.prosrc, '--[^\n]*', '', 'g'),
+                        '\s+', ' ', 'g')))
   FROM pg_proc p
   JOIN pg_namespace n ON n.oid = p.pronamespace
   JOIN pg_language l ON l.oid = p.prolang

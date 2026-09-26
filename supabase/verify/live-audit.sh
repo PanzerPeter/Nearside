@@ -164,9 +164,12 @@ if [ -s "$WORK/extra.txt" ]; then
   echo
 fi
 
-if [ -s "$WORK/missing.txt" ]; then
+# A wrong body counts as missing: the function this repo describes is not on the
+# project. The trim above takes it out of missing.txt, so it has to be named here
+# or the audit reports "Nothing is missing" and exits 0 over a broken function.
+if [ -s "$WORK/missing.txt" ] || [ -s "$WORK/changed.fn" ]; then
   printf '\033[31m==> The live project is not what this checkout describes.\033[0m\n'
-  printf '    Find the migration that adds a missing fact:\n'
+  printf '    Find the migration that adds a missing fact or the right body:\n'
   printf "      grep -rn '<object name>' supabase/migrations/\n"
   exit 1
 fi
