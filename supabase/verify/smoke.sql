@@ -349,6 +349,59 @@ BEGIN
 END;
 $$;
 
+-- ---------------------------------------------------------------------------
+-- Read-receipt privacy (0056). `shares_read()` is there for one policy, which
+-- asks it about a peer whose watermark row is addressed to the caller. Being
+-- granted and in `public` it is also /rpc/shares_read, and it answered for any
+-- id: a stranger could learn who had switched read receipts off.
+--
+-- Alice hides hers and Bob does not. Carol knows neither of them, so she must
+-- get the same answer for both — and the guard must not take the feature
+-- with it, so Alice and Bob still see exactly what the setting says.
+-- ---------------------------------------------------------------------------
+
+RESET ROLE;
+INSERT INTO public.receipt_prefs (user_id, share_read) VALUES
+  ('aaaaaaaa-0000-0000-0000-000000000001', false);
+INSERT INTO public.message_receipts (user_id, peer_id, read_at) VALUES
+  ('aaaaaaaa-0000-0000-0000-000000000001', 'bbbbbbbb-0000-0000-0000-000000000002', now()),
+  ('bbbbbbbb-0000-0000-0000-000000000002', 'aaaaaaaa-0000-0000-0000-000000000001', now());
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claim.sub = 'ffffffff-0000-0000-0000-000000000007';
+
+DO $$
+BEGIN
+  IF public.shares_read('aaaaaaaa-0000-0000-0000-000000000001')
+     IS DISTINCT FROM public.shares_read('bbbbbbbb-0000-0000-0000-000000000002') THEN
+    RAISE EXCEPTION 'shares_read: told a stranger who hides their read receipts';
+  END IF;
+END;
+$$;
+
+SET LOCAL request.jwt.claim.sub = 'aaaaaaaa-0000-0000-0000-000000000001';
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM public.message_receipts
+                  WHERE user_id = 'bbbbbbbb-0000-0000-0000-000000000002'
+                    AND peer_id = 'aaaaaaaa-0000-0000-0000-000000000001') THEN
+    RAISE EXCEPTION 'receipts: a peer who shares read receipts was hidden';
+  END IF;
+END;
+$$;
+
+SET LOCAL request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000002';
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM public.message_receipts
+              WHERE user_id = 'aaaaaaaa-0000-0000-0000-000000000001'
+                AND peer_id = 'bbbbbbbb-0000-0000-0000-000000000002') THEN
+    RAISE EXCEPTION 'receipts: a peer who hides read receipts was shown';
+  END IF;
+END;
+$$;
+
 RESET ROLE;
 
 ROLLBACK;

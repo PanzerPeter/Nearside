@@ -235,6 +235,11 @@ checks(ord, migration, proves, ok) AS (VALUES
         AND EXISTS (SELECT 1 FROM pubs WHERE name = 'blocks')),
   (56, '0054_expiry_past_the_storage_guard', 'expire_messages() sets storage.allow_delete_query',
        EXISTS (SELECT 1 FROM fns WHERE name = 'expire_messages' AND src LIKE '%allow_delete_query%')),
+  (57, '0055_consent_and_media_folders', 'media folder CHECKs + has_answered() answers only the caller',
+       (SELECT count(*) = 2 FROM cons WHERE name IN ('messages_media_in_conversation','room_messages_media_in_room'))
+        AND EXISTS (SELECT 1 FROM fns WHERE name = 'has_answered' AND src LIKE '%who = (SELECT auth.uid())%')),
+  (58, '0056_shares_read_answers_peers', 'shares_read() answers only about a peer with a row addressed to the caller',
+       EXISTS (SELECT 1 FROM fns WHERE name = 'shares_read' AND src LIKE '%r.peer_id = (SELECT auth.uid())%')),
 
   -- Not migrations, but the same question: applied by hand, and nothing
   -- complains when they were not.

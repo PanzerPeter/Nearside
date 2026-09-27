@@ -65,3 +65,4 @@
 0053_blocks_and_reports.sql
 0054_expiry_past_the_storage_guard.sql
 0055_consent_and_media_folders.sql
+0056_shares_read_answers_peers.sql

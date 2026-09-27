@@ -1081,29 +1081,6 @@ CREATE POLICY "receipt_prefs_delete_own" ON public.receipt_prefs
 REVOKE ALL ON TABLE public.receipt_prefs FROM PUBLIC, anon;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.receipt_prefs TO authenticated;
 
-/*
-  No row means yes: every account that predates 0045 shared its watermarks, and
-  a default that turned the feature off for them would be a change nobody asked
-  for. SECURITY DEFINER for the reason `has_answered()` is — the policy has to
-  ask about somebody else's row, and a policy reading a table the caller cannot
-  read returns nothing rather than the truth.
-*/
-CREATE OR REPLACE FUNCTION public.shares_read(uid uuid)
-RETURNS boolean
-LANGUAGE sql
-STABLE
-SECURITY DEFINER
-SET search_path = ''
-AS $$
-  SELECT coalesce(
-    (SELECT p.share_read FROM public.receipt_prefs p WHERE p.user_id = uid),
-    true
-  );
-$$;
-
-REVOKE ALL ON FUNCTION public.shares_read(uuid) FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION public.shares_read(uuid) TO authenticated;
-
 CREATE TABLE IF NOT EXISTS public.message_receipts (
   user_id      uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   peer_id      uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
@@ -1117,6 +1094,37 @@ CREATE TABLE IF NOT EXISTS public.message_receipts (
 -- The sender's tick lookup goes the other way round from the primary key.
 CREATE INDEX IF NOT EXISTS message_receipts_peer_idx
   ON public.message_receipts (peer_id, user_id);
+
+/*
+  No row means yes: every account that predates 0045 shared its watermarks, and
+  a default that turned the feature off for them would be a change nobody asked
+  for. SECURITY DEFINER for the reason `has_answered()` is — the policy has to
+  ask about somebody else's row, and a policy reading a table the caller cannot
+  read returns nothing rather than the truth.
+
+  Being granted and in `public`, it is also /rpc/shares_read, so it answers
+  only where the policy would: about someone whose watermark row is addressed
+  to the caller. Anyone else gets false whatever their setting (0056). Before,
+  any account could ask about any id and learn who had switched receipts off.
+*/
+CREATE OR REPLACE FUNCTION public.shares_read(uid uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.message_receipts r
+    WHERE r.user_id = uid AND r.peer_id = (SELECT auth.uid())
+  ) AND coalesce(
+    (SELECT p.share_read FROM public.receipt_prefs p WHERE p.user_id = uid),
+    true
+  );
+$$;
+
+REVOKE ALL ON FUNCTION public.shares_read(uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.shares_read(uuid) TO authenticated;
 
 ALTER TABLE public.message_receipts ENABLE ROW LEVEL SECURITY;
 

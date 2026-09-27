@@ -14,6 +14,13 @@ one of them drifts.
 
 ## [Unreleased]
 
+### Security
+
+- Whether you have switched read receipts off is now visible only to the
+  people you talk to, who could already tell from the missing ticks. Before,
+  anyone with an account and your account id could ask the server and get the
+  answer.
+
 ## [1.18.0] — 2026-09-26
 
 ### Added
