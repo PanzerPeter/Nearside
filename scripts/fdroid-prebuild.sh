@@ -1,7 +1,6 @@
 #!/bin/sh
 # Turns a checkout into the F-Droid build: Android without OneSignal,
-# RevenueCat, ML Kit or Crashlytics. F-Droid's inclusion policy forbids all
-# four, and its scanner fails the build on any trace of them in the Gradle
+# RevenueCat or Crashlytics. F-Droid's inclusion policy forbids all three, and its scanner fails the build on any trace of them in the Gradle
 # files. Run from the repository root after `npm ci`; it rewrites tracked files,
 # so on a development machine run it in a throwaway worktree, never in place.
 set -eu
@@ -9,7 +8,6 @@ set -eu
 # Out of package.json, so `cap sync` stops generating Gradle projects for them.
 npm uninstall --no-audit --no-fund \
   @capacitor-firebase/crashlytics \
-  @capacitor-mlkit/barcode-scanning \
   @revenuecat/purchases-capacitor \
   onesignal-cordova-plugin
 

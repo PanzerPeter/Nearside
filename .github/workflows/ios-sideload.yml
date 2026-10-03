@@ -1,0 +1,64 @@
+name: ios-sideload
+
+# An unsigned .ipa for testers without an Apple developer account. Nobody here
+# has a Mac, and this runner is the only place the iOS project compiles. The
+# file is signed on the tester's side by Sideloadly or SideStore with their own
+# free Apple ID, which is why nothing here touches a certificate.
+#
+# Manual only: a macOS build takes ten-odd minutes, and one nobody is about to
+# install is not worth the wait in the Actions queue.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write # the rolling `ios-latest` release
+
+jobs:
+  ipa:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      # The two public values from `.env.foss` are all the app needs to reach
+      # the backend. OneSignal and RevenueCat stay unset on purpose: a free
+      # signing team cannot hold the push entitlement, and a sideloaded app has
+      # no App Store to buy from, so both init paths return early.
+      - run: cp .env.foss .env
+      - run: npm ci
+      # `cap sync ios` runs `pod install` itself when it finds CocoaPods.
+      - run: npm run ios:sync
+
+      - name: Build unsigned
+        working-directory: ios/App
+        run: |
+          xcodebuild build \
+            -workspace App.xcworkspace -scheme App -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
+
+      - name: Package .ipa
+        run: |
+          mkdir Payload
+          cp -R ios/App/build/Build/Products/Release-iphoneos/App.app Payload/
+          zip -qry Nearside.ipa Payload
+
+      # A release asset has a fixed URL that needs no GitHub login, unlike an
+      # Actions artifact, so the link sent to a tester keeps working across
+      # rebuilds and opens straight from Safari.
+      - name: Publish to ios-latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          notes="Unsigned test build from ${GITHUB_SHA::7}. Install with Sideloadly or SideStore, see docs/IOS-SIDELOAD.md."
+          gh release view ios-latest >/dev/null 2>&1 \
+            || gh release create ios-latest --prerelease --title "iOS test build" --notes "$notes"
+          gh release edit ios-latest --notes "$notes"
+          gh release upload ios-latest Nearside.ipa --clobber

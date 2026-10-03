@@ -48,7 +48,6 @@ describe('processors', () => {
     'Crashlytics',
     'Cloudflare',
     'RevenueCat',
-    'ML Kit',
   ]) {
     it(`names ${company}`, () => {
       expect(source).toContain(company);

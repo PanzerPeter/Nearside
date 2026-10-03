@@ -20,9 +20,8 @@
 // `isNativePlatform()` returned, so nothing about the shipping builds changes.
 // Electron takes the browser path, which the app already supports.
 //
-// `Capacitor.getPlatform()` is called here, in `lib/scan.ts` (a permission flow
-// that exists only on Android) and in `lib/purchases.ts` (App Store versus Play
-// pricing). Everywhere else, ask this module.
+// `Capacitor.getPlatform()` is called here and in `lib/purchases.ts` (App Store
+// versus Play pricing). Everywhere else, ask this module.
 import { Capacitor } from '@capacitor/core';
 
 /**
@@ -45,11 +44,11 @@ export function isDesktop(): boolean {
 }
 
 /**
- * A mobile shell that has OneSignal, RevenueCat, ML Kit and Crashlytics in it.
+ * A mobile shell that has OneSignal, RevenueCat and Crashlytics in it.
  *
- * False in the F-Droid build, which is Android without them: push, purchases,
- * QR scanning and crash reports there behave as they do in a browser. The gate
- * for those four and nothing else — the seed, the mirror and every other
+ * False in the F-Droid build, which is Android without them: push, purchases
+ * and crash reports there behave as they do in a browser. The gate for those
+ * three and nothing else — the seed, the mirror and every other
  * plugin still answer to `isMobileNative()`.
  */
 export function hasProprietaryPlugins(): boolean {

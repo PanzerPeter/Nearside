@@ -63,9 +63,10 @@ recoverable only from its twelve words. Build the matching variant instead:
 ## iOS
 
 Same shell, bundle id `app.nearside`, deployment target 15.0, dependencies
-through CocoaPods rather than SPM. `@capacitor-mlkit/barcode-scanning` ships no
-`Package.swift`, and an SPM project drops it silently, taking QR scanning with
-it.
+through CocoaPods rather than SPM. That was forced by the old ML Kit scanner,
+which had no `Package.swift`; every plugin left has one, but OneSignal arrives
+as a Cordova plugin and the move is untested, so the project stays on
+CocoaPods until somebody with a Mac makes it.
 
 **Everything past `npm run ios:sync` needs a Mac.** Xcode, CocoaPods, the
 simulator, code signing and the upload to App Store Connect are macOS only, and
@@ -73,6 +74,12 @@ there is no supported way around it. A Linux checkout can edit the project and
 copy the web build into it; it cannot compile it. Options in order of cost: a
 Mac, a hosted Mac runner (GitHub Actions `macos-latest`, Codemagic, Bitrise), or
 a rented cloud Mac.
+
+Without a Mac or a developer account, the `ios-sideload` workflow (Actions →
+Run workflow) builds an unsigned `.ipa` on a hosted runner and publishes it to
+the `ios-latest` prerelease. Testers sign it with their own free Apple ID;
+[IOS-SIDELOAD.md](IOS-SIDELOAD.md) is the guide to send them. Those builds have
+no push and expire every 7 days.
 
 ```bash
 npm run ios:sync                     # works anywhere
@@ -119,8 +126,7 @@ Two routes, neither of them a second codebase:
   Intel Macs are excluded.
 - **Mac Catalyst** produces a real Mac binary with resizable windows and a menu
   bar. It is also a separate build to test and sign, and some plugins have no
-  Catalyst path. ML Kit barcode scanning is the likely casualty, which would
-  cost QR scanning on that target.
+  Catalyst path. QR scanning is not among them: it runs in the WebView.
 
 Start with Designed for iPad. Catalyst earns its cost only if the Mac becomes a
 target in its own right rather than a place the phone app also runs.

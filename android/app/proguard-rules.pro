@@ -27,18 +27,11 @@
 -keep public class * extends org.apache.cordova.CordovaPlugin { *; }
 
 # The community and capawesome plugins this app uses: SQLite (the local
-# decrypted mirror), secure storage (the identity key), the barcode scanner,
-# the media library and the filesystem.
+# decrypted mirror), secure storage (the identity key), Crashlytics, the media
+# library and the filesystem.
 -keep class com.getcapacitor.community.** { *; }
 -keep class io.capawesome.** { *; }
 -keep class com.getcapacitor.plugin.** { *; }
-
-# ML Kit resolves its barcode models dynamically. Without this the scanner
-# reports "unavailable" on a release build and works fine on a debug one,
-# which is the worst possible way to find out.
--keep class com.google.mlkit.** { *; }
--keep class com.google.android.gms.internal.mlkit_** { *; }
--dontwarn com.google.mlkit.**
 
 # OneSignal registers receivers and services by name in the manifest and
 # deserialises its payloads reflectively.

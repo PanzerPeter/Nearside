@@ -1,0 +1,1 @@
+QR scanning now works in this build. Nearside reads the code itself, on the phone, with no Google scanner involved, so the camera picture never leaves the device. Phones with a flashlight get a button for it.

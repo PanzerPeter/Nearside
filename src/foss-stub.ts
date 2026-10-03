@@ -5,8 +5,5 @@
 const absent = {};
 
 export const FirebaseCrashlytics = absent;
-export const BarcodeScanner = absent;
-export const BarcodeFormat = absent;
-export const GoogleBarcodeScannerModuleInstallState = absent;
 export const Purchases = absent;
 export default absent;

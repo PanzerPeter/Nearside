@@ -182,8 +182,9 @@ export const privacySections: LegalSection[] = [
           your card details.
         </p>
         <p>
-          Scanning a friend&rsquo;s QR code uses Google&rsquo;s ML Kit barcode scanner, which runs
-          on the phone. The camera image is not uploaded anywhere.
+          Scanning a friend&rsquo;s QR code happens inside the app, with the open-source jsQR
+          decoder. The camera picture is read on the phone, is never stored or uploaded, and no
+          scanning service from Google or anyone else is involved.
         </p>
         <p>
           OneSignal, Google, Cloudflare, and RevenueCat are based in the United States, so using

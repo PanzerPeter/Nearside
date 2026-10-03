@@ -180,7 +180,7 @@ CocoaPods. `npm run android:sync` then `./gradlew assembleDebug`.
 [docs/BUILDING.md](docs/BUILDING.md) covers signing, the R8 rules a missing entry
 turns into a runtime crash, and the iOS project, which is configured but has
 never been compiled. The Electron shell in `electron/` is a convenience build
-with no Keystore, no local mirror and no QR scanning; see [commands.md](commands.md).
+with no Keystore and no local mirror; see [commands.md](commands.md).
 
 | Command | Purpose |
 | --- | --- |

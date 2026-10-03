@@ -150,10 +150,10 @@ everywhere. What that costs:
   implementation that is missing from the package; the sync warning names it.
 - **No push notifications** (OneSignal) and **no purchases** (RevenueCat).
 - **No app-lock screen guard** — `FLAG_SECURE` is an Android window flag.
-- **No QR scanning** — the barcode plugin is Android-only already.
 
-Messaging, calls, media and the sealed exchange all work: they are Supabase,
-WebRTC and libsodium, none of which need a native plugin.
+Messaging, calls, media, the sealed exchange and QR scanning (with the webcam)
+all work: they are Supabase, WebRTC, libsodium and the WebView's own camera,
+none of which need a native plugin.
 
 One thing that is not a plugin and still differs: **Electron's Chromium is
 built without an HEVC decoder**, and phones record in HEVC by default. It does

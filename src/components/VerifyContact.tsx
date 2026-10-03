@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Camera, ShieldCheck } from 'lucide-react';
 import { scanMessage, scanQr } from '../lib/scan';
-import { isFossBuild } from '../lib/platform';
 import { safetyNumber } from '../lib/crypto/safety';
 import { safetyArt, type SafetyArt } from '../lib/crypto/safety-art';
 import { toBase64 } from '../lib/crypto/keys';
@@ -94,11 +93,7 @@ export function VerifyContact({
     try {
       const result = await scanQr();
       if ('failure' in result) {
-        if (result.failure === 'unsupported-platform') {
-          toast.error(t('verify.scanNeedsApp'));
-        } else if (result.failure !== 'cancelled') {
-          toast.error(scanMessage(result.failure));
-        }
+        if (result.failure !== 'cancelled') toast.error(scanMessage(result.failure));
         return;
       }
 
@@ -200,18 +195,14 @@ export function VerifyContact({
               <div className="rounded-box bg-white p-2">
                 <QrCode text={safetyPayload(number)} size={168} />
               </div>
-              {/* The F-Droid build has no scanner; our code is still here for
-                  their phone to read. */}
-              {!isFossBuild() && (
-                <button
-                  className="btn btn-outline btn-sm gap-2"
-                  onClick={() => void scanTheirs()}
-                  disabled={busy}
-                >
-                  <Camera className="w-4 h-4" />
-                  {t('verify.scanTheirs')}
-                </button>
-              )}
+              <button
+                className="btn btn-outline btn-sm gap-2"
+                onClick={() => void scanTheirs()}
+                disabled={busy}
+              >
+                <Camera className="w-4 h-4" />
+                {t('verify.scanTheirs')}
+              </button>
               <p className="text-meta text-muted text-center max-w-xs">
                 {t('verify.qrBody')}
               </p>

@@ -37,18 +37,10 @@ const DEPENDENCIES: Dependency[] = [
     url: 'https://github.com/paulmillr/scure-bip39',
   },
   {
-    name: 'Google ML Kit Barcode Scanning',
-    what: 'Reading a connect code or a safety number off another phone’s screen.',
+    name: 'jsQR',
+    what: 'Reading a connect code or a safety number off another phone’s screen, on the phone.',
     license: 'Apache-2.0',
-    url: 'https://developers.google.com/ml-kit/terms',
-    proprietaryPlugin: true,
-  },
-  {
-    name: '@capacitor-mlkit/barcode-scanning',
-    what: 'The Capacitor bridge to the scanner above.',
-    license: 'Apache-2.0',
-    url: 'https://github.com/capawesome-team/capacitor-mlkit',
-    proprietaryPlugin: true,
+    url: 'https://github.com/cozmo/jsQR',
   },
   {
     name: 'qrcode-generator',

@@ -535,11 +535,13 @@ export const de: Catalog = {
   'connect.raced':
     'Ihr habt euch im selben Moment hinzugefügt. Nimm die Anfrage in deiner Liste an.',
   'connect.badCode': 'Dieser Code funktioniert nicht. Lass dir einen neuen geben.',
-  'scan.unsupported': 'Scannen braucht die App. Tippe den Code stattdessen ein.',
+  'scan.unsupported': 'Dieser Browser kann die Kamera nicht öffnen. Tippe den Code stattdessen ein.',
   'scan.noCamera': 'Dieses Gerät hat keine Kamera zum Scannen.',
   'scan.denied': 'Nearside braucht die Kamera, um einen Code zu scannen.',
-  'scan.unavailable': 'Der Scanner ließ sich nicht installieren. Tippe den Code stattdessen ein.',
   'scan.error': 'Die Kamera ließ sich nicht öffnen.',
+  'scan.title': 'Code scannen',
+  'scan.hint': 'Halte den Code so, dass er das Quadrat füllt',
+  'scan.torch': 'Taschenlampe',
   'verify.title': '{name} verifizieren',
   'verify.markVerified': 'Als verifiziert markieren',
   'verify.pagePicture': 'Bild und Wörter',
@@ -555,7 +557,6 @@ export const de: Catalog = {
   'verify.mismatch':
     'Diese Codes sind nicht gleich. Verifiziere {name} nicht, bevor sie es sind. Scanne erneut, sobald ihr beide beim richtigen Kontakt seid.',
   'verify.compared': 'Ich habe sie mit {name} verglichen und sie sind identisch.',
-  'verify.scanNeedsApp': 'Scannen braucht die App. Vergleicht stattdessen die Ziffern.',
   'verify.notASafetyCode': 'Das ist kein Sicherheitsnummern-Code.',
   'verify.mismatchToast': 'Die stimmen nicht überein. Macht nicht weiter, bis sie es tun.',
   'verify.matchToast': 'Die Nummern stimmen überein.',

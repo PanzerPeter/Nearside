@@ -14,6 +14,23 @@ one of them drifts.
 
 ## [Unreleased]
 
+## [1.20.0] — 2026-10-03
+
+### Added
+
+- Scanning a QR code in the F-Droid build, on the desktop app and in the
+  browser. All of them had to fall back on typing the code or comparing the
+  digits by eye.
+
+### Changed
+
+- Nearside reads QR codes itself now instead of handing the camera to Google's
+  scanner. It opens at once, where the first scan used to wait on a download
+  from Google Play Services and failed outright on a phone without them, and
+  nothing about the scan is reported to Google. The camera picture is read on
+  the phone and never leaves it. Phones with a flashlight get a button for it,
+  and switching away from the app closes the camera instead of leaving it on.
+
 ## [1.19.0] — 2026-10-03
 
 ### Added

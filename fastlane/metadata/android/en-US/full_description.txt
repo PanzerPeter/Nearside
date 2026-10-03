@@ -2,7 +2,7 @@ Nearside is an end-to-end encrypted messenger for one-to-one chats and group roo
 
 <b>The server holds no message bodies.</b> There is no column on the server a message could be stored in. Search and conversation previews read a local copy of what your own phone decrypted.
 
-<b>Nobody can look you up.</b> No phone number, no directory, no search by name. You connect by reading out an eight-character code, or by scanning one from a phone running the Play Store build.
+<b>Nobody can look you up.</b> No phone number, no directory, no search by name. You connect by scanning a QR code or reading out an eight-character code.
 
 <b>Also:</b>
 * Rooms with signed messages, so a forged one shows a warning instead of quietly disappearing
@@ -12,7 +12,7 @@ Nearside is an end-to-end encrypted messenger for one-to-one chats and group roo
 * App lock, and a screen that blocks screenshots while the recovery phrase or the lock is showing
 * A transparency screen that reads the live server schema instead of reciting a privacy promise
 
-<b>What this build leaves out.</b> The F-Droid build has nothing from Google or any other closed-source library in it, so four things are missing compared with the Play Store build: push notifications (messages and calls arrive only while the app is open), QR scanning, the paid theme packs, and crash reports.
+<b>What this build leaves out.</b> The F-Droid build has nothing from Google or any other closed-source library in it, so three things are missing compared with the Play Store build: push notifications (messages and calls arrive only while the app is open), the paid theme packs, and crash reports.
 
 <b>What it does not hide.</b> Metadata is not encrypted: the server knows who talks to whom and when. Nearside is not a Signal replacement and says so. If you are at serious risk, use Signal.
 

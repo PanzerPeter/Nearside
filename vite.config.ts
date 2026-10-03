@@ -11,7 +11,7 @@ const pkgVersion = JSON.parse(readFileSync('./package.json', 'utf8')).version as
 
 export default defineConfig(({ mode }) => {
   // The F-Droid build (`vite build --mode foss`, run by scripts/fdroid-prebuild.sh
-  // after it has uninstalled the four proprietary plugins). Their imports are
+  // after it has uninstalled the three proprietary plugins). Their imports are
   // pointed at a stub so the bundle still resolves; `hasProprietaryPlugins()`
   // keeps every call site from reaching it.
   const foss = mode === 'foss';
@@ -31,7 +31,6 @@ export default defineConfig(({ mode }) => {
         ? Object.fromEntries(
             [
               '@capacitor-firebase/crashlytics',
-              '@capacitor-mlkit/barcode-scanning',
               '@revenuecat/purchases-capacitor',
               'onesignal-cordova-plugin',
             ].map((pkg) => [pkg, fileURLToPath(new URL('./src/foss-stub.ts', import.meta.url))])
