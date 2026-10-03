@@ -809,6 +809,7 @@ export const fr: Catalog = {
   'settings.accountsHere#other': '{count} ici',
   'settings.about': 'À propos',
   'settings.aboutHint': 'Soutien, licences, mentions légales',
+  'settings.aboutHintFoss': 'Licences, mentions légales',
 
   'language.title': 'Langue',
   'language.hint': 'Dans quelle langue l’app est écrite',

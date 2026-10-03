@@ -3,7 +3,7 @@ import { Bell, Database, Heart, Palette } from 'lucide-react';
 import { DONATION_TIERS, donate, donationOffers, type DonationOffer } from '../lib/donations';
 import { useToast } from '../hooks/useToast';
 import { SettingsPage } from './settings/SettingsUi';
-import { isMobileNative } from '../lib/platform';
+import { hasProprietaryPlugins } from '../lib/platform';
 import { useT } from '../hooks/useT';
 
 interface SupportNearsideProps {
@@ -28,7 +28,7 @@ export function SupportNearside({ onBack }: SupportNearsideProps) {
   const [busy, setBusy] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const toast = useToast();
-  const native = isMobileNative();
+  const native = hasProprietaryPlugins();
 
   const load = useCallback(async () => {
     setOffers(await donationOffers());

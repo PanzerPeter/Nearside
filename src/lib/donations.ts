@@ -12,7 +12,7 @@
 // unavailable rather than at a price we invented.
 import { Purchases, type PurchasesPackage } from '@revenuecat/purchases-capacitor';
 import { ALL_PACKS_ENTITLEMENT } from './purchases';
-import { isMobileNative } from './platform';
+import { hasProprietaryPlugins } from './platform';
 import type { MessageKey } from './i18n';
 
 /** The RevenueCat offering the tiers live in. Deliberately not `current`,
@@ -73,7 +73,7 @@ export interface DonationOffer {
 /** Live prices from the donations offering, keyed by tier id. */
 export async function donationOffers(): Promise<Map<string, DonationOffer>> {
   const offers = new Map<string, DonationOffer>();
-  if (!isMobileNative()) return offers;
+  if (!hasProprietaryPlugins()) return offers;
 
   try {
     const { all } = await Purchases.getOfferings();

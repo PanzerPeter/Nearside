@@ -10,7 +10,7 @@ import {
   shouldOfferPush,
 } from '../lib/notifications';
 import { Modal } from './Modal';
-import { isMobileNative } from '../lib/platform';
+import { hasProprietaryPlugins } from '../lib/platform';
 import { useT } from '../hooks/useT';
 
 interface NotificationsPromptProps {
@@ -53,7 +53,7 @@ export function NotificationsPrompt({ userId }: NotificationsPromptProps) {
       if (!alive) return;
       setOpen(
         shouldOfferPush({
-          native: isMobileNative(),
+          native: hasProprietaryPlugins(),
           granted,
           canRequest,
           alreadyAsked: pushOfferSeen(userId),

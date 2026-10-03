@@ -14,7 +14,7 @@ import {
 import { grantedPacks, ownedPacks } from '../lib/theme-grants';
 import { useToast } from '../hooks/useToast';
 import { SettingsPage } from './settings/SettingsUi';
-import { isMobileNative } from '../lib/platform';
+import { hasProprietaryPlugins, isFossBuild } from '../lib/platform';
 import { useT } from '../hooks/useT';
 import type { MessageKey } from '../lib/i18n';
 
@@ -45,7 +45,7 @@ export function ThemeStore({ onBack }: ThemeStoreProps) {
   // become a wall of tiny chats to compare against each other.
   const [previewing, setPreviewing] = useState<string | null>(null);
   const toast = useToast();
-  const native = isMobileNative();
+  const native = hasProprietaryPlugins();
   const t = useT();
 
   const load = useCallback(async () => {
@@ -122,7 +122,10 @@ export function ThemeStore({ onBack }: ThemeStoreProps) {
 
   return (
     <SettingsPage title={t('themes.title')} onBack={onBack}>
-      <p className="text-body text-strong leading-relaxed">{t('themes.intro')}</p>
+      {/* About paying, and the F-Droid build has nothing to pay for. */}
+      {!isFossBuild() && (
+        <p className="text-body text-strong leading-relaxed">{t('themes.intro')}</p>
+      )}
 
       <h3 className="text-meta font-medium uppercase tracking-wide text-subtle mt-5 mb-2">
         {t('themes.included')}
@@ -144,46 +147,53 @@ export function ThemeStore({ onBack }: ThemeStoreProps) {
         ))}
       </div>
 
-      <h3 className="text-meta font-medium uppercase tracking-wide text-subtle mt-6 mb-2">
-        {t('themes.packs')}
-      </h3>
-      {bySupport && (
-        <p className="text-meta text-muted mb-2">{t('themes.bySupport')}</p>
-      )}
-      <div className="space-y-3">
-        {PACKS.map((pack) => {
-          const isOwned = owned.has(pack.id);
-          const offer = offers.get(pack.id);
-          return (
-            <ThemeCard
-              key={pack.id}
-              name={pack.name}
-              description={pack.description}
-              swatches={pack.swatches}
-              theme={pack.theme}
-              selected={active === pack.theme}
-              owned={isOwned}
-              price={offer?.priceString}
-              busy={busy === pack.id}
-              unavailable={!isOwned && (!native || (!loading && !offer))}
-              previewOpen={previewing === pack.theme}
-              onTogglePreview={() => togglePreview(pack.theme)}
-              onSelect={() => (isOwned ? choose(pack.theme) : void buy(pack.id))}
-            />
-          );
-        })}
-      </div>
+      {/* Packs are sold through store billing, which the F-Droid build does not
+          have. Hidden rather than shown as previews, so that build carries no
+          price it cannot charge. */}
+      {!isFossBuild() && (
+        <>
+          <h3 className="text-meta font-medium uppercase tracking-wide text-subtle mt-6 mb-2">
+            {t('themes.packs')}
+          </h3>
+          {bySupport && (
+            <p className="text-meta text-muted mb-2">{t('themes.bySupport')}</p>
+          )}
+          <div className="space-y-3">
+            {PACKS.map((pack) => {
+              const isOwned = owned.has(pack.id);
+              const offer = offers.get(pack.id);
+              return (
+                <ThemeCard
+                  key={pack.id}
+                  name={pack.name}
+                  description={pack.description}
+                  swatches={pack.swatches}
+                  theme={pack.theme}
+                  selected={active === pack.theme}
+                  owned={isOwned}
+                  price={offer?.priceString}
+                  busy={busy === pack.id}
+                  unavailable={!isOwned && (!native || (!loading && !offer))}
+                  previewOpen={previewing === pack.theme}
+                  onTogglePreview={() => togglePreview(pack.theme)}
+                  onSelect={() => (isOwned ? choose(pack.theme) : void buy(pack.id))}
+                />
+              );
+            })}
+          </div>
 
-      <button
-        className="btn btn-ghost btn-sm w-full mt-4 gap-2"
-        onClick={() => void restore()}
-        disabled={busy !== null || !native}
-      >
-        <RotateCcw className="w-3.5 h-3.5" />
-        {t('themes.restore')}
-      </button>
-      {!native && (
-        <p className="text-meta text-muted mt-2 text-center">{t('themes.browserOnly')}</p>
+          <button
+            className="btn btn-ghost btn-sm w-full mt-4 gap-2"
+            onClick={() => void restore()}
+            disabled={busy !== null || !native}
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            {t('themes.restore')}
+          </button>
+          {!native && (
+            <p className="text-meta text-muted mt-2 text-center">{t('themes.browserOnly')}</p>
+          )}
+        </>
       )}
     </SettingsPage>
   );

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
-import { Camera, QrCode as QrCodeIcon, RefreshCw } from 'lucide-react';
+import { Camera, QrCode as QrCodeIcon, RefreshCw, UserPlus } from 'lucide-react';
 import { scanMessage, scanQr } from '../lib/scan';
+import { isFossBuild } from '../lib/platform';
 import { supabase } from '../lib/supabase';
 import type { Identity } from '../lib/crypto/keys';
 import {
@@ -70,7 +71,7 @@ export function ConnectModal({ session, identity, onClose, initialTab = 'show' }
           className={`tab flex-1 gap-1.5 ${tab === 'scan' ? 'tab-active' : ''}`}
           onClick={() => setTab('scan')}
         >
-          <Camera className="w-4 h-4" />
+          {isFossBuild() ? <UserPlus className="w-4 h-4" /> : <Camera className="w-4 h-4" />}
           {t('connect.addSomeone')}
         </button>
       </div>
@@ -322,19 +323,25 @@ function AddSomeone({ me, onConnected, toastError, toastSuccess }: AddSomeonePro
 
   return (
     <div className="space-y-5">
-      <div>
-        <button
-          className="btn btn-primary w-full gap-2"
-          onClick={() => void scan()}
-          disabled={busy}
-        >
-          <Camera className="w-4 h-4" />
-          {t('connect.scanTheirs')}
-        </button>
-        <p className="text-meta text-muted mt-2 text-center">{t('connect.scanVerifies')}</p>
-      </div>
+      {/* No scanner in the F-Droid build, and a button that only ever says
+          so is worse than the typed code standing alone. */}
+      {!isFossBuild() && (
+        <>
+          <div>
+            <button
+              className="btn btn-primary w-full gap-2"
+              onClick={() => void scan()}
+              disabled={busy}
+            >
+              <Camera className="w-4 h-4" />
+              {t('connect.scanTheirs')}
+            </button>
+            <p className="text-meta text-muted mt-2 text-center">{t('connect.scanVerifies')}</p>
+          </div>
 
-      <div className="divider text-meta text-muted">{t('connect.or')}</div>
+          <div className="divider text-meta text-muted">{t('connect.or')}</div>
+        </>
+      )}
 
       <div>
         <label className="text-body text-muted" htmlFor="connect-code">

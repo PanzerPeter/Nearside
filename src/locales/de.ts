@@ -815,6 +815,7 @@ export const de: Catalog = {
   'settings.accountsHere#other': '{count} hier',
   'settings.about': 'Über die App',
   'settings.aboutHint': 'Unterstützen, Lizenzen, Rechtliches',
+  'settings.aboutHintFoss': 'Lizenzen, Rechtliches',
 
   'language.title': 'Sprache',
   'language.hint': 'In welcher Sprache die App geschrieben ist',

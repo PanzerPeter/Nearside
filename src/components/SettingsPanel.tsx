@@ -28,6 +28,7 @@ import { AccountPage } from './settings/AccountPage';
 import { LanguagePage } from './settings/LanguagePage';
 import { LOCALE_NAMES } from '../lib/i18n';
 import { useLocale, useT } from '../hooks/useT';
+import { isFossBuild } from '../lib/platform';
 
 /** The subpages, in the order they appear. */
 type Section =
@@ -214,7 +215,7 @@ export function SettingsPanel({
         <NavRow
           icon={Info}
           label={t('settings.about')}
-          hint={t('settings.aboutHint')}
+          hint={t(isFossBuild() ? 'settings.aboutHintFoss' : 'settings.aboutHint')}
           value={APP_VERSION}
           onClick={() => setSection('about')}
         />

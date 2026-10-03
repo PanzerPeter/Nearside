@@ -43,3 +43,22 @@ export function isMobileNative(): boolean {
 export function isDesktop(): boolean {
   return Capacitor.getPlatform() === 'electron';
 }
+
+/**
+ * A mobile shell that has OneSignal, RevenueCat, ML Kit and Crashlytics in it.
+ *
+ * False in the F-Droid build, which is Android without them: push, purchases,
+ * QR scanning and crash reports there behave as they do in a browser. The gate
+ * for those four and nothing else — the seed, the mirror and every other
+ * plugin still answer to `isMobileNative()`.
+ */
+export function hasProprietaryPlugins(): boolean {
+  return isMobileNative() && !__FOSS__;
+}
+
+/** The F-Droid build. For hiding what it cannot offer at all, which is not the
+ *  same as `!hasProprietaryPlugins()`: a browser still previews the theme
+ *  packs, while this build has no store to sell them through. */
+export function isFossBuild(): boolean {
+  return __FOSS__;
+}

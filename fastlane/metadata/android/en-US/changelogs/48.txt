@@ -1,0 +1,1 @@
+First F-Droid release. Built from source with nothing closed-source in it, which leaves out push notifications, QR scanning, the theme packs and crash reports. Messages and calls arrive while the app is open; type the connect code instead of scanning. Your read-receipt setting is now visible only to the people you talk to.

@@ -9,7 +9,7 @@ import {
 } from '../../lib/notifications';
 import { isSoundMuted, setSoundMuted } from '../../lib/sound';
 import { permissionSettingsLocation } from '../../lib/device';
-import { isMobileNative } from '../../lib/platform';
+import { hasProprietaryPlugins, isFossBuild } from '../../lib/platform';
 import { useToast } from '../../hooks/useToast';
 import { Card, InfoRow, ToggleRow } from './SettingsUi';
 import { useT } from '../../hooks/useT';
@@ -21,7 +21,7 @@ import { useT } from '../../hooks/useT';
  */
 export function NotificationsPage() {
   const toast = useToast();
-  const native = isMobileNative();
+  const native = hasProprietaryPlugins();
   const t = useT();
 
   // Whether the OS has granted notifications, as OneSignal reports it.
@@ -98,15 +98,19 @@ export function NotificationsPage() {
 
   return (
     <Card>
-      <ToggleRow
-        icon={Bell}
-        label={t('notifications.messages')}
-        hint={notifStatus}
-        checked={pushOn}
-        onChange={() => void toggleNotifications()}
-        disabled={!native}
-        busy={pushBusy}
-      />
+      {/* The F-Droid build has no push at all, and "only the Android app"
+          would be read on the Android app. */}
+      {!isFossBuild() && (
+        <ToggleRow
+          icon={Bell}
+          label={t('notifications.messages')}
+          hint={notifStatus}
+          checked={pushOn}
+          onChange={() => void toggleNotifications()}
+          disabled={!native}
+          busy={pushBusy}
+        />
+      )}
       <ToggleRow
         icon={Volume2}
         label={t('notifications.sound')}

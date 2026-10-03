@@ -1,4 +1,4 @@
-import { isMobileNative } from './platform';
+import { hasProprietaryPlugins } from './platform';
 // Notifications, through OneSignal on Android, plus the browser-side helpers
 // the foreground banner path still uses. OneSignal owns the tray entry alone;
 // the Web Push (VAPID) transport that competed for it is gone.
@@ -49,7 +49,7 @@ export function resolveOneSignal(mod: unknown): OneSignalModule | null {
 }
 
 async function oneSignal(): Promise<OneSignalModule | null> {
-  if (!isMobileNative()) return null;
+  if (!hasProprietaryPlugins()) return null;
   if (plugin) return plugin;
   try {
     plugin = resolveOneSignal(await import('onesignal-cordova-plugin'));

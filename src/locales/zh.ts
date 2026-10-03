@@ -809,6 +809,7 @@ export const zh: Catalog = {
   'settings.accountsHere#other': '这里有{count}个',
   'settings.about': '关于',
   'settings.aboutHint': '赞助、许可证、法律条款',
+  'settings.aboutHintFoss': '许可证、法律条款',
 
   'language.title': '语言',
   'language.hint': '应用用哪种语言说话',

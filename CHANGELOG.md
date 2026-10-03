@@ -14,6 +14,18 @@ one of them drifts.
 
 ## [Unreleased]
 
+## [1.19.0] — 2026-10-03
+
+### Added
+
+- A build for F-Droid, made from this source with nothing from Google or any
+  other closed-source library in it. That leaves out four things: push
+  notifications (messages and calls reach you only while the app is open),
+  scanning a QR code (type the connect code, or compare the digits, instead —
+  your own code is still there for the other phone to scan), the theme packs
+  and contributions (they need store billing), and crash reports. The build
+  from the Play Store is unchanged.
+
 ### Security
 
 - Whether you have switched read receipts off is now visible only to the

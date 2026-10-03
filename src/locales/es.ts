@@ -803,6 +803,7 @@ export const es: Catalog = {
   'settings.accountsHere#other': '{count} aquí',
   'settings.about': 'Información',
   'settings.aboutHint': 'Apoyo, licencias, legal',
+  'settings.aboutHintFoss': 'Licencias, legal',
 
   'language.title': 'Idioma',
   'language.hint': 'El idioma en el que está escrita la app',

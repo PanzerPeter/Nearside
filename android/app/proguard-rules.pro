@@ -85,3 +85,9 @@
 -keepclassmembers class * implements android.os.Parcelable {
     public static final ** CREATOR;
 }
+
+# Tink (under the secure storage and SQLite plugins) is annotated with
+# Error Prone's compile-time annotations, which nothing ships at runtime.
+# Firebase used to drag them in, so only the F-Droid build, which has no
+# Firebase, fails R8 on their absence.
+-dontwarn com.google.errorprone.annotations.**

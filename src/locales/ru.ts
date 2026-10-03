@@ -802,6 +802,7 @@ export const ru: Catalog = {
   'settings.accountsHere#other': '{count} здесь',
   'settings.about': 'О приложении',
   'settings.aboutHint': 'Поддержка, лицензии, документы',
+  'settings.aboutHintFoss': 'Лицензии, документы',
 
   'language.title': 'Язык',
   'language.hint': 'На каком языке написано приложение',

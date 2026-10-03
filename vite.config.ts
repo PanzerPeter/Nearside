@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
@@ -8,7 +9,13 @@ import { VitePWA } from 'vite-plugin-pwa';
 // src/lib/version.test.ts fails the suite when one of them drifts.
 const pkgVersion = JSON.parse(readFileSync('./package.json', 'utf8')).version as string;
 
-export default defineConfig(() => {
+export default defineConfig(({ mode }) => {
+  // The F-Droid build (`vite build --mode foss`, run by scripts/fdroid-prebuild.sh
+  // after it has uninstalled the four proprietary plugins). Their imports are
+  // pointed at a stub so the bundle still resolves; `hasProprietaryPlugins()`
+  // keeps every call site from reaching it.
+  const foss = mode === 'foss';
+
   // Set by the android:sync script. A Workbox precache inside a WebView serves
   // the previous build after an app update, which reads as "my change didn't
   // apply" rather than as a caching bug.
@@ -17,6 +24,19 @@ export default defineConfig(() => {
   return {
     define: {
       __APP_VERSION__: JSON.stringify(pkgVersion),
+      __FOSS__: JSON.stringify(foss),
+    },
+    resolve: {
+      alias: foss
+        ? Object.fromEntries(
+            [
+              '@capacitor-firebase/crashlytics',
+              '@capacitor-mlkit/barcode-scanning',
+              '@revenuecat/purchases-capacitor',
+              'onesignal-cordova-plugin',
+            ].map((pkg) => [pkg, fileURLToPath(new URL('./src/foss-stub.ts', import.meta.url))])
+          )
+        : {},
     },
     plugins: [
       react(),

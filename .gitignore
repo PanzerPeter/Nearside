@@ -13,9 +13,11 @@ dist-ssr
 
 # Every local env file, not only the two that happened to exist when this was
 # written — `.env.production` and friends carry the same project keys and were
-# not covered. `.env.example` is the tracked template and is the one exception.
+# not covered. `.env.example` is the tracked template, and `.env.foss` holds the
+# two public values the F-Droid build needs (see its header).
 .env*
 !.env.example
+!.env.foss
 
 # Firebase service account keys and client config — never commit
 *-firebase-adminsdk-*.json

@@ -10,6 +10,7 @@ const pkgVersion = JSON.parse(readFileSync('./package.json', 'utf8')).version as
 export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(pkgVersion),
+    __FOSS__: 'false',
   },
   test: {
     environment: 'node',

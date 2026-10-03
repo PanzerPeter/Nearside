@@ -1,5 +1,6 @@
 import { ExternalLink } from 'lucide-react';
 import { SettingsPage } from './settings/SettingsUi';
+import { isFossBuild } from '../lib/platform';
 
 interface OpenSourceLicensesProps {
   onBack: () => void;
@@ -10,6 +11,8 @@ interface Dependency {
   what: string;
   license: string;
   url: string;
+  /** Left out of the F-Droid build, so its own list must not claim it. */
+  proprietaryPlugin?: true;
 }
 
 /**
@@ -38,12 +41,14 @@ const DEPENDENCIES: Dependency[] = [
     what: 'Reading a connect code or a safety number off another phone’s screen.',
     license: 'Apache-2.0',
     url: 'https://developers.google.com/ml-kit/terms',
+    proprietaryPlugin: true,
   },
   {
     name: '@capacitor-mlkit/barcode-scanning',
     what: 'The Capacitor bridge to the scanner above.',
     license: 'Apache-2.0',
     url: 'https://github.com/capawesome-team/capacitor-mlkit',
+    proprietaryPlugin: true,
   },
   {
     name: 'qrcode-generator',
@@ -122,18 +127,21 @@ const DEPENDENCIES: Dependency[] = [
     what: 'Delivering notifications. It is told an account id and never a message.',
     license: 'Modified MIT',
     url: 'https://github.com/OneSignal/OneSignal-Cordova-SDK',
+    proprietaryPlugin: true,
   },
   {
     name: 'RevenueCat',
     what: 'The purchase of a cosmetic pack, and nothing else.',
     license: 'MIT',
     url: 'https://github.com/RevenueCat/purchases-capacitor',
+    proprietaryPlugin: true,
   },
   {
     name: 'Firebase Crashlytics',
     what: 'Crash reports. They carry a stack trace, never message content.',
     license: 'Apache-2.0',
     url: 'https://firebase.google.com/terms',
+    proprietaryPlugin: true,
   },
 ];
 
@@ -146,7 +154,7 @@ export function OpenSourceLicenses({ onBack }: OpenSourceLicensesProps) {
       </p>
 
       <ul className="space-y-2.5 mt-4">
-        {DEPENDENCIES.map((dep) => (
+        {DEPENDENCIES.filter((dep) => !(isFossBuild() && dep.proprietaryPlugin)).map((dep) => (
           <li
             key={dep.name}
             className="rounded-box border border-hairline bg-base-200/40 p-3"

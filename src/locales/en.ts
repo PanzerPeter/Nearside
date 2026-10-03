@@ -826,6 +826,7 @@ export const en = {
   'settings.accountsHere#other': '{count} here',
   'settings.about': 'About',
   'settings.aboutHint': 'Support, licenses, legal',
+  'settings.aboutHintFoss': 'Licenses, legal',
 
   // ---------------------------------------------------- settings: language
   'language.title': 'Language',

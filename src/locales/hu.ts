@@ -809,6 +809,7 @@ export const hu: Catalog = {
   'settings.accountsHere#other': '{count} itt',
   'settings.about': 'Névjegy',
   'settings.aboutHint': 'Támogatás, licencek, jogi tudnivalók',
+  'settings.aboutHintFoss': 'Licencek, jogi tudnivalók',
 
   'language.title': 'Nyelv',
   'language.hint': 'Milyen nyelven szól az alkalmazás',

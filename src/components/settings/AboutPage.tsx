@@ -7,6 +7,7 @@ import { LegalDocPage, type LegalDoc } from '../LegalFooter';
 import { Card, InfoRow, NavRow } from './SettingsUi';
 import { isCoarsePointer } from '../../lib/device';
 import { useT } from '../../hooks/useT';
+import { isFossBuild } from '../../lib/platform';
 
 /** The documents used to be reachable only from the sign-in screen's footer,
  *  which a signed-in user never sees again. */
@@ -41,7 +42,11 @@ export function AboutPage() {
       <Card>
         {/* A donation is not a look and not a legal document, so it leads here
             rather than sitting under either. */}
-        <NavRow icon={Heart} label={t('about.support')} onClick={() => setShowSupport(true)} />
+        {/* Contributions go through store billing, which the F-Droid build
+            does not have. */}
+        {!isFossBuild() && (
+          <NavRow icon={Heart} label={t('about.support')} onClick={() => setShowSupport(true)} />
+        )}
         <NavRow
           icon={Scale}
           label={t('about.licenses')}

@@ -10,7 +10,7 @@ import {
   BarcodeScanner,
   GoogleBarcodeScannerModuleInstallState,
 } from '@capacitor-mlkit/barcode-scanning';
-import { isMobileNative } from './platform';
+import { hasProprietaryPlugins } from './platform';
 import { t, type MessageKey } from './i18n';
 
 /** Why a scan produced nothing. `cancelled` covers the user backing out, which
@@ -100,7 +100,7 @@ async function ensureScannerModule(): Promise<boolean> {
  * exactly the people this app is for.
  */
 export async function scanQr(): Promise<ScanResult> {
-  if (!isMobileNative()) return { failure: 'unsupported-platform' };
+  if (!hasProprietaryPlugins()) return { failure: 'unsupported-platform' };
 
   try {
     const { supported } = await BarcodeScanner.isSupported();
