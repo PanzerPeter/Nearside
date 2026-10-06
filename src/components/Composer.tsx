@@ -400,7 +400,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}
-      className={`relative p-3 sm:p-4 pb-[calc(0.75rem+var(--safe-bottom))] sm:pb-[calc(1rem+var(--safe-bottom))] bg-base-100 border-t border-hairline shrink-0 ${
+      className={`relative p-3 sm:py-4 sm:px-[max(1rem,calc((100%-var(--thread-max))/2))] pb-[calc(0.75rem+var(--safe-bottom))] sm:pb-[calc(1rem+var(--safe-bottom))] bg-base-100 border-t border-hairline shrink-0 ${
         dragging ? 'ring-2 ring-inset ring-primary' : ''
       }`}
     >

@@ -246,7 +246,7 @@ export function StickerPicker({ drawer, onSelect, onError }: StickerPickerProps)
               sticker directly below it is two tiles of the same picture. */}
           {!query && drawer.recent.length > 1 && (
             <div className="mb-2">
-              <p className="px-0.5 pb-1 text-micro font-semibold uppercase tracking-wider text-subtle">
+              <p className="px-0.5 pb-1 text-meta font-medium text-subtle">
                 {t('stickers.recent')}
               </p>
               <div className="flex gap-1.5 overflow-x-auto pb-1">

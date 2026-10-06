@@ -33,8 +33,15 @@ const TONE = {
 function RowShell({ icon: Icon, label, hint, tone = 'default', children }: RowShellProps) {
   return (
     <div className="flex items-center justify-between gap-3 px-4 py-3">
-      <div className="flex items-center gap-2.5 min-w-0">
-        {Icon && <Icon className={`w-4 h-4 shrink-0 ${TONE[tone]}`} />}
+      <div className="flex items-center gap-3 min-w-0">
+        {/* On a tile rather than loose: a column of bare 16px glyphs left the
+            labels with nothing to hang off, and the eye had to find each row's
+            start by its text. */}
+        {Icon && (
+          <span className="flex w-8 h-8 shrink-0 items-center justify-center rounded-field bg-wash">
+            <Icon className={`w-4 h-4 ${TONE[tone]}`} />
+          </span>
+        )}
         <div className="min-w-0 text-left">
           <p className={`text-body font-medium ${tone === 'error' ? 'text-error' : ''}`}>{label}</p>
           {hint && <p className="text-meta text-muted">{hint}</p>}
@@ -132,7 +139,7 @@ export function Card({ title, children }: { title?: string; children: ReactNode 
   return (
     <div className="mb-4">
       {title && (
-        <p className="text-micro font-semibold uppercase tracking-wider text-subtle px-1 mb-2">
+        <p className="text-meta font-medium text-subtle px-1 mb-2">
           {title}
         </p>
       )}
@@ -160,7 +167,7 @@ const NestedPage = createContext<((open: boolean) => void) | null>(null);
  * The hardware back button is claimed here rather than by the caller: entries
  * stack, so a page pushes on top of the settings tab's own entry and back walks
  * page → settings → chats in the order the user opened them. The desktop dialog
- * has no hardware back, and `useMobileBackClose` no-ops above 1023px, so the
+ * has no hardware back, and `useMobileBackClose` no-ops above 767px, so the
  * chevron is the only route out there — which is why it is a real button and
  * not a decoration on the title.
  *

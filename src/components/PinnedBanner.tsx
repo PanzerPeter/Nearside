@@ -38,7 +38,7 @@ export function PinnedBanner({ snippet, by, onJump, onUnpin, busy }: PinnedBanne
         className="min-w-0 flex-1 text-left"
         title={t('pin.jump')}
       >
-        <span className="block text-micro font-semibold uppercase tracking-wider text-subtle">
+        <span className="block text-micro font-medium text-subtle">
           {t('pin.by', { name: by })}
         </span>
         <span className="block truncate text-meta text-strong">

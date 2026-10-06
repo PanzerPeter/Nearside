@@ -598,9 +598,9 @@ export function FriendsList({
   /** Nothing on this pane but the self-chat — where a new sign-up lands, and
    *  the only state worth spending a whole card on. */
   const firstRun = loaded && roomCount === 0 && !hasFriendRows;
-  /** Section labels are structure; with one row under each of them they are
-   *  louder than the content they label. */
-  const showSections = hasFriendRows || (roomCount ?? 0) > 0;
+  /** Section labels are structure, and "Direct" only means something with a
+   *  groups section above it to be told apart from. */
+  const showSections = (roomCount ?? 0) > 0;
 
   /** Every conversation a hit could be in, under the name this list shows it
    *  by — the nickname where there is one, exactly as the row above would. */
@@ -858,28 +858,41 @@ export function FriendsList({
           desktop that bar is above it and already paid for the inset.
           Past `lg` it also stands in the `--chrome-top` band, so the rule under
           it meets the conversation header's rule rather than sitting below it. */}
-      <div className="px-4 pb-3 pt-[calc(1rem+var(--safe-top))] lg:flex lg:flex-col lg:justify-center lg:min-h-[var(--chrome-top)] lg:py-2 border-b border-hairline">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <Users className="w-5 h-5 text-primary hidden lg:block" />
-            <h2 className="text-display font-semibold text-base-content">{t('tabs.chats')}</h2>
+      <div className="border-b border-hairline md:border-b-0">
+        {/* Past `md` the title row alone is the `--chrome-top` band, ruled
+            off, so its rule meets the conversation header's across the seam;
+            the search field sits under the rule as the top of the list. */}
+        <div className="flex items-center justify-between gap-3 px-4 pt-[calc(1rem+var(--safe-top))] md:pt-0 md:h-(--chrome-top) md:border-b md:border-hairline">
+          <h2 className="text-display font-semibold text-base-content">{t('tabs.chats')}</h2>
+          <div className="flex items-center gap-1">
+            {/* Groups start here rather than from a "+" on an empty section:
+                a list without groups no longer spends its first rows on a
+                heading and a sentence about one. */}
+            <button
+              className="btn btn-ghost btn-circle text-muted hover:text-base-content"
+              onClick={() => setCreatingRoom(true)}
+              title={t('rooms.new')}
+              aria-label={t('rooms.new')}
+            >
+              <Users className="w-5 h-5" />
+            </button>
+            <button
+              className="brand-gradient btn btn-primary btn-circle border-0"
+              onClick={() => setConnectTab('show')}
+              title={t('chatList.addContact')}
+              aria-label={t('chatList.addContact')}
+            >
+              <UserPlus className="w-5 h-5" />
+            </button>
           </div>
-          <button
-            className="brand-gradient btn btn-primary btn-circle border-0 shadow-md shadow-primary/20 hover:shadow-primary/30 transition-shadow"
-            onClick={() => setConnectTab('show')}
-            title={t('chatList.addContact')}
-            aria-label={t('chatList.addContact')}
-          >
-            <UserPlus className="w-5 h-5" />
-          </button>
         </div>
-        {search.field}
+        <div className="px-4 pb-3 md:pt-0.5">{search.field}</div>
       </div>
 
       {/* Pending Requests */}
       {shownRequests.length > 0 && (
         <div className="p-3 sm:p-4 border-b border-hairline bg-warning/5">
-          <p className="text-micro font-semibold text-warning mb-2.5 uppercase tracking-wider">
+          <p className="text-meta font-medium text-warning mb-2.5">
             {t('requests.pending', { count: shownRequests.length })}
           </p>
           <div className="space-y-2">
@@ -889,7 +902,7 @@ export function FriendsList({
                 className="flex items-center justify-between p-2 rounded-field bg-base-100 border border-hairline"
               >
                 <div className="flex items-center gap-2 min-w-0">
-                  <Avatar display_name={req.profiles?.display_name} url={req.profiles?.avatar_url} size={28} />
+                  <Avatar display_name={req.profiles?.display_name} seed={req.requester_id} url={req.profiles?.avatar_url} size={28} />
                   <span className="text-body text-base-content truncate">
                     {req.profiles?.display_name ?? t('requests.unknown')}
                   </span>
@@ -939,14 +952,14 @@ export function FriendsList({
           onSelectRoom={onSelectRoom}
           onCountChange={setRoomCount}
           onRoomsChange={setRooms}
-          hideWhenEmpty={firstRun}
+          hideWhenEmpty
           creating={creatingRoom}
           onCreatingChange={setCreatingRoom}
         />
 
         {showSections && (
-          <div className="px-4 sm:px-5 pt-2">
-            <p className="text-micro font-semibold uppercase tracking-wider text-subtle">
+          <div className="px-5 pt-3">
+            <p className="text-meta font-medium text-muted">
               {t('chatList.direct')}
             </p>
           </div>

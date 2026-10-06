@@ -231,6 +231,10 @@ export const ru: Catalog = {
 
   'auth.welcomeBack': 'С возвращением',
   'auth.createYourAccount': 'Создай аккаунт',
+  'auth.tagline': 'Личные сообщения, которые остаются твоими.',
+  'auth.pointSealed': 'Запечатаны на твоём устройстве. Сервер хранит только то, что не может прочитать.',
+  'auth.pointNoDirectory': 'Ни номера телефона, ни каталога. Связь — по QR-коду или одноразовому коду.',
+  'auth.pointNoAds': 'Без рекламы, и приватность — не платная опция.',
   'auth.email': 'Почта',
   'auth.password': 'Пароль',
   'auth.namePlaceholder': 'Иван Петров',

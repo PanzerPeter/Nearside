@@ -1091,10 +1091,10 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
   return (
     <div className="relative flex flex-col h-full bg-base-200/50 min-h-0">
       {/* Same top edge as ChatHeader, and inset the same way — see the comment
-          there for why `lg:` puts it back. */}
-      <header className="navbar bg-base-100 px-2 sm:px-4 pt-[calc(0.5rem+var(--safe-top))] shrink-0 border-b border-hairline min-h-[3.5rem] lg:min-h-[var(--chrome-top)] gap-1">
+          there for why `md:` puts it back. */}
+      <header className="navbar bg-base-100 px-2 sm:px-4 pt-[calc(0.5rem+var(--safe-top))] shrink-0 border-b border-hairline min-h-[3.5rem] md:min-h-[var(--chrome-top)] gap-1">
         <button
-          className="btn btn-ghost btn-sm btn-square lg:hidden"
+          className="btn btn-ghost btn-sm btn-square md:hidden"
           onClick={onBack}
           title={t('common.back')}
         >

@@ -21,7 +21,11 @@
   logs: false;
 }
 
-/* Discord-family cool-grey dark system with a single blue accent.
+/* The default: ink rather than grey. The surface ladder carries a trace of
+   the mark's own blue (hue 262 at chroma ~0.013 in OKLCH) instead of the
+   neutral greys it started from, and the accent is taken from the near half
+   of the mark, darkened until white text on it clears 4.5:1 — the own-message
+   bubble is the most-read surface in the app, and `#3b82f6` gave it 3.7:1.
 
    Every theme below repeats the shape and status tokens. A theme that omits
    `--surface-ring` or `--receipt-read` does not inherit them from `nearside`,
@@ -48,19 +52,19 @@
   default: true;
   prefersdark: true;
   color-scheme: dark;
-  --color-primary: #3b82f6;
+  --color-primary: #2d72da;
   --color-primary-content: #ffffff;
-  --color-secondary: #7a86ad;
-  --color-secondary-content: #010102;
-  --color-accent: #3b82f6;
+  --color-secondary: #8393ae;
+  --color-secondary-content: #0f1217;
+  --color-accent: #2d72da;
   --color-accent-content: #ffffff;
-  --color-neutral: #383b40;
-  --color-neutral-content: #f7f8f8;
-  --color-base-100: #2a2c31;
-  --color-base-200: #202225;
-  --color-base-300: #1a1b1e;
-  --color-base-content: #e8e9eb;
-  --color-info: #3b82f6;
+  --color-neutral: #2e333b;
+  --color-neutral-content: #eef0f3;
+  --color-base-100: #1f232a;
+  --color-base-200: #161a20;
+  --color-base-300: #0f1217;
+  --color-base-content: #e5e8ed;
+  --color-info: #2d72da;
   --color-info-content: #ffffff;
   --color-success: #27a644;
   --color-success-content: #ffffff;
@@ -72,9 +76,10 @@
   --radius-field: 0.5rem;
   --radius-selector: 1.9rem;
   --border: 1px;
-  --surface-ring: #2a2c31;
+  --surface-ring: #1f232a;
   --receipt-read: #86efac;
-  --presence-offline: #4b4d52;
+  --presence-offline: #494d56;
+  --avatar-chroma: 0.085;
   --brand-lit: #4f8ffa;
   --brand-dim: #1d4ed8;
   --depth: 0;
@@ -121,6 +126,7 @@
   --surface-ring: #ffffff;
   --receipt-read: #a7f3d0;
   --presence-offline: #b6bfcc;
+  --avatar-chroma: 0.085;
   --brand-lit: #3b78f0;
   --brand-dim: #1739a6;
   --depth: 0;
@@ -133,11 +139,11 @@
 @plugin "daisyui/theme" {
   name: "nearside-void";
   color-scheme: dark;
-  --color-primary: #4c8dff;
+  --color-primary: #2471e4;
   --color-primary-content: #ffffff;
   --color-secondary: #8a93a6;
   --color-secondary-content: #000000;
-  --color-accent: #4c8dff;
+  --color-accent: #2471e4;
   --color-accent-content: #ffffff;
   --color-neutral: #1c1d21;
   --color-neutral-content: #f2f4f7;
@@ -145,7 +151,7 @@
   --color-base-200: #060607;
   --color-base-300: #000000;
   --color-base-content: #f2f4f7;
-  --color-info: #4c8dff;
+  --color-info: #2471e4;
   --color-info-content: #ffffff;
   --color-success: #2ecc71;
   --color-success-content: #00120a;
@@ -160,6 +166,7 @@
   --surface-ring: #0c0c0e;
   --receipt-read: #86efac;
   --presence-offline: #3a3d44;
+  --avatar-chroma: 0.085;
   --brand-lit: #6ba3ff;
   --brand-dim: #2159c9;
   --depth: 0;
@@ -198,6 +205,7 @@
   --surface-ring: #141c31;
   --receipt-read: #a7f3d0;
   --presence-offline: #3a4560;
+  --avatar-chroma: 0.08;
   --brand-lit: #8dbcff;
   --brand-dim: #3d6fc0;
   --depth: 0;
@@ -236,6 +244,7 @@
   --surface-ring: #fffdf7;
   --receipt-read: #d7f0c8;
   --presence-offline: #c4bba6;
+  --avatar-chroma: 0.06;
   --brand-lit: #a3824a;
   --brand-dim: #5b4722;
   --depth: 0;
@@ -272,6 +281,7 @@
   --surface-ring: #0e1a11;
   --receipt-read: #bbf7d0;
   --presence-offline: #2a4531;
+  --avatar-chroma: 0;
   --brand-lit: #6ee79b;
   --brand-dim: #16a34a;
   --depth: 0;
@@ -284,11 +294,11 @@
 @plugin "daisyui/theme" {
   name: "nearside-sunset";
   color-scheme: dark;
-  --color-primary: #e0563f;
+  --color-primary: #c9442e;
   --color-primary-content: #fff4f0;
   --color-secondary: #b58ad6;
   --color-secondary-content: #1b1024;
-  --color-accent: #e0563f;
+  --color-accent: #c9442e;
   --color-accent-content: #fff4f0;
   --color-neutral: #3a2450;
   --color-neutral-content: #f4e9fa;
@@ -311,6 +321,7 @@
   --surface-ring: #2b1a3c;
   --receipt-read: #ffd479;
   --presence-offline: #4d3a63;
+  --avatar-chroma: 0.09;
   --brand-lit: #ef7058;
   --brand-dim: #a2341f;
   --depth: 0;
@@ -323,11 +334,11 @@
 @plugin "daisyui/theme" {
   name: "nearside-sakura";
   color-scheme: light;
-  --color-primary: #d6336c;
+  --color-primary: #c42a62;
   --color-primary-content: #fff5f8;
   --color-secondary: #9c7b8c;
   --color-secondary-content: #fff5f8;
-  --color-accent: #d6336c;
+  --color-accent: #c42a62;
   --color-accent-content: #fff5f8;
   --color-neutral: #fbe3ec;
   --color-neutral-content: #4a2436;
@@ -350,6 +361,7 @@
   --surface-ring: #fffafc;
   --receipt-read: #ffd166;
   --presence-offline: #d9c3cd;
+  --avatar-chroma: 0.08;
   --brand-lit: #e8517f;
   --brand-dim: #99204c;
   --depth: 0;
@@ -392,6 +404,7 @@
   --surface-ring: #1d2024;
   --receipt-read: #1f5c3a;
   --presence-offline: #4a4f56;
+  --avatar-chroma: 0;
   --brand-lit: #cdd3db;
   --brand-dim: #6b7482;
   --depth: 0;
@@ -463,6 +476,14 @@
      Both bands are held here so the two sides cannot drift apart again. */
   --chrome-top: 4rem;
   --chrome-bottom: 5rem;
+
+  /* The reading column. Past it the thread and the composer stop growing and
+     centre instead: at 1920px a bubble capped at 70% of the pane ran to about
+     a thousand pixels a line, and the composer to fourteen hundred. Applied as
+     padding (see `MessageThread`, `Composer`) rather than a wrapper's
+     max-width, so the scrollbar and the composer's rule still meet the pane's
+     edges. */
+  --thread-max: 48rem;
 }
 
 /* The text ladder, and why `inline`.
@@ -500,6 +521,11 @@
 
 @theme inline {
   --color-scrim: var(--scrim);
+  /* A message bubble's rounding, as `rounded-bubble`. Derived from each
+     theme's own box radius rather than fixed, so the square-cut packs
+     (terminal, graphite) keep square-cut bubbles and sakura keeps its soft
+     ones; on the default it lands on 18px. */
+  --radius-bubble: calc(var(--radius-box) * 1.5);
   --shadow-overlay: var(--elev-overlay);
   --shadow-modal: var(--elev-modal);
   --shadow-sheet: var(--elev-sheet);
@@ -715,6 +741,33 @@
       color-mix(in oklab, var(--brand-lit) 22%, transparent),
       color-mix(in oklab, var(--brand-dim) 22%, transparent)
     );
+  }
+
+  /* An initial with no photo behind it. The hue comes from `Avatar` (one of
+     eight, stable per person); lightness and chroma are decided here, per
+     surface, so a list of contacts scans as eight colours instead of a column
+     of identical grey discs. `--avatar-chroma` is per theme: the two
+     single-hue packs set it to 0 and keep their monochrome. */
+  .avatar-tint {
+    background-color: oklch(0.44 var(--avatar-chroma) var(--avatar-hue));
+    color: oklch(0.96 calc(var(--avatar-chroma) * 0.35) var(--avatar-hue));
+  }
+  :root[data-surface='light'] .avatar-tint {
+    background-color: oklch(0.91 calc(var(--avatar-chroma) * 0.6) var(--avatar-hue));
+    color: oklch(0.42 var(--avatar-chroma) var(--avatar-hue));
+  }
+
+  /* The other person's bubble. On a dark surface it is the raised neutral; on
+     a light one a neutral bubble is a grey slab barely off the grey thread
+     behind it, so it becomes the page colour instead — white on the tinted
+     thread, the arrangement light-mode messengers settled on. */
+  .bubble-peer {
+    background-color: var(--color-neutral);
+    color: var(--color-neutral-content);
+  }
+  :root[data-surface='light'] .bubble-peer {
+    background-color: var(--color-base-100);
+    color: var(--color-base-content);
   }
 
   /* Notch inset added on top of the shared top bar's own height. */
@@ -1075,7 +1128,7 @@
      an ancestor of the thread — anything longer would keep `position: fixed`
      descendants (the message menu, the emoji popover) resolving against this
      element instead of the viewport. */
-  @media (max-width: 1023px) {
+  @media (max-width: 767px) {
     :root[data-motion='expressive'] main[data-chat-open='true'] {
       animation: screen-in 240ms var(--motion-enter-easing);
     }
@@ -1275,12 +1328,12 @@ em-emoji-picker {
   /* emoji-mart only accepts RGB triples through its shadow DOM boundary, so
      these must stay literal — they cannot reference the theme's CSS custom
      properties. Keep them mirrored by hand: this must match `--color-primary`
-     in the `nearside` theme block above (currently #3b82f6). */
-  --rgb-accent: 59, 130, 246;
+     in the `nearside` theme block above (currently #2d72da). */
+  --rgb-accent: 45, 114, 218;
   /* Must match `--color-base-100` in the `nearside` theme block above
-     (currently #2a2c31), and the `--surface-ring` token — same surface,
+     (currently #1f232a), and the `--surface-ring` token — same surface,
      mirrored by hand for the same reason. */
-  --rgb-background: 42, 44, 49;
+  --rgb-background: 31, 35, 42;
   --font-family: Inter, system-ui, sans-serif;
   /* The category strip is ten tabs sharing the panel's width, and at
      emoji-mart's default 18px the icons meet each other with no gap left

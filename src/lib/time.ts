@@ -19,9 +19,29 @@ function daysAgo(iso: string): number {
   return Math.round((today - then) / 86_400_000);
 }
 
-/** Clock time only: "14:32". */
+const hourCycles = new Map<string, boolean>();
+
+/** Whether a locale writes its clock in twelve-hour form. Cached: every
+ *  bubble's footer asks, and the answer only changes with the language. */
+function twelveHour(locale: string): boolean {
+  let twelve = hourCycles.get(locale);
+  if (twelve === undefined) {
+    const cycle = new Intl.DateTimeFormat(locale, { hour: 'numeric' }).resolvedOptions().hourCycle;
+    twelve = cycle === 'h12' || cycle === 'h11';
+    hourCycles.set(locale, twelve);
+  }
+  return twelve;
+}
+
+/** Clock time only: "14:32", or "2:32 PM". A twelve-hour clock drops the
+ *  padded hour — "02:32 PM" is how no one writes it — while a 24-hour one
+ *  keeps it, as "09:05" is the convention there. */
 export function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString(localeTag(), { hour: '2-digit', minute: '2-digit' });
+  const locale = localeTag();
+  return new Date(iso).toLocaleTimeString(locale, {
+    hour: twelveHour(locale) ? 'numeric' : '2-digit',
+    minute: '2-digit',
+  });
 }
 
 /** Date divider label for the message thread. */

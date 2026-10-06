@@ -232,6 +232,10 @@ export const zh: Catalog = {
 
   'auth.welcomeBack': '欢迎回来',
   'auth.createYourAccount': '创建你的账号',
+  'auth.tagline': '私密消息，始终属于你。',
+  'auth.pointSealed': '在你的设备上封存加密。服务器只保存它无法读取的内容。',
+  'auth.pointNoDirectory': '无需手机号，没有用户目录。通过二维码或一次性代码建立联系。',
+  'auth.pointNoAds': '没有广告，隐私也不是付费功能。',
   'auth.email': '邮箱',
   'auth.password': '密码',
   'auth.namePlaceholder': '张小雨',

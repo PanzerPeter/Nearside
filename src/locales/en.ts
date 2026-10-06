@@ -241,6 +241,10 @@ export const en = {
   // ------------------------------------------------------------------ auth
   'auth.welcomeBack': 'Welcome back',
   'auth.createYourAccount': 'Create your account',
+  'auth.tagline': 'Private messages that stay yours.',
+  'auth.pointSealed': 'Sealed on your device. The server only ever stores what it can’t read.',
+  'auth.pointNoDirectory': 'No phone number and no directory. You connect by QR code or a one-time code.',
+  'auth.pointNoAds': 'No ads, and privacy is not a paid tier.',
   'auth.email': 'Email',
   'auth.password': 'Password',
   'auth.namePlaceholder': 'Jane Doe',

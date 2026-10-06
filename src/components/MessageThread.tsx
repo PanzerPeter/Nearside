@@ -223,7 +223,7 @@ export function MessageThread({
       <main
         ref={scroll.listRef}
         onScroll={scroll.handleListScroll}
-        className="relative h-full overflow-y-auto overflow-x-clip px-3 sm:px-5 py-4"
+        className="relative h-full overflow-y-auto overflow-x-clip px-3 sm:px-[max(1.25rem,calc((100%-var(--thread-max))/2))] py-4"
       >
         {hasMore && (
           <div className="flex justify-center mb-3">
@@ -274,6 +274,23 @@ export function MessageThread({
             const msgDate = formatDate(msg.created_at);
             const showDateDivider = !prev || formatDate(prev.created_at) !== msgDate;
             const groupedWithPrev = !showDateDivider && isGrouped(msg, prev);
+            // Whether this bubble visually touches its neighbours, for the
+            // pinched corners. Anything drawn between two messages — the
+            // unread line, a timer notice, a sealed exchange, which is not a
+            // bubble — breaks the run even inside the grouping window.
+            const breaksBefore = (index: number, m: Message | PendingMessage) =>
+              ('sealed_prompt' in m && m.sealed_prompt) ||
+              m.id === unreadDividerId ||
+              (!!timerChange && noticeIndex === index);
+            const next: Message | PendingMessage | undefined =
+              messages[i + 1] ?? (i === messages.length - 1 ? queued[0] : undefined);
+            const joinedAbove = groupedWithPrev && !breaksBefore(i, msg) && !prev?.sealed_prompt;
+            const joinedBelow =
+              !!next &&
+              !msg.sealed_prompt &&
+              formatDate(next.created_at) === msgDate &&
+              isGrouped(next, msg) &&
+              !breaksBefore(i + 1, next);
             // Not pre-seeded by a fetch means this id reached `messages` via
             // the realtime INSERT handler — the one path an arrival should
             // actually animate for.
@@ -299,11 +316,11 @@ export function MessageThread({
                   // newest: the line answers "where was I", so it has to sit
                   // where reading starts again.
                   <div className="flex items-center gap-2 my-4" aria-hidden={false}>
-                    <span className="flex-1 h-px bg-primary/40" />
-                    <span className="text-micro font-semibold uppercase tracking-wide text-primary">
+                    <span className="flex-1 h-px bg-primary/25" />
+                    <span className="text-micro font-medium text-primary">
                       {t('thread.newMessages')}
                     </span>
-                    <span className="flex-1 h-px bg-primary/40" />
+                    <span className="flex-1 h-px bg-primary/25" />
                   </div>
                 )}
                 {timerChange && noticeIndex === i && <TimerNotice label={timerChange.label} />}
@@ -329,6 +346,8 @@ export function MessageThread({
                   me={me}
                   nameFor={nameFor}
                   showHeader={showSenderNames && !groupedWithPrev}
+                  joinedAbove={joinedAbove}
+                  joinedBelow={joinedBelow}
                   senderColour={colourFor?.(msg.user_id)}
                   handles={handles}
                   myHandle={myHandle}
@@ -383,6 +402,11 @@ export function MessageThread({
           {queued.map((msg, i) => {
             const prev = i === 0 ? messages[messages.length - 1] : queued[i - 1];
             const groupedWithPrev = isGrouped(msg, prev);
+            const next = queued[i + 1];
+            const joinedAbove =
+              groupedWithPrev && !(prev && 'sealed_prompt' in prev && prev.sealed_prompt);
+            // A failed send carries its retry row underneath, which is a break.
+            const joinedBelow = !!next && !msg.failed && isGrouped(next, msg);
 
             // opacity-90, not the /70 this started at: the hand-off to the
             // server row is a swap between two elements, so the dim can't
@@ -404,6 +428,8 @@ export function MessageThread({
                   me={me}
                   nameFor={nameFor}
                   showHeader={false}
+                  joinedAbove={joinedAbove}
+                  joinedBelow={joinedBelow}
                   isEditing={false}
                   editingText=""
                   reactions={[]}

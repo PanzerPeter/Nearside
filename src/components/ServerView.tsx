@@ -156,7 +156,7 @@ export function ServerView({ onBack, onOpenLimits }: ServerViewProps) {
               routing metadata the server genuinely reads, and plumbing. */}
           {groupTables(report.tables).map((group) => (
             <section key={group.group} className="mt-5">
-              <h4 className="text-micro font-medium uppercase tracking-wider text-muted">
+              <h4 className="text-meta font-medium text-muted">
                 {t(group.title)}
               </h4>
               <p className="text-meta text-muted leading-relaxed mt-1">{t(group.blurb)}</p>
@@ -188,7 +188,7 @@ export function ServerView({ onBack, onOpenLimits }: ServerViewProps) {
                     <dl className="mt-3 space-y-2">
                       {spec.readable.length > 0 && (
                         <div className="flex gap-2">
-                          <dt className="flex items-center gap-1 text-micro font-medium uppercase tracking-wider text-warning shrink-0 w-28">
+                          <dt className="flex items-center gap-1 text-meta font-medium text-warning shrink-0 w-28">
                             <Eye className="w-3 h-3" />
                             {t('serverView.serverReads')}
                           </dt>
@@ -199,7 +199,7 @@ export function ServerView({ onBack, onOpenLimits }: ServerViewProps) {
                       )}
                       {spec.opaque.length > 0 && (
                         <div className="flex gap-2">
-                          <dt className="flex items-center gap-1 text-micro font-medium uppercase tracking-wider text-success shrink-0 w-28">
+                          <dt className="flex items-center gap-1 text-meta font-medium text-success shrink-0 w-28">
                             <EyeOff className="w-3 h-3" />
                             {t('serverView.encrypted')}
                           </dt>
@@ -210,7 +210,7 @@ export function ServerView({ onBack, onOpenLimits }: ServerViewProps) {
                       )}
                       {spec.opaque.length === 0 && (
                         <div className="flex gap-2">
-                          <dt className="flex items-center gap-1 text-micro font-medium uppercase tracking-wider text-faint shrink-0 w-28">
+                          <dt className="flex items-center gap-1 text-meta font-medium text-faint shrink-0 w-28">
                             <Lock className="w-3 h-3" />
                             {t('serverView.encrypted')}
                           </dt>
@@ -229,7 +229,7 @@ export function ServerView({ onBack, onOpenLimits }: ServerViewProps) {
           {/* Its own heading, under the tables rather than among them: both
               cards below describe things with no row anywhere above, and
               trailing them off the last group made them read as more plumbing. */}
-          <h4 className="text-micro font-medium uppercase tracking-wider text-muted mt-5">
+          <h4 className="text-meta font-medium text-muted mt-5">
             {t('serverView.outsideTables')}
           </h4>
 

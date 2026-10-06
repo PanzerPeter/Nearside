@@ -211,7 +211,7 @@ export function ProfilePage({ session, profile, onUpdated }: ProfilePageProps) {
 
       <div className="flex flex-col">
         <label className="flex select-none items-center justify-between pb-1">
-          <span className="text-micro font-medium uppercase tracking-wider text-muted">
+          <span className="text-meta font-medium text-muted">
             {t('profile.displayName')}
           </span>
         </label>
@@ -236,7 +236,7 @@ export function ProfilePage({ session, profile, onUpdated }: ProfilePageProps) {
 
       <div className="flex flex-col mt-4">
         <label className="flex select-none items-center justify-between pb-1">
-          <span className="text-micro font-medium uppercase tracking-wider text-muted">
+          <span className="text-meta font-medium text-muted">
             {t('profile.bio')}
           </span>
         </label>

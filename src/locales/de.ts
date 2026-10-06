@@ -229,6 +229,10 @@ export const de: Catalog = {
 
   'auth.welcomeBack': 'Willkommen zurück',
   'auth.createYourAccount': 'Erstelle dein Konto',
+  'auth.tagline': 'Private Nachrichten, die deine bleiben.',
+  'auth.pointSealed': 'Auf deinem Gerät versiegelt. Der Server speichert nur, was er nicht lesen kann.',
+  'auth.pointNoDirectory': 'Keine Telefonnummer, kein Verzeichnis. Ihr verbindet euch per QR-Code oder Einmalcode.',
+  'auth.pointNoAds': 'Keine Werbung – und Privatsphäre kostet nichts extra.',
   'auth.email': 'E-Mail',
   'auth.password': 'Passwort',
   'auth.namePlaceholder': 'Anna Müller',

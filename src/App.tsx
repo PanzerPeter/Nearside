@@ -70,7 +70,7 @@ import { AppLockScreen } from './components/AppLockScreen';
 import { clearLock } from './lib/app-lock';
 import { setScreenGuard } from './lib/screen-guard';
 import { useConnection } from './lib/connection';
-import { MessageSquare } from 'lucide-react';
+import { BrandMark } from './components/BrandMark';
 import { useT } from './hooks/useT';
 
 /** Gap between retries of the profile fetch the settings tab waits on. Long
@@ -639,8 +639,8 @@ function App() {
             bar is showing, so tearing it down on a tab switch would drop all
             three and pay for a full refetch on the way back. */}
         <aside
-          className={`w-full lg:w-80 xl:w-96 lg:border-r lg:border-hairline shrink-0 transition-all duration-200 ${
-            chatOpen || tab === 'settings' ? 'hidden lg:flex lg:flex-col' : 'flex flex-col'
+          className={`w-full md:w-80 xl:w-96 md:border-r md:border-hairline shrink-0 transition-all duration-200 ${
+            chatOpen || tab === 'settings' ? 'hidden md:flex md:flex-col' : 'flex flex-col'
           }`}
         >
           {/* The list is `h-full`, so it needs a box of its own to be full of:
@@ -693,7 +693,7 @@ function App() {
           // animation each time it flips — see index.css.
           data-chat-open={chatOpen}
           className={`flex-1 min-w-0 ${
-            chatOpen ? 'flex flex-col' : 'hidden lg:flex lg:flex-col'
+            chatOpen ? 'flex flex-col' : 'hidden md:flex md:flex-col'
           }`}
         >
           {selectedFriend ? (
@@ -716,8 +716,10 @@ function App() {
           ) : (
             <div className="flex-1 flex items-center justify-center bg-base-200/50">
               <div className="text-center px-4">
-                <div className="motion-float brand-wash w-20 h-20 rounded-box flex items-center justify-center mx-auto mb-4">
-                  <MessageSquare className="w-10 h-10 text-primary/70" />
+                {/* The mark itself rather than a stock chat-bubble icon on a
+                    tile: this pane is the app's own front page on a desktop. */}
+                <div className="motion-float w-fit mx-auto mb-5">
+                  <BrandMark size={72} />
                 </div>
                 <p className="text-title font-medium text-strong">
                   {t('app.pickAChat')}
@@ -732,7 +734,7 @@ function App() {
             dialog renders — mounted only while the tab is up, so its push and
             entitlement checks don't run on every launch. */}
         {tab === 'settings' && !chatOpen && (
-          <section className="w-full lg:hidden flex flex-col min-w-0 bg-base-100">
+          <section className="w-full md:hidden flex flex-col min-w-0 bg-base-100">
             <div className="px-4 pb-3 pt-[calc(1rem+var(--safe-top))] border-b border-hairline shrink-0">
               <h2 className="text-display font-semibold text-base-content">{t('settings.title')}</h2>
             </div>

@@ -4,7 +4,8 @@ import { authRedirectTo } from '../lib/authRedirect';
 import { subscribeToAuthLinkError } from '../lib/nativeAuthLinks';
 import { LegalDocModal, LegalFooter, type LegalDoc } from './LegalFooter';
 import { BrandMark } from './BrandMark';
-import { ArrowLeft, LogIn, UserPlus } from 'lucide-react';
+import { ArrowLeft, EyeOff, Lock, LogIn, QrCode, UserPlus, type LucideIcon } from 'lucide-react';
+import type { MessageKey } from '../lib/i18n';
 import { useT } from '../hooks/useT';
 
 /** Display names are not addresses: they may collide, contain spaces and keep
@@ -17,10 +18,17 @@ const DISPLAY_NAME_MAX = 32;
 // Shared field styling — one source of truth for the four inputs so the focus
 // treatment (blue border + soft ring, no default outline) stays consistent.
 const INPUT_CLASS =
-  'input w-full bg-base-200/50 border border-hairline focus:border-primary focus:bg-base-200 focus:outline-hidden focus:ring-2 focus:ring-primary/25 transition-all';
+  'input w-full h-12 bg-base-200/50 border border-hairline focus:border-primary focus:bg-base-200 focus:outline-hidden focus:ring-2 focus:ring-primary/25 transition-all';
 
 const LABEL_CLASS =
-  'text-micro font-medium uppercase tracking-wider text-muted';
+  'text-meta font-medium text-muted';
+
+/** The brand panel's three lines — see the comment where they render. */
+const POINTS: { icon: LucideIcon; key: MessageKey }[] = [
+  { icon: Lock, key: 'auth.pointSealed' },
+  { icon: QrCode, key: 'auth.pointNoDirectory' },
+  { icon: EyeOff, key: 'auth.pointNoAds' },
+];
 
 interface AuthFormProps {
   /**
@@ -132,44 +140,59 @@ export function AuthForm({ onCancel }: AuthFormProps = {}) {
   }
 
   return (
-    <div className="relative min-h-dvh flex flex-col items-center justify-center gap-4 bg-base-300 px-4 py-6 pt-[calc(1.5rem+var(--safe-top))] pb-[calc(1.5rem+var(--safe-bottom))] overflow-hidden">
-      {/* Ambient brand glow — adds depth behind the card without competing with it. */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0"
-        style={{
-          background:
-            'radial-gradient(60rem 40rem at 50% -10%, rgba(59,130,246,0.10), transparent 70%)',
-        }}
-      />
-      <div className="relative card w-full max-w-sm bg-base-100 shadow-modal border border-hairline">
-        <div className="card-body p-6 sm:p-8">
-          <div className="flex flex-col items-center gap-2.5 mb-1">
-            <div className="relative">
-              <div
-                aria-hidden
-                className="absolute inset-0 -z-10 blur-xl opacity-50"
-                style={{ background: 'radial-gradient(closest-side, rgba(59,130,246,0.55), transparent)' }}
-              />
-              <BrandMark size={44} />
-            </div>
-            <h1 className="text-display font-bold text-base-content">Nearside</h1>
-          </div>
+    <div className="min-h-dvh flex bg-base-300">
+      {/* The brand side, from `md` up: what the product is, in its own words,
+          beside the form rather than squeezed above it. The three lines are
+          the README's claims, each of which the app enforces rather than
+          describes. Absent on a phone, where the screen is the form. */}
+      <aside className="hidden md:flex md:w-[44%] lg:w-1/2 flex-col justify-between gap-10 bg-base-200 border-r border-hairline px-10 lg:px-16 pt-[calc(2.5rem+var(--safe-top))] pb-[calc(2.5rem+var(--safe-bottom))]">
+        <div className="flex items-center gap-3">
+          <BrandMark size={36} />
+          <span className="text-title font-semibold text-base-content">Nearside</span>
+        </div>
+        <div className="max-w-md">
+          <p className="text-[2.25rem] lg:text-[2.75rem] font-semibold leading-[1.08] tracking-[-0.03em] text-base-content text-balance">
+            {t('auth.tagline')}
+          </p>
+          <ul className="mt-10 space-y-5">
+            {POINTS.map(({ icon: Icon, key }) => (
+              <li key={key} className="flex items-start gap-3.5">
+                <span className="flex w-9 h-9 shrink-0 items-center justify-center rounded-field bg-wash text-(--brand-lit)">
+                  <Icon className="w-[18px] h-[18px]" />
+                </span>
+                <span className="pt-1.5 text-body text-strong">{t(key)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <LegalFooter className="justify-start!" />
+      </aside>
+
+      <main className="flex-1 min-w-0 flex flex-col px-6 sm:px-10 pt-[calc(1.5rem+var(--safe-top))] pb-[calc(1.5rem+var(--safe-bottom))]">
+        {/* Phone: the mark and the name up top, the form low on the screen
+            where a thumb reaches it. Past `md` the form simply centres. */}
+        <div className="md:hidden flex items-center gap-2.5 pt-2">
+          <BrandMark size={36} />
+          <span className="text-title font-semibold text-base-content">Nearside</span>
+        </div>
+
+        <div className="w-full max-w-sm mx-auto mt-auto md:my-auto pt-10 md:pt-0">
           {onCancel && (
             <button
               type="button"
-              className="btn btn-ghost btn-xs self-center -mt-1 mb-1 gap-1.5 text-muted"
+              className="btn btn-ghost btn-sm -ml-3 mb-4 gap-1.5 text-muted"
               onClick={onCancel}
             >
-              <ArrowLeft className="w-3.5 h-3.5" />
+              <ArrowLeft className="w-4 h-4" />
               {t('auth.backToAccount')}
             </button>
           )}
-          <p className="text-center text-muted text-body mb-6">
+          <h1 className="text-[1.75rem] leading-tight font-semibold tracking-[-0.02em] text-base-content">
             {isSignUp ? t('auth.createYourAccount') : t('auth.welcomeBack')}
-          </p>
+          </h1>
+          <p className="md:hidden mt-1.5 text-body text-muted">{t('auth.tagline')}</p>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="mt-7 space-y-4">
             {isSignUp && (
               <div className="flex flex-col">
                 <label className="flex select-none items-center justify-between pb-1">
@@ -278,7 +301,7 @@ export function AuthForm({ onCancel }: AuthFormProps = {}) {
 
             <button
               type="submit"
-              className="btn btn-primary w-full mt-2 shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-shadow"
+              className="btn btn-primary w-full h-12 mt-2"
               disabled={loading || (isSignUp && !agreedToLegal)}
             >
               {loading ? (
@@ -297,7 +320,7 @@ export function AuthForm({ onCancel }: AuthFormProps = {}) {
             </button>
           </form>
 
-          <div className="mt-5 pt-4 border-t border-hairline text-center text-body text-muted">
+          <p className="mt-6 text-body text-muted">
             {isSignUp ? t('auth.haveAccount') : t('auth.noAccount')}{' '}
             <button
               type="button"
@@ -311,10 +334,11 @@ export function AuthForm({ onCancel }: AuthFormProps = {}) {
             >
               {isSignUp ? t('auth.signInShort') : t('auth.signUpShort')}
             </button>
-          </div>
+          </p>
         </div>
-      </div>
-      <LegalFooter />
+
+        <LegalFooter className="md:hidden mt-10" />
+      </main>
 
       {legalDoc && <LegalDocModal doc={legalDoc} onClose={() => setLegalDoc(null)} />}
     </div>

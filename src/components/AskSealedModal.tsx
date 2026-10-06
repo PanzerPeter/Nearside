@@ -56,7 +56,7 @@ export function AskSealedModal({ peerLabel, busy, onAsk, onClose }: AskSealedMod
         </p>
 
         <label className="block">
-          <span className="mb-1.5 block text-meta font-medium uppercase tracking-wide text-muted">
+          <span className="mb-1.5 block text-meta font-medium text-muted">
             {t('sealed.theQuestion')}
           </span>
           <textarea
@@ -72,7 +72,7 @@ export function AskSealedModal({ peerLabel, busy, onAsk, onClose }: AskSealedMod
         </label>
 
         <label className="block">
-          <span className="mb-1.5 flex items-center gap-1.5 text-meta font-medium uppercase tracking-wide text-muted">
+          <span className="mb-1.5 flex items-center gap-1.5 text-meta font-medium text-muted">
             <Lock className="h-3 w-3" />
             {t('sealed.yourAnswer')}
           </span>

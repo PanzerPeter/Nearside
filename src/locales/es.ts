@@ -227,6 +227,10 @@ export const es: Catalog = {
 
   'auth.welcomeBack': 'Hola de nuevo',
   'auth.createYourAccount': 'Crea tu cuenta',
+  'auth.tagline': 'Mensajes privados que siguen siendo tuyos.',
+  'auth.pointSealed': 'Sellados en tu dispositivo. El servidor solo guarda lo que no puede leer.',
+  'auth.pointNoDirectory': 'Sin número de teléfono ni directorio. Te conectas con un código QR o un código de un solo uso.',
+  'auth.pointNoAds': 'Sin anuncios, y la privacidad no es una función de pago.',
   'auth.email': 'Correo',
   'auth.password': 'Contraseña',
   'auth.namePlaceholder': 'Ana García',

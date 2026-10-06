@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Session } from '@supabase/supabase-js';
-import { Profile, initial } from '../lib/types';
+import { Profile } from '../lib/types';
+import { Avatar } from './Avatar';
 import type { StoredAccount } from '../lib/accounts';
 import type { AppLock } from '../hooks/useAppLock';
 import { APP_VERSION } from '../lib/version';
@@ -143,17 +144,12 @@ export function SettingsPanel({
         className="w-full flex items-center gap-3 p-3 mb-4 rounded-box border border-hairline bg-base-200/40 hover:bg-wash text-left"
         onClick={() => setSection('profile')}
       >
-        <div className="avatar placeholder shrink-0">
-          <div className="brand-gradient w-12 h-12 rounded-full text-primary-content overflow-hidden ring-3 ring-base-content/5">
-            {profile.avatar_url ? (
-              <img src={profile.avatar_url} alt="" className="w-full h-full object-cover" />
-            ) : (
-              <span className="text-title font-semibold">{initial(profile.display_name)}</span>
-            )}
-          </div>
-        </div>
+        {/* The same avatar the list and the header draw, so the face here is
+            the one other people see — it used to be a bespoke gradient disc
+            whose initial sat clipped in its top corner. */}
+        <Avatar display_name={profile.display_name} seed={profile.id} url={profile.avatar_url} size={52} />
         <div className="min-w-0 flex-1">
-          <p className="text-body font-medium truncate">{profile.display_name}</p>
+          <p className="text-title font-semibold truncate">{profile.display_name}</p>
           <p className="text-meta text-muted">{t('settings.profileHint')}</p>
         </div>
         <ChevronRight className="w-4 h-4 text-faint shrink-0" />

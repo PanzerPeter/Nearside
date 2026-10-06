@@ -25,6 +25,7 @@ import { syncMutedIds } from '../lib/mute';
 import { syncAlertLevels } from '../lib/alerts';
 import { cachedPreview } from '../lib/localdb';
 import { useT } from '../hooks/useT';
+import { HANDLE_ZONE } from '../lib/row-handle';
 
 interface RoomListProps {
   me: string;
@@ -176,9 +177,9 @@ export function RoomList({
       {/* Section and row insets are chosen so the label, the room icons and the
           conversation avatars below all share one left edge. */}
       {settled && !(empty && hideWhenEmpty) && (
-        <div className="px-2 sm:px-3 pt-3">
-          <div className="flex items-center justify-between px-2 mb-1.5">
-            <p className="text-micro font-semibold uppercase tracking-wider text-subtle">
+        <div className="px-2 pt-3">
+          <div className="flex items-center justify-between pl-3 pr-1 mb-1">
+            <p className="text-meta font-medium text-muted">
               {t('rooms.title')}
             </p>
             <button
@@ -194,7 +195,7 @@ export function RoomList({
           {empty ? (
             <p className="px-2 text-meta text-muted pb-2">{t('rooms.empty')}</p>
           ) : (
-            <ul className="space-y-1 pb-1">
+            <ul className="space-y-0.5 pb-1">
               {ordered.map((room) => {
                 const pinned = flags.get(room.id)?.pinnedAt != null;
                 const muted = isMuted(room.id, flags);
@@ -225,19 +226,23 @@ export function RoomList({
                       },
                     ]}
                   >
+                  {/* The same box, padding and selected treatment as a
+                      conversation row, so a group and a person in the same
+                      list read as the same kind of thing. */}
                   <button
-                    className={`w-full flex items-center gap-2.5 px-2 py-2 rounded-box text-left transition-colors ${
-                      selectedRoomId === room.id
-                        ? 'bg-primary/10 ring-1 ring-primary/25'
-                        : 'hover:bg-wash'
+                    className={`relative w-full flex items-center gap-3 px-3 py-2 rounded-field text-left transition-colors ${
+                      selectedRoomId === room.id ? 'bg-primary/10' : 'hover:bg-wash'
                     }`}
                     onClick={() => {
                       setOpenRail(null);
                       onSelectRoom(room);
                     }}
                   >
-                    <span className="w-9 h-9 rounded-box bg-primary/15 text-primary flex items-center justify-center shrink-0">
-                      <Users className="w-4 h-4" />
+                    {selectedRoomId === room.id && (
+                      <span className="brand-gradient absolute left-0 top-1/2 -translate-y-1/2 h-7 w-1 rounded-r-full" />
+                    )}
+                    <span className="w-10 h-10 rounded-box bg-primary/15 text-primary flex items-center justify-center shrink-0">
+                      <Users className="w-[18px] h-[18px]" />
                     </span>
                     <span className="flex-1 min-w-0">
                       <span className="block text-body font-medium truncate">{room.title}</span>
@@ -252,13 +257,13 @@ export function RoomList({
                       <Pin className="w-3 h-3 shrink-0 text-subtle" aria-label={t('chatList.pinned')} />
                     )}
                     {room.last_at && (
-                      <span className="text-micro text-muted shrink-0">
+                      <span className={`text-micro tabular-nums text-subtle shrink-0 ${HANDLE_ZONE}`}>
                         {formatListTime(room.last_at)}
                       </span>
                     )}
                     {(unread.get(room.id) ?? 0) > 0 && (
                       <span
-                        className="shrink-0 min-w-[1.25rem] h-5 px-1.5 inline-flex items-center justify-center rounded-full bg-primary text-primary-content text-micro font-bold leading-none"
+                        className={`shrink-0 min-w-[1.25rem] h-5 px-1.5 inline-flex items-center justify-center rounded-full bg-primary text-primary-content text-micro font-bold tabular-nums leading-none ${HANDLE_ZONE}`}
                         aria-label={t('chatList.unread', { count: unread.get(room.id) ?? 0 })}
                       >
                         {formatUnread(unread.get(room.id) ?? 0)}

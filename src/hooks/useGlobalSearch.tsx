@@ -165,7 +165,7 @@ export function useGlobalSearch({ me, targets, onOpen }: GlobalSearchOptions): G
             return (
               <li key={group.conversationId}>
                 <div className="flex items-center gap-2 px-1 pb-1">
-                  <Avatar display_name={target.name} url={target.avatarUrl} size={20} />
+                  <Avatar display_name={target.name} seed={target.id} url={target.avatarUrl} size={20} />
                   <span className="truncate text-meta font-semibold text-strong">
                     {target.name}
                   </span>

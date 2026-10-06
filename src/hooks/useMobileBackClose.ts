@@ -30,7 +30,7 @@ export function useMobileBackClose(active: boolean, onClose: () => void) {
 
   useEffect(() => {
     if (!active) return;
-    if (!window.matchMedia('(max-width: 1023px)').matches) return;
+    if (!window.matchMedia('(max-width: 767px)').matches) return;
 
     const id = nextId++;
     window.history.pushState({ nearsideBack: true, nearsideBackId: id }, '');

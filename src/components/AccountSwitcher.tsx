@@ -68,6 +68,7 @@ export function AccountSwitcher({
             >
               <Avatar
                 display_name={account.display_name || '?'}
+                seed={account.userId}
                 url={account.avatar_url}
                 size={22}
               />

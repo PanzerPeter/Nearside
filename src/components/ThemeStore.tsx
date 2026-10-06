@@ -127,7 +127,7 @@ export function ThemeStore({ onBack }: ThemeStoreProps) {
         <p className="text-body text-strong leading-relaxed">{t('themes.intro')}</p>
       )}
 
-      <h3 className="text-meta font-medium uppercase tracking-wide text-subtle mt-5 mb-2">
+      <h3 className="text-meta font-medium text-subtle mt-5 mb-2">
         {t('themes.included')}
       </h3>
       <div className="space-y-3">
@@ -152,7 +152,7 @@ export function ThemeStore({ onBack }: ThemeStoreProps) {
           price it cannot charge. */}
       {!isFossBuild() && (
         <>
-          <h3 className="text-meta font-medium uppercase tracking-wide text-subtle mt-6 mb-2">
+          <h3 className="text-meta font-medium text-subtle mt-6 mb-2">
             {t('themes.packs')}
           </h3>
           {bySupport && (

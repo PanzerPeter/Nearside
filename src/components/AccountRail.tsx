@@ -21,17 +21,17 @@ interface AccountRailProps {
  * settings, and therefore no sign-out, and therefore no way off the screen but
  * clearing app data.
  *
- * `lg:` only: the phone reaches the same panel through the tab bar, and a
+ * `md:` and up only: the phone reaches the same panel through the tab bar, and a
  * second permanent row above it would cost a conversation.
  */
 export function AccountRail({ profile, profileFailed, onOpenSettings }: AccountRailProps) {
   const t = useT();
   return (
-    // The tab bar is `lg:hidden`, so on a tablet wide enough for this layout
+    // The tab bar is `md:hidden`, so on a tablet wide enough for this layout
     // the rail is what sits on the bottom edge and has to inset itself.
     // The band is `--chrome-bottom` tall so the rail's rule lines up with the
     // composer's across the seam, and the row centres in whatever is left.
-    <div className="hidden lg:flex lg:flex-col lg:justify-center shrink-0 border-t border-hairline bg-base-100 p-2 pb-[calc(0.5rem+var(--safe-bottom))] min-h-[calc(var(--chrome-bottom)+var(--safe-bottom))]">
+    <div className="hidden md:flex md:flex-col md:justify-center shrink-0 border-t border-hairline bg-base-100 p-2 pb-[calc(0.5rem+var(--safe-bottom))] min-h-[calc(var(--chrome-bottom)+var(--safe-bottom))]">
       <button
         type="button"
         onClick={onOpenSettings}
@@ -39,7 +39,7 @@ export function AccountRail({ profile, profileFailed, onOpenSettings }: AccountR
         className="group flex w-full items-center gap-2.5 rounded-field px-2 py-1.5 text-left transition-colors hover:bg-wash focus-visible:bg-wash"
       >
         {profile ? (
-          <Avatar display_name={profile.display_name} url={profile.avatar_url} size={32} />
+          <Avatar display_name={profile.display_name} seed={profile.id} url={profile.avatar_url} size={32} />
         ) : profileFailed ? (
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-warning/10">
             <AlertTriangle className="h-4 w-4 text-warning" />

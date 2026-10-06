@@ -232,6 +232,10 @@ export const fr: Catalog = {
 
   'auth.welcomeBack': 'Content de te revoir',
   'auth.createYourAccount': 'Crée ton compte',
+  'auth.tagline': 'Des messages privés qui restent les tiens.',
+  'auth.pointSealed': 'Scellés sur ton appareil. Le serveur ne stocke que ce qu’il ne peut pas lire.',
+  'auth.pointNoDirectory': 'Ni numéro de téléphone, ni annuaire. On se connecte par QR code ou par un code à usage unique.',
+  'auth.pointNoAds': 'Pas de publicité, et la confidentialité n’est pas une option payante.',
   'auth.email': 'E-mail',
   'auth.password': 'Mot de passe',
   'auth.namePlaceholder': 'Marie Dupont',

@@ -9,5 +9,5 @@
          below API 35, and for the frame between the splash screen going and
          the first paint arriving. Left at the AppCompat DayNight default,
          those strips are white around a dark app. -->
-    <color name="appCanvas">#1a1b1e</color>
+    <color name="appCanvas">#0f1217</color>
 </resources>

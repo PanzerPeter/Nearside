@@ -11,6 +11,8 @@ interface MessageTextProps {
   /** My own display name, so a mention of me can be marked more strongly than
    *  a mention of somebody else. */
   myHandle?: string;
+  /** Inline content after the last word — the bubble's footer spacer. */
+  trailer?: ReactNode;
 }
 
 /** Splits a plain segment on the mentions inside it. Links are left alone —
@@ -48,7 +50,7 @@ function withMentions(value: string, handles: string[], myHandle: string, key: s
 /** Renders a message body with any `http(s)://` or `www.` URL turned into a
  *  clickable link; everything else stays plain text (see `linkify`'s own
  *  comment for why that whitelist is the security boundary here). */
-export function MessageText({ text, handles, myHandle }: MessageTextProps) {
+export function MessageText({ text, handles, myHandle, trailer }: MessageTextProps) {
   const segments = linkify(text);
 
   return (
@@ -73,6 +75,7 @@ export function MessageText({ text, handles, myHandle }: MessageTextProps) {
           <span key={i}>{segment.value}</span>
         )
       )}
+      {trailer}
     </div>
   );
 }

@@ -104,7 +104,7 @@ export function ProfileCard({
           title={photo ? t('profileCard.viewPhoto') : undefined}
           className="rounded-full ring-3 ring-base-content/5 disabled:cursor-default"
         >
-          <Avatar display_name={profile.display_name} url={profile.avatar_url} size={96} />
+          <Avatar display_name={profile.display_name} seed={profile.id} url={profile.avatar_url} size={96} />
         </button>
 
         <div className="min-w-0">
@@ -146,7 +146,7 @@ export function ProfileCard({
 
       <div className="mt-5 space-y-4">
         <section>
-          <h4 className="text-micro font-medium uppercase tracking-wider text-muted">
+          <h4 className="text-meta font-medium text-muted">
             {t('profileCard.bio')}
           </h4>
           {failed ? (
@@ -171,7 +171,7 @@ export function ProfileCard({
 
         {!isSelf && (
           <section>
-            <h4 className="text-micro font-medium uppercase tracking-wider text-muted">
+            <h4 className="text-meta font-medium text-muted">
               {t('profileCard.yourNameFor')}
             </h4>
             <div className="mt-1 flex items-center gap-2">

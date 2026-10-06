@@ -230,6 +230,10 @@ export const pl: Catalog = {
 
   'auth.welcomeBack': 'Witaj ponownie',
   'auth.createYourAccount': 'Załóż konto',
+  'auth.tagline': 'Prywatne wiadomości, które pozostają twoje.',
+  'auth.pointSealed': 'Zapieczętowane na twoim urządzeniu. Serwer przechowuje tylko to, czego nie może odczytać.',
+  'auth.pointNoDirectory': 'Bez numeru telefonu i bez katalogu użytkowników. Łączycie się kodem QR lub kodem jednorazowym.',
+  'auth.pointNoAds': 'Bez reklam, a prywatność nie jest płatnym dodatkiem.',
   'auth.email': 'E-mail',
   'auth.password': 'Hasło',
   'auth.namePlaceholder': 'Jan Kowalski',

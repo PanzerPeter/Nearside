@@ -17,10 +17,13 @@ export function AvatarWithStatus({ userId, display_name, url, size = 40 }: Avata
 
   return (
     <div className="relative shrink-0" style={{ width: size, height: size }}>
-      <Avatar display_name={display_name} url={url} size={size} />
+      <Avatar display_name={display_name} seed={userId} url={url} size={size} />
       {/* No dot at all while presence is off, rather than a grey one: grey
-          says "offline", which is a claim about them. */}
-      {status && (
+          says "offline", which is a claim about them. And none for offline
+          either: on a list of mostly-offline contacts a grey dot on every
+          avatar read as a hole punched in it, and "last seen" in the
+          conversation header already says it in words. */}
+      {status && status !== 'offline' && (
         <span className="absolute -bottom-0.5 -right-0.5">
           <StatusDot status={status} size={dot} />
         </span>

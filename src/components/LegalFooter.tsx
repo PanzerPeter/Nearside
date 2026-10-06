@@ -133,7 +133,7 @@ function LegalDocBody({ doc }: { doc: LegalDoc }) {
       <div className="space-y-3 mt-3">{terms ? termsLead : privacyLead}</div>
 
       <nav aria-label="Sections" className="mt-4 rounded-field bg-base-200/50 px-3 py-2.5">
-        <p className="text-micro font-medium uppercase tracking-wide text-subtle mb-1.5">
+        <p className="text-meta font-medium text-subtle mb-1.5">
           {t('legal.inThisDocument')}
         </p>
         <ul className="space-y-0.5">

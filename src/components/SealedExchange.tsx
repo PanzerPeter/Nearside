@@ -193,7 +193,7 @@ function Answer({ label, text, sealed }: { label: string; text: string | null; s
         sealed ? 'bg-base-200/70 ring-1 ring-dashed ring-base-content/15' : 'bg-base-200'
       }`}
     >
-      <p className="mb-0.5 text-micro font-medium uppercase tracking-wide text-subtle">
+      <p className="mb-0.5 text-meta font-medium text-subtle">
         {label}
       </p>
       {text === null ? (

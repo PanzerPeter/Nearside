@@ -301,7 +301,7 @@ export function ForwardModal({
                   />
                   <div className="relative shrink-0" style={{ width: 32, height: 32 }}>
                     {target.memberCount === null ? (
-                      <Avatar display_name={target.display_name} url={target.avatarUrl} size={32} />
+                      <Avatar display_name={target.display_name} seed={target.peer_id} url={target.avatarUrl} size={32} />
                     ) : (
                       /* A group has no picture to show, and an initial drawn
                          from its title reads as a person. The icon is what says

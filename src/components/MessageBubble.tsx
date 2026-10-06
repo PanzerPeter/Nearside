@@ -47,6 +47,12 @@ interface MessageBubbleProps {
    *  where one person is on the other side and the bubble's own side already
    *  says which. */
   showHeader: boolean;
+  /** Whether the same author's previous / next message sits tight against
+   *  this one (`MessageThread`'s grouping). The corners on the sender's side
+   *  pinch where two bubbles of one run meet, so a run reads as one turn in
+   *  the conversation rather than a stack of separate cards. */
+  joinedAbove?: boolean;
+  joinedBelow?: boolean;
   /** Text colour class for the author's name, so a group's members stay
    *  tellable apart at a glance (`roomColour`). Unused in a 1:1. */
   senderColour?: string;
@@ -113,6 +119,8 @@ export function MessageBubble({
   me,
   nameFor,
   showHeader,
+  joinedAbove = false,
+  joinedBelow = false,
   senderColour,
   handles,
   myHandle,
@@ -224,6 +232,17 @@ export function MessageBubble({
   // Chips straddle the bubble's bottom edge and need the padded band under the
   // content to land on, so a reacted-to picture keeps its ordinary footer row.
   const floatFooter = mediaAlone && !hasReactions;
+  // Text that ends the bubble: the time and ticks tuck into the end of its last
+  // line, the way a chat app is expected to, instead of spending a row of their
+  // own under a three-word message. A reacted-to message keeps the row — its
+  // chips hang into the band beneath the text.
+  const inlineFooter =
+    !isDeleted && !untrusted && !!msg.text && jumboEmoji === 0 && !msg.decrypt_failed && !hasReactions;
+  // Messenger-style: full rounding on a message that stands alone, pinched on
+  // the sender's side where it meets the next or previous one of the same run.
+  const corners = isOwn
+    ? `${joinedAbove ? 'rounded-tr-md' : ''} ${joinedBelow ? 'rounded-br-md' : ''}`
+    : `${joinedAbove ? 'rounded-tl-md' : ''} ${joinedBelow ? 'rounded-bl-md' : ''}`;
   // A queued message has no server row yet, so nothing can be done to it — and
   // neither reply, reaction nor forward is offered on a row whose author is not
   // established: forwarding re-seals the body as yours, which would carry an
@@ -403,6 +422,14 @@ export function MessageBubble({
     direction,
   });
 
+  const footerItems = (
+    <>
+      <time className={isDeleted ? '' : 'opacity-75'}>{formatTime(msg.created_at)}</time>
+      {msg.edited_at && !isDeleted && <span className="opacity-75">{t('message.editedMark')}</span>}
+      {isOwn && status && !isDeleted && <MessageStatus status={status} />}
+    </>
+  );
+
   return (
     <div
       // Which side the entrance comes from, for the expressive animation set
@@ -460,8 +487,8 @@ export function MessageBubble({
         // The save and cancel controls live in the composer, not here — see
         // `Composer`'s `editing` prop.
         <div
-          className={`selection-on-fill w-[85%] sm:w-[70%] px-3.5 py-2 rounded-box shadow-[0_1px_2px_rgba(0,0,0,0.28)] ring-2 ring-primary/60 ${
-            isOwn ? 'rounded-br-md bg-primary text-primary-content' : 'rounded-bl-md bg-neutral text-neutral-content'
+          className={`selection-on-fill w-[85%] sm:w-[70%] px-3.5 py-2 rounded-bubble shadow-[0_1px_2px_rgba(0,0,0,0.28)] ring-2 ring-primary/60 ${corners} ${
+            isOwn ? 'bg-primary text-primary-content' : 'bubble-peer'
           }`}
         >
           {/* The attachment stays on screen while its caption is being
@@ -599,14 +626,12 @@ export function MessageBubble({
               transition: swiping ? 'none' : 'transform 0.2s ease-out',
               touchAction: canReply ? 'pan-y' : undefined,
             }}
-            className={`rounded-box whitespace-pre-wrap wrap-break-word cursor-default ${
+            className={`rounded-bubble whitespace-pre-wrap wrap-break-word cursor-default ${
               // A bare sticker or a jumbo emoji keeps the rounding (reaction
               // chips and the menu ring still anchor to this box) and drops
               // everything that would draw a frame around it.
               bareGlyph ? 'p-0' : 'px-3.5 pt-2 shadow-[0_1px_2px_rgba(0,0,0,0.28)]'
-            } ${
-              isOwn ? 'rounded-br-md' : 'rounded-bl-md'
-            } ${
+            } ${corners} ${
               // Reaction chips hang about 12px up into the bubble from
               // -bottom-2.5. Without extra bottom padding they land on the
               // right-aligned footer; the pad keeps them over dead space
@@ -639,7 +664,7 @@ export function MessageBubble({
                     'text-base-content'
                   : isOwn
                     ? 'bg-primary text-primary-content'
-                    : 'bg-neutral text-neutral-content'
+                    : 'bubble-peer'
             } ${
               // The menu is a floating card that can end up above or below its
               // bubble; the ring is what keeps it visibly attached to the
@@ -751,7 +776,10 @@ export function MessageBubble({
                     // there is bubble above it to be flush with.
                     <div
                       className={`-mx-3.5 overflow-hidden ${
-                        msg.forwarded || msg.reply_to_id ? '' : '-mt-2 rounded-t-2xl'
+                        // The bubble's own clip rounds it; a radius of its
+                        // own here would leave bubble colour showing in a
+                        // corner the run has pinched.
+                        msg.forwarded || msg.reply_to_id ? '' : '-mt-2'
                       }`}
                     >
                       <MediaAttachment
@@ -791,7 +819,24 @@ export function MessageBubble({
                       {msg.text.trim()}
                     </div>
                   ) : (
-                    <MessageText text={msg.text} handles={handles} myHandle={myHandle} />
+                    <MessageText
+                      text={msg.text}
+                      handles={handles}
+                      myHandle={myHandle}
+                      // An invisible copy of the footer, at the end of the last
+                      // line: it is what makes the text wrap early when the
+                      // real footer, absolutely placed below, would cover it.
+                      trailer={
+                        inlineFooter ? (
+                          <span
+                            aria-hidden
+                            className="invisible ml-2 inline-flex items-center gap-1 text-micro leading-none select-none"
+                          >
+                            {footerItems}
+                          </span>
+                        ) : undefined
+                      }
+                    />
                   ))}
                 {/* Sealed, and this device could not open it. Said out loud,
                     because an empty bubble would read as a message someone
@@ -831,17 +876,15 @@ export function MessageBubble({
                 and rides on its own scrim, because the image underneath it is
                 any colour at all. */}
             <div
-              className={`text-micro leading-none flex items-center gap-1 ${
+              className={`text-micro leading-none flex items-center gap-1 tabular-nums ${
                 floatFooter
                   ? 'absolute bottom-1.5 right-1.5 rounded-full bg-black/50 px-1.5 py-1 text-white'
-                  : 'justify-end mt-1 -mb-0.5'
+                  : inlineFooter
+                    ? 'absolute bottom-[9px] right-3.5'
+                    : 'justify-end mt-1 -mb-0.5'
               }`}
             >
-              <time className={isDeleted ? '' : 'opacity-75'}>{formatTime(msg.created_at)}</time>
-              {msg.edited_at && !isDeleted && (
-                <span className="opacity-75">{t('message.editedMark')}</span>
-              )}
-              {isOwn && status && !isDeleted && <MessageStatus status={status} />}
+              {footerItems}
             </div>
           </div>
 

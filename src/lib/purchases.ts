@@ -53,7 +53,7 @@ export const FREE_THEMES: ThemeOption[] = [
     name: 'Nearside',
     description: 'theme.nearside',
     theme: DEFAULT_THEME,
-    swatches: ['#1a1b1e', '#2a2c31', '#3b82f6'],
+    swatches: ['#0f1217', '#1f232a', '#2d72da'],
   },
   {
     name: 'Daylight',
@@ -65,7 +65,7 @@ export const FREE_THEMES: ThemeOption[] = [
     name: 'Void',
     description: 'theme.void',
     theme: 'nearside-void',
-    swatches: ['#000000', '#1c1d21', '#4c8dff'],
+    swatches: ['#000000', '#1c1d21', '#2471e4'],
   },
 ];
 
@@ -96,14 +96,14 @@ export const PACKS: Pack[] = [
     name: 'Sunset',
     description: 'theme.sunset',
     theme: 'nearside-sunset',
-    swatches: ['#170d21', '#3a2450', '#e0563f'],
+    swatches: ['#170d21', '#3a2450', '#c9442e'],
   },
   {
     id: 'pack.sakura',
     name: 'Sakura',
     description: 'theme.sakura',
     theme: 'nearside-sakura',
-    swatches: ['#fffafc', '#f7dde8', '#d6336c'],
+    swatches: ['#fffafc', '#f7dde8', '#c42a62'],
   },
   {
     id: 'pack.graphite',

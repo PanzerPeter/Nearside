@@ -1,7 +1,7 @@
 import { Profile } from '../lib/types';
 import type { VerificationState } from '../lib/verification';
 import type { PresenceStatus } from '../lib/presence-model';
-import { Avatar } from './Avatar';
+import { Avatar, VaultAvatar } from './Avatar';
 import { StatusDot, presenceLabels } from './StatusDot';
 import { formatLastSeen } from '../lib/time';
 import { useConnection, useDegraded } from '../lib/connection';
@@ -15,7 +15,6 @@ import {
   Image as ImageIcon,
   Lock,
   MoreVertical,
-  NotebookPen,
   Pencil,
   Phone,
   Search,
@@ -142,13 +141,13 @@ export function ChatHeader({
 
   // The phone's top edge: this bar is the first thing under the status bar, so
   // it carries the inset itself and puts its own background behind the clock.
-  // `lg:` takes it back off — on desktop App's top bar sits above this one and
+  // `md:` takes it back off — on desktop App's top bar sits above this one and
   // has already paid it. The left padding is tighter than the right because on
   // a phone the back arrow's own hit area supplies the rest of the gap.
   return (
-    <header className="flex items-center gap-2 sm:gap-3 pl-2 pr-1.5 lg:pl-5 lg:pr-3 py-2.5 pt-[calc(0.625rem+var(--safe-top))] lg:min-h-[var(--chrome-top)] bg-base-100 border-b border-hairline z-10 shrink-0">
+    <header className="flex items-center gap-2 sm:gap-3 pl-2 pr-1.5 md:pl-5 md:pr-3 py-2.5 pt-[calc(0.625rem+var(--safe-top))] md:min-h-[var(--chrome-top)] bg-base-100 border-b border-hairline z-10 shrink-0">
       <button
-        className="btn btn-ghost btn-sm btn-square lg:hidden hover:bg-wash transition-colors"
+        className="btn btn-ghost btn-sm btn-square md:hidden hover:bg-wash transition-colors"
         onClick={onBack}
       >
         <ArrowLeft className="w-5 h-5" />
@@ -161,11 +160,10 @@ export function ChatHeader({
         title={t('profileCard.title')}
         aria-label={t('profileCard.title')}
       >
-        <Avatar display_name={friend.display_name} url={friend.avatar_url} size={36} />
-        {isSelf && (
-          <span className="absolute -bottom-0.5 -right-0.5 rounded-full bg-base-100 p-0.5">
-            <NotebookPen className="w-3 h-3 text-primary" />
-          </span>
+        {isSelf ? (
+          <VaultAvatar size={36} />
+        ) : (
+          <Avatar display_name={friend.display_name} seed={friend.id} url={friend.avatar_url} size={36} />
         )}
       </button>
       {/* The name is the button that opens the nickname editor: it is the
@@ -264,8 +262,13 @@ export function ChatHeader({
           </button>
         </>
       )}
+      {/* Into the menu on a phone, where four icons beside the name left the
+          name about 150px. The self-chat has no call buttons, so there is the
+          room to keep it out here. */}
       <button
-        className="btn btn-ghost btn-sm btn-square hover:bg-wash transition-colors"
+        className={`btn btn-ghost btn-sm btn-square hover:bg-wash transition-colors ${
+          isSelf ? '' : 'hidden sm:inline-flex'
+        }`}
         onClick={onToggleSearch}
         title={t('chat.searchMessages')}
         aria-pressed={searchOpen}
@@ -298,6 +301,19 @@ export function ChatHeader({
               something rather than configures something. Absent in the
               self-chat: an exchange with yourself has nothing to withhold, and
               the CHECK constraint on `sealed_prompt` refuses the row anyway. */}
+          {!isSelf && (
+            <li className="sm:hidden">
+              <button
+                onClick={() => {
+                  closeMenu();
+                  onToggleSearch();
+                }}
+              >
+                <Search className="w-4 h-4" />
+                {t('chat.searchMessages')}
+              </button>
+            </li>
+          )}
           {!isSelf && !blocked && (
             <li>
               <button

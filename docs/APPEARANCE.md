@@ -12,7 +12,7 @@ Every theme lives in two places and the two must agree: an
 RevenueCat entitlement id, its store product id, and what `packOffers()`
 matches an offering on. `purchases.test.ts` fails if a listed theme has no
 block behind it, if a block is missing one of the `--surface-ring`,
-`--receipt-read` or `--presence-offline` tokens the components read, or if it
+`--receipt-read`, `--presence-offline` or `--avatar-chroma` tokens the components read, or if it
 leaves daisyUI 5's `--depth`/`--noise` at their default of 1, which adds a
 gradient and a drop shadow to buttons, badges and toggles that this app's flat
 surfaces never had.
@@ -95,6 +95,20 @@ work, and the rest of the app is untouched.
 The preview button beside each theme renders a sample conversation in that theme
 without applying it, by setting `data-theme` on that element rather than on
 `<html>`. Nothing is stored and there is no state to walk back.
+
+### What each theme has to get right
+
+- **White on `--color-primary` clears 4.5:1** wherever the primary carries
+  white text, because the own-message bubble is that pair and it is the most
+  read surface in the app. The dark packs whose primary carries dark text
+  (midnight, terminal, graphite) are measured the other way round.
+- **Bubbles** round at `rounded-bubble`, which is 1.5 × the theme's
+  `--radius-box`: square-cut packs keep square-cut bubbles. The other person's
+  bubble is `.bubble-peer`: the neutral on a dark surface, the page colour on a
+  light one.
+- **Initials without a photo** are tinted by `.avatar-tint`. `Avatar` picks one
+  of eight hues from the person's id; the stylesheet sets lightness per surface
+  and the theme sets `--avatar-chroma`, which is 0 in the two single-hue packs.
 
 ## Motion
 

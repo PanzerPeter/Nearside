@@ -37,7 +37,7 @@ export function FirstRunInvite({ onShowCode, onScan, onCreateRoom }: FirstRunInv
 
       <div className="mt-4 flex gap-2">
         <button
-          className="btn btn-primary btn-sm flex-1 gap-1.5 shadow-md shadow-primary/20"
+          className="btn btn-primary btn-sm flex-1 gap-1.5"
           onClick={onShowCode}
         >
           <QrCode className="w-4 h-4" />

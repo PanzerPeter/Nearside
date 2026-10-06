@@ -258,6 +258,7 @@ export function CallScreen() {
             <div className={`relative flex rounded-full${pending ? ' motion-call-halo' : ''}`}>
               <Avatar
                 display_name={state.peerName.replace(/^@/, '')}
+                seed={state.peerId}
                 url={peerAvatar}
                 size={128}
                 className="ring-1 ring-hairline-strong shadow-overlay"

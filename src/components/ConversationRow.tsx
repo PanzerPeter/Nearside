@@ -1,13 +1,14 @@
-import { Avatar } from './Avatar';
+import { VaultAvatar } from './Avatar';
 import { AvatarWithStatus } from './AvatarWithStatus';
 import { formatListTime } from '../lib/time';
 import { formatUnread } from '../lib/receipts';
 import { isSelfChat } from '../lib/conversation';
 import { formatDisplayName, useNickname } from '../lib/nicknames';
 import type { ConversationSummary, MediaType } from '../lib/types';
-import { Ban, BellOff, NotebookPen, Pin } from 'lucide-react';
+import { Ban, BellOff, Pin } from 'lucide-react';
 import { peekDraft } from '../lib/drafts';
 import { useT } from '../hooks/useT';
+import { HANDLE_ZONE } from '../lib/row-handle';
 
 interface ConversationRowProps {
   conversation: ConversationSummary;
@@ -95,14 +96,11 @@ export function ConversationRow({
         <span className="brand-gradient absolute left-0 top-1/2 -translate-y-1/2 h-7 w-1 rounded-r-full" />
       )}
       {/* No presence dot on your own row: it would report your own device back
-          to you, and the notebook mark is what makes the row recognisable. */}
+          to you. The vault gets a mark of its own rather than your initial
+          with a badge on it, which read as a contact who happened to share
+          your first letter. */}
       {isSelf ? (
-        <div className="relative shrink-0" style={{ width: 40, height: 40 }}>
-          <Avatar display_name={display_name} url={avatar_url} size={40} />
-          <span className="absolute -bottom-0.5 -right-0.5 rounded-full bg-base-100 p-0.5">
-            <NotebookPen className="w-3 h-3 text-primary" />
-          </span>
-        </div>
+        <VaultAvatar size={40} />
       ) : (
         <AvatarWithStatus
           userId={conversation.peer_id}
@@ -138,7 +136,7 @@ export function ConversationRow({
             <Pin className="shrink-0 w-3 h-3 text-subtle" aria-label={t('chatList.pinned')} />
           )}
           {last_at && (
-            <span className="shrink-0 text-micro text-subtle">
+            <span className={`shrink-0 text-micro tabular-nums text-subtle ${HANDLE_ZONE}`}>
               {formatListTime(last_at)}
             </span>
           )}
@@ -162,14 +160,14 @@ export function ConversationRow({
       </span>
       {unread > 0 ? (
         <span
-          className="shrink-0 min-w-[1.25rem] h-5 px-1.5 inline-flex items-center justify-center rounded-full bg-primary text-primary-content text-micro font-bold leading-none"
+          className={`shrink-0 min-w-[1.25rem] h-5 px-1.5 inline-flex items-center justify-center rounded-full bg-primary text-primary-content text-micro font-bold tabular-nums leading-none ${HANDLE_ZONE}`}
           aria-label={t('chatList.unread', { count: unread })}
         >
           {formatUnread(unread)}
         </span>
       ) : markedUnread ? (
         <span
-          className="shrink-0 w-2.5 h-2.5 rounded-full bg-primary"
+          className={`shrink-0 w-2.5 h-2.5 rounded-full bg-primary ${HANDLE_ZONE}`}
           aria-label={t('chatList.markedUnread')}
         />
       ) : null}

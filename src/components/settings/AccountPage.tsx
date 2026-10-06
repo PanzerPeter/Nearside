@@ -156,7 +156,7 @@ export function AccountPage({
       </Card>
 
       <div className="space-y-2">
-        <p className="text-micro font-medium uppercase tracking-wider text-error px-1">
+        <p className="text-meta font-medium text-error px-1">
           {t('account.dangerZone')}
         </p>
         {confirmingDelete ? (

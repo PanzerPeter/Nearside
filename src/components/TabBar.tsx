@@ -11,7 +11,7 @@ interface TabBarProps {
 }
 
 /**
- * The phone's primary navigation. `lg:hidden` by construction: the desktop
+ * The phone's primary navigation. `md:hidden` by construction: the desktop
  * layout shows both panes at once and reaches settings from the account rail
  * at the foot of the list, so a tab bar there would be navigating between
  * things already on screen.
@@ -22,7 +22,7 @@ interface TabBarProps {
 export function TabBar({ tab, onSelect, unread }: TabBarProps) {
   const t = useT();
   return (
-    <nav className="lg:hidden shrink-0 bg-base-100 border-t border-hairline pb-(--safe-bottom) z-20">
+    <nav className="md:hidden shrink-0 bg-base-100 border-t border-hairline pb-(--safe-bottom) z-20">
       <div className="flex">
         <TabButton
           label={t('tabs.chats')}
@@ -62,24 +62,30 @@ function TabButton({
       // behaviour it implies is worse than not claiming it.
       aria-current={active ? 'page' : undefined}
       className={`flex-1 flex flex-col items-center gap-1 py-2 transition-colors ${
-        active ? 'text-primary' : 'text-muted hover:text-strong'
+        active ? 'text-base-content' : 'text-muted hover:text-strong'
       }`}
     >
       {/* motion-tab-icon is the hook the expressive set animates when
           aria-current above flips to this button — see index.css. */}
       <span
-        className={`motion-tab-icon relative flex items-center justify-center rounded-full px-4 py-1 transition-colors ${
-          active ? 'brand-gradient text-primary-content' : ''
+        // A tint, not a fill: the solid gradient pill was the loudest thing on
+        // the screen, louder than the conversations it navigates to. The label
+        // under it takes full contrast instead of the accent, which at 11px on
+        // a dark bar did not carry.
+        className={`motion-tab-icon relative flex items-center justify-center rounded-full px-5 py-1 transition-colors ${
+          active ? 'bg-primary/20' : ''
         }`}
       >
         {children}
         {badge > 0 && (
-          <span className="absolute -top-1.5 -right-2.5 badge badge-xs badge-primary px-1 font-semibold">
+          <span className="absolute -top-1.5 -right-2 badge badge-xs badge-primary px-1 font-semibold tabular-nums ring-2 ring-base-100">
             {badge > 99 ? '99+' : badge}
           </span>
         )}
       </span>
-      <span className="text-micro font-medium leading-none">{label}</span>
+      <span className={`text-micro leading-none ${active ? 'font-semibold' : 'font-medium'}`}>
+        {label}
+      </span>
     </button>
   );
 }

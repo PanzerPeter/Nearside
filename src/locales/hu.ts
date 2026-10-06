@@ -232,6 +232,10 @@ export const hu: Catalog = {
 
   'auth.welcomeBack': 'Üdv újra',
   'auth.createYourAccount': 'Hozz létre egy fiókot',
+  'auth.tagline': 'Privát üzenetek, amelyek a tieid maradnak.',
+  'auth.pointSealed': 'A készülékeden lezárva. A szerver csak azt tárolja, amit nem tud elolvasni.',
+  'auth.pointNoDirectory': 'Nincs telefonszám, nincs névjegyzék. QR-kóddal vagy egyszer használatos kóddal kapcsolódtok.',
+  'auth.pointNoAds': 'Nincs reklám, és az adatvédelem nem fizetős extra.',
   'auth.email': 'E-mail',
   'auth.password': 'Jelszó',
   'auth.namePlaceholder': 'Kiss Anna',

@@ -33,6 +33,7 @@ const APP_TOKENS = [
   '--presence-offline',
   '--brand-lit',
   '--brand-dim',
+  '--avatar-chroma',
 ];
 
 /** Shape and finish. `--depth`/`--noise` are pinned to 0 in every theme: left

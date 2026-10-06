@@ -71,7 +71,7 @@ export function ReportModal({
     >
       <div className="space-y-4">
         <label className="block">
-          <span className="mb-1.5 block text-meta font-medium uppercase tracking-wide text-muted">
+          <span className="mb-1.5 block text-meta font-medium text-muted">
             {t('report.reasonLabel')}
           </span>
           <textarea

@@ -63,7 +63,7 @@ export function SupportNearside({ onBack }: SupportNearsideProps) {
     <SettingsPage title={t('about.support')} onBack={onBack}>
       <p className="text-body text-strong leading-relaxed">{t('support.intro')}</p>
 
-      <h3 className="text-meta font-medium uppercase tracking-wide text-subtle mt-5 mb-2">
+      <h3 className="text-meta font-medium text-subtle mt-5 mb-2">
         {t('support.paysFor')}
       </h3>
       <ul className="space-y-2 text-body text-strong">
@@ -83,7 +83,7 @@ export function SupportNearside({ onBack }: SupportNearsideProps) {
         </li>
       </ul>
 
-      <h3 className="text-meta font-medium uppercase tracking-wide text-subtle mt-6 mb-2">
+      <h3 className="text-meta font-medium text-subtle mt-6 mb-2">
         {t('support.tiers')}
       </h3>
       <div className="space-y-3">

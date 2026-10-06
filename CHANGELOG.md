@@ -14,6 +14,37 @@ one of them drifts.
 
 ## [Unreleased]
 
+### Changed
+
+- A new look for the default theme: a deep blue-tinted ink instead of the grey
+  it shipped with, and a blue taken from the logo. Your own messages are now
+  easy to read: the old blue left white text below the accessibility minimum,
+  and the Void, Sunset and Sakura themes had the same problem, fixed the same way.
+- Contacts without a photo get a colour of their own, so the chat list no
+  longer looks like a column of identical grey circles. Your vault has its own
+  icon instead of your initial.
+- Messages sent one after another join up into one run, and the time sits at
+  the end of the last line instead of on a line of its own, so more of the
+  conversation fits on screen. In the light themes the other person's messages
+  are white instead of grey on grey.
+- On a large screen the conversation stays in a centred column instead of
+  stretching across the whole window, and tablets get the chat list and the
+  conversation side by side from 768 pixels wide.
+- A new sign-in screen. On a phone the form sits low, where your thumb is; on a
+  larger screen it sits beside a short summary of what Nearside promises.
+- Starting a group moved to a button next to "Add contact". The chat list no
+  longer opens with an empty "Groups" section.
+- Calmer details throughout: plain-case labels instead of spaced capitals, a
+  quieter tab bar, no grey "offline" dot on every contact, and times written
+  "2:18 PM" rather than "02:18 PM".
+
+### Fixed
+
+- Initials sat in the top-left corner of their circle instead of the middle.
+- The "jump to latest" button showed on a conversation that was already
+  showing its latest message.
+- On a computer, the "…" button on a chat-list row covered the time beside it.
+
 ## [1.20.0] — 2026-10-03
 
 ### Added

@@ -100,7 +100,7 @@ export function HiddenRequests({ onBack }: HiddenRequestsProps) {
         <Card title={t('block.settingsTitle')}>
           {blockedProfiles.map((profile) => (
             <div key={profile.id} className="flex items-center gap-3 px-3 py-2.5">
-              <Avatar display_name={profile.display_name} url={profile.avatar_url} size={32} />
+              <Avatar display_name={profile.display_name} seed={profile.id} url={profile.avatar_url} size={32} />
               <span className="flex-1 min-w-0 truncate text-body">
                 {profile.display_name ? `@${profile.display_name}` : t('hidden.deletedAccount')}
               </span>
@@ -125,7 +125,7 @@ export function HiddenRequests({ onBack }: HiddenRequestsProps) {
         ) : (
           profiles.map((profile) => (
             <div key={profile.id} className="flex items-center gap-3 px-3 py-2.5">
-              <Avatar display_name={profile.display_name} url={profile.avatar_url} size={32} />
+              <Avatar display_name={profile.display_name} seed={profile.id} url={profile.avatar_url} size={32} />
               <span className="flex-1 min-w-0 truncate text-body">
                 {profile.display_name ? `@${profile.display_name}` : t('hidden.deletedAccount')}
               </span>

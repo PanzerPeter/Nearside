@@ -147,10 +147,16 @@ export function useThreadScroll({
         // 'start', not 'center': the question the line answers is "where was
         // I", so the unread messages belong below it and on screen.
         target.scrollIntoView({ behavior: 'auto', block: 'start' });
-        // The view is no longer at the bottom, and the bookkeeping has to say
-        // so or the jump-to-latest button — the way back down — never appears.
-        atBottomRef.current = false;
-        setAtBottom(false);
+        // Usually the view is no longer at the bottom, and the bookkeeping has
+        // to say so or the jump-to-latest button — the way back down — never
+        // appears. Measured rather than assumed: when everything unread fits
+        // on one screen the jump moves nothing, and a "jump to latest" button
+        // over a thread already showing the latest pointed nowhere.
+        const el = listRef.current;
+        const stillAtBottom =
+          !!el && el.scrollHeight - el.scrollTop - el.clientHeight < AT_BOTTOM_SLACK_PX;
+        atBottomRef.current = stillAtBottom;
+        setAtBottom(stillAtBottom);
         return;
       }
     }

@@ -116,7 +116,7 @@ export function CreateRoomModal({ me, identity, onCreated, onClose }: CreateRoom
     >
       <div className="flex flex-col">
         <label className="flex select-none items-center justify-between pb-1" htmlFor="room-title">
-          <span className="text-micro font-medium uppercase tracking-wider text-muted">
+          <span className="text-meta font-medium text-muted">
             {t('room.name')}
           </span>
         </label>
@@ -134,7 +134,7 @@ export function CreateRoomModal({ me, identity, onCreated, onClose }: CreateRoom
 
       <div className="divider my-4" />
 
-      <p className="text-micro font-medium uppercase tracking-wider text-muted mb-2">
+      <p className="text-meta font-medium text-muted mb-2">
         Members ({picked.size})
       </p>
 
@@ -162,7 +162,7 @@ export function CreateRoomModal({ me, identity, onCreated, onClose }: CreateRoom
                   disabled={blocked}
                   onClick={() => toggle(f.id)}
                 >
-                  <Avatar display_name={f.display_name} url={f.avatar_url} size={32} />
+                  <Avatar display_name={f.display_name} seed={f.id} url={f.avatar_url} size={32} />
                   <span className="flex-1 min-w-0 truncate text-body">
                     {formatDisplayName(nicknameFor(f.id), f.display_name)}
                   </span>
