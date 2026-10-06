@@ -226,6 +226,8 @@ export const TABLE_REPORTS: TableSpec[] = [
       'ttl_seconds',
       'ttl_set_by',
       'ttl_set_at',
+      'title_set_by',
+      'title_set_at',
       'avatar_path',
     ],
     opaque: ['avatar_key_ciphertext', 'avatar_key_nonce'],

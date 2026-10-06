@@ -87,6 +87,7 @@ current state; this table is about what each file *does*.
 | 56 | `0054_expiry_past_the_storage_guard.sql` | `expire_messages()` sets the flag Supabase's storage delete guard requires. Without it every sweep with an attachment to collect rolled back, and expired messages stayed on the server |
 | 57 | `0055_consent_and_media_folders.sql` | Friend requests are inserted pending only; room owners add only themselves or unblocked contacts; a message's media must sit in its own conversation's (or room's) folder; `has_answered()` answers only about the caller |
 | 58 | `0056_shares_read_answers_peers.sql` | `shares_read()` answers only about someone whose watermark row is addressed to the caller. It was also `/rpc/shares_read`, and told any account who had switched read receipts off |
+| 59 | `0057_group_membership.sql` | A group member reads `room_messages` from the moment they joined; `joined_at` and a room message's `created_at` are stamped by the server on insert; `set_room_title()` renames a group and records who did it |
 
 ## The two files that do not follow the numbering
 

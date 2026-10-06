@@ -14,8 +14,28 @@ one of them drifts.
 
 ## [Unreleased]
 
+### Added
+
+- **Groups can be changed after they are made.** Whoever made a group can add
+  more of their contacts to it from the member list, and anyone in it can rename
+  it. The conversation shows a line where each happened: "Bo renamed the group
+  to …", "Carol was added".
+- Someone added to a group sees messages from the moment they join, not the
+  conversation that happened before them. The add screen says so, and says that
+  it is the server holding the earlier messages back: everybody in a group
+  shares one key, so the encryption alone cannot.
+- In a group you share with someone you blocked, their messages fold into one
+  line ("2 messages from Bo, who you blocked · Show"), the group list does not
+  quote them, and they no longer wake your phone.
+
 ### Changed
 
+- Notifications arrive in the language the app is set to, rather than always
+  in English, and a sticker is announced as a sticker.
+- A notification names the sender by their display name. It used to show the
+  nickname you gave someone, but only for an old nickname not yet sealed on
+  your phone, and only by handing that nickname to the notification service.
+  The privacy policy's description of notifications now matches.
 - A new look for the default theme: a deep blue-tinted ink instead of the grey
   it shipped with, and a blue taken from the logo. Your own messages are now
   easy to read: the old blue left white text below the accessibility minimum,
@@ -44,6 +64,12 @@ one of them drifts.
 - The "jump to latest" button showed on a conversation that was already
   showing its latest message.
 - On a computer, the "…" button on a chat-list row covered the time beside it.
+- Leaving a group told you somebody still in it would have to add you back,
+  which nothing in the app could do. It now says what actually happens.
+- A screen reader said nothing when a message arrived. It now announces who it
+  is from and what it says, once, without reading out history as it loads.
+- The voice-message speed button and the "remove from group" button were
+  described to screen readers in English whatever the app's language.
 
 ## [1.20.0] — 2026-10-03
 

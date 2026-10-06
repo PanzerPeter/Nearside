@@ -178,7 +178,7 @@ export function VoiceNote({
           style={{ backgroundColor: 'color-mix(in srgb, currentColor 12%, transparent)' }}
           className="shrink-0 rounded-full px-2 py-0.5 text-micro font-medium tabular-nums bg-[rgba(127,127,127,0.2)]"
           title={t('voice.speed')}
-          aria-label={`Playback speed ${formatPlaybackRate(rate)}, tap to change`}
+          aria-label={t('voice.speedLabel', { rate: formatPlaybackRate(rate) })}
         >
           {formatPlaybackRate(rate)}
         </button>

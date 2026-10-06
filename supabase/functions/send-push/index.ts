@@ -41,6 +41,7 @@
 // else is rejected.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { fixedHeading, groupHeading, messageBody } from "../_shared/push-copy.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -171,24 +172,6 @@ function json(body: unknown, status: number): Response {
 }
 
 /**
- * What the banner says. Content-free by construction. `media_type` is a column
- * the server does read, so naming the kind of attachment is honest, and no
- * branch below widens it beyond that.
- */
-function bodyFor(name: string, mediaType: string | null): string {
-  switch (mediaType) {
-    case "image":
-      return `${name} sent a photo`;
-    case "video":
-      return `${name} sent a video`;
-    case "audio":
-      return `${name} sent a voice message`;
-    default:
-      return `New message from ${name}`;
-  }
-}
-
-/**
  * A room message, fanned out to every other member.
  *
  * Separate from the 1:1 path below rather than folded into it: the audience is
@@ -197,9 +180,8 @@ function bodyFor(name: string, mediaType: string | null): string {
  * person. Sharing a code path between those would be sharing four `if`s.
  *
  * The name is `profiles.display_name`, never the receiver's private nickname
- * for the sender: one notification addresses many people at once, and reading
- * each receiver's nicknames to personalise it would mean one OneSignal call
- * per member of every room.
+ * for the sender — see the 1:1 path below for why no notification can carry
+ * one.
  */
 async function pushRoomMessage(
   admin: ReturnType<typeof createClient>,
@@ -244,9 +226,25 @@ async function pushRoomMessage(
     .select("user_id")
     .eq("room_id", msg.room_id);
 
-  const receivers = (participants ?? [])
+  const members = (participants ?? [])
     .map((p) => p.user_id as string)
     .filter((id) => id !== msg.sender_id);
+
+  // A member who blocked the sender is not woken by them. The block cannot
+  // keep the message out of the group — the others never blocked anyone — and
+  // the app folds it away on that member's screen; ringing their phone for it
+  // would undo both.
+  const { data: blockers } = members.length
+    ? await admin
+      .from("blocks")
+      .select("blocker_id")
+      .eq("blocked_id", msg.sender_id)
+      .in("blocker_id", members)
+    : { data: [] };
+  const blockedBy = new Set(
+    ((blockers ?? []) as { blocker_id: string }[]).map((b) => b.blocker_id),
+  );
+  const receivers = members.filter((id) => !blockedBy.has(id));
   if (receivers.length === 0) {
     await releaseClaim();
     return json({ sent: 0, reason: "no other members" }, 200);
@@ -257,8 +255,11 @@ async function pushRoomMessage(
     admin.from("profiles").select("display_name").eq("id", msg.sender_id).maybeSingle(),
   ]);
 
-  const roomTitle = (room?.title as string | undefined)?.trim() || "a room";
-  const name = sender?.display_name ? `@${sender.display_name}` : "someone";
+  const heading = groupHeading((room?.title as string | undefined) ?? null);
+  const body = messageBody(
+    (sender?.display_name as string | undefined) ?? null,
+    msg.media_type as string | null,
+  );
 
   // The ladder is per receiver per ROOM, so a group of six talking at once
   // rings a phone on the first few messages rather than on all six, and a
@@ -316,8 +317,8 @@ async function pushRoomMessage(
         app_id: ONESIGNAL_APP_ID,
         target_channel: "push",
         include_aliases: { external_id: aliases },
-        headings: { en: roomTitle },
-        contents: { en: bodyFor(name, msg.media_type as string | null) },
+        headings: heading,
+        contents: body,
         android_channel_id: silent ? ANDROID_QUIET_CHANNEL_ID : ANDROID_CHANNEL_ID,
         ios_interruption_level: silent ? "passive" : "active",
         priority: 10,
@@ -424,19 +425,17 @@ Deno.serve(async (req) => {
       .eq("id", msg.user_id)
       .maybeSingle();
 
-    // The private nickname the receiver gave the sender, if any (0016).
-    // Without it the banner says "@bob" while every screen in the app says
-    // "Bobby". Read with the service role, since the row is readable only by
-    // its owner.
-    const { data: nick } = await admin
-      .from("friend_nicknames")
-      .select("nickname")
-      .eq("owner_id", msg.receiver_id)
-      .eq("peer_id", msg.user_id)
-      .maybeSingle();
-
-    const name = nick?.nickname?.trim() ||
-      (sender?.display_name ? `@${sender.display_name}` : "someone");
+    // Not the private nickname the receiver gave the sender. Since 0041 it is
+    // sealed under the receiver's vault key, so the server cannot read it, and
+    // the plaintext column this used to read survives only on rows no device
+    // has re-sealed yet — reading those would hand OneSignal, a third party,
+    // the one name the app promises nobody else sees. The banner says "@bob"
+    // where the app says "Bobby"; the app can say that because it holds the
+    // key and the server does not.
+    const body = messageBody(
+      (sender?.display_name as string | undefined) ?? null,
+      msg.media_type as string | null,
+    );
 
     // Alert, or arrive quietly. A conversation is a burst of short messages,
     // and a sound for each of them is a phone buzzing six times while somebody
@@ -489,8 +488,8 @@ Deno.serve(async (req) => {
         app_id: ONESIGNAL_APP_ID,
         target_channel: "push",
         include_aliases: { external_id: [msg.receiver_id] },
-        headings: { en: "Nearside" },
-        contents: { en: bodyFor(name, msg.media_type) },
+        headings: fixedHeading("Nearside"),
+        contents: body,
         android_channel_id: quiet ? ANDROID_QUIET_CHANNEL_ID : ANDROID_CHANNEL_ID,
         // The iOS half of the same decision. `passive` files the notification
         // without a sound or a banner; the channel does that job on Android and

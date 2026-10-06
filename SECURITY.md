@@ -124,6 +124,12 @@ Three limits of that design, stated here so nobody has to find them:
   rows because RLS stops serving them, not because they can no longer decrypt.
   Messages sent afterwards are kept from them by the server, not by the
   cryptography.
+- **A newcomer to a room is kept from its history by the server, not by the
+  cryptography.** There is one room key and someone added later holds it. They
+  read from the moment they joined because the SELECT policy on
+  `room_messages` compares against their `joined_at` (0057), and both
+  timestamps are the server's. A server that handed them the older rows would
+  hand them rows they can open.
 - **Room keys are not pinned.** A 1:1 chat records a peer's key on first use and
   refuses to seal to a different one until it is verified again. Rooms read
   members' encryption and signing keys from `profiles` each session, and the

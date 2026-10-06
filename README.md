@@ -47,10 +47,12 @@ reactions, editing, soft delete, forwarding, drafts, per-chat mute, and a
 note-to-self vault pinned to the top of the list.
 
 **Rooms.** One symmetric key per room, sealed to each member, so adding someone
-is one row rather than a re-encryption of the history. A message whose signature
-fails renders as a warning rather than disappearing, because a dropped message
-is an attack the user never learns about. `@` completes against the member list on the
-device, since the mention travels inside the sealed body.
+is one row rather than a re-encryption of the history. The owner can add people
+later, anyone in it can rename it, and a newcomer reads from when they joined. A
+message whose signature fails renders as a warning rather than disappearing,
+because a dropped message is an attack the user never learns about. `@`
+completes against the member list on the device, since the mention travels
+inside the sealed body.
 
 **Media.** Images re-encode to WebP on the device, which drops EXIF on the way;
 an animated image, or one that would lose its orientation, passes through with
@@ -155,8 +157,13 @@ The app ships a screen saying this too.
 - A rooted or jailbroken phone can reach the seed. A compromised device is a
   compromised account.
 - Removing someone from a room does not claw back what they already hold.
+- Someone added to a room later reads from when they joined because the server
+  withholds the earlier rows, not because the room key cannot open them.
 - A block covers one-to-one conversations. In a group you share with someone
-  you blocked, their messages still reach you; leaving the group is the fix.
+  you blocked, their messages still reach your phone, because the other
+  members blocked nobody. The app folds them into one line you can open and
+  does not notify you of them; leaving the group is the way to stop receiving
+  them at all.
 - A report with messages attached sends them to the team in readable form, by
   email. The app asks first, every time.
 

@@ -485,7 +485,7 @@ export const en = {
   'room.more': 'Group options',
   'room.timerFailed': 'Could not change the timer.',
   'room.confirmLeaveTitle': 'Leave this group?',
-  'room.confirmLeaveBody': 'You will stop receiving messages in {name}. Somebody still in it would have to add you back.',
+  'room.confirmLeaveBody': 'You will stop receiving messages in {name}. If whoever made the group adds you back, you will only see what is sent after that.',
   'room.confirmDeleteTitle': 'Delete this group?',
   'room.confirmDeleteBody': 'This ends {name} for everybody in it, not just for you. It cannot be undone.',
   'room.namePlaceholder': 'Weekend plans',
@@ -703,9 +703,9 @@ export const en = {
   'server.room_backgrounds.note': 'Which background image you chose for which group. The picture is encrypted with a key only you hold — the file sits in the group’s own folder, which every member can read, so here the encryption is against them as well as against the server.',
   'server.rooms.label': 'Groups',
   'server.rooms.note':
-    'A group name is stored as text so the server can list your groups. Do not put anything in a name you would not put on an envelope. The last two columns are the group’s disappearing-message timer and who set it.',
+    'A group name is stored as text so the server can list your groups. Do not put anything in a name you would not put on an envelope. It also keeps the group’s disappearing-message timer, and who last changed the timer and the name, and when.',
   'server.room_participants.label': 'Group membership',
-  'server.room_participants.note': 'Who is in which group, and since when.',
+  'server.room_participants.note': 'Who is in which group, and since when. The “since when” also decides what you can read: nothing sent before you joined.',
   'server.room_keys.label': 'Group keys',
   'server.room_keys.note':
     'The group key, sealed once to each member. The server hands out a key it cannot open.',
@@ -1213,4 +1213,30 @@ export const en = {
   'server.blocks.note': 'Who has blocked whom, and when. Both people in a block can see its row — that is how the blocked person is told.',
   'server.reports.label': 'Reports',
   'server.reports.note': 'Who reported whom, and when. The complaint and any messages the reporter chose to include are emailed to the Nearside team and never stored here. Your account cannot read this table.',
+
+  // Groups after they are made: adding people, renaming, and the lines
+  // the thread draws for both.
+  'room.addPeople': 'Add people',
+  'room.addTitle': 'Add people to {name}',
+  'room.addNote': 'They will see messages from the moment they join, not before. That is the server holding the earlier ones back: everyone in a group shares one key.',
+  'room.addConfirm': 'Add',
+  'room.addFailed': 'Could not add them to the group.',
+  'room.addNobody': 'Everyone you are connected to is already in this group.',
+  'room.addedToast': 'Added to the group.',
+  'room.rename': 'Rename group',
+  'room.renameFailed': 'Could not rename the group.',
+  'room.renamed': '{who} renamed the group to “{title}”',
+  'room.youRenamed': 'You renamed the group to “{title}”',
+  'room.wasAdded': '{name} was added',
+  'room.youWereAdded': 'You were added',
+  'room.removeMember': 'Remove {name} from the group',
+  'room.membersPicked': 'Members ({count})',
+  'voice.speedLabel': 'Playback speed {rate}, tap to change',
+  // A group's messages from somebody you blocked, folded.
+  'room.blockedRun#one': '{count} message from {name}, who you blocked',
+  'room.blockedRun#few': '{count} messages from {name}, who you blocked',
+  'room.blockedRun#many': '{count} messages from {name}, who you blocked',
+  'room.blockedRun#other': '{count} messages from {name}, who you blocked',
+  'room.blockedShow': 'Show',
+  'thread.announce': 'New message from {name}: {text}',
 } as const;

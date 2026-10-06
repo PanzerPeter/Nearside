@@ -9,11 +9,13 @@ import {
   Lock,
   LogOut,
   MoreVertical,
+  PenLine,
   Search,
   ShieldAlert,
   Timer,
   Trash2,
   UserMinus,
+  UserPlus,
   Users,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -23,10 +25,12 @@ import {
   deleteRoomMessage,
   editRoomMessage,
   leaveRoom,
+  loadRoomInfo,
   openRoomRows,
   roomColour,
   roomKeyFor,
   removeMember,
+  renameRoom,
   markRoomRead,
   roomAsMessage,
   roomMembers,
@@ -34,9 +38,13 @@ import {
   roomSigningKeys,
   sendRoomMessage,
   type RoomMessage,
+  type RoomInfo,
   type RoomParticipant,
   type RoomSummary,
 } from '../lib/rooms';
+import { joinNotices, renameNotice, timerNotice } from '../lib/thread-notices';
+import { blockedByMe } from '../lib/blocks';
+import { useBlockRows } from '../hooks/useBlocks';
 import { formatDisplayName, nicknameFor } from '../lib/nicknames';
 import {
   describeTimerChange,
@@ -48,6 +56,7 @@ import {
 } from '../lib/disappearing';
 import { useChatBackground } from '../hooks/useChatBackground';
 import { ChatBackgroundModal } from './ChatBackgroundModal';
+import { AddMembersModal } from './AddMembersModal';
 import { Modal } from './Modal';
 import { PinnedBanner } from './PinnedBanner';
 import {
@@ -206,6 +215,15 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
    *  `edited_at` and hang "(edited)" on a message nobody changed. */
   const editingOriginal = useRef('');
   const [showMembers, setShowMembers] = useState(false);
+  /** The name and who last changed it, read fresh: `room` is the list's
+   *  snapshot, taken whenever the list last loaded. */
+  const [info, setInfo] = useState<RoomInfo | null>(null);
+  const [addingMembers, setAddingMembers] = useState(false);
+  /** The rename field's text while its dialog is open; null when closed. */
+  const [renameText, setRenameText] = useState<string | null>(null);
+  const [renaming, setRenaming] = useState(false);
+  /** Blocked members whose messages the reader chose to open, this visit. */
+  const [revealed, setRevealed] = useState<ReadonlySet<string>>(new Set());
   const [searchOpen, setSearchOpen] = useState(false);
   /** How far this account had read when the group opened. `undefined` while
    *  that read is in flight — the mark below waits for it, because the mark is
@@ -221,6 +239,7 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
   const { generation, live } = useConnection();
 
   const isOwner = room.created_by === me;
+  const title = info?.title ?? room.title;
 
   // The drawer is per account, not per room — the same hook the 1:1 composer
   // uses, and the same cache behind it.
@@ -389,6 +408,18 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
     [byId, room.id]
   );
 
+  // A block covers 1:1 conversations; in a group the server still delivers a
+  // blocked member's messages, because the other members chose no such thing.
+  // Folded on this screen instead — see `lib/hidden-runs.ts`.
+  const blockRows = useBlockRows();
+  const hiddenSenders = useMemo(
+    () => new Set(blockedByMe(blockRows, me).filter((id) => !revealed.has(id))),
+    [blockRows, me, revealed]
+  );
+  useEffect(() => setRevealed(new Set()), [room.id]);
+
+  const memberIds = useMemo(() => new Set(members.map((m) => m.user_id)), [members]);
+
   const colourFor = useMemo(() => {
     const map = new Map(members.map((m) => [m.user_id, roomColour(m.colour_index)]));
     return (userId: string) => map.get(userId) ?? 'text-base-content';
@@ -403,9 +434,10 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
     [me, profiles, t]
   );
 
-  // The one line the group shows about its timer, and where in the thread it
-  // belongs. `rooms` keeps the current setting and who set it last, so — as in
-  // a 1:1 conversation — this is the whole history the app can honestly draw.
+  // The lines the group draws between messages: its timer, its latest name,
+  // and everyone added after it was made. `rooms` keeps only the current timer
+  // and name and who set them last, so — as in a 1:1 conversation — this is the
+  // whole history the app can honestly draw.
   //
   // Must stay below `nameFor`: the memo body calls it during the render that
   // creates it, and every room has a `rooms` row, so `timer` is non-null the
@@ -413,13 +445,38 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
   // temporal dead zone — a ReferenceError in render, which the app-wide error
   // boundary turns into "Something went wrong" for the whole app on opening
   // any group.
-  const timerChange = useMemo(
-    () => (timer?.setBy ? describeTimerChange(timer, me, nameFor(timer.setBy)) : null),
+  const notices = useMemo(
+    () => [
+      ...timerNotice(timer?.setBy ? describeTimerChange(timer, me, nameFor(timer.setBy)) : null),
+      ...renameNotice(title, info?.title_set_by ?? null, info?.title_set_at ?? null, me, nameFor),
+      ...joinNotices(members, room.created_by, me, nameFor),
+    ],
     // `nameFor` reads the member list, which is state; it is re-created on
     // every render and as a dependency would recompute this on each of them.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [timer, me, members]
+    [timer, info, title, me, members, profiles, room.created_by]
   );
+
+  const loadInfo = useCallback(async () => {
+    const next = await loadRoomInfo(room.id);
+    if (next) setInfo(next);
+  }, [room.id]);
+
+  // A rename made on another phone lands on the next wake or reopen — `rooms`
+  // is not on the realtime publication, for the reason the timer gives above.
+  // Another group's name must not linger in the header while this one loads:
+  // the pane survives a switch between conversations.
+  useEffect(() => setInfo(null), [room.id]);
+  useEffect(() => {
+    let alive = true;
+    void loadRoomInfo(room.id).then((next) => {
+      if (alive && next) setInfo(next);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [room.id, generation]);
+
   // Re-read on every wake, like every other fetch beside a subscription.
   useEffect(() => {
     let alive = true;
@@ -567,7 +624,7 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
 
   const chatExport = useExportChat({
     conversationId: room.id,
-    title: room.title,
+    title,
     me,
     meLabel: t('common.you'),
     nameFor,
@@ -1064,6 +1121,25 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
     }
   }
 
+  async function handleRename() {
+    const next = renameText?.trim() ?? '';
+    if (!next || renaming) return;
+    if (next === title) {
+      setRenameText(null);
+      return;
+    }
+    setRenaming(true);
+    try {
+      await renameRoom(room.id, next);
+      setRenameText(null);
+      await loadInfo();
+    } catch {
+      toast.error(t('room.renameFailed'));
+    } finally {
+      setRenaming(false);
+    }
+  }
+
   /** Owner-only. The panel below already tells the owner what removal does and
    *  does not reach; this is the action that copy was written for. */
   async function handleRemove(userId: string) {
@@ -1106,7 +1182,7 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
               <Users className="w-4 h-4" />
             </span>
             <div className="min-w-0">
-              <p className="font-semibold text-body truncate">{room.title}</p>
+              <p className="font-semibold text-body truncate">{title}</p>
               <p className="text-meta text-muted truncate">
                 {t('room.memberCount', { count: members.length })} · {t('call.e2ee')}
               </p>
@@ -1174,6 +1250,17 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
                   ))}
                 </ul>
               </details>
+            </li>
+            <li>
+              <button
+                onClick={() => {
+                  closeMenu();
+                  setRenameText(title);
+                }}
+              >
+                <PenLine className="w-4 h-4" />
+                {t('room.rename')}
+              </button>
             </li>
             <li>
               <button
@@ -1266,7 +1353,7 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
           key={room.id}
           peerId={room.id}
           me={me}
-          peerLabel={room.title}
+          peerLabel={title}
           senderName={nameFor}
           loadingHistory={history.running}
           historyRevision={history.fetched}
@@ -1295,8 +1382,8 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
         >
           <p className="text-body text-muted">
             {isOwner
-              ? t('room.confirmDeleteBody', { name: room.title })
-              : t('room.confirmLeaveBody', { name: room.title })}
+              ? t('room.confirmDeleteBody', { name: title })
+              : t('room.confirmLeaveBody', { name: title })}
           </p>
           <div className="mt-4 flex justify-end gap-2">
             <button className="btn btn-ghost btn-sm" onClick={() => setConfirmLeave(false)}>
@@ -1313,6 +1400,73 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
             </button>
           </div>
         </Modal>
+      )}
+
+      {renameText !== null && (
+        <Modal
+          title={t('room.rename')}
+          onClose={() => setRenameText(null)}
+          actions={
+            <>
+              <button
+                className="btn btn-ghost"
+                onClick={() => setRenameText(null)}
+                disabled={renaming}
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                className="btn btn-primary"
+                onClick={() => void handleRename()}
+                disabled={renaming || !renameText.trim()}
+              >
+                {renaming ? (
+                  <span className="loading loading-spinner loading-sm" />
+                ) : (
+                  t('common.save')
+                )}
+              </button>
+            </>
+          }
+        >
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              void handleRename();
+            }}
+          >
+            <label className="text-meta font-medium text-muted" htmlFor="room-rename">
+              {t('room.name')}
+            </label>
+            <input
+              id="room-rename"
+              type="text"
+              className="input w-full mt-1 bg-base-200/50 border border-hairline focus:border-primary"
+              value={renameText}
+              maxLength={60}
+              autoFocus
+              onChange={(e) => setRenameText(e.target.value)}
+            />
+            <span className="block text-meta text-muted mt-1">{t('room.nameNote')}</span>
+          </form>
+        </Modal>
+      )}
+
+      {addingMembers && roomKey && (
+        <AddMembersModal
+          me={me}
+          identity={identity}
+          roomId={room.id}
+          title={title}
+          roomKey={roomKey}
+          memberIds={memberIds}
+          colourStart={members.length}
+          onAdded={() => {
+            setAddingMembers(false);
+            void loadMembers();
+          }}
+          onClose={() => setAddingMembers(false)}
+        />
       )}
 
       {showingReactions && (
@@ -1367,8 +1521,8 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
                     className="btn btn-ghost btn-xs btn-circle text-subtle hover:text-error"
                     onClick={() => void handleRemove(m.user_id)}
                     disabled={removing !== null}
-                    title={`Remove ${nameFor(m.user_id)} from this room`}
-                    aria-label={`Remove ${nameFor(m.user_id)} from this room`}
+                    title={t('room.removeMember', { name: nameFor(m.user_id) })}
+                    aria-label={t('room.removeMember', { name: nameFor(m.user_id) })}
                   >
                     {removing === m.user_id ? (
                       <span className="loading loading-spinner loading-xs" />
@@ -1381,7 +1535,18 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
             ))}
           </ul>
           {isOwner && (
-            <p className="text-micro text-muted mt-2">{t('room.removeNote')}</p>
+            <>
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm mt-2 -ml-2 gap-1.5 text-primary"
+                onClick={() => setAddingMembers(true)}
+                disabled={!roomKey}
+              >
+                <UserPlus className="w-4 h-4" />
+                {t('room.addPeople')}
+              </button>
+              <p className="text-micro text-muted mt-1">{t('room.removeNote')}</p>
+            </>
           )}
         </div>
       )}
@@ -1402,7 +1567,7 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
           me={me}
           // Not the group's own name: this is what the typing line and the
           // default empty state would say, and a room supplies both itself.
-          peerLabel={room.title}
+          peerLabel={title}
           nameFor={nameFor}
           // The whole reason a group bubble carries a header: a message that
           // does not say who wrote it is worse than one in a box.
@@ -1440,7 +1605,9 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
           replyTargets={replyTargets}
           scroll={scroll}
           backgroundUrl={background.url}
-          timerChange={timerChange}
+          notices={notices}
+          hiddenSenders={hiddenSenders}
+          onShowHidden={(id) => setRevealed((prev) => new Set(prev).add(id))}
           editingId={editingId}
           editingText={editingText}
           isAlreadySeen={(id) => seenIds.current.has(id)}

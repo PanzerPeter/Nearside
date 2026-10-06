@@ -1,11 +1,9 @@
-import { useEffect, useState } from 'react';
-import { supabase } from '../lib/supabase';
-import { createRoom, unreachableMembers } from '../lib/rooms';
-import { formatDisplayName, nicknameFor } from '../lib/nicknames';
+import { useState } from 'react';
+import { createRoom } from '../lib/rooms';
 import type { Identity } from '../lib/crypto/keys';
-import type { Profile } from '../lib/types';
 import { useToast } from '../hooks/useToast';
-import { Avatar } from './Avatar';
+import { useRoomCandidates } from '../hooks/useRoomCandidates';
+import { MemberPicker } from './MemberPicker';
 import { Modal } from './Modal';
 import { useT } from '../hooks/useT';
 
@@ -19,56 +17,18 @@ interface CreateRoomModalProps {
 const TITLE_MAX = 60;
 
 /**
- * A room can only invite people you are already connected to.
- *
- * Not a policy choice — sealing the room key needs their published public key,
- * and there is no directory to look one up in. Someone whose key has not
- * published yet is shown as unavailable with the reason rather than silently
- * dropped: a room quietly missing a member is worse than one that refuses to
- * be created.
+ * A room can only invite people you are already connected to — see
+ * `useRoomCandidates`. Someone whose key has not published yet is shown as
+ * unavailable with the reason rather than silently dropped: a room quietly
+ * missing a member is worse than one that refuses to be created.
  */
 export function CreateRoomModal({ me, identity, onCreated, onClose }: CreateRoomModalProps) {
   const t = useT();
   const [title, setTitle] = useState('');
-  const [friends, setFriends] = useState<Profile[]>([]);
-  const [unreachable, setUnreachable] = useState<Set<string>>(new Set());
   const [picked, setPicked] = useState<Set<string>>(new Set());
-  const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const toast = useToast();
-
-  useEffect(() => {
-    let alive = true;
-    void (async () => {
-      const { data } = await supabase
-        .from('friendships')
-        .select('requester_id, addressee_id')
-        .eq('status', 'accepted')
-        .or(`requester_id.eq.${me},addressee_id.eq.${me}`);
-
-      const peerIds = [
-        ...new Set(
-          (data ?? [])
-            .map((f) => (f.requester_id === me ? f.addressee_id : f.requester_id))
-            .filter((id) => id !== me)
-        ),
-      ];
-
-      const { data: profiles } = await supabase
-        .from('profiles')
-        .select('id, display_name, avatar_url')
-        .in('id', peerIds.length ? peerIds : ['00000000-0000-0000-0000-000000000000']);
-
-      const blocked = await unreachableMembers(peerIds);
-      if (!alive) return;
-      setFriends((profiles as Profile[] | null) ?? []);
-      setUnreachable(new Set(blocked));
-      setLoading(false);
-    })();
-    return () => {
-      alive = false;
-    };
-  }, [me]);
+  const candidates = useRoomCandidates(me);
 
   function toggle(id: string) {
     setPicked((prev) => {
@@ -135,55 +95,17 @@ export function CreateRoomModal({ me, identity, onCreated, onClose }: CreateRoom
       <div className="divider my-4" />
 
       <p className="text-meta font-medium text-muted mb-2">
-        Members ({picked.size})
+        {t('room.membersPicked', { count: picked.size })}
       </p>
 
-      {loading ? (
-        <div className="flex justify-center py-8">
-          <span className="loading loading-spinner" />
-        </div>
-      ) : friends.length === 0 ? (
-        <p className="text-body text-muted py-6 text-center">{t('rooms.connectFirst')}</p>
-      ) : (
-        <ul className="space-y-1 max-h-64 overflow-y-auto">
-          {friends.map((f) => {
-            const blocked = unreachable.has(f.id);
-            return (
-              <li key={f.id}>
-                <button
-                  type="button"
-                  className={`w-full flex items-center gap-2.5 p-2 rounded-field text-left transition-colors ${
-                    blocked
-                      ? 'opacity-50 cursor-not-allowed'
-                      : picked.has(f.id)
-                        ? 'bg-primary/10 ring-1 ring-primary/30'
-                        : 'hover:bg-wash'
-                  }`}
-                  disabled={blocked}
-                  onClick={() => toggle(f.id)}
-                >
-                  <Avatar display_name={f.display_name} seed={f.id} url={f.avatar_url} size={32} />
-                  <span className="flex-1 min-w-0 truncate text-body">
-                    {formatDisplayName(nicknameFor(f.id), f.display_name)}
-                  </span>
-                  {blocked ? (
-                    <span className="text-micro text-muted shrink-0">
-                      {t('rooms.noKeyPublished')}
-                    </span>
-                  ) : (
-                    <input
-                      type="checkbox"
-                      className="checkbox checkbox-primary checkbox-sm pointer-events-none shrink-0"
-                      checked={picked.has(f.id)}
-                      readOnly
-                    />
-                  )}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      )}
+      <MemberPicker
+        people={candidates.people}
+        unreachable={candidates.unreachable}
+        picked={picked}
+        loading={candidates.loading}
+        emptyLabel={t('rooms.connectFirst')}
+        onToggle={toggle}
+      />
     </Modal>
   );
 }

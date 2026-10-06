@@ -139,9 +139,24 @@ function jsxText(source: string): string[] {
  *  identifiers, paths and class names. */
 const TEXT_PROPS = /\b(?:placeholder|title|aria-label|alt|label)="([^"]+)"/g;
 
+/**
+ * The same props written as a template literal, which `TEXT_PROPS` cannot see:
+ * ``aria-label={`Remove ${name} from this room`}`` is how two labels reached a
+ * screen reader in English in every language while this suite was green. Each
+ * interpolation reads as a gap, so what is checked is the English around it.
+ */
+const TEMPLATE_TEXT_PROPS = /\b(?:placeholder|title|aria-label|alt|label)=\{`([^`]+)`\}/g;
+
 function textProps(source: string): string[] {
   const found: string[] = [];
-  for (const [, value] of stripComments(source).matchAll(TEXT_PROPS)) {
+  const stripped = stripComments(source);
+  const values = [
+    ...[...stripped.matchAll(TEXT_PROPS)].map(([, value]) => value),
+    ...[...stripped.matchAll(TEMPLATE_TEXT_PROPS)].map(([, value]) =>
+      value.replace(/\$\{[^}]*\}/g, ' ').replace(/\s+/g, ' ')
+    ),
+  ];
+  for (const value of values) {
     const trimmed = value.trim();
     if (isSentence(trimmed) || isBareLabel(trimmed)) found.push(trimmed);
   }
@@ -176,6 +191,12 @@ describe('user-visible text goes through the catalogs', () => {
 
   it('does not report ordinary code as prose', () => {
     expect(jsxText('function place() { const next = now - at; }')).toEqual([]);
+  });
+
+  it('sees English in a template-literal prop', () => {
+    const source = '<button aria-label={`Remove ${nameFor(id)} from this room`} />';
+    expect(textProps(source)).toEqual(['Remove from this room']);
+    expect(textProps('<span title={`${count} · ${size}`} />')).toEqual([]);
   });
 
   it('has no English sentence in a prop a person reads', () => {

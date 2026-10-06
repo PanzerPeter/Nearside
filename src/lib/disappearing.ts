@@ -91,23 +91,6 @@ export function describeTimerChange(
   return { label, at: timer.updatedAt };
 }
 
-/**
- * Where the change belongs in a thread ordered oldest first: before the first
- * message sent after it, or at the end when it is newer than all of them.
- *
- * A timestamp that will not parse is sorted to the end rather than dropped —
- * the line is worth showing in the wrong place, and not worth hiding over.
- */
-export function timerChangeIndex(createdAts: readonly string[], at: string): number {
-  const changedAt = Date.parse(at);
-  if (!Number.isFinite(changedAt)) return createdAts.length;
-  const i = createdAts.findIndex((iso) => {
-    const sentAt = Date.parse(iso);
-    return Number.isFinite(sentAt) && sentAt > changedAt;
-  });
-  return i === -1 ? createdAts.length : i;
-}
-
 export async function loadConversationTimer(
   me: string,
   peerId: string

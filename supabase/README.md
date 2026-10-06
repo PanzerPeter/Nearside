@@ -60,6 +60,10 @@ supabase functions deploy report-user   # Report → email ticket to the inbox
 supabase secrets set RESEND_API_KEY=...
 ```
 
+`send-push` and `call-ring` share the notification wording in
+`functions/_shared/push-copy.ts`, which the CLI bundles into each function on
+deploy, so a change to it means redeploying both.
+
 Both keys are server-side only. Vite inlines every `VITE_`-prefixed variable
 into the bundle, so either one in `.env` ships inside every APK — a long-lived
 TURN secret there is a free relay for anyone who unzips it. Without `call-ring`

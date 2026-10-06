@@ -402,6 +402,109 @@ BEGIN
 END;
 $$;
 
+-- ---------------------------------------------------------------------------
+-- Group membership (0057). A member reads from the moment they joined, the
+-- two timestamps that rule compares are the server's whatever a client sends,
+-- and any member, but only a member, can rename the group.
+--
+-- One transaction means one now(), so "before they joined" is a row dated in
+-- the past with the stamp trigger held off for that one insert — the way the
+-- expiry fixtures above hold off theirs.
+-- ---------------------------------------------------------------------------
+
+RESET ROLE;
+INSERT INTO public.rooms (id, title, created_by) VALUES
+  ('34343434-0000-0000-0000-000000000010', 'membership room',
+   'aaaaaaaa-0000-0000-0000-000000000001');
+INSERT INTO public.room_participants (room_id, user_id, joined_at) VALUES
+  ('34343434-0000-0000-0000-000000000010', 'aaaaaaaa-0000-0000-0000-000000000001', now()),
+  ('34343434-0000-0000-0000-000000000010', 'bbbbbbbb-0000-0000-0000-000000000002',
+   '2000-01-01T00:00:00Z');
+
+ALTER TABLE public.room_messages DISABLE TRIGGER room_messages_stamp_created;
+INSERT INTO public.room_messages (id, room_id, sender_id, ciphertext, nonce, signature, created_at)
+VALUES ('56565656-0000-0000-0000-000000000011', '34343434-0000-0000-0000-000000000010',
+        'aaaaaaaa-0000-0000-0000-000000000001', 'sealed', 'nonce', 'sig', '2001-01-01T00:00:00Z');
+ALTER TABLE public.room_messages ENABLE TRIGGER room_messages_stamp_created;
+
+INSERT INTO public.room_messages (id, room_id, sender_id, ciphertext, nonce, signature, created_at)
+VALUES ('78787878-0000-0000-0000-000000000012', '34343434-0000-0000-0000-000000000010',
+        'aaaaaaaa-0000-0000-0000-000000000001', 'sealed', 'nonce', 'sig', '2001-01-01T00:00:00Z');
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM public.room_participants
+              WHERE room_id = '34343434-0000-0000-0000-000000000010'
+                AND joined_at <> now()) THEN
+    RAISE EXCEPTION 'membership: joined_at took the client''s date';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM public.room_messages
+                  WHERE id = '78787878-0000-0000-0000-000000000012' AND created_at = now()) THEN
+    RAISE EXCEPTION 'membership: a room message kept the client''s created_at';
+  END IF;
+END;
+$$;
+
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000002';
+
+DO $$
+DECLARE
+  refused boolean;
+BEGIN
+  IF EXISTS (SELECT 1 FROM public.room_messages
+              WHERE id = '56565656-0000-0000-0000-000000000011') THEN
+    RAISE EXCEPTION 'membership: a member read a message from before they joined';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM public.room_messages
+                  WHERE id = '78787878-0000-0000-0000-000000000012') THEN
+    RAISE EXCEPTION 'membership: a member could not read a message sent after they joined';
+  END IF;
+
+  PERFORM public.set_room_title('34343434-0000-0000-0000-000000000010', '  renamed  ');
+  IF NOT EXISTS (SELECT 1 FROM public.rooms
+                  WHERE id = '34343434-0000-0000-0000-000000000010'
+                    AND title = 'renamed'
+                    AND title_set_by = 'bbbbbbbb-0000-0000-0000-000000000002'
+                    AND title_set_at IS NOT NULL) THEN
+    RAISE EXCEPTION 'set_room_title() wrote no usable row';
+  END IF;
+
+  refused := false;
+  BEGIN
+    PERFORM public.set_room_title('34343434-0000-0000-0000-000000000010', E'two\nlines');
+  EXCEPTION WHEN raise_exception THEN
+    refused := true;
+  END;
+  IF NOT refused THEN
+    RAISE EXCEPTION 'set_room_title() accepted a name with a line break';
+  END IF;
+END;
+$$;
+
+SET LOCAL request.jwt.claim.sub = 'ffffffff-0000-0000-0000-000000000007';
+
+DO $$
+DECLARE
+  refused boolean;
+BEGIN
+  IF EXISTS (SELECT 1 FROM public.room_messages
+              WHERE room_id = '34343434-0000-0000-0000-000000000010') THEN
+    RAISE EXCEPTION 'membership: somebody outside the group read its messages';
+  END IF;
+
+  refused := false;
+  BEGIN
+    PERFORM public.set_room_title('34343434-0000-0000-0000-000000000010', 'taken over');
+  EXCEPTION WHEN raise_exception THEN
+    refused := true;
+  END;
+  IF NOT refused THEN
+    RAISE EXCEPTION 'set_room_title() let somebody outside the group rename it';
+  END IF;
+END;
+$$;
+
 RESET ROLE;
 
 ROLLBACK;

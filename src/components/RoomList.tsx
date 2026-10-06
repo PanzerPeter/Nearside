@@ -3,6 +3,7 @@ import { Bell, BellOff, Pin, PinOff, Plus, Users } from 'lucide-react';
 import {
   listRooms,
   roomUnreadCounts,
+  subscribeRoomChanges,
   subscribeRoomReads,
   type RoomSummary,
 } from '../lib/rooms';
@@ -11,6 +12,8 @@ import { formatUnread } from '../lib/receipts';
 import { useConnection } from '../lib/connection';
 import type { Identity } from '../lib/crypto/keys';
 import { CreateRoomModal } from './CreateRoomModal';
+import { useBlockRows } from '../hooks/useBlocks';
+import { blockedByMe } from '../lib/blocks';
 import { SwipeRow } from './SwipeRow';
 import {
   isMuted,
@@ -115,7 +118,22 @@ export function RoomList({
    *  decrypted. A group nobody has opened on this phone has no line here and
    *  falls back to its member count — the honest answer, since the server
    *  holds no bodies to ask for. */
-  const [previews, setPreviews] = useState<Map<string, string>>(new Map());
+  const [previews, setPreviews] = useState<Map<string, { text: string; from: string }>>(
+    new Map()
+  );
+  /** The thread folds what somebody you blocked said in a group, so the list
+   *  must not print it as the group's last line either. */
+  const blockRows = useBlockRows();
+  const blocked = useMemo(() => new Set(blockedByMe(blockRows, me)), [blockRows, me]);
+
+  /** A group's last line, or its member count when this device has none to
+   *  show — the honest answer, since the server holds no bodies to ask for. */
+  function previewFor(room: RoomSummary): string {
+    const line = previews.get(room.id);
+    return line && !blocked.has(line.from)
+      ? line.text
+      : t('room.memberCount', { count: room.member_count });
+  }
 
   // Live ref rather than a dep: the callback is re-created on every render of
   // the list above, and keying `load` on it would restart the poll each time.
@@ -135,10 +153,10 @@ export function RoomList({
       setUnread(await roomUnreadCounts(me, rows.map((r) => r.id)));
       // Local reads, one per group: the mirror is the only place a group's
       // plaintext exists, and there is no server call that could answer this.
-      const lines = new Map<string, string>();
+      const lines = new Map<string, { text: string; from: string }>();
       for (const row of rows) {
         const hit = await cachedPreview(row.id);
-        if (hit?.text) lines.set(row.id, hit.text);
+        if (hit?.text) lines.set(row.id, { text: hit.text, from: hit.user_id });
       }
       setPreviews(lines);
     } catch {
@@ -157,6 +175,9 @@ export function RoomList({
   // until the next poll, which is up to a minute of the list disagreeing with
   // the screen the user just came back from.
   useEffect(() => subscribeRoomReads(() => void load()), [load]);
+  // A rename or a new member, made on this device, shows in the list at once
+  // rather than at the next poll.
+  useEffect(() => subscribeRoomChanges(() => void load()), [load]);
 
   // Skipped while the app is hidden, like every other poll in the app: the
   // wake path refetches on return, so a backgrounded tab polling on is spent
@@ -247,7 +268,7 @@ export function RoomList({
                     <span className="flex-1 min-w-0">
                       <span className="block text-body font-medium truncate">{room.title}</span>
                       <span className="block text-meta text-muted truncate">
-                        {previews.get(room.id) ?? t('room.memberCount', { count: room.member_count })}
+                        {previewFor(room)}
                       </span>
                     </span>
                     {muted && (

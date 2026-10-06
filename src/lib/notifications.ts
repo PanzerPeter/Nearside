@@ -1,4 +1,8 @@
 import { hasProprietaryPlugins } from './platform';
+import { locale, onLocaleChange } from './i18n';
+// The edge functions' own table: the code the app reports must be one the
+// functions wrote copy under, and one file holding both halves keeps them so.
+import { oneSignalLanguage } from '../../supabase/functions/_shared/push-copy.ts';
 // Notifications, through OneSignal on Android, plus the browser-side helpers
 // the foreground banner path still uses. OneSignal owns the tray entry alone;
 // the Web Push (VAPID) transport that competed for it is gone.
@@ -60,6 +64,22 @@ async function oneSignal(): Promise<OneSignalModule | null> {
 }
 
 let initialised = false;
+/** Listening for language changes, once per app run however often this signs in. */
+let followingLanguage = false;
+
+/**
+ * Report the app's language, not the phone's, as the one to write this
+ * account's notifications in. OneSignal otherwise takes the device language,
+ * so an English phone running Nearside in German got English banners from a
+ * German app. Re-sent on every change from Settings → Language.
+ */
+function syncLanguage(os: OneSignalModule): void {
+  try {
+    os.User.setLanguage(oneSignalLanguage(locale()));
+  } catch {
+    // Wording, not delivery: a failure here still leaves notifications arriving.
+  }
+}
 
 /**
  * Starts OneSignal and binds this device to the Supabase account.
@@ -82,6 +102,11 @@ export async function initNotifications(userId: string): Promise<void> {
       initialised = true;
     }
     os.login(userId);
+    syncLanguage(os);
+    if (!followingLanguage) {
+      onLocaleChange(() => syncLanguage(os));
+      followingLanguage = true;
+    }
   } catch {
     // A notification transport that cannot start must not stop the messenger.
   }

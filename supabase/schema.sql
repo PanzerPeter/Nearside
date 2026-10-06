@@ -1697,6 +1697,10 @@ CREATE TABLE IF NOT EXISTS public.rooms (
   -- every title change for a column only this reads. Null on rows whose timer
   -- was set before 0047 recorded the moment.
   ttl_set_at  timestamptz,
+  -- Who last renamed the group, and when (0057), for the one line the thread
+  -- draws about it. Null on a group still carrying the name it was made with.
+  title_set_by uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
+  title_set_at timestamptz,
 
   -- The room picture: an attachment that happens to be an avatar. An object in
   -- `chat-media` and a file key sealed under the room key. Profile avatars are
@@ -1884,6 +1888,28 @@ REVOKE ALL ON FUNCTION public.is_room_owner(uuid)  FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.is_room_member(uuid) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.is_room_owner(uuid)  TO authenticated;
 
+/*
+  When the caller joined a room, or null when they are not in it (0057). The
+  read policy on `room_messages` compares against it, so somebody added to a
+  group reads from the moment they arrived rather than inheriting everything
+  it said to the people who were there before them. That is the server
+  withholding rows, not the cryptography: there is one room key and a
+  newcomer holds it. SECURITY.md says so beside the same limit on removal.
+*/
+CREATE OR REPLACE FUNCTION public.room_member_since(target uuid)
+RETURNS timestamptz
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+SET search_path = ''
+AS $$
+  SELECT p.joined_at FROM public.room_participants p
+   WHERE p.room_id = target AND p.user_id = (SELECT auth.uid());
+$$;
+
+REVOKE ALL ON FUNCTION public.room_member_since(uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.room_member_since(uuid) TO authenticated;
+
 DROP POLICY IF EXISTS rooms_select_member ON public.rooms;
 CREATE POLICY rooms_select_member ON public.rooms
   FOR SELECT TO authenticated USING (public.is_room_member(id));
@@ -1896,8 +1922,8 @@ DROP POLICY IF EXISTS rooms_delete_creator ON public.rooms;
 CREATE POLICY rooms_delete_creator ON public.rooms
   FOR DELETE TO authenticated USING (created_by = (SELECT auth.uid()));
 
--- No UPDATE grant, because there is no UPDATE policy (0052). The title has
--- never been changeable, and the picture and the timer are written by
+-- No UPDATE grant, because there is no UPDATE policy (0052). The title, the
+-- picture and the timer are written by `set_room_title()` (0057),
 -- `set_room_avatar()` and `set_room_timer()` — definer functions that name the
 -- columns they write, which is the whole reason `rooms` has no UPDATE policy.
 REVOKE ALL ON public.rooms FROM PUBLIC, anon, authenticated;
@@ -1986,9 +2012,35 @@ CREATE POLICY keys_delete_owner ON public.room_keys
 REVOKE ALL ON public.room_keys FROM PUBLIC, anon, authenticated;
 GRANT SELECT, INSERT, DELETE ON public.room_keys TO authenticated;
 
+/*
+  `joined_at` is the server's (0057). It is one side of the comparison the
+  read policy on `room_messages` makes, so a client that could write it could
+  backdate a member into history they were never part of.
+*/
+CREATE OR REPLACE FUNCTION public.room_participants_stamp_joined()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = ''
+AS $$
+BEGIN
+  NEW.joined_at := now();
+  RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.room_participants_stamp_joined() FROM PUBLIC, anon, authenticated;
+
+DROP TRIGGER IF EXISTS room_participants_stamp_joined ON public.room_participants;
+CREATE TRIGGER room_participants_stamp_joined
+  BEFORE INSERT ON public.room_participants
+  FOR EACH ROW EXECUTE FUNCTION public.room_participants_stamp_joined();
+
 DROP POLICY IF EXISTS room_messages_select_member ON public.room_messages;
+-- A null from `room_member_since()` (not a member) makes the comparison null,
+-- and a null USING clause denies the row, so this is the membership check too.
 CREATE POLICY room_messages_select_member ON public.room_messages
-  FOR SELECT TO authenticated USING (public.is_room_member(room_id));
+  FOR SELECT TO authenticated
+  USING (created_at >= public.room_member_since(room_id));
 
 DROP POLICY IF EXISTS room_messages_insert_member ON public.room_messages;
 CREATE POLICY room_messages_insert_member ON public.room_messages
@@ -2174,6 +2226,41 @@ $$;
 
 REVOKE ALL ON FUNCTION public.set_room_avatar(uuid, text, text, text) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.set_room_avatar(uuid, text, text, text) TO authenticated;
+
+/*
+  Renaming a group (0057): any member, the rule the picture follows, and
+  recorded the way the timer is, so the thread can say who did it. The title
+  stays plaintext — notifications name the group with it — and the length
+  rule is `rooms_title_length`, which still applies to this UPDATE.
+*/
+CREATE OR REPLACE FUNCTION public.set_room_title(target uuid, new_title text)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+  me uuid := auth.uid();
+  cleaned text := btrim(coalesce(new_title, ''));
+BEGIN
+  IF me IS NULL OR NOT public.is_room_member(target) THEN
+    RAISE EXCEPTION 'not a member of that room';
+  END IF;
+  -- Drawn on one line in the list, the header and every notification.
+  IF cleaned ~ '[[:cntrl:]]' THEN
+    RAISE EXCEPTION 'a group name is one line';
+  END IF;
+
+  UPDATE public.rooms
+     SET title        = cleaned,
+         title_set_by = me,
+         title_set_at = now()
+   WHERE id = target;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.set_room_title(uuid, text) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.set_room_title(uuid, text) TO authenticated;
 
 -- ---------------------------------------------------------------------------
 -- 7a. Room reactions
@@ -2503,6 +2590,27 @@ DROP TRIGGER IF EXISTS room_messages_stamp_expiry ON public.room_messages;
 CREATE TRIGGER room_messages_stamp_expiry
   BEFORE INSERT ON public.room_messages
   FOR EACH ROW EXECUTE FUNCTION public.stamp_room_message_expiry();
+
+-- The other side of that comparison (0057). The app never sent `created_at`,
+-- but the column was writable on insert, so a member could date a message to
+-- before a newer member joined and keep it out of their view.
+CREATE OR REPLACE FUNCTION public.room_messages_stamp_created()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = ''
+AS $$
+BEGIN
+  NEW.created_at := now();
+  RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.room_messages_stamp_created() FROM PUBLIC, anon, authenticated;
+
+DROP TRIGGER IF EXISTS room_messages_stamp_created ON public.room_messages;
+CREATE TRIGGER room_messages_stamp_created
+  BEFORE INSERT ON public.room_messages
+  FOR EACH ROW EXECUTE FUNCTION public.room_messages_stamp_created();
 
 CREATE OR REPLACE FUNCTION public.set_conversation_timer(peer uuid, ttl integer)
 RETURNS void

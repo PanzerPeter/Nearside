@@ -27,6 +27,7 @@
 //   supabase functions deploy call-ring
 
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { callBody, callerHeading } from "../_shared/push-copy.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -130,18 +131,13 @@ Deno.serve(async (req) => {
       .eq("id", caller)
       .maybeSingle();
 
-    // The private nickname the receiver gave the caller (0016). Without it the
-    // ring says "@bob" while every screen in the app says "Bobby". Read with
-    // the service role, since the row is readable only by its owner.
-    const { data: nick } = await admin
-      .from("friend_nicknames")
-      .select("nickname")
-      .eq("owner_id", peer_id)
-      .eq("peer_id", caller)
-      .maybeSingle();
-
-    const name =
-      nick?.nickname?.trim() || (profile?.display_name ? `@${profile.display_name}` : "Someone");
+    // Not the private nickname the receiver gave the caller: since 0041 it is
+    // sealed on the receiver's phone, and the plaintext rows not yet re-sealed
+    // are not something to hand OneSignal. See send-push for the longer note.
+    const displayName = (profile?.display_name as string | undefined) ?? null;
+    // The native ring screen (CallNotificationExtension) draws this as given,
+    // and its own strings are English for now, so its fallback matches them.
+    const name = displayName ? `@${displayName}` : "Someone";
     const video = kind === "video";
 
     const response = await fetch("https://api.onesignal.com/notifications", {
@@ -157,8 +153,8 @@ Deno.serve(async (req) => {
         // rather than a device, which is what reaches someone holding two
         // phones and survives a reinstall.
         include_aliases: { external_id: [peer_id] },
-        headings: { en: name },
-        contents: { en: video ? "Incoming video call" : "Incoming voice call" },
+        headings: callerHeading(displayName),
+        contents: callBody(video),
         android_channel_id: ANDROID_CHANNEL_ID,
         priority: 10,
         // High-priority *data*: the extension needs this delivered while the

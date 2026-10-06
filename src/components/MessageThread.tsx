@@ -2,14 +2,17 @@ import { Message, PendingMessage, Reaction } from '../lib/types';
 import { pendingAsMessage } from '../lib/message-queries';
 import { formatUnread, statusFor, type Receipt } from '../lib/receipts';
 import { formatDate, formatTime } from '../lib/time';
-import { timerChangeIndex, type TimerChange } from '../lib/disappearing';
+import { placeNotices, type ThreadNotice } from '../lib/thread-notices';
+import { hiddenRuns, type HiddenRun } from '../lib/hidden-runs';
+import { messageSnippet } from '../lib/conversation';
 import type { ReplyTargets } from '../hooks/useReplyTargets';
 import type { ThreadScroll } from '../hooks/useThreadScroll';
 import { MessageBubble } from './MessageBubble';
 import { TypingIndicator } from './TypingIndicator';
 import { SealedExchange } from './SealedExchange';
 import type { OpenedAnswer } from '../lib/sealed-exchange';
-import { AlertCircle, ChevronDown, Timer } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { AlertCircle, ChevronDown, EyeOff, PenLine, Timer, UserPlus } from 'lucide-react';
 import { useT } from '../hooks/useT';
 
 /** Group consecutive messages from the same sender within this window. */
@@ -70,9 +73,15 @@ interface MessageThreadProps {
   /** The chat background, if the pair chose one — a decorative layer behind
    *  the thread. */
   backgroundUrl: string | null;
-  /** The conversation's timer as a line in the thread, or null when the pair
-   *  has never set one. */
-  timerChange: TimerChange | null;
+  /** One-line events drawn between messages at the time they happened: the
+   *  timer, and in a group, people added and a rename. Memoised by the caller,
+   *  since placing them is a pass over every message. */
+  notices: readonly ThreadNotice[];
+  /** Senders whose messages fold into one line per run — in a group, the
+   *  people this account has blocked (see `lib/hidden-runs.ts`). */
+  hiddenSenders?: ReadonlySet<string>;
+  /** Open everything one hidden sender wrote in this thread. */
+  onShowHidden?: (userId: string) => void;
   editingId: string | null;
   editingText: string;
   /** Answers to the sealed questions in this thread, by prompt id — only the
@@ -128,12 +137,46 @@ function isGrouped(msg: Message | PendingMessage, prev: Message | PendingMessage
  *  pill the date divider uses, because it is the same kind of thing: not
  *  something either of you said, but something that happened to the
  *  conversation. */
-function TimerNotice({ label }: { label: string }) {
+const NOBODY: ReadonlySet<string> = new Set();
+
+const NOTICE_ICONS = { timer: Timer, joined: UserPlus, renamed: PenLine } as const;
+
+function HiddenLine({
+  run,
+  name,
+  onShow,
+}: {
+  run: HiddenRun;
+  name: string;
+  onShow?: (userId: string) => void;
+}) {
+  const t = useT();
+  return (
+    <div className="flex justify-center">
+      <span className="inline-flex items-center gap-2 text-micro font-medium text-muted bg-base-300/60 pl-3 pr-1 py-1 rounded-full ring-1 ring-base-content/5">
+        <EyeOff className="w-3 h-3 shrink-0" aria-hidden />
+        {t('room.blockedRun', { count: run.count, name })}
+        {onShow && (
+          <button
+            type="button"
+            className="btn btn-ghost btn-xs rounded-full text-primary"
+            onClick={() => onShow(run.sender)}
+          >
+            {t('room.blockedShow')}
+          </button>
+        )}
+      </span>
+    </div>
+  );
+}
+
+function NoticeLine({ notice }: { notice: ThreadNotice }) {
+  const Icon = NOTICE_ICONS[notice.kind];
   return (
     <div className="flex justify-center my-4">
       <span className="inline-flex items-center gap-1.5 text-micro font-medium text-muted bg-base-300/80 px-3 py-1 rounded-full ring-1 ring-base-content/5 backdrop-blur-xs">
-        <Timer className="w-3 h-3 shrink-0" />
-        {label}
+        <Icon className="w-3 h-3 shrink-0" aria-hidden />
+        {notice.label}
       </span>
     </div>
   );
@@ -160,7 +203,9 @@ export function MessageThread({
   replyTargets,
   scroll,
   backgroundUrl,
-  timerChange,
+  notices,
+  hiddenSenders,
+  onShowHidden,
   editingId,
   editingText,
   sealedAnswers,
@@ -188,15 +233,56 @@ export function MessageThread({
   onDiscardQueued,
 }: MessageThreadProps) {
   const t = useT();
-  const noticeIndex = timerChange
-    ? timerChangeIndex(
+  const placed = useMemo(
+    () =>
+      placeNotices(
         messages.map((m) => m.created_at),
-        timerChange.at
-      )
-    : -1;
+        notices,
+        hasMore
+      ),
+    [messages, notices, hasMore]
+  );
+  const runs = useMemo(
+    () =>
+      hiddenRuns(
+        messages,
+        hiddenSenders ?? NOBODY,
+        (i) =>
+          i > 0 &&
+          (formatDate(messages[i].created_at) !== formatDate(messages[i - 1].created_at) ||
+            messages[i].id === unreadDividerId ||
+            placed.has(i))
+      ),
+    [messages, hiddenSenders, unreadDividerId, placed]
+  );
+
+  /**
+   * What a screen reader hears when a message arrives.
+   *
+   * A visual list growing at the bottom says nothing to someone who cannot see
+   * it, and marking the whole list as a live region would read out every page
+   * of history as it loads, too. So only an arrival is announced: a message
+   * from somebody else that no fetch put on screen — the same test that lets
+   * its bubble animate in. Not one from a sender folded away as blocked.
+   */
+  const [announcement, setAnnouncement] = useState('');
+  const newest = messages[messages.length - 1];
+  useEffect(() => {
+    if (!newest || newest.user_id === me || isAlreadySeen(newest.id)) return;
+    if (hiddenSenders?.has(newest.user_id)) return;
+    setAnnouncement(
+      t('thread.announce', { name: nameFor(newest.user_id), text: messageSnippet(newest) })
+    );
+    // Keyed on the newest id alone: an edit, a reaction or a re-render of the
+    // same last message is not a new arrival.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [newest?.id]);
 
   return (
     <div className="relative flex-1 min-h-0">
+      <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+        {announcement}
+      </div>
       {backgroundUrl && (
         <>
           {/* aria-hidden and pointer-events-none: decoration only. Both
@@ -246,7 +332,13 @@ export function MessageThread({
             {/* Inside the empty state rather than after it: the block below is
                 a full-height centred box, so a sibling pill would sit under
                 the fold of a thread with nothing in it to scroll. */}
-            {timerChange && <TimerNotice label={timerChange.label} />}
+            {notices.length > 0 && (
+              <div>
+                {(placed.get(0) ?? []).map((n) => (
+                  <NoticeLine key={n.id} notice={n} />
+                ))}
+              </div>
+            )}
             <div className="text-center px-6">
               {emptyState ?? (isSelf ? (
                 <>
@@ -276,15 +368,23 @@ export function MessageThread({
             const groupedWithPrev = !showDateDivider && isGrouped(msg, prev);
             // Whether this bubble visually touches its neighbours, for the
             // pinched corners. Anything drawn between two messages — the
-            // unread line, a timer notice, a sealed exchange, which is not a
+            // unread line, a notice, a sealed exchange, which is not a
             // bubble — breaks the run even inside the grouping window.
             const breaksBefore = (index: number, m: Message | PendingMessage) =>
               ('sealed_prompt' in m && m.sealed_prompt) ||
               m.id === unreadDividerId ||
-              (!!timerChange && noticeIndex === index);
+              placed.has(index) ||
+              runs.has(m.id);
+            // A folded run: its first message draws the line, the rest draw
+            // nothing but whatever divider or notice falls on them.
+            const run = runs.get(msg.id);
             const next: Message | PendingMessage | undefined =
               messages[i + 1] ?? (i === messages.length - 1 ? queued[0] : undefined);
-            const joinedAbove = groupedWithPrev && !breaksBefore(i, msg) && !prev?.sealed_prompt;
+            const joinedAbove =
+              groupedWithPrev &&
+              !breaksBefore(i, msg) &&
+              !prev?.sealed_prompt &&
+              !(prev && runs.has(prev.id));
             const joinedBelow =
               !!next &&
               !msg.sealed_prompt &&
@@ -301,7 +401,7 @@ export function MessageThread({
                 key={msg.id}
                 id={`msg-${msg.id}`}
                 className={`rounded-box transition-shadow duration-300 ${
-                  groupedWithPrev ? 'mt-0.5' : 'mt-3 first:mt-0'
+                  run === null ? '' : groupedWithPrev ? 'mt-0.5' : 'mt-3 first:mt-0'
                 } ${scroll.highlightId === msg.id ? 'ring-2 ring-primary' : ''}`}
               >
                 {showDateDivider && (
@@ -323,11 +423,15 @@ export function MessageThread({
                     <span className="flex-1 h-px bg-primary/25" />
                   </div>
                 )}
-                {timerChange && noticeIndex === i && <TimerNotice label={timerChange.label} />}
+                {placed.get(i)?.map((n) => <NoticeLine key={n.id} notice={n} />)}
                 {/* A sealed exchange is a two-sided object with a state, not
                     something one person said, so it takes the whole width
                     instead of hanging off the asker's edge. */}
-                {msg.sealed_prompt && onAnswerSealed ? (
+                {run !== undefined ? (
+                  run && (
+                    <HiddenLine run={run} name={nameFor(run.sender)} onShow={onShowHidden} />
+                  )
+                ) : msg.sealed_prompt && onAnswerSealed ? (
                   <SealedExchange
                     msg={msg}
                     me={me}
@@ -386,15 +490,12 @@ export function MessageThread({
             );
           })}
 
-          {/* The change is newer than everything loaded. Guarded on there being
-              something to sit under: with the thread empty the pill is drawn
-              inside the empty state above instead, and drawing it twice is the
-              bug this excludes. */}
-          {timerChange &&
-            noticeIndex === messages.length &&
-            (messages.length > 0 || queued.length > 0) && (
-              <TimerNotice label={timerChange.label} />
-            )}
+          {/* Newer than everything loaded. Guarded on there being something to
+              sit under: with the thread empty the lines are drawn inside the
+              empty state above instead, and drawing them twice is the bug this
+              excludes. */}
+          {(messages.length > 0 || queued.length > 0) &&
+            placed.get(messages.length)?.map((n) => <NoticeLine key={n.id} notice={n} />)}
 
           {/* Every action on a queued send is a no-op: a message that doesn't
               exist server-side can't be edited, deleted, replied to, or

@@ -156,7 +156,9 @@ export const privacySections: LegalSection[] = [
           account identifier, and the text of the notification. Delivery to the handset is
           Google&rsquo;s Firebase Cloud Messaging. A notification never contains message content,
           and cannot: the server has no plaintext to put in one. The most it says is who a message
-          or a call is from, using the display name or the nickname you chose.
+          or a call is from, by their display name, what kind of attachment it carried, and the
+          name of the group it was sent in. Never the nickname you gave someone: that is sealed on
+          your phone, where the server cannot read it.
         </p>
         <p>
           Cloudflare provides the relay that carries a call when the two phones cannot reach each

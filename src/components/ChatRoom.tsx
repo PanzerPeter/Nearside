@@ -19,6 +19,7 @@ import {
 } from '../lib/pinned-message';
 import { PinnedBanner } from './PinnedBanner';
 import { describeTimerChange } from '../lib/disappearing';
+import { timerNotice } from '../lib/thread-notices';
 import { openRows } from '../lib/sealed-body';
 import { putSealedRows } from '../lib/localdb';
 import { PAGE_SIZE, fetchLatestPage, fetchOlderPage } from '../lib/message-queries';
@@ -452,6 +453,13 @@ export function ChatRoom({ session, friend, identity, openAt, onBack }: ChatRoom
     };
   }, [me, friend.id, generation]);
 
+  // The one line a conversation draws about its timer, in the list the thread
+  // places by time. Memoised: the thread re-places on every change to it.
+  const notices = useMemo(
+    () => timerNotice(describeTimerChange(thread.timer, me, peerLabel)),
+    [thread.timer, me, peerLabel]
+  );
+
   /** The pinned message as one line, when this device is holding it. */
   const pinnedSnippet = useMemo(() => {
     if (!pinned) return null;
@@ -836,7 +844,7 @@ export function ChatRoom({ session, friend, identity, openAt, onBack }: ChatRoom
           replyTargets={replyTargets}
           scroll={thread.scroll}
           backgroundUrl={background.url}
-          timerChange={describeTimerChange(thread.timer, me, peerLabel)}
+          notices={notices}
           editingId={editing.editingId}
           editingText={editing.editingText}
           sealedAnswers={sealed.answers}

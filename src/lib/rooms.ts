@@ -268,7 +268,9 @@ export async function createRoom(
 
   // Participants before keys: `keys_insert_sealer` checks room ownership, and
   // `participants_insert_creator` checks the same, so both depend on the room
-  // row existing and neither depends on the other.
+  // row existing and neither depends on the other. All of them in one
+  // statement, so the founding members share one server-stamped `joined_at`
+  // (0057) — which is how the thread tells them apart from people added later.
   const { error: partError } = await supabase.from('room_participants').insert(
     reachable.map((id, i) => ({
       room_id: roomId,
@@ -278,8 +280,26 @@ export async function createRoom(
   );
   if (partError) throw partError;
 
-  const sealedKeys = await Promise.all(
-    reachable.map(async (id) => {
+  const { error: keyError } = await supabase
+    .from('room_keys')
+    .insert(await sealedKeyRows(roomId, me, identity, roomKey, reachable, keys));
+  if (keyError) throw keyError;
+
+  return { roomId, skipped };
+}
+
+/** The room key, sealed once per member to their published key — the rows
+ *  `keys_insert_sealer` accepts from the owner and nobody else. */
+async function sealedKeyRows(
+  roomId: string,
+  me: string,
+  identity: Identity,
+  roomKey: Uint8Array,
+  memberIds: string[],
+  keys: Map<string, PublishedKeys>
+) {
+  return Promise.all(
+    memberIds.map(async (id) => {
       const theirPublic = await fromBase64(keys.get(id)!.public_key!);
       const sealed = await sealBytesFor(identity.boxPrivate, theirPublic, roomKey);
       return {
@@ -291,11 +311,119 @@ export async function createRoom(
       };
     })
   );
+}
 
-  const { error: keyError } = await supabase.from('room_keys').insert(sealedKeys);
+export interface AddMembersResult {
+  added: string[];
+  /** People the key could not be sealed to, as at creation. */
+  skipped: string[];
+}
+
+/**
+ * Owner-only: bring people into a group that already exists.
+ *
+ * The same two writes creating it made, in the other order. The key row goes
+ * first, so a failure between the two leaves somebody holding a key to a
+ * group whose messages the read policy will not give them — rather than a
+ * member with no key, which is a group that tells them it cannot be opened.
+ *
+ * A key row can outlive its member: leaving deletes the participant row and
+ * only the owner may delete keys. Re-adding someone who left would collide on
+ * that row's primary key, so any old copy is cleared first. It was sealed
+ * under the same room key, so nothing is lost by replacing it.
+ *
+ * Newcomers read from the moment they join, not before: the read policy on
+ * `room_messages` compares against their `joined_at` (0057). The add dialog
+ * says so, and says that it is the server keeping it from them.
+ */
+export async function addMembers(
+  roomId: string,
+  me: string,
+  identity: Identity,
+  roomKey: Uint8Array,
+  userIds: string[],
+  colourStart: number
+): Promise<AddMembersResult> {
+  await sodium.ready;
+  const wanted = [...new Set(userIds)].filter((id) => id !== me);
+  if (wanted.length === 0) return { added: [], skipped: [] };
+
+  const keys = await publishedKeys(wanted);
+  const added = wanted.filter((id) => keys.get(id)?.public_key);
+  const skipped = wanted.filter((id) => !keys.get(id)?.public_key);
+  if (added.length === 0) return { added, skipped };
+
+  const { error: staleError } = await supabase
+    .from('room_keys')
+    .delete()
+    .eq('room_id', roomId)
+    .in('user_id', added);
+  if (staleError) throw staleError;
+
+  const { error: keyError } = await supabase
+    .from('room_keys')
+    .insert(await sealedKeyRows(roomId, me, identity, roomKey, added, keys));
   if (keyError) throw keyError;
 
-  return { roomId, skipped };
+  const { error: partError } = await supabase.from('room_participants').insert(
+    added.map((id, i) => ({
+      room_id: roomId,
+      user_id: id,
+      colour_index: (colourStart + i) % ROOM_COLOURS.length,
+    }))
+  );
+  if (partError) {
+    // Refused — a block on either side, or a contact who has since been
+    // removed (`participants_insert_creator`). The keys just written would
+    // otherwise sit there sealed to people who are not in the group.
+    await supabase.from('room_keys').delete().eq('room_id', roomId).in('user_id', added);
+    throw partError;
+  }
+
+  announceRoomChange();
+  return { added, skipped };
+}
+
+/** The parts of a group that change after it is made, read fresh: the summary
+ *  the list handed over is a snapshot from whenever the list last loaded. */
+export interface RoomInfo {
+  title: string;
+  title_set_by: string | null;
+  title_set_at: string | null;
+}
+
+export async function loadRoomInfo(roomId: string): Promise<RoomInfo | null> {
+  const { data } = await supabase
+    .from('rooms')
+    .select('title, title_set_by, title_set_at')
+    .eq('id', roomId)
+    .maybeSingle();
+  return (data as RoomInfo | null) ?? null;
+}
+
+/** Any member may rename a group, as any member may change its picture. The
+ *  server records who did it, for the line the thread draws. */
+export async function renameRoom(roomId: string, title: string): Promise<void> {
+  const { error } = await supabase.rpc('set_room_title', {
+    target: roomId,
+    new_title: title.trim(),
+  });
+  if (error) throw error;
+  announceRoomChange();
+}
+
+const changeListeners = new Set<() => void>();
+
+function announceRoomChange(): void {
+  for (const listener of changeListeners) listener();
+}
+
+/** One place to hear that a group was renamed or gained members on this
+ *  device, so the list does not wait for its next poll to agree with the
+ *  screen the user is looking at. Same shape as `subscribeRoomReads`. */
+export function subscribeRoomChanges(listener: () => void): () => void {
+  changeListeners.add(listener);
+  return () => changeListeners.delete(listener);
 }
 
 /** Opened room keys, cached for the session. Opening one is two round trips

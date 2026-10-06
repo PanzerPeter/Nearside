@@ -33,6 +33,13 @@ export function Modal({ title, onClose, children, actions, className = '' }: Mod
     dialog.showModal();
 
     function handleClose() {
+      // `close` is dispatched as a task, after the call that caused it. Under
+      // StrictMode the dev build runs this effect, its cleanup and the effect
+      // again on mount: the cleanup's `dialog.close()` queues a `close` that
+      // lands after `showModal()` has reopened the dialog, on the listener the
+      // second run added — and every modal in `npm run dev` shut the instant
+      // it opened. A real close always finds the dialog already closed.
+      if (dialog!.open) return;
       onCloseRef.current();
     }
     // Escape fires a cancelable `cancel` event whose default (unprevented)

@@ -5,7 +5,6 @@ import {
   formatTtl,
   hasExpired,
   normalizePair,
-  timerChangeIndex,
   TTL_OPTIONS,
 } from './disappearing';
 
@@ -95,38 +94,6 @@ describe('describeTimerChange', () => {
     expect(describeTimerChange(timer, 'me', 'Mum')?.label).toBe(
       'Mum turned off disappearing messages'
     );
-  });
-});
-
-describe('timerChangeIndex', () => {
-  const sent = [
-    '2026-08-08T10:00:00.000Z',
-    '2026-08-08T12:00:00.000Z',
-    '2026-08-08T14:00:00.000Z',
-  ];
-
-  it('sits before the first message sent after the change', () => {
-    expect(timerChangeIndex(sent, '2026-08-08T11:00:00.000Z')).toBe(1);
-  });
-
-  it('sits at the end when the change is newer than every message', () => {
-    expect(timerChangeIndex(sent, '2026-08-08T15:00:00.000Z')).toBe(3);
-  });
-
-  it('sits at the top when the change predates the loaded window', () => {
-    expect(timerChangeIndex(sent, '2026-08-01T00:00:00.000Z')).toBe(0);
-  });
-
-  it('keeps a message stamped at the same instant above the line', () => {
-    expect(timerChangeIndex(sent, '2026-08-08T10:00:00.000Z')).toBe(1);
-  });
-
-  it('has somewhere to go in an empty thread', () => {
-    expect(timerChangeIndex([], '2026-08-08T10:00:00.000Z')).toBe(0);
-  });
-
-  it('falls to the end rather than disappearing on an unparseable stamp', () => {
-    expect(timerChangeIndex(sent, 'not a date')).toBe(3);
   });
 });
 
