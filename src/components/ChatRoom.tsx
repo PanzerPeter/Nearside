@@ -24,6 +24,7 @@ import { openRows } from '../lib/sealed-body';
 import { putSealedRows } from '../lib/localdb';
 import { PAGE_SIZE, fetchLatestPage, fetchOlderPage } from '../lib/message-queries';
 import { peerPublicKey } from '../lib/peer-keys';
+import { conversationReactionSeal } from '../lib/reaction-seal';
 import type { Identity } from '../lib/crypto/keys';
 import { formatDisplayName, useNickname } from '../lib/nicknames';
 import { tapSend, tapSuccess } from '../lib/haptics';
@@ -299,9 +300,15 @@ export function ChatRoom({ session, friend, identity, openAt, onBack }: ChatRoom
   // than the nullable field.
   const editingId = editing.editingId;
 
+  const reactionSeal = useMemo(
+    () => conversationReactionSeal(identity, me, friend.id),
+    [identity, me, friend.id]
+  );
   const { byMessage, toggle } = useReactions(
     me,
-    thread.messages.map((m) => m.id)
+    thread.messages.map((m) => m.id),
+    'message_reactions',
+    reactionSeal
   );
   // Quoted messages, including the ones that are older than the loaded window.
   const replyTargets = useReplyTargets(me, friend.id, thread.messages, open);
@@ -965,6 +972,7 @@ export function ChatRoom({ session, friend, identity, openAt, onBack }: ChatRoom
           staged={media.staged}
           onUnstage={media.unstage}
           onClearStaged={media.clearStaged}
+          mediaOptions={media}
           sentCount={media.sentCount}
           onError={toast.error}
           sending={thread.outbox.sending}

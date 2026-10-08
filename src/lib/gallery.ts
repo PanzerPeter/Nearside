@@ -46,6 +46,8 @@ export interface GalleryRow {
   deleted_at?: string | null;
   /** These columns were put back from this device's pin. */
   restored?: boolean;
+  /** Opened in its own viewer, once, and never stepped into from another. */
+  view_once?: boolean;
 }
 
 function isVisual(type: MediaType | null | undefined): type is VisualMediaType {
@@ -66,7 +68,7 @@ function isVisual(type: MediaType | null | undefined): type is VisualMediaType {
 export function galleryItems(rows: readonly GalleryRow[]): GalleryItem[] {
   const items: GalleryItem[] = [];
   for (const row of rows) {
-    if (row.deleted_at) continue;
+    if (row.deleted_at || row.view_once) continue;
     if (!row.media_path || !isVisual(row.media_type)) continue;
     items.push({
       messageId: row.id,

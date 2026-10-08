@@ -47,7 +47,12 @@ type TrimRow = MediaRow & {
 };
 import { forgetMedia } from '../lib/media-cache';
 import { keepMedia, pinnedIds } from '../lib/pins';
-import { CHAT_IMAGE_MAX_EDGE, compressImageResult } from '../lib/compress';
+import {
+  CHAT_IMAGE_HD_MAX_EDGE,
+  CHAT_IMAGE_HD_QUALITY,
+  CHAT_IMAGE_MAX_EDGE,
+  compressImageResult,
+} from '../lib/compress';
 import { stripVideoMetadata } from '../lib/video-bytes';
 import {
   imageThumbnail,
@@ -75,6 +80,17 @@ export interface MediaSend {
   /** Drop one entry from the queue — the strip's per-thumbnail remove. */
   unstage: (id: string) => void;
   clearStaged: () => void;
+  /** A caption for one file after the first — see `StagedMedia.caption`. */
+  setCaption: (id: string, caption: string) => void;
+  /** Send photos at `CHAT_IMAGE_HD_MAX_EDGE` rather than the usual cap. */
+  hd: boolean;
+  setHd: (on: boolean) => void;
+  /** Send the batch as view-once (0058). Only offered where `canViewOnce`. */
+  viewOnce: boolean;
+  setViewOnce: (on: boolean) => void;
+  /** A 1:1 conversation with somebody else. A group cannot spend one opening
+   *  per member, and a note to yourself has nobody to show it to. */
+  canViewOnce: boolean;
   send: (caption: string, replyToId: string | null) => Promise<void>;
   /** Send one sticker on its own. Not part of the staged batch: a sticker is
    *  picked and sent in a single tap, with no caption and nothing to review. */
@@ -134,6 +150,16 @@ export function useMediaSend({
   const [staged, setStaged] = useState<StagedMedia[]>([]);
   const [uploading, setUploading] = useState(false);
   const [sentCount, setSentCount] = useState(0);
+  const [hd, setHd] = useState(false);
+  const [viewOnceWanted, setViewOnce] = useState(false);
+  const canViewOnce = target.kind === 'peer' && !target.isSelf;
+  const viewOnce = canViewOnce && viewOnceWanted;
+  // Both choices belong to one batch. A new pick starts plain again, so a photo
+  // is never sent view-once, or at full size, because of the one before it.
+  if (!staged.length && (hd || viewOnceWanted)) {
+    setHd(false);
+    setViewOnce(false);
+  }
 
   const targetId = target.kind === 'peer' ? target.peerId : target.roomId;
 
@@ -160,6 +186,10 @@ export function useMediaSend({
 
   function clearStaged() {
     setStaged([]);
+  }
+
+  function setCaption(id: string, caption: string) {
+    setStaged((current) => current.map((item) => (item.id === id ? { ...item, caption } : item)));
   }
 
   async function send(caption: string, replyToId: string | null): Promise<void> {
@@ -193,11 +223,15 @@ export function useMediaSend({
         // The caption and the reply belong to the batch, not to every file in
         // it: repeating them would post the same sentence under each photo and
         // quote the same message N times.
+        // A view-once file carries no caption: 0058 refuses one, because a
+        // caption is a body and bodies are kept after the picture is gone.
+        const itemCaption = viewOnce ? '' : index === 0 ? caption : (item.caption ?? '').trim();
         const insertedId = await uploadStaged(
           item,
           kind,
-          index === 0 ? caption : '',
-          index === 0 ? replyToId : null
+          itemCaption,
+          index === 0 ? replyToId : null,
+          { hd, viewOnce }
         );
         if (!insertedId) break;
         lastInsertedId = insertedId;
@@ -262,7 +296,8 @@ export function useMediaSend({
     { file, durationMs }: StagedMedia,
     kind: MediaType,
     caption: string,
-    replyToId: string | null
+    replyToId: string | null,
+    { hd = false, viewOnce = false }: { hd?: boolean; viewOnce?: boolean } = {}
   ): Promise<string | null> {
     /** Report and stop. The console line is not decoration: a toast is one
      *  sentence, and a PostgREST code, a DOMException name and a sodium
@@ -319,7 +354,12 @@ export function useMediaSend({
     if (kind === 'image') {
       let compressed;
       try {
-        compressed = await compressImageResult(file, { maxEdge: CHAT_IMAGE_MAX_EDGE });
+        compressed = await compressImageResult(
+          file,
+          hd
+            ? { maxEdge: CHAT_IMAGE_HD_MAX_EDGE, quality: CHAT_IMAGE_HD_QUALITY }
+            : { maxEdge: CHAT_IMAGE_MAX_EDGE }
+        );
       } catch (error) {
         return fail(describeMediaError(error), error);
       }
@@ -378,7 +418,9 @@ export function useMediaSend({
      * fallback it lands on is the behaviour this whole feature replaced.
      */
     let rawThumb: Blob | null = null;
-    if (shouldMakeThumbnail(kind, sourceBytes, false)) {
+    // Never for view-once: the small sealed copy would outlive the deletion,
+    // and 0058 refuses a row that names one.
+    if (!viewOnce && shouldMakeThumbnail(kind, sourceBytes, false)) {
       try {
         rawThumb = kind === 'video' ? await videoPoster(body) : await imageThumbnail(body, bytes);
       } catch {
@@ -579,6 +621,9 @@ export function useMediaSend({
           media_thumb_path: thumbPath,
           media_duration_ms: kind === 'audio' ? durationMs : null,
           reply_to_id: replyToId,
+          // Only when set, so a database without 0058 still takes every
+          // ordinary attachment.
+          ...(viewOnce ? { view_once: true } : {}),
         })
         .select('id')
         .single();
@@ -705,7 +750,7 @@ export function useMediaSend({
       .select(
         'id, media_path, media_thumb_path, user_id, receiver_id, media_type, ' +
           'created_at, expires_at, ciphertext, nonce, ' +
-          'media_key_ciphertext, media_key_nonce'
+          'media_key_ciphertext, media_key_nonce, view_once'
       )
       .or(conversationFilter(me, peerId))
       .not('media_path', 'is', null)
@@ -714,13 +759,18 @@ export function useMediaSend({
       .limit(MEDIA_SCAN_LIMIT);
 
     if (!data) return;
+    // A view-once row is never trimmed: its object goes when it is opened, and
+    // the placeholder the trim writes is a body that row's shape refuses.
+    const rows = (data as unknown as (TrimRow & { view_once?: boolean })[]).filter(
+      (row) => !row.view_once
+    );
 
     // Pins are read fresh on every pass rather than held in state: the set
     // changes from the viewer, which is a different component, and a stale
     // copy here would prune the very file someone just chose to keep.
     // Both sides' rows are counted — the keep limit is the conversation's, not
     // one person's — but only our own are acted on.
-    const stale = selectStaleMedia(data as unknown as TrimRow[], await pinnedIds());
+    const stale = selectStaleMedia(rows, await pinnedIds());
     if (!stale.length) return;
 
     // Deleting the friend's objects too is what this used to do, and the
@@ -828,5 +878,20 @@ export function useMediaSend({
     for (const path of paths) forgetMedia(path);
   }
 
-  return { staged, uploading, sentCount, stage, unstage, clearStaged, send, sendSticker };
+  return {
+    staged,
+    uploading,
+    sentCount,
+    stage,
+    unstage,
+    clearStaged,
+    setCaption,
+    hd,
+    setHd,
+    viewOnce,
+    setViewOnce,
+    canViewOnce,
+    send,
+    sendSticker,
+  };
 }

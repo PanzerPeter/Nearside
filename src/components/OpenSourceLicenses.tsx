@@ -97,8 +97,8 @@ const DEPENDENCIES: Dependency[] = [
     url: 'https://github.com/lucide-icons/lucide',
   },
   {
-    name: 'emoji-mart',
-    what: 'The emoji picker and the reaction palette.',
+    name: '@emoji-mart/data',
+    what: 'The emoji list, names and search keywords behind the picker.',
     license: 'MIT',
     url: 'https://github.com/missive/emoji-mart',
   },
@@ -126,13 +126,6 @@ const DEPENDENCIES: Dependency[] = [
     what: 'The purchase of a cosmetic pack, and nothing else.',
     license: 'MIT',
     url: 'https://github.com/RevenueCat/purchases-capacitor',
-    proprietaryPlugin: true,
-  },
-  {
-    name: 'Firebase Crashlytics',
-    what: 'Crash reports. They carry a stack trace, never message content.',
-    license: 'Apache-2.0',
-    url: 'https://firebase.google.com/terms',
     proprietaryPlugin: true,
   },
 ];

@@ -20,6 +20,8 @@ import {
   signedPayloadV3,
   signedPayloadV4,
   verifyBytes,
+  openForSelf,
+  sealForSelf,
   type Sealed,
 } from './crypto/seal';
 import { supabase } from './supabase';
@@ -29,6 +31,8 @@ import { t } from './i18n';
 
 export interface RoomSummary {
   id: string;
+  /** The name, opened. Sealed under the room key on the server since 0060 —
+   *  see `openRoomTitle`. */
   title: string;
   created_by: string;
   created_at: string;
@@ -261,9 +265,14 @@ export async function createRoom(
   const roomId = crypto.randomUUID();
   const roomKey = sodium.crypto_secretbox_keygen();
 
-  const { error: roomError } = await supabase
-    .from('rooms')
-    .insert({ id: roomId, title: title.trim(), created_by: me });
+  const sealedTitle = await sealForSelf(roomKey, normalizeRoomTitle(title));
+  const { error: roomError } = await supabase.from('rooms').insert({
+    id: roomId,
+    title: null,
+    title_ciphertext: sealedTitle.ciphertext,
+    title_nonce: sealedTitle.nonce,
+    created_by: me,
+  });
   if (roomError) throw roomError;
 
   // Participants before keys: `keys_insert_sealer` checks room ownership, and
@@ -384,6 +393,83 @@ export async function addMembers(
   return { added, skipped };
 }
 
+/** The longest name a group may have, counted in characters the way
+ *  Postgres counts them. 0057's CHECK enforced it on a plaintext name; a sealed
+ *  one is ciphertext to the server, so this is where it is held now. */
+export const ROOM_TITLE_MAX = 60;
+
+/** A name as it will be stored: one line, trimmed, at most `ROOM_TITLE_MAX`
+ *  characters. Control characters become spaces rather than being refused,
+ *  because the server can no longer refuse them for us. */
+export function normalizeRoomTitle(title: string): string {
+  const oneLine = title.replace(/\p{Cc}/gu, ' ').trim();
+  return Array.from(oneLine).slice(0, ROOM_TITLE_MAX).join('').trim();
+}
+
+/** The name columns of a `rooms` row as read. `title` is plaintext only on a
+ *  group named before 0060 that nobody has resealed yet. */
+interface TitleColumns {
+  title: string | null;
+  title_ciphertext?: string | null;
+  title_nonce?: string | null;
+}
+
+/** Rooms this session has already asked to reseal, so a list refresh does not
+ *  send the same request again. */
+const resealed = new Set<string>();
+
+/**
+ * A group's name, opened.
+ *
+ * A plaintext name is shown as it is and resealed in the background, once, by
+ * whichever member's device meets it first (`seal_room_title`, 0060). A name
+ * this device cannot open — no room key yet, or a key that will not open it —
+ * reads as a plain "Group" rather than as an error: the conversation inside
+ * has its own, louder, way of saying the key is missing.
+ */
+export async function openRoomTitle(
+  roomId: string,
+  row: TitleColumns,
+  identity: Identity
+): Promise<string> {
+  if (row.title) {
+    if (!row.title_ciphertext && !resealed.has(roomId)) {
+      resealed.add(roomId);
+      void resealRoomTitle(roomId, row.title, identity);
+    }
+    return row.title;
+  }
+  if (row.title_ciphertext && row.title_nonce) {
+    const key = await roomKeyFor(roomId, identity);
+    if (key) {
+      try {
+        return await openForSelf(key, { ciphertext: row.title_ciphertext, nonce: row.title_nonce });
+      } catch {
+        // Falls through to the placeholder.
+      }
+    }
+  }
+  return t('room.unnamed');
+}
+
+async function resealRoomTitle(roomId: string, title: string, identity: Identity): Promise<void> {
+  try {
+    const key = await roomKeyFor(roomId, identity);
+    if (!key) return;
+    const sealed = await sealForSelf(key, normalizeRoomTitle(title));
+    const { error } = await supabase.rpc('seal_room_title', {
+      target: roomId,
+      ciphertext: sealed.ciphertext,
+      nonce: sealed.nonce,
+    });
+    // A database without 0060 has no such function. The name stays plaintext,
+    // as it was, and the next session asks again.
+    if (error) resealed.delete(roomId);
+  } catch {
+    resealed.delete(roomId);
+  }
+}
+
 /** The parts of a group that change after it is made, read fresh: the summary
  *  the list handed over is a snapshot from whenever the list last loaded. */
 export interface RoomInfo {
@@ -392,21 +478,32 @@ export interface RoomInfo {
   title_set_at: string | null;
 }
 
-export async function loadRoomInfo(roomId: string): Promise<RoomInfo | null> {
+export async function loadRoomInfo(roomId: string, identity: Identity): Promise<RoomInfo | null> {
   const { data } = await supabase
     .from('rooms')
-    .select('title, title_set_by, title_set_at')
+    .select('title, title_ciphertext, title_nonce, title_set_by, title_set_at')
     .eq('id', roomId)
     .maybeSingle();
-  return (data as RoomInfo | null) ?? null;
+  if (!data) return null;
+  const row = data as TitleColumns & { title_set_by: string | null; title_set_at: string | null };
+  return {
+    title: await openRoomTitle(roomId, row, identity),
+    title_set_by: row.title_set_by,
+    title_set_at: row.title_set_at,
+  };
 }
 
 /** Any member may rename a group, as any member may change its picture. The
- *  server records who did it, for the line the thread draws. */
-export async function renameRoom(roomId: string, title: string): Promise<void> {
-  const { error } = await supabase.rpc('set_room_title', {
+ *  server records who did it, for the line the thread draws, and never sees
+ *  the name itself. */
+export async function renameRoom(roomId: string, title: string, identity: Identity): Promise<void> {
+  const key = await roomKeyFor(roomId, identity);
+  if (!key) throw new Error('no room key');
+  const sealed = await sealForSelf(key, normalizeRoomTitle(title));
+  const { error } = await supabase.rpc('set_room_title_sealed', {
     target: roomId,
-    new_title: title.trim(),
+    ciphertext: sealed.ciphertext,
+    nonce: sealed.nonce,
   });
   if (error) throw error;
   announceRoomChange();
@@ -888,10 +985,20 @@ export async function roomSigningKeys(userIds: string[]): Promise<Map<string, st
   return new Map([...keys].map(([id, k]) => [id, k.signing_key]));
 }
 
-export async function listRooms(): Promise<RoomSummary[]> {
+export async function listRooms(identity: Identity): Promise<RoomSummary[]> {
   const { data, error } = await supabase.rpc('rooms_for_me');
   if (error) throw error;
-  return (data as RoomSummary[] | null) ?? [];
+  const rows = (data as (Omit<RoomSummary, 'title'> & TitleColumns)[] | null) ?? [];
+  return Promise.all(
+    rows.map(async (row) => ({
+      id: row.id,
+      created_by: row.created_by,
+      created_at: row.created_at,
+      member_count: row.member_count,
+      last_at: row.last_at,
+      title: await openRoomTitle(row.id, row, identity),
+    }))
+  );
 }
 
 /**

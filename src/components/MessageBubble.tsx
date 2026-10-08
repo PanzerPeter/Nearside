@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Message, Reaction } from '../lib/types';
 import { MediaAttachment } from './MediaAttachment';
+import { ViewOnceAttachment } from './ViewOnceAttachment';
 import { StickerAttachment } from './StickerAttachment';
 import { VoiceNote } from './VoiceNote';
 import { MessageText } from './MessageText';
@@ -177,7 +178,10 @@ export function MessageBubble({
     !!msg.media_path &&
     !!msg.media_type &&
     msg.media_type !== 'audio' &&
-    msg.media_type !== 'sticker';
+    msg.media_type !== 'sticker' &&
+    // A view-once row draws a label, not the picture, so it sits in the
+    // bubble's padding like text does.
+    !msg.view_once;
   /**
    * A sticker with nothing else in the bubble, which is how a sticker is
    * normally sent.
@@ -564,7 +568,7 @@ export function MessageBubble({
         // w-fit lets the bubble hug short text (no vertical "H e y"), while
         // max-w caps long messages so they wrap at a comfortable width. The
         // relative wrapper hugs the bubble so overlays anchor to its edges.
-        <div className="relative w-fit max-w-[85%] sm:max-w-[70%]">
+        <div className="relative w-fit max-w-[85%] sm:max-w-[min(70%,var(--bubble-max))]">
           {/* Reply cue that sits in the gap opening up as you swipe the bubble
               toward its own edge; snaps to the primary colour once past the
               trigger. Anchored to the same side the bubble swipes away from —
@@ -752,9 +756,11 @@ export function MessageBubble({
                     mediaKey={msg.media_key}
                   />
                 )}
+                {msg.view_once && msg.media_path && <ViewOnceAttachment msg={msg} me={me} />}
                 {msg.media_path &&
                   msg.media_type &&
                   msg.media_type !== 'sticker' &&
+                  !msg.view_once &&
                   (msg.media_type === 'audio' ? (
                     <VoiceNote
                       messageId={msg.id}

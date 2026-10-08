@@ -7,6 +7,6 @@
 declare const __APP_VERSION__: string;
 
 // True in the F-Droid build (`vite build --mode foss`), which ships without
-// OneSignal, RevenueCat and Crashlytics. Ask `lib/platform.ts`
+// OneSignal and RevenueCat. Ask `lib/platform.ts`
 // rather than reading this directly.
 declare const __FOSS__: boolean;

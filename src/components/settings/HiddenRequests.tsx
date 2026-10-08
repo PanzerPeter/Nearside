@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { EyeOff } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { revealProfiles } from '../../lib/profile-seal';
 import { loadChatFlags, setDismissed } from '../../lib/chat-flags';
 import type { Profile } from '../../lib/types';
 import { Card, Note, SettingsPage } from './SettingsUi';
@@ -51,9 +52,9 @@ export function HiddenRequests({ onBack }: HiddenRequestsProps) {
       .from('profiles')
       .select('id, display_name, avatar_url')
       .in('id', blockedIds)
-      .then(({ data }) => {
+      .then(async ({ data }) => {
+        const found = await revealProfiles((data as Profile[] | null) ?? []);
         if (!alive) return;
-        const found = (data as Profile[] | null) ?? [];
         setBlockedProfiles(
           blockedIds.map(
             (id) => found.find((p) => p.id === id) ?? { id, display_name: '', avatar_url: null }
@@ -80,7 +81,7 @@ export function HiddenRequests({ onBack }: HiddenRequestsProps) {
     // A profile that no longer resolves — a deleted account — still had a
     // dismissal, and dropping the row silently would leave a flag nobody can
     // see. It is listed by id rather than hidden.
-    const found = (data as Profile[] | null) ?? [];
+    const found = await revealProfiles((data as Profile[] | null) ?? []);
     setProfiles(
       ids.map(
         (id) =>

@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { DISPLAY_NAME_MAX } from '../lib/profile-shape';
+import { rememberPendingName } from '../lib/profile-seal';
 import { authRedirectTo } from '../lib/authRedirect';
 import { subscribeToAuthLinkError } from '../lib/nativeAuthLinks';
 import { LegalDocModal, LegalFooter, type LegalDoc } from './LegalFooter';
@@ -8,12 +10,6 @@ import { ArrowLeft, EyeOff, Lock, LogIn, QrCode, UserPlus, type LucideIcon } fro
 import type { MessageKey } from '../lib/i18n';
 import { useT } from '../hooks/useT';
 
-/** Display names are not addresses: they may collide, contain spaces and keep
- *  their capitals. All that is enforced is that there is something there and
- *  that it fits on a row. The old ^[a-z0-9_]{3,24}$ handle format went with the
- *  unique constraint in 0022 — a namespace is enumerable, and that is exactly
- *  what this product is removing. */
-const DISPLAY_NAME_MAX = 32;
 
 // Shared field styling — one source of truth for the four inputs so the focus
 // treatment (blue border + soft ring, no default outline) stays consistent.
@@ -81,11 +77,14 @@ export function AuthForm({ onCancel }: AuthFormProps = {}) {
         return;
       }
       setLoading(true);
+      // The name stays on this device until there is an identity to seal it
+      // with (0061). Sent as signup metadata it sat in the auth service in
+      // plaintext for the life of the account.
+      rememberPendingName(normalized);
       const { data, error: signUpError } = await supabase.auth.signUp({
         email: email.trim(),
         password,
         options: {
-          data: { display_name: normalized },
           emailRedirectTo: authRedirectTo('confirm'),
         },
       });

@@ -4,6 +4,5 @@
 // every caller is behind `hasProprietaryPlugins()`, so nothing is ever called.
 const absent = {};
 
-export const FirebaseCrashlytics = absent;
 export const Purchases = absent;
 export default absent;

@@ -144,7 +144,7 @@ export function RoomList({
 
   const load = useCallback(async () => {
     try {
-      const rows = await listRooms();
+      const rows = await listRooms(identity);
       setRooms(rows);
       onCountChangeRef.current?.(rows.length);
       onRoomsChangeRef.current?.(rows);
@@ -165,7 +165,7 @@ export function RoomList({
     } finally {
       setSettled(true);
     }
-  }, [me]);
+  }, [me, identity]);
 
   useEffect(() => {
     void load();
@@ -310,7 +310,7 @@ export function RoomList({
             // the RPC is the only thing that knows the member count, and a
             // header reading "0 members" for a room that has three is the kind
             // of wrong that looks like a bug in the crypto.
-            void listRooms().then((rows) => {
+            void listRooms(identity).then((rows) => {
               setRooms(rows);
               onCountChangeRef.current?.(rows.length);
               onRoomsChangeRef.current?.(rows);

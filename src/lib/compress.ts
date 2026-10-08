@@ -22,6 +22,11 @@ import { isAnimatedImage, stripImageMetadata } from './image-bytes';
 
 /** Long-edge caps, chosen per surface from how large each is ever painted. */
 export const CHAT_IMAGE_MAX_EDGE = 1920;
+/** "HD" in the send screen: for a photo somebody means to zoom into or print,
+ *  where 1920 throws away the detail the picture was sent for. Still a
+ *  re-encode, which is what takes the camera's metadata off. */
+export const CHAT_IMAGE_HD_MAX_EDGE = 4096;
+export const CHAT_IMAGE_HD_QUALITY = 0.92;
 export const BACKGROUND_MAX_EDGE = 1920;
 export const AVATAR_MAX_EDGE = 512;
 

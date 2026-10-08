@@ -2,6 +2,7 @@ import { Component, ReactNode } from 'react';
 // A class component, so no hook here: `t` is read at render, which is the only
 // moment this screen exists at all.
 import { t } from '../lib/i18n';
+import { recordJsError } from '../lib/crash-report';
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -29,6 +30,9 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
   componentDidCatch(error: unknown, info: { componentStack: string }) {
     console.error('Uncaught render error:', error, info.componentStack);
+    // Offered for sending on the next launch, not now: this screen is already
+    // asking for one decision.
+    recordJsError('fatal', error, info.componentStack);
   }
 
   render() {

@@ -4,6 +4,7 @@ import { generateMnemonic, seedFromMnemonic } from './crypto/mnemonic';
 import { sealBody } from './sealed-body';
 import { sealForSelf } from './crypto/seal';
 import { normalizeNickname } from './nicknames';
+import { roomReactionSeal } from './reaction-seal';
 
 const ME = '11111111-1111-1111-1111-111111111111';
 const PEER = '22222222-2222-2222-2222-222222222222';
@@ -52,5 +53,22 @@ describe('no plaintext on the wire', () => {
     // Explicitly null rather than absent: an upsert that omitted the column
     // would leave a pre-0041 plaintext name sitting beside the new ciphertext.
     expect(payload.nickname).toBeNull();
+  });
+
+  it('never puts a reaction emoji into an insert payload', async () => {
+    // 0059. The 1:1 path is `sealBody`, covered above; this is the group's.
+    const roomKey = crypto.getRandomValues(new Uint8Array(32));
+    const sealer = roomReactionSeal(roomKey);
+    const sealed = await sealer.seal('🤮');
+    const payload = {
+      message_id: PEER,
+      user_id: ME,
+      emoji_ciphertext: sealed.ciphertext,
+      emoji_nonce: sealed.nonce,
+    };
+
+    expect(JSON.stringify(payload)).not.toContain('🤮');
+    expect(payload).not.toHaveProperty('emoji');
+    expect(await sealer.open(sealed)).toBe('🤮');
   });
 });

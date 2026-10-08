@@ -139,9 +139,11 @@ each decision.
 
 The app shows this list on its own screen as well.
 
-- The server knows who talks to whom and when. Display names, bios, last-seen
-  times and room titles are ordinary text. The nickname you give a contact is
-  not.
+- The server knows who talks to whom and when, and last-seen times while
+  Online status is on. Names, bios, profile pictures, group names, reaction
+  emoji and the nickname you give a contact are encrypted.
+- A view-once photo is deleted from the server after it is opened, but a
+  modified app could keep it and a camera can photograph the screen.
 - There is no forward secrecy. Messages are sealed between long-lived identity
   keys, so a seed obtained later opens recorded traffic.
 - A rooted or jailbroken phone can reach the seed.
@@ -177,8 +179,7 @@ touching a live project: migrations are not applied in numeric order, and
 - **Android** is the mature target. It needs Android SDK 36 and JDK 21:
   `npm run android:sync`, then `./gradlew assembleDebug` in `android/`.
 - **F-Droid**: a separate build from the same source with no Google or other
-  closed-source libraries. It has no push notifications, theme packs or crash
-  reports. `scripts/fdroid-prebuild.sh` prepares it.
+  closed-source libraries. It has no push notifications or theme packs. `scripts/fdroid-prebuild.sh` prepares it.
 - **iOS** needs macOS with Xcode 15+ and CocoaPods. CI compiles an unsigned
   build for sideloading ([docs/IOS-SIDELOAD.md](docs/IOS-SIDELOAD.md)); it has
   not yet been tested on a real iPhone.

@@ -3,7 +3,7 @@ import { pendingAsMessage } from '../lib/message-queries';
 import { formatUnread, statusFor, type Receipt } from '../lib/receipts';
 import { formatDate, formatTime } from '../lib/time';
 import { placeNotices, type ThreadNotice } from '../lib/thread-notices';
-import { hiddenRuns, type HiddenRun } from '../lib/hidden-runs';
+import { deletedRuns, hiddenRuns, type HiddenRun } from '../lib/hidden-runs';
 import { messageSnippet } from '../lib/conversation';
 import type { ReplyTargets } from '../hooks/useReplyTargets';
 import type { ThreadScroll } from '../hooks/useThreadScroll';
@@ -12,7 +12,7 @@ import { TypingIndicator } from './TypingIndicator';
 import { SealedExchange } from './SealedExchange';
 import type { OpenedAnswer } from '../lib/sealed-exchange';
 import { useEffect, useMemo, useState } from 'react';
-import { AlertCircle, ChevronDown, EyeOff, PenLine, Timer, UserPlus } from 'lucide-react';
+import { AlertCircle, ChevronDown, EyeOff, PenLine, Timer, Trash2, UserPlus } from 'lucide-react';
 import { useT } from '../hooks/useT';
 
 /** Group consecutive messages from the same sender within this window. */
@@ -170,6 +170,18 @@ function HiddenLine({
   );
 }
 
+function DeletedLine({ count }: { count: number }) {
+  const t = useT();
+  return (
+    <div className="flex justify-center">
+      <span className="inline-flex items-center gap-1.5 text-micro font-medium italic text-muted bg-base-300/60 px-3 py-1 rounded-full ring-1 ring-base-content/5">
+        <Trash2 className="w-3 h-3 shrink-0" aria-hidden />
+        {t('thread.deletedRun', { count })}
+      </span>
+    </div>
+  );
+}
+
 function NoticeLine({ notice }: { notice: ThreadNotice }) {
   const Icon = NOTICE_ICONS[notice.kind];
   return (
@@ -242,18 +254,23 @@ export function MessageThread({
       ),
     [messages, notices, hasMore]
   );
-  const runs = useMemo(
-    () =>
-      hiddenRuns(
-        messages,
-        hiddenSenders ?? NOBODY,
-        (i) =>
-          i > 0 &&
-          (formatDate(messages[i].created_at) !== formatDate(messages[i - 1].created_at) ||
-            messages[i].id === unreadDividerId ||
-            placed.has(i))
-      ),
-    [messages, hiddenSenders, unreadDividerId, placed]
+  const runs = useMemo(() => {
+    const breaks = (i: number) =>
+      i > 0 &&
+      (formatDate(messages[i].created_at) !== formatDate(messages[i - 1].created_at) ||
+        messages[i].id === unreadDividerId ||
+        placed.has(i));
+    const hidden = hiddenRuns(messages, hiddenSenders ?? NOBODY, breaks);
+    // A deleted message from a hidden sender is already inside its hidden
+    // run, so only the rest are offered to the deleted fold.
+    const tombs = deletedRuns(
+      messages.map((m) => (hidden.has(m.id) ? { id: m.id, deleted_at: null } : m)),
+      breaks
+    );
+    const all = new Map<string, HiddenRun | number | null>(hidden);
+    for (const [id, run] of tombs) all.set(id, run);
+    return all;
+  }, [messages, hiddenSenders, unreadDividerId, placed]
   );
 
   /**
@@ -309,7 +326,7 @@ export function MessageThread({
       <main
         ref={scroll.listRef}
         onScroll={scroll.handleListScroll}
-        className="relative h-full overflow-y-auto overflow-x-clip px-3 sm:px-[max(1.25rem,calc((100%-var(--thread-max))/2))] py-4"
+        className="relative h-full overflow-y-auto overflow-x-clip px-3 sm:px-5 lg:px-8 py-4"
       >
         {hasMore && (
           <div className="flex justify-center mb-3">
@@ -428,8 +445,12 @@ export function MessageThread({
                     something one person said, so it takes the whole width
                     instead of hanging off the asker's edge. */}
                 {run !== undefined ? (
-                  run && (
-                    <HiddenLine run={run} name={nameFor(run.sender)} onShow={onShowHidden} />
+                  typeof run === 'number' ? (
+                    <DeletedLine count={run} />
+                  ) : (
+                    run && (
+                      <HiddenLine run={run} name={nameFor(run.sender)} onShow={onShowHidden} />
+                    )
                   )
                 ) : msg.sealed_prompt && onAnswerSealed ? (
                   <SealedExchange

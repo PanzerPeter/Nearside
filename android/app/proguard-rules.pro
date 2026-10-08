@@ -6,9 +6,9 @@
 # every one of them exists because the thing it protects is reached by
 # reflection or by name from JavaScript rather than by a Java call R8 can see.
 
-# Line numbers survive minification, so a Crashlytics stack trace still points
-# at a line. Without this, every crash report is a list of `a.a.a(Unknown
-# Source)` and the whole reason Crashlytics is in the build evaporates.
+# Line numbers survive minification, so a crash report's trace (NearsideApp)
+# still points at a line once `retrace` has been run over it with the release's
+# mapping.txt. Without this, every report is a list of `a.a.a(Unknown Source)`.
 -keepattributes SourceFile,LineNumberTable
 -renamesourcefileattribute SourceFile
 
@@ -27,7 +27,7 @@
 -keep public class * extends org.apache.cordova.CordovaPlugin { *; }
 
 # The community and capawesome plugins this app uses: SQLite (the local
-# decrypted mirror), secure storage (the identity key), Crashlytics, the media
+# decrypted mirror), secure storage (the identity key), the media
 # library and the filesystem.
 -keep class com.getcapacitor.community.** { *; }
 -keep class io.capawesome.** { *; }
@@ -53,12 +53,17 @@
 # stops being honoured in release builds only.
 -keep class app.nearside.AlertStore { *; }
 
+# `NameStore` the same way, for the same two reasons: the extension calls its
+# statics, and a stripped `nameFor` is every notification reading "someone" in
+# release builds only.
+-keep class app.nearside.NameStore { *; }
+
 # RevenueCat deserialises the Play Billing responses into Kotlin data classes.
 -keep class com.revenuecat.purchases.** { *; }
 -keep class com.android.billingclient.** { *; }
 -dontwarn com.revenuecat.purchases.**
 
-# Firebase Crashlytics.
+# Firebase, which OneSignal brings in as its FCM transport.
 -keep class com.google.firebase.** { *; }
 -dontwarn com.google.firebase.**
 

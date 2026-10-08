@@ -89,7 +89,10 @@ export async function fetchMediaRows(me: string, peerId: string): Promise<Messag
     .order('created_at', { ascending: false })
     .order('id', { ascending: false })
     .limit(MEDIA_GRID_LIMIT);
-  return (data ?? []) as Message[];
+  // Filtered here rather than in the query: a database without 0058 has no
+  // `view_once` column to filter on, and the grid must keep working there. A
+  // view-once photo in the grid would be a second way to open it.
+  return ((data ?? []) as Message[]).filter((row) => !row.view_once);
 }
 
 /** The page immediately older than `cursor`, newest first. */

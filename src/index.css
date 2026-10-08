@@ -477,13 +477,13 @@
   --chrome-top: 4rem;
   --chrome-bottom: 5rem;
 
-  /* The reading column. Past it the thread and the composer stop growing and
-     centre instead: at 1920px a bubble capped at 70% of the pane ran to about
-     a thousand pixels a line, and the composer to fourteen hundred. Applied as
-     padding (see `MessageThread`, `Composer`) rather than a wrapper's
-     max-width, so the scrollbar and the composer's rule still meet the pane's
-     edges. */
-  --thread-max: 48rem;
+  /* How wide one bubble may get. The thread itself runs edge to edge, with
+     your messages against the right of the pane and theirs against the left,
+     because a centred 48rem column left two-thirds of a desktop window empty
+     beside every conversation. What that column was protecting against is a
+     line of text a thousand pixels long, and capping the bubble rather than
+     the thread prevents it just as well. */
+  --bubble-max: 42rem;
 }
 
 /* The text ladder, and why `inline`.
@@ -1158,26 +1158,6 @@
     animation: chip-pop 300ms var(--motion-spring);
   }
 
-  /* The tab that just became current lifts and settles. Driven off
-     `aria-current`, which TabBar already sets — when that attribute flips, the
-     computed animation-name changes from `none`, and that is what restarts it,
-     so no key or state is needed on the React side. */
-  @keyframes tab-pop {
-    0% {
-      transform: translate3d(0, 0, 0) scale(1);
-    }
-    45% {
-      transform: translate3d(0, -3px, 0) scale(1.16);
-    }
-    100% {
-      transform: translate3d(0, 0, 0) scale(1);
-    }
-  }
-
-  :root[data-motion='expressive'] [aria-current='page'] .motion-tab-icon {
-    animation: tab-pop 360ms var(--motion-spring);
-  }
-
   /* Deeper than the 0.97 every button gets, and it springs rather than snaps
      back — this is the one piece of motion in the app that fires on every
      single tap, so it is where a lively feel is cheapest to buy. */
@@ -1313,60 +1293,4 @@
     animation: call-halo 2s ease-out infinite;
     pointer-events: none;
   }
-}
-
-/* emoji-mart lives in a shadow DOM, so only its exposed custom properties are
-   reachable — but CSS custom properties inherit through the shadow boundary.
-   Give the panel rounded corners, a real shadow, and the brand accent so it
-   reads as part of the app instead of a bare, square-cornered popover. */
-em-emoji-picker {
-  --border-radius: 14px;
-  /* Custom properties inherit through the shadow boundary, so the panel takes
-     the same elevation token as every other popover — including its
-     light-surface variant. Only *colours* have to be literal here (below). */
-  --shadow: var(--elev-overlay);
-  /* emoji-mart only accepts RGB triples through its shadow DOM boundary, so
-     these must stay literal — they cannot reference the theme's CSS custom
-     properties. Keep them mirrored by hand: this must match `--color-primary`
-     in the `nearside` theme block above (currently #2d72da). */
-  --rgb-accent: 45, 114, 218;
-  /* Must match `--color-base-100` in the `nearside` theme block above
-     (currently #1f232a), and the `--surface-ring` token — same surface,
-     mirrored by hand for the same reason. */
-  --rgb-background: 31, 35, 42;
-  --font-family: Inter, system-ui, sans-serif;
-  /* The category strip is ten tabs sharing the panel's width, and at
-     emoji-mart's default 18px the icons meet each other with no gap left
-     between them. The tabs keep their hit area; only the glyph inside shrinks,
-     which is the whole of the spacing this row can be given from outside the
-     shadow boundary. */
-  --category-icon-size: 15px;
-  /* emoji-mart's own host rule is `width: min-content`, which it expects the
-     embedder to override whenever `dynamicWidth` is on — with that prop the
-     panel's insides are all `width: 100%`, so min-content collapses to the
-     widest thing that cannot break: the ten category icons in a row, about
-     200px. The popover is up to 384px wide and the panel sat in the left half
-     of it. Invisible until the tabbed layout gave that dead space a background
-     to show up against, which is why this looks like the sticker tab broke it.
-     `100%`, not a fixed width: the popover clamps itself on a narrow phone and
-     the panel has to follow it down. */
-  width: 100%;
-  max-height: min(435px, 60vh);
-}
-
-/* Inside the tabbed picker the panel is no longer the popover — the popover is,
-   and it pins its own height so switching tabs does not resize it under the
-   finger. So the custom element has to fill the half it was given rather than
-   size itself, and it must drop the corners and elevation it draws for the
-   untabbed case, which would otherwise be a second card inside the first.
-
-   `height`, not just `max-height`: emoji-mart's own layout reads the host's
-   computed height to decide how many rows to virtualise, and a host that is
-   only capped renders its full list and overflows. */
-.emoji-fill em-emoji-picker {
-  height: 100%;
-  max-height: none;
-  min-height: 0;
-  --border-radius: 0;
-  --shadow: none;
 }

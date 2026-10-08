@@ -85,8 +85,19 @@ export const TABLE_REPORTS: TableSpec[] = [
       'created_at',
       'updated_at',
     ],
-    opaque: [],
+    // `display_name`, `bio` and `avatar_url` are the plaintext columns 0061
+    // replaced, listed while any row still carries them — a profile is moved
+    // across the first time its owner's updated app starts.
+    opaque: ['profile_key_ciphertext', 'profile_key_nonce', 'profile_ciphertext', 'profile_nonce'],
     note: 'server.profiles.note',
+  },
+  {
+    table: 'profile_keys',
+    group: 'about-you',
+    label: 'server.profile_keys.label',
+    readable: ['owner_id', 'reader_id', 'created_at'],
+    opaque: ['key_ciphertext', 'key_nonce'],
+    note: 'server.profile_keys.note',
   },
   {
     table: 'friendships',
@@ -133,6 +144,8 @@ export const TABLE_REPORTS: TableSpec[] = [
       'media_thumb_path',
       'expires_at',
       'sealed_prompt',
+      'view_once',
+      'viewed_at',
     ],
     opaque: ['ciphertext', 'nonce', 'media_key_ciphertext', 'media_key_nonce'],
     note: 'server.messages.note',
@@ -141,8 +154,10 @@ export const TABLE_REPORTS: TableSpec[] = [
     table: 'message_reactions',
     group: 'content',
     label: 'server.message_reactions.label',
+    // `emoji` is the plaintext column 0059 replaced, still listed because rows
+    // from before it still carry one — the same honesty the nicknames get.
     readable: ['id', 'message_id', 'user_id', 'emoji', 'created_at'],
-    opaque: [],
+    opaque: ['emoji_ciphertext', 'emoji_nonce'],
     note: 'server.message_reactions.note',
   },
   {
@@ -230,7 +245,8 @@ export const TABLE_REPORTS: TableSpec[] = [
       'title_set_at',
       'avatar_path',
     ],
-    opaque: ['avatar_key_ciphertext', 'avatar_key_nonce'],
+    // `title` stays listed while any group still carries a pre-0060 name.
+    opaque: ['title_ciphertext', 'title_nonce', 'avatar_key_ciphertext', 'avatar_key_nonce'],
     note: 'server.rooms.note',
   },
   {
@@ -276,8 +292,10 @@ export const TABLE_REPORTS: TableSpec[] = [
     table: 'room_message_reactions',
     group: 'content',
     label: 'server.room_message_reactions.label',
+    // `emoji` is the plaintext column 0059 replaced, still listed because rows
+    // from before it still carry one — the same honesty the nicknames get.
     readable: ['id', 'message_id', 'user_id', 'emoji', 'created_at'],
-    opaque: [],
+    opaque: ['emoji_ciphertext', 'emoji_nonce'],
     note: 'server.room_message_reactions.note',
   },
   {

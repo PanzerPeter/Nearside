@@ -10,6 +10,8 @@ import {
 } from './crypto/seal';
 import {
   ROOM_COLOURS,
+  ROOM_TITLE_MAX,
+  normalizeRoomTitle,
   openRoomFileKey,
   openRoomRows,
   roomAsMessage,
@@ -848,5 +850,18 @@ describe('roomAsMessage', () => {
     expect(plain.edited_at).toBeNull();
     expect(plain.deleted_at).toBeNull();
     expect(plain.expires_at).toBeNull();
+  });
+});
+
+describe('normalizeRoomTitle', () => {
+  it('keeps a name to one trimmed line', () => {
+    expect(normalizeRoomTitle('  Mum\nand Dad  ')).toBe('Mum and Dad');
+  });
+
+  it('counts characters the way the old CHECK did, without splitting one', () => {
+    const name = '🎉'.repeat(70);
+    const out = normalizeRoomTitle(name);
+    expect(Array.from(out)).toHaveLength(ROOM_TITLE_MAX);
+    expect(out).toBe('🎉'.repeat(ROOM_TITLE_MAX));
   });
 });

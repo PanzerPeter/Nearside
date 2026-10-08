@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
+import { revealProfile } from '../lib/profile-seal';
 import { Message } from '../lib/types';
 import { playNotificationSound } from '../lib/sound';
 import { AlertAnchor, clearAlert, noteAlert } from '../lib/alert-throttle';
@@ -74,14 +75,15 @@ export function useMessageNotifications(
       if (cached && Date.now() - cached.at < USERNAME_TTL_MS) return cached.name;
       const { data, error } = await supabase
         .from('profiles')
-        .select('display_name')
+        .select('id, display_name')
         .eq('id', userId)
         .maybeSingle();
       // On a failed lookup prefer a stale name over the "someone" placeholder,
       // and don't cache the failure.
-      if (error || !data?.display_name) return cached?.name ?? 'someone';
-      usernameCache.current.set(userId, { name: data.display_name, at: Date.now() });
-      return data.display_name;
+      if (error || !data) return cached?.name ?? 'someone';
+      const { display_name } = await revealProfile(data);
+      usernameCache.current.set(userId, { name: display_name, at: Date.now() });
+      return display_name;
     }
 
     async function showNotification(title: string, body: string, tag: string) {

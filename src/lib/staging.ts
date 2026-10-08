@@ -21,6 +21,9 @@ export interface StagedMedia {
   file: File;
   /** Set only for a recording: a MediaRecorder blob carries no duration. */
   durationMs: number | null;
+  /** This file's own caption, written on the send screen. The first file's is
+   *  the composer's draft instead, so it is never set on that one. */
+  caption?: string;
 }
 
 export interface StageResult {

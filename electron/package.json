@@ -1,7 +1,7 @@
 {
   "name": "nearside",
   "private": true,
-  "version": "1.20.0",
+  "version": "1.21.0",
   "description": "Electron platform project for Nearside.",
   "main": "build/main.js",
   "scripts": {
@@ -10,7 +10,7 @@
     "pack": "npm run build && capacitor-electron vendor && electron-builder --config electron-builder.config.js"
   },
   "devDependencies": {
-    "electron": "^43.0.0",
+    "electron": "^43.7.9",
     "electron-builder": "^26.0.12",
     "typescript": "^5.5.0"
   },

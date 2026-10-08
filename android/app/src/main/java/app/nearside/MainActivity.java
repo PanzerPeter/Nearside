@@ -18,6 +18,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(CallNative.class);
         registerPlugin(MuteStore.class);
         registerPlugin(AlertStore.class);
+        registerPlugin(NameStore.class);
         // Both channels created at launch as well as on the first write. A
         // notification posted to a channel that does not exist is dropped by
         // Android with no error, and the write that would have created them

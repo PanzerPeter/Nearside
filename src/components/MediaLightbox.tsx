@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { ZoomableImage } from './ZoomableImage';
 import {
   Check,
   ChevronLeft,
@@ -225,7 +226,7 @@ export function MediaLightbox({
   // from.
   return createPortal(
     <div
-      className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center"
+      className="fixed inset-0 z-50 overflow-hidden bg-black/95 flex items-center justify-center"
       onClick={(e) => {
         // A portal moves the DOM node, not the React tree: synthetic events
         // still travel from here up to MessageBubble, whose click, contextmenu
@@ -359,11 +360,13 @@ export function MediaLightbox({
           backdrop does that. */}
       <div className="max-w-full max-h-full p-4" onClick={(e) => e.stopPropagation()}>
         {type === 'image' ? (
-          <img
+          <ZoomableImage
+            key={url}
             src={url}
             alt={t('media.attachment')}
             className="max-w-full max-h-[85dvh] object-contain"
             onError={onError}
+            onSwipe={(direction) => (direction < 0 ? onPrev?.() : onNext?.())}
           />
         ) : noPicture ? (
           // The file is here and intact — it is this build that has no decoder

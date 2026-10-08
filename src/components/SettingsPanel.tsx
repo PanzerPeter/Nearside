@@ -108,7 +108,7 @@ export function SettingsPanel({
     return (
       <SettingsPage title={t(TITLES[section])} onBack={() => setSection(null)}>
         {section === 'profile' && (
-          <ProfilePage session={session} profile={profile} onUpdated={onUpdated} />
+          <ProfilePage profile={profile} onUpdated={onUpdated} />
         )}
         {section === 'notifications' && <NotificationsPage />}
         {section === 'calls' && <CallsPage />}

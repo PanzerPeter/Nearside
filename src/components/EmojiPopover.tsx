@@ -3,7 +3,6 @@ import {
   RefObject,
   Suspense,
   lazy,
-  useCallback,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -35,9 +34,8 @@ interface EmojiPopoverProps {
 /** The two halves, when there are two. */
 type Tab = 'emoji' | 'stickers';
 
-// emoji-mart's default panel size, widened a little: the ten category tabs
-// divide this width between them, so every pixel here is a third of a pixel of
-// air around each icon. Width flexes down via `dynamicWidth`.
+// Nine emoji to a row at 2.5rem, plus gutters. Clamped down on a narrow phone;
+// the grid reflows to whatever width it is given.
 const PICKER_W = 384;
 const PICKER_H = 435;
 const MARGIN = 8;
@@ -136,18 +134,19 @@ export function EmojiPopover({
     };
   }, [open, anchorRef]);
 
-  // emoji-mart fires this for any click it considers "outside" its root. Ignore
-  // clicks on the trigger button — otherwise the click that opens the picker
-  // (once emoji-mart is already loaded and mounts synchronously) is seen as an
-  // outside click and closes it immediately, so it only ever opened once.
-  const handleClickOutside = useCallback(
-    (e: MouseEvent) => {
+  // A click anywhere but the panel or its trigger closes it. The trigger is
+  // excluded because the click that opens the popover is still bubbling when
+  // this listener lands, and would otherwise close it on the spot.
+  useEffect(() => {
+    if (!open) return;
+    function onClick(e: MouseEvent) {
       const t = e.target as Node;
       if (panelRef.current?.contains(t) || anchorRef.current?.contains(t)) return;
       closeRef.current();
-    },
-    [anchorRef]
-  );
+    }
+    document.addEventListener('click', onClick);
+    return () => document.removeEventListener('click', onClick);
+  }, [open, anchorRef]);
 
   useEffect(() => {
     if (!open) return;
@@ -167,19 +166,19 @@ export function EmojiPopover({
       style={{ top: pos.top, left: pos.left, width: pos.width }}
       onClick={(e) => e.stopPropagation()}
     >
-      {stickers ? (
-        // One panel, two halves, switched by a control the popover owns —
-        // never two panels side by side. A split sheet leaves whichever half
-        // you are not using as dead space, which on a phone is half the width
-        // of the only picker there is.
-        //
-        // The height is fixed to the emoji panel's so the popover does not
-        // resize under the finger when the tab changes.
-        <div
-          className="flex flex-col rounded-field bg-base-100 border border-hairline shadow-modal overflow-hidden"
-          style={{ height: pos.height }}
-        >
-          <div role="tablist" className="flex shrink-0 gap-1 p-2 pb-1.5">
+      {/* One panel, two halves when the composer passes stickers, switched
+          by a control the popover owns — never two panels side by side. A
+          split sheet leaves whichever half you are not using as dead space,
+          which on a phone is half the width of the only picker there is.
+
+          The height is pinned so the popover does not resize under the finger
+          when the tab changes. */}
+      <div
+        className="flex flex-col pt-2 rounded-field bg-base-100 border border-hairline shadow-modal overflow-hidden"
+        style={{ height: pos.height }}
+      >
+        {stickers && (
+          <div role="tablist" className="flex shrink-0 gap-1 px-2 pb-1.5">
             {(['emoji', 'stickers'] as const).map((name) => (
               <button
                 key={name}
@@ -197,22 +196,20 @@ export function EmojiPopover({
               </button>
             ))}
           </div>
-          {/* Both halves stay mounted, and the inactive one is hidden rather
-              than unmounted: the sticker grid holds decrypted object URLs and
-              a scroll position, and remounting it on every tab switch would
-              rebuild both. */}
-          <div className={`emoji-fill flex-1 min-h-0 ${tab === 'emoji' ? '' : 'hidden'}`}>
-            <Suspense fallback={null}>
-              <EmojiPicker onSelect={onSelect} onClickOutside={handleClickOutside} />
-            </Suspense>
-          </div>
-          <div className={`flex-1 min-h-0 ${tab === 'stickers' ? '' : 'hidden'}`}>{stickers}</div>
+        )}
+        {/* Both halves stay mounted, and the inactive one is hidden rather
+            than unmounted: the sticker grid holds decrypted object URLs and a
+            scroll position, and remounting it on every tab switch would
+            rebuild both. */}
+        <div className={`flex-1 min-h-0 ${tab === 'emoji' ? '' : 'hidden'}`}>
+          <Suspense fallback={null}>
+            <EmojiPicker onSelect={onSelect} />
+          </Suspense>
         </div>
-      ) : (
-        <Suspense fallback={null}>
-          <EmojiPicker onSelect={onSelect} onClickOutside={handleClickOutside} />
-        </Suspense>
-      )}
+        {stickers && (
+          <div className={`flex-1 min-h-0 ${tab === 'stickers' ? '' : 'hidden'}`}>{stickers}</div>
+        )}
+      </div>
     </div>,
     document.body
   );

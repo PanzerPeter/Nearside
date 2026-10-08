@@ -45,7 +45,6 @@ describe('processors', () => {
     'Supabase',
     'OneSignal',
     'Firebase Cloud Messaging',
-    'Crashlytics',
     'Cloudflare',
     'RevenueCat',
   ]) {

@@ -115,6 +115,7 @@ UNION ALL SELECT 'sealed_answers',      count(*) FROM public.sealed_answers
 UNION ALL SELECT 'stickers',            count(*) FROM public.stickers
 UNION ALL SELECT 'chat_backgrounds',    count(*) FROM public.chat_backgrounds
 UNION ALL SELECT 'friend_nicknames',    count(*) FROM public.friend_nicknames
+UNION ALL SELECT 'profile_keys',        count(*) FROM public.profile_keys
 UNION ALL SELECT 'rooms',               count(*) FROM public.rooms
 UNION ALL SELECT 'room_participants',   count(*) FROM public.room_participants
 UNION ALL SELECT 'room_keys',           count(*) FROM public.room_keys

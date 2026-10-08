@@ -1,7 +1,7 @@
 {
   "name": "nearside",
   "private": true,
-  "version": "1.20.0",
+  "version": "1.21.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -29,7 +29,6 @@
   "dependencies": {
     "@capacitor-community/media": "^9.1.0",
     "@capacitor-community/sqlite": "^8.1.1",
-    "@capacitor-firebase/crashlytics": "^8.5.2",
     "@capacitor/android": "^8.5.2",
     "@capacitor/app": "^8.1.1",
     "@capacitor/cli": "^8.5.2",
@@ -43,7 +42,6 @@
     "@scure/bip39": "^2.4.0",
     "@supabase/supabase-js": "^2.116.0",
     "capacitor-secure-storage-plugin": "^0.13.0",
-    "emoji-mart": "^5.6.0",
     "jsqr": "^1.4.0",
     "libsodium-wrappers": "^0.8.4",
     "lucide-react": "^1.47.0",

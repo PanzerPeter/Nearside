@@ -470,6 +470,25 @@ BEGIN
     RAISE EXCEPTION 'set_room_title() wrote no usable row';
   END IF;
 
+  -- 0060: a sealed rename clears the plaintext and records who, and the
+  -- one-time reseal neither records anybody nor touches a sealed name.
+  PERFORM public.set_room_title_sealed('34343434-0000-0000-0000-000000000010', 'ct', 'nn');
+  IF NOT EXISTS (SELECT 1 FROM public.rooms
+                  WHERE id = '34343434-0000-0000-0000-000000000010'
+                    AND title IS NULL AND title_ciphertext = 'ct'
+                    AND title_set_by = 'bbbbbbbb-0000-0000-0000-000000000002') THEN
+    RAISE EXCEPTION 'set_room_title_sealed() wrote no usable row';
+  END IF;
+  PERFORM public.seal_room_title('34343434-0000-0000-0000-000000000010', 'other', 'nn');
+  IF NOT EXISTS (SELECT 1 FROM public.rooms
+                  WHERE id = '34343434-0000-0000-0000-000000000010' AND title_ciphertext = 'ct') THEN
+    RAISE EXCEPTION 'seal_room_title() replaced a name that was already sealed';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM public.rooms_for_me()
+                  WHERE id = '34343434-0000-0000-0000-000000000010' AND title_ciphertext = 'ct') THEN
+    RAISE EXCEPTION 'rooms_for_me() did not return the sealed name';
+  END IF;
+
   refused := false;
   BEGIN
     PERFORM public.set_room_title('34343434-0000-0000-0000-000000000010', E'two\nlines');
@@ -501,6 +520,146 @@ BEGIN
   END;
   IF NOT refused THEN
     RAISE EXCEPTION 'set_room_title() let somebody outside the group rename it';
+  END IF;
+END;
+$$;
+
+RESET ROLE;
+
+-- ---------------------------------------------------------------------------
+-- View-once (0058): only the recipient's call opens it, the opening clears the
+-- key and deletes the object, and nobody can write `viewed_at` by hand.
+-- ---------------------------------------------------------------------------
+
+INSERT INTO storage.objects (bucket_id, name) VALUES
+  ('chat-media', 'aaaaaaaa-0000-0000-0000-000000000001_bbbbbbbb-0000-0000-0000-000000000002/once.bin');
+
+INSERT INTO public.messages
+  (id, user_id, receiver_id, media_path, media_type, media_key_ciphertext, media_key_nonce, view_once)
+VALUES
+  ('cccccccc-0000-0000-0000-000000000058',
+   'aaaaaaaa-0000-0000-0000-000000000001',
+   'bbbbbbbb-0000-0000-0000-000000000002',
+   'aaaaaaaa-0000-0000-0000-000000000001_bbbbbbbb-0000-0000-0000-000000000002/once.bin',
+   'image', 'k', 'n', true);
+
+DO $$
+DECLARE
+  refused boolean := false;
+BEGIN
+  -- A thumbnail would outlive the deletion, so the shape refuses one.
+  BEGIN
+    INSERT INTO public.messages
+      (user_id, receiver_id, media_path, media_thumb_path, media_type, view_once)
+    VALUES
+      ('aaaaaaaa-0000-0000-0000-000000000001', 'bbbbbbbb-0000-0000-0000-000000000002',
+       'aaaaaaaa-0000-0000-0000-000000000001_bbbbbbbb-0000-0000-0000-000000000002/x.bin',
+       'aaaaaaaa-0000-0000-0000-000000000001_bbbbbbbb-0000-0000-0000-000000000002/y.bin',
+       'image', true);
+  EXCEPTION WHEN check_violation THEN
+    refused := true;
+  END;
+  IF NOT refused THEN
+    RAISE EXCEPTION 'view_once: a view-once row was given a thumbnail';
+  END IF;
+
+  -- Setting it by hand is ignored, not obeyed.
+  UPDATE public.messages SET viewed_at = now()
+   WHERE id = 'cccccccc-0000-0000-0000-000000000058';
+  IF EXISTS (SELECT 1 FROM public.messages
+              WHERE id = 'cccccccc-0000-0000-0000-000000000058' AND viewed_at IS NOT NULL) THEN
+    RAISE EXCEPTION 'view_once: viewed_at was written outside consume_view_once()';
+  END IF;
+END;
+$$;
+
+-- The sender cannot spend the recipient's one opening.
+SET LOCAL request.jwt.claim.sub = 'aaaaaaaa-0000-0000-0000-000000000001';
+SELECT public.consume_view_once('cccccccc-0000-0000-0000-000000000058');
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM public.messages
+              WHERE id = 'cccccccc-0000-0000-0000-000000000058' AND viewed_at IS NOT NULL) THEN
+    RAISE EXCEPTION 'view_once: the sender consumed their own message';
+  END IF;
+END;
+$$;
+
+SET LOCAL request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000002';
+SELECT public.consume_view_once('cccccccc-0000-0000-0000-000000000058');
+-- Twice, as a retry after a lost response would.
+SELECT public.consume_view_once('cccccccc-0000-0000-0000-000000000058');
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM public.messages
+                  WHERE id = 'cccccccc-0000-0000-0000-000000000058'
+                    AND viewed_at IS NOT NULL
+                    AND media_key_ciphertext IS NULL
+                    AND media_key_nonce IS NULL) THEN
+    RAISE EXCEPTION 'consume_view_once() left the row openable';
+  END IF;
+  IF EXISTS (SELECT 1 FROM storage.objects
+              WHERE bucket_id = 'chat-media'
+                AND name = 'aaaaaaaa-0000-0000-0000-000000000001_bbbbbbbb-0000-0000-0000-000000000002/once.bin') THEN
+    RAISE EXCEPTION 'consume_view_once() left the object in Storage';
+  END IF;
+END;
+$$;
+
+-- Deleting an opened one still works: a tombstone is always allowed.
+UPDATE public.messages
+   SET deleted_at = now(), media_path = NULL, media_type = NULL
+ WHERE id = 'cccccccc-0000-0000-0000-000000000058';
+
+-- ---------------------------------------------------------------------------
+-- Profile keys (0061): granted only to somebody the profile row is shown to.
+-- ---------------------------------------------------------------------------
+
+RESET ROLE;
+INSERT INTO auth.users (id, email) VALUES
+  ('99999999-0000-0000-0000-000000000061', 'stranger@verify.test');
+
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claim.sub = 'aaaaaaaa-0000-0000-0000-000000000001';
+
+INSERT INTO public.profile_keys (owner_id, reader_id, key_ciphertext, key_nonce)
+VALUES ('aaaaaaaa-0000-0000-0000-000000000001', 'bbbbbbbb-0000-0000-0000-000000000002', 'k', 'n');
+
+DO $$
+DECLARE
+  refused boolean := false;
+BEGIN
+  BEGIN
+    INSERT INTO public.profile_keys (owner_id, reader_id, key_ciphertext, key_nonce)
+    VALUES ('aaaaaaaa-0000-0000-0000-000000000001', '99999999-0000-0000-0000-000000000061', 'k', 'n');
+  EXCEPTION WHEN insufficient_privilege THEN
+    refused := true;
+  END;
+  IF NOT refused THEN
+    RAISE EXCEPTION 'profile_keys: a profile key was granted to a stranger';
+  END IF;
+
+  refused := false;
+  BEGIN
+    INSERT INTO public.profile_keys (owner_id, reader_id, key_ciphertext, key_nonce)
+    VALUES ('bbbbbbbb-0000-0000-0000-000000000002', 'aaaaaaaa-0000-0000-0000-000000000001', 'k', 'n');
+  EXCEPTION WHEN insufficient_privilege THEN
+    refused := true;
+  END;
+  IF NOT refused THEN
+    RAISE EXCEPTION 'profile_keys: somebody granted another person''s profile key';
+  END IF;
+END;
+$$;
+
+SET LOCAL request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000002';
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM public.profile_keys
+                  WHERE owner_id = 'aaaaaaaa-0000-0000-0000-000000000001') THEN
+    RAISE EXCEPTION 'profile_keys: the reader could not read their grant';
   END IF;
 END;
 $$;

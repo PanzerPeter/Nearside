@@ -8,11 +8,13 @@ import {
   useRef,
   useState,
 } from 'react';
-import { Check, Mic, Pause, Play, Send, Paperclip, Pencil, Smile, Square, Trash2, X } from 'lucide-react';
+import { Check, ChevronRight, Mic, Pause, Play, Send, Paperclip, Pencil, Smile, Square, Trash2, X } from 'lucide-react';
 import { EmojiPopover } from './EmojiPopover';
 import { warmEmojiPanel } from '../lib/emoji-panel';
 import { VoicePreview } from './VoicePreview';
 import { AttachMenu } from './AttachMenu';
+import { MediaReview } from './MediaReview';
+import type { MediaSend } from '../hooks/useMediaSend';
 import { MAX_MESSAGE_LENGTH } from '../lib/conversation';
 import { stagedIsRecording, type StagedMedia } from '../lib/staging';
 import { formatDuration, MAX_VOICE_MS, voiceRecordingSupported } from '../lib/audio';
@@ -65,6 +67,11 @@ interface ComposerProps {
   /** The sticker drawer, rendered as the picker's second tab. Only the composer
    *  gets one — see `EmojiPopover`. */
   stickers?: ReactNode;
+  /** The send screen's per-batch choices, from `useMediaSend`. */
+  mediaOptions: Pick<
+    MediaSend,
+    'setCaption' | 'hd' | 'setHd' | 'viewOnce' | 'setViewOnce' | 'canViewOnce'
+  >;
 }
 
 // Shared with MessageBubble's edit textarea, which reuses this exact
@@ -91,6 +98,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
     editing,
     onError,
     stickers,
+    mediaOptions,
   },
   ref
 ) {
@@ -122,13 +130,21 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   // button. Touch keeps the old behaviour: there the picker covers the thread
   // and the message under it, so leaving it up hides what is being written.
   const [stickyEmoji] = useState(() => !isCoarsePointer());
+  // On a phone the paperclip and the emoji button cost the box a quarter of
+  // its width for the whole time something is being typed, which is exactly
+  // when neither is being reached for — the keyboard has its own emoji row.
+  // They fold into one chevron once there is text and come back when the box
+  // empties. Desktop keeps them: there the picker is a sticky side panel and
+  // the width is not short.
+  const [toolsOpen, setToolsOpen] = useState(false);
+  if (toolsOpen && !value) setToolsOpen(false);
+  const toolsFolded = !stickyEmoji && !!value && !toolsOpen && !emojiOpen;
 
   /**
    * Fetch the emoji panel before it is asked for.
    *
-   * It is half a megabyte of code and data in a chunk of its own, and
-   * emoji-mart indexes the whole set before it can draw a single row — on the
-   * tap that opens it, that is the entire wait. Done while the app is idle it
+   * It is the whole emoji table in a chunk of its own, and fetching and
+   * parsing it on the tap that opens the panel is the entire wait. Done while the app is idle it
    * is invisible, and it is done once per session however many conversations
    * are opened. Idle rather than on mount so it never competes with the
    * conversation painting behind it.
@@ -383,12 +399,9 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
     else libraryRef.current?.click();
   }
 
-  // The one staged item, when there is exactly one. A batch renders as a strip
-  // instead: names and sizes stop being readable past the first thumbnail.
+  // A voice note is staged alone and previewed in the composer itself; photos
+  // and videos go to the send screen.
   const only = staged.length === 1 ? staged[0] : null;
-  const stagedKind = only?.file.type.startsWith('video/')
-    ? t('composer.video')
-    : t('composer.image');
 
   return (
     <form
@@ -400,7 +413,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}
-      className={`relative p-3 sm:py-4 sm:px-[max(1rem,calc((100%-var(--thread-max))/2))] pb-[calc(0.75rem+var(--safe-bottom))] sm:pb-[calc(1rem+var(--safe-bottom))] bg-base-100 border-t border-hairline shrink-0 ${
+      className={`relative p-3 sm:py-4 sm:px-5 lg:px-8 pb-[calc(0.75rem+var(--safe-bottom))] sm:pb-[calc(1rem+var(--safe-bottom))] bg-base-100 border-t border-hairline shrink-0 ${
         dragging ? 'ring-2 ring-inset ring-primary' : ''
       }`}
     >
@@ -457,103 +470,26 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
         </div>
       )}
 
-      {only && !isAudio && previewUrls[only.id] && (
-        <div className="flex items-center gap-3 mb-2 p-2 rounded-field bg-base-200/70 border border-hairline">
-          <div className="relative shrink-0">
-            {only.file.type.startsWith('video/') ? (
-              <video
-                src={previewUrls[only.id]}
-                className="w-16 h-16 rounded-field object-cover bg-black"
-                muted
-              />
-            ) : (
-              <img
-                src={previewUrls[only.id]}
-                alt={t('composer.attachmentPreview')}
-                className="w-16 h-16 rounded-field object-cover"
-              />
-            )}
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-meta font-medium truncate">{only.file.name}</p>
-            <p className="text-meta text-muted">
-              {`${stagedKind} · ${(only.file.size / (1024 * 1024)).toFixed(1)} MB`} ·{' '}
-              {t('composer.pressSend')}
-            </p>
-          </div>
-          <button
-            type="button"
-            className="btn btn-ghost btn-xs btn-circle"
-            onClick={onClearStaged}
-            disabled={busy}
-            title={t('composer.removeAttachment')}
-            aria-label={t('composer.removeAttachment')}
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      )}
-
-      {/* A batch. Thumbnails only: a column of file names is unreadable at this
-          height, and what the sender is checking is which photos are going. */}
-      {staged.length > 1 && (
-        <div className="mb-2 p-2 rounded-field bg-base-200/70 border border-hairline">
-          <div className="flex items-center gap-2 mb-2 px-0.5">
-            <p className="text-meta text-muted flex-1 truncate">
-              {uploading
-                ? t('composer.sendingProgress', {
-                    index: Math.min(sentCount + 1, staged.length),
-                    total: staged.length,
-                  })
-                : t('composer.batchHint', {
-                    files: t('storage.files', { count: staged.length }),
-                  })}
-            </p>
-            <button
-              type="button"
-              className="btn btn-ghost btn-xs"
-              onClick={onClearStaged}
-              disabled={busy}
-            >
-              {t('common.clear')}
-            </button>
-          </div>
-          <div className="flex gap-2 overflow-x-auto scrollbar-none [&::-webkit-scrollbar]:hidden">
-            {staged.map((item, index) => (
-              <div key={item.id} className="relative shrink-0">
-                {item.file.type.startsWith('video/') ? (
-                  <video
-                    src={previewUrls[item.id]}
-                    className="w-16 h-16 rounded-field object-cover bg-black"
-                    muted
-                  />
-                ) : (
-                  <img
-                    src={previewUrls[item.id]}
-                    alt={t('composer.attachmentN', { index: index + 1 })}
-                    className="w-16 h-16 rounded-field object-cover"
-                  />
-                )}
-                {/* The order matters — the first one carries the caption — so
-                    the strip numbers itself rather than leaving it to be
-                    inferred from left-to-right. */}
-                <span className="absolute bottom-0.5 left-0.5 rounded bg-black/60 px-1 text-micro text-white">
-                  {index + 1}
-                </span>
-                <button
-                  type="button"
-                  className="absolute -top-1 -right-1 btn btn-xs btn-circle btn-neutral"
-                  onClick={() => onUnstage(item.id)}
-                  disabled={busy}
-                  title={t('composer.removeThisFile')}
-                  aria-label={t('composer.removeAttachmentN', { index: index + 1 })}
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
+      {staged.length > 0 && !isAudio && (
+        <MediaReview
+          staged={staged}
+          previewUrls={previewUrls}
+          firstCaption={value}
+          onFirstCaption={onChange}
+          onCaption={mediaOptions.setCaption}
+          onUnstage={onUnstage}
+          onDiscard={onClearStaged}
+          onAddMore={() => libraryRef.current?.click()}
+          hd={mediaOptions.hd}
+          onHd={mediaOptions.setHd}
+          viewOnce={mediaOptions.viewOnce}
+          onViewOnce={mediaOptions.setViewOnce}
+          canViewOnce={mediaOptions.canViewOnce}
+          onSend={submit}
+          busy={busy}
+          sentCount={sentCount}
+          replyingTo={replyingTo ? replyingTo.display_name : null}
+        />
       )}
 
       {/* `multiple` on the library picker only. The two below open the camera,
@@ -691,51 +627,59 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
           </>
         ) : (
           <>
-            <button
-              type="button"
-              className="btn btn-ghost btn-square"
-              onClick={openAttach}
-              disabled={busy}
-              title={t('composer.attach')}
-              aria-label={t('composer.attach')}
-            >
-              <Paperclip className="w-5 h-5" />
-            </button>
+            {toolsFolded ? (
+              <button
+                type="button"
+                className="btn btn-ghost btn-circle btn-sm self-center"
+                onClick={() => setToolsOpen(true)}
+                title={t('composer.showTools')}
+                aria-label={t('composer.showTools')}
+              >
+                <ChevronRight className="w-5 h-5" />
+              </button>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-square"
+                  onClick={openAttach}
+                  disabled={busy}
+                  title={t('composer.attach')}
+                  aria-label={t('composer.attach')}
+                >
+                  <Paperclip className="w-5 h-5" />
+                </button>
 
-            <button
-              ref={emojiBtnRef}
-              type="button"
-              className="btn btn-ghost btn-square"
-              onClick={() => setEmojiOpen((o) => !o)}
-              // The backstop for the idle prefetch above: a phone that never
-              // went idle still gets the fetch started a moment before the
-              // click it is about to become.
-              onPointerDown={warmEmojiPanel}
-              title={t('composer.emoji')}
-              aria-label={t('composer.insertEmoji')}
-              aria-expanded={emojiOpen}
-            >
-              <Smile className="w-5 h-5" />
-            </button>
-            <EmojiPopover
-              open={emojiOpen}
-              anchorRef={emojiBtnRef}
-              onSelect={insertEmoji}
-              onClose={() => setEmojiOpen(false)}
-              stickers={stickers}
-            />
+                <button
+                  ref={emojiBtnRef}
+                  type="button"
+                  className="btn btn-ghost btn-square"
+                  onClick={() => setEmojiOpen((o) => !o)}
+                  // The backstop for the idle prefetch above: a phone that never
+                  // went idle still gets the fetch started a moment before the
+                  // click it is about to become.
+                  onPointerDown={warmEmojiPanel}
+                  title={t('composer.emoji')}
+                  aria-label={t('composer.insertEmoji')}
+                  aria-expanded={emojiOpen}
+                >
+                  <Smile className="w-5 h-5" />
+                </button>
+                <EmojiPopover
+                  open={emojiOpen}
+                  anchorRef={emojiBtnRef}
+                  onSelect={insertEmoji}
+                  onClose={() => setEmojiOpen(false)}
+                  stickers={stickers}
+                />
+              </>
+            )}
 
             <textarea
               ref={textareaRef}
               rows={1}
               maxLength={MAX_MESSAGE_LENGTH}
-              placeholder={
-                staged.length > 1
-                  ? t('composer.captionFirst')
-                  : staged.length
-                    ? t('composer.caption')
-                    : t('composer.placeholder')
-              }
+              placeholder={staged.length ? t('composer.caption') : t('composer.placeholder')}
               // The scrollbar is hidden, not the scrolling: auto-grow stops at
               // MAX_TEXTAREA_PX, so a long draft still has to scroll. The bar
               // itself is a grey stripe down a rounded pill and the WebView

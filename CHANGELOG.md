@@ -14,7 +14,23 @@ one of them drifts.
 
 ## [Unreleased]
 
+## [1.21.0] — 2026-10-08
+
 ### Added
+
+- **A full-screen send screen for photos and videos.** Swipe between what you
+  picked, add more from the strip along the bottom, give each one its own
+  caption, and choose HD for a photo that should keep its detail.
+- **View once.** A photo or video sent this way opens one time, with
+  screenshots blocked while it is on screen, and is deleted from the server as
+  soon as it closes. It cannot be forwarded and does not appear in the shared
+  media list. A screenshot block cannot stop a second phone's camera, and the
+  app does not pretend otherwise.
+- Pinch, double-tap or scroll to zoom into a photo.
+- If Nearside crashes, the next time it opens it asks whether to email the
+  report to us. It opens in your mail app, so you can read exactly what it says
+  first, and it holds no messages and no account id. Saying no deletes it. This
+  works in the F-Droid build too, which had no crash reports at all.
 
 - **Groups can be changed after they are made.** Whoever made a group can add
   more of their contacts to it from the member list, and anyone in it can rename
@@ -32,10 +48,24 @@ one of them drifts.
 
 - Notifications arrive in the language the app is set to, rather than always
   in English, and a sticker is announced as a sticker.
-- A notification names the sender by their display name. It used to show the
-  nickname you gave someone, but only for an old nickname not yet sealed on
-  your phone, and only by handing that nickname to the notification service.
-  The privacy policy's description of notifications now matches.
+- A notification no longer carries anybody's name to the notification
+  service. On Android the app puts the name back in on your phone, from its own
+  copy; on iPhone it says "someone" for now. The privacy policy's description
+  of notifications now matches.
+- A new emoji picker, built into Nearside instead of borrowed. It follows your
+  theme, keeps your recent emoji and skin tone from the old one, and leaves out
+  emoji your phone cannot draw, instead of offering boxes.
+- The conversation uses the whole width of the window again, with long
+  messages kept to a readable width.
+- On a phone, the attach and emoji buttons fold away behind an arrow while you
+  type, so the message has the room.
+- Two or more deleted messages in a row show as one line instead of a stack of
+  "message deleted".
+- A chat background shows at once when you go back into a conversation,
+  instead of fading in.
+- The tab bar along the bottom is gone. Settings open from your picture at the
+  top of the chat list.
+- Turning off your online status hides when you were last seen as well.
 - A new look for the default theme: a deep blue-tinted ink instead of the grey
   it shipped with, and a blue taken from the logo. Your own messages are now
   easy to read: the old blue left white text below the accessibility minimum,
@@ -47,15 +77,14 @@ one of them drifts.
   the end of the last line instead of on a line of its own, so more of the
   conversation fits on screen. In the light themes the other person's messages
   are white instead of grey on grey.
-- On a large screen the conversation stays in a centred column instead of
-  stretching across the whole window, and tablets get the chat list and the
-  conversation side by side from 768 pixels wide.
+- Tablets get the chat list and the conversation side by side from 768 pixels
+  wide.
 - A new sign-in screen. On a phone the form sits low, where your thumb is; on a
   larger screen it sits beside a short summary of what Nearside promises.
 - Starting a group moved to a button next to "Add contact". The chat list no
   longer opens with an empty "Groups" section.
-- Calmer details throughout: plain-case labels instead of spaced capitals, a
-  quieter tab bar, no grey "offline" dot on every contact, and times written
+- Calmer details throughout: plain-case labels instead of spaced capitals, no
+  grey "offline" dot on every contact, and times written
   "2:18 PM" rather than "02:18 PM".
 
 ### Fixed
@@ -70,6 +99,17 @@ one of them drifts.
   is from and what it says, once, without reading out history as it loads.
 - The voice-message speed button and the "remove from group" button were
   described to screen readers in English whatever the app's language.
+
+### Security
+
+- **Your name, bio and picture are sealed.** Only the people you are connected
+  to can read them; the server stores them and cannot. Signing up no longer
+  makes a name out of the start of your email address.
+- Group names and reactions are sealed as well. The server no longer knows what
+  a group is called or which emoji anybody reacted with.
+- Firebase Crashlytics is gone, so nothing about a crash reaches Google.
+- Someone still on an older version of Nearside sees names, group names and
+  reactions as blank until they update.
 
 ## [1.20.0] — 2026-10-03
 

@@ -117,6 +117,13 @@ describe('catalogs', () => {
       'transcript.messages#few',
       'transcript.messages#many',
       'transcript.messages#other',
+      // "HD" is written as the letters everywhere it is used, and the photo and
+      // video labels under a view-once message are the same words as above.
+      'review.hd',
+      'viewOnce.photo',
+      'viewOnce.video',
+      // "Contact" is the French word too.
+      'profile.unknown',
     ]);
     for (const code of TRANSLATED) {
       const untranslated = Object.keys(en).filter(

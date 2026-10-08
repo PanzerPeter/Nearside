@@ -128,7 +128,9 @@ REVOKE ALL ON FUNCTION public.set_updated_at() FROM PUBLIC, anon, authenticated;
 */
 CREATE TABLE IF NOT EXISTS public.profiles (
   id             uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-  display_name   text NOT NULL,
+  -- Plaintext only until the owner's app seals the profile (0061) and clears
+  -- it; `display_name`, `bio` and `avatar_url` are all legacy columns now.
+  display_name   text,
   bio            text,
   avatar_url     text,
   last_seen_at   timestamptz,
@@ -145,7 +147,19 @@ CREATE TABLE IF NOT EXISTS public.profiles (
 
   -- Null when nothing has been written. The CHECK is what keeps "never wrote
   -- one" and "wrote a space" from being different states in the database.
-  CONSTRAINT bio_length CHECK (bio IS NULL OR char_length(btrim(bio)) BETWEEN 1 AND 200)
+  CONSTRAINT bio_length CHECK (bio IS NULL OR char_length(btrim(bio)) BETWEEN 1 AND 200),
+
+  -- The profile key, sealed under the owner's vault key, and the profile —
+  -- name, bio, picture key — sealed under it (0061). See `profile_keys`.
+  profile_key_ciphertext text,
+  profile_key_nonce      text,
+  profile_ciphertext     text,
+  profile_nonce          text,
+  CONSTRAINT profile_key_pair CHECK ((profile_key_ciphertext IS NULL) = (profile_key_nonce IS NULL)),
+  CONSTRAINT profile_sealed_pair CHECK ((profile_ciphertext IS NULL) = (profile_nonce IS NULL)),
+  CONSTRAINT profile_sealed_length
+    CHECK ((profile_ciphertext IS NULL OR char_length(profile_ciphertext) <= 4096)
+           AND (profile_key_ciphertext IS NULL OR char_length(profile_key_ciphertext) <= 256))
 );
 
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
@@ -282,6 +296,81 @@ CREATE POLICY "profiles_delete_own" ON public.profiles
 REVOKE ALL ON public.profiles FROM PUBLIC, anon, authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.profiles TO authenticated;
 
+-- ---------------------------------------------------------------------------
+-- Profile keys (0061)
+-- ---------------------------------------------------------------------------
+
+/*
+  Whether `a` and `b` have a friendship row in either direction, at any
+  status. The same test `profiles_select_connected` makes, as a function so the
+  grant policy below can ask it about somebody other than the caller.
+*/
+CREATE OR REPLACE FUNCTION public.has_friendship(a uuid, b uuid)
+RETURNS boolean
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+SET search_path = ''
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.friendships f
+     WHERE (f.requester_id = a AND f.addressee_id = b)
+        OR (f.requester_id = b AND f.addressee_id = a)
+  );
+$$;
+
+REVOKE ALL ON FUNCTION public.has_friendship(uuid, uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.has_friendship(uuid, uuid) TO authenticated;
+
+CREATE TABLE IF NOT EXISTS public.profile_keys (
+  owner_id       uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  reader_id      uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  key_ciphertext text NOT NULL,
+  key_nonce      text NOT NULL,
+  created_at     timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (owner_id, reader_id),
+  CONSTRAINT profile_keys_not_self CHECK (owner_id <> reader_id),
+  CONSTRAINT profile_keys_length CHECK (char_length(key_ciphertext) <= 256)
+);
+
+-- The reader's side of the primary key, for "every key granted to me".
+CREATE INDEX IF NOT EXISTS profile_keys_reader_idx ON public.profile_keys (reader_id);
+
+ALTER TABLE public.profile_keys ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS profile_keys_select_party ON public.profile_keys;
+CREATE POLICY profile_keys_select_party ON public.profile_keys
+  FOR SELECT TO authenticated
+  USING ((select auth.uid()) IN (owner_id, reader_id));
+
+-- Only to somebody who can already read the row the key opens: a grant to a
+-- stranger would be a profile handed to someone the server would not show it to.
+DROP POLICY IF EXISTS profile_keys_insert_owner ON public.profile_keys;
+CREATE POLICY profile_keys_insert_owner ON public.profile_keys
+  FOR INSERT TO authenticated
+  WITH CHECK (
+    (select auth.uid()) = owner_id
+    AND public.has_friendship(owner_id, reader_id)
+  );
+
+-- Upserted on rotation: the same reader, a new key.
+DROP POLICY IF EXISTS profile_keys_update_owner ON public.profile_keys;
+CREATE POLICY profile_keys_update_owner ON public.profile_keys
+  FOR UPDATE TO authenticated
+  USING ((select auth.uid()) = owner_id)
+  WITH CHECK (
+    (select auth.uid()) = owner_id
+    AND public.has_friendship(owner_id, reader_id)
+  );
+
+DROP POLICY IF EXISTS profile_keys_delete_owner ON public.profile_keys;
+CREATE POLICY profile_keys_delete_owner ON public.profile_keys
+  FOR DELETE TO authenticated
+  USING ((select auth.uid()) = owner_id);
+
+REVOKE ALL ON public.profile_keys FROM PUBLIC, anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.profile_keys TO authenticated;
+
 /*
   Signup. Open since 0019 — the invite gate was right for a private chat among
   friends and wrong for a store listing.
@@ -307,18 +396,18 @@ AS $$
 DECLARE
   proposed text;
 BEGIN
+  -- Only an app from before 0061 sends a name at signup. The email address is
+  -- no longer mined for one: the local part of an address is a name too, and
+  -- the server is not to hold one.
   proposed := coalesce(
     NEW.raw_user_meta_data->>'display_name',
     NEW.raw_user_meta_data->>'username',
-    -- Not an address, just something better than a failed signup. It is the
-    -- local part of what they typed, and Settings can change it immediately.
-    split_part(coalesce(NEW.email, ''), '@', 1),
     ''
   );
   proposed := btrim(left(btrim(regexp_replace(proposed, '[[:cntrl:]]+', ' ', 'g')), 32));
 
   INSERT INTO public.profiles (id, display_name)
-  VALUES (NEW.id, coalesce(nullif(proposed, ''), 'Someone'));
+  VALUES (NEW.id, nullif(proposed, ''));
   RETURN NEW;
 END;
 $$;
@@ -662,6 +751,11 @@ CREATE TABLE IF NOT EXISTS public.messages (
   -- directions: a row flipped into a prompt after the fact, or out of one,
   -- would change what the answers beneath it were answering.
   sealed_prompt        boolean NOT NULL DEFAULT false,
+  -- View-once (0058): shown once by the recipient's app, then the key is
+  -- cleared and the object deleted by consume_view_once(). Frozen after
+  -- insert; `viewed_at` is written by that function and nothing else.
+  view_once            boolean NOT NULL DEFAULT false,
+  viewed_at            timestamptz,
   edited_at            timestamptz,
   deleted_at           timestamptz,
   expires_at           timestamptz,
@@ -709,6 +803,21 @@ CREATE TABLE IF NOT EXISTS public.messages (
     NOT sealed_prompt
     OR (ciphertext IS NOT NULL AND media_path IS NULL AND user_id <> receiver_id)
   ),
+
+  -- What a view-once row may be (0058): a picture or a video, with no
+  -- thumbnail to outlive the deletion, no caption to keep, never forwarded,
+  -- never a prompt, never the self-chat. A tombstone is exempt.
+  CONSTRAINT view_once_shape CHECK (
+    NOT view_once
+    OR deleted_at IS NOT NULL
+    OR (media_type IN ('image', 'video')
+        AND media_thumb_path IS NULL
+        AND ciphertext IS NULL
+        AND NOT forwarded
+        AND NOT sealed_prompt
+        AND user_id <> receiver_id)
+  ),
+  CONSTRAINT viewed_needs_view_once CHECK (viewed_at IS NULL OR view_once),
 
   -- A row names objects in its own conversation's folder and nowhere else
   -- (0055). `expire_messages()` deletes what an expiring row names, as the
@@ -836,6 +945,9 @@ BEGIN
   IF NEW.reply_to_id IS DISTINCT FROM OLD.reply_to_id THEN
     RAISE EXCEPTION 'messages.reply_to_id is immutable';
   END IF;
+  IF NEW.view_once IS DISTINCT FROM OLD.view_once THEN
+    RAISE EXCEPTION 'messages.view_once is immutable';
+  END IF;
   RETURN NEW;
 END;
 $$;
@@ -893,6 +1005,19 @@ BEGIN
     NEW.edited_at := now();
   END IF;
 
+  -- Opened is final, and only consume_view_once() may say so. It sets the
+  -- flag below for its own transaction; any other write keeps the old value,
+  -- and an opened row cannot be handed a key or an object again.
+  IF current_setting('nearside.consume_view_once', true) IS DISTINCT FROM 'on' THEN
+    NEW.viewed_at := OLD.viewed_at;
+  END IF;
+  IF OLD.viewed_at IS NOT NULL
+     AND NEW.deleted_at IS NULL
+     AND (NEW.media_key_ciphertext IS NOT NULL
+          OR NEW.media_path IS DISTINCT FROM OLD.media_path) THEN
+    RAISE EXCEPTION 'an opened view-once message cannot be given a new attachment';
+  END IF;
+
   NEW.expires_at := OLD.expires_at;
   NEW.created_at := OLD.created_at;
   RETURN NEW;
@@ -905,6 +1030,53 @@ DROP TRIGGER IF EXISTS messages_body_guard ON public.messages;
 CREATE TRIGGER messages_body_guard
   BEFORE UPDATE ON public.messages
   FOR EACH ROW EXECUTE FUNCTION public.messages_body_guard();
+
+/*
+  The one opening. Idempotent: a second call, a call for a message that is
+  not view-once, or a call from anybody but the recipient changes nothing and
+  says nothing — the viewer calls it on close, and a retry after a lost
+  response must not raise.
+*/
+CREATE OR REPLACE FUNCTION public.consume_view_once(target uuid)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+  path text;
+BEGIN
+  SELECT m.media_path INTO path
+    FROM public.messages m
+   WHERE m.id = target
+     AND m.receiver_id = (SELECT auth.uid())
+     AND m.view_once
+     AND m.viewed_at IS NULL
+     AND m.deleted_at IS NULL
+   FOR UPDATE;
+  IF NOT FOUND THEN
+    RETURN;
+  END IF;
+
+  PERFORM set_config('nearside.consume_view_once', 'on', true);
+  UPDATE public.messages
+     SET viewed_at = now(),
+         media_key_ciphertext = NULL,
+         media_key_nonce = NULL
+   WHERE id = target;
+  PERFORM set_config('nearside.consume_view_once', 'off', true);
+
+  -- The key is gone from the row above, so the bytes are already unopenable;
+  -- this takes them off the server too. Same flag as expire_messages() (0054).
+  IF path IS NOT NULL THEN
+    PERFORM set_config('storage.allow_delete_query', 'true', true);
+    DELETE FROM storage.objects WHERE bucket_id = 'chat-media' AND name = path;
+  END IF;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.consume_view_once(uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.consume_view_once(uuid) TO authenticated;
 
 -- Sixty a minute is far above human speed; a person typing fast sends perhaps
 -- twenty. This stops a loop, not a spammer.
@@ -944,10 +1116,17 @@ CREATE TABLE IF NOT EXISTS public.message_reactions (
   id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   message_id uuid NOT NULL REFERENCES public.messages(id) ON DELETE CASCADE,
   user_id    uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-  emoji      text NOT NULL,
+  -- Plaintext only on rows from before 0059; sealed into the two columns
+  -- below since, with the same keys a message body uses.
+  emoji      text,
   created_at timestamptz NOT NULL DEFAULT now(),
+  emoji_ciphertext text,
+  emoji_nonce      text,
   UNIQUE (message_id, user_id, emoji),
-  CONSTRAINT emoji_length CHECK (char_length(emoji) <= 32)
+  CONSTRAINT emoji_length CHECK (char_length(emoji) <= 32),
+  CONSTRAINT reaction_sealed_pair CHECK ((emoji_ciphertext IS NULL) = (emoji_nonce IS NULL)),
+  CONSTRAINT reaction_has_emoji CHECK (emoji IS NOT NULL OR (emoji_ciphertext IS NOT NULL
+                                                            AND char_length(emoji_ciphertext) <= 256))
 );
 
 CREATE INDEX IF NOT EXISTS message_reactions_message_idx
@@ -1687,7 +1866,9 @@ CREATE POLICY "friend_nicknames_delete_own" ON public.friend_nicknames
 */
 CREATE TABLE IF NOT EXISTS public.rooms (
   id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  title       text NOT NULL,
+  -- Plaintext only on a group named before 0060 and not yet resealed; since
+  -- then the name is sealed under the room key into the two columns below.
+  title       text,
   created_by  uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   ttl_seconds integer,
   ttl_set_by  uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
@@ -1701,6 +1882,8 @@ CREATE TABLE IF NOT EXISTS public.rooms (
   -- draws about it. Null on a group still carrying the name it was made with.
   title_set_by uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
   title_set_at timestamptz,
+  title_ciphertext text,
+  title_nonce      text,
 
   -- The room picture: an attachment that happens to be an avatar. An object in
   -- `chat-media` and a file key sealed under the room key. Profile avatars are
@@ -1713,6 +1896,10 @@ CREATE TABLE IF NOT EXISTS public.rooms (
 
   created_at  timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT rooms_title_length CHECK (char_length(btrim(title)) BETWEEN 1 AND 60),
+  CONSTRAINT rooms_title_sealed_pair CHECK ((title_ciphertext IS NULL) = (title_nonce IS NULL)),
+  CONSTRAINT rooms_title_present CHECK (title IS NOT NULL OR title_ciphertext IS NOT NULL),
+  CONSTRAINT rooms_title_ciphertext_length
+    CHECK (title_ciphertext IS NULL OR char_length(title_ciphertext) <= 512),
   CONSTRAINT rooms_ttl_positive CHECK (ttl_seconds IS NULL OR ttl_seconds > 0),
 
   -- All three or none of them. A path whose key is missing is an image that
@@ -2252,9 +2439,11 @@ BEGIN
   END IF;
 
   UPDATE public.rooms
-     SET title        = cleaned,
-         title_set_by = me,
-         title_set_at = now()
+     SET title            = cleaned,
+         title_ciphertext = NULL,
+         title_nonce      = NULL,
+         title_set_by     = me,
+         title_set_at     = now()
    WHERE id = target;
 END;
 $$;
@@ -2262,24 +2451,87 @@ $$;
 REVOKE ALL ON FUNCTION public.set_room_title(uuid, text) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.set_room_title(uuid, text) TO authenticated;
 
+/*
+  A rename, sealed. The same rule as the plaintext one — any member — and the
+  same record of who and when. Length and line breaks are the client's to
+  check now: the server holds ciphertext and can only bound its size.
+*/
+CREATE OR REPLACE FUNCTION public.set_room_title_sealed(target uuid, ciphertext text, nonce text)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+  me uuid := auth.uid();
+BEGIN
+  IF me IS NULL OR NOT public.is_room_member(target) THEN
+    RAISE EXCEPTION 'not a member of that room';
+  END IF;
+  IF ciphertext IS NULL OR nonce IS NULL THEN
+    RAISE EXCEPTION 'a sealed name needs both halves';
+  END IF;
+
+  UPDATE public.rooms
+     SET title            = NULL,
+         title_ciphertext = ciphertext,
+         title_nonce      = nonce,
+         title_set_by     = me,
+         title_set_at     = now()
+   WHERE id = target;
+END;
+$$;
+
+/* The one-time reseal of a name written before this file. See the header. */
+CREATE OR REPLACE FUNCTION public.seal_room_title(target uuid, ciphertext text, nonce text)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+BEGIN
+  IF auth.uid() IS NULL OR NOT public.is_room_member(target) THEN
+    RAISE EXCEPTION 'not a member of that room';
+  END IF;
+  IF ciphertext IS NULL OR nonce IS NULL THEN
+    RAISE EXCEPTION 'a sealed name needs both halves';
+  END IF;
+
+  UPDATE public.rooms
+     SET title            = NULL,
+         title_ciphertext = ciphertext,
+         title_nonce      = nonce
+   WHERE id = target AND title IS NOT NULL;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.set_room_title_sealed(uuid, text, text) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.set_room_title_sealed(uuid, text, text) TO authenticated;
+REVOKE ALL ON FUNCTION public.seal_room_title(uuid, text, text) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.seal_room_title(uuid, text, text) TO authenticated;
+
 -- ---------------------------------------------------------------------------
 -- 7a. Room reactions
 -- ---------------------------------------------------------------------------
 
 /*
-  The emoji is plaintext, exactly as `message_reactions` stores it. Not sealed,
-  deliberately: an inconsistency between a 1:1 reaction and a room reaction is
-  worse than the disclosure, and the transparency screen already declares
-  reactions server-visible. It has to declare room reactions too.
+  Sealed under the room key since 0059, the same change `message_reactions`
+  got in the same file: a 1:1 reaction and a room reaction were kept
+  consistent when both were plaintext, and they still are.
 */
 CREATE TABLE IF NOT EXISTS public.room_message_reactions (
   id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   message_id uuid NOT NULL REFERENCES public.room_messages(id) ON DELETE CASCADE,
   user_id    uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-  emoji      text NOT NULL,
+  emoji      text,
   created_at timestamptz NOT NULL DEFAULT now(),
+  emoji_ciphertext text,
+  emoji_nonce      text,
   UNIQUE (message_id, user_id, emoji),
-  CONSTRAINT room_emoji_length CHECK (char_length(emoji) <= 32)
+  CONSTRAINT room_emoji_length CHECK (char_length(emoji) <= 32),
+  CONSTRAINT room_reaction_sealed_pair CHECK ((emoji_ciphertext IS NULL) = (emoji_nonce IS NULL)),
+  CONSTRAINT room_reaction_has_emoji CHECK (emoji IS NOT NULL OR (emoji_ciphertext IS NOT NULL
+                                                                 AND char_length(emoji_ciphertext) <= 256))
 );
 
 CREATE INDEX IF NOT EXISTS room_message_reactions_message_idx
@@ -3366,12 +3618,14 @@ GRANT EXECUTE ON FUNCTION public.unread_counts() TO authenticated;
 */
 CREATE OR REPLACE FUNCTION public.rooms_for_me()
 RETURNS TABLE (
-  id           uuid,
-  title        text,
-  created_by   uuid,
-  created_at   timestamptz,
-  member_count bigint,
-  last_at      timestamptz
+  id               uuid,
+  title            text,
+  title_ciphertext text,
+  title_nonce      text,
+  created_by       uuid,
+  created_at       timestamptz,
+  member_count     bigint,
+  last_at          timestamptz
 )
 LANGUAGE sql
 SECURITY DEFINER
@@ -3380,6 +3634,8 @@ SET search_path = ''
 AS $$
   SELECT r.id,
          r.title,
+         r.title_ciphertext,
+         r.title_nonce,
          r.created_by,
          r.created_at,
          (SELECT count(*) FROM public.room_participants p WHERE p.room_id = r.id),
@@ -3533,7 +3789,10 @@ BEGIN
     'conversation_pins',
     'room_pins',
     -- Both people's screens change the moment a block is placed or lifted.
-    'blocks'
+    'blocks',
+    -- A friend's profile becomes readable the moment their app grants the
+    -- key (0061); the list renames "Contact" to them when it hears it.
+    'profile_keys'
   ] LOOP
     IF NOT EXISTS (
       SELECT 1 FROM pg_publication_tables

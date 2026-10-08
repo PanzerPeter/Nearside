@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
-import { Session } from '@supabase/supabase-js';
 import { Camera } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
+import { DISPLAY_NAME_MAX } from '../../lib/profile-shape';
+import { updateOwnProfile } from '../../lib/profile-seal';
 import { Profile, initial } from '../../lib/types';
 import { AVATAR_MAX_EDGE, compressImage } from '../../lib/compress';
 import { MAX_BIO_LENGTH, bioLength, normalizeBio } from '../../lib/bio';
@@ -9,12 +9,8 @@ import { useToast } from '../../hooks/useToast';
 import { AvatarCropper } from '../AvatarCropper';
 import { useT } from '../../hooks/useT';
 
-/** Display names collide freely and keep their spaces and capitals; the only
- *  rule left is that there is one and that it fits. See 0022_display_name. */
-const DISPLAY_NAME_MAX = 32;
 
 interface ProfilePageProps {
-  session: Session;
   profile: Profile;
   onUpdated: (profile: Profile) => void;
 }
@@ -26,7 +22,7 @@ interface ProfilePageProps {
  * page there is no footer to put it in, and a button beside the field it commits
  * reads better in the dialog too.
  */
-export function ProfilePage({ session, profile, onUpdated }: ProfilePageProps) {
+export function ProfilePage({ profile, onUpdated }: ProfilePageProps) {
   const [display_name, setUsername] = useState(profile.display_name);
   const [avatarUrl, setAvatarUrl] = useState(profile.avatar_url ?? null);
   const [bio, setBio] = useState(profile.bio ?? '');
@@ -60,45 +56,25 @@ export function ProfilePage({ session, profile, onUpdated }: ProfilePageProps) {
     // an ordinary phone photo outright. The cropper already caps its output,
     // so this is a no-op on that path and the guard for the fallbacks.
     const upload = await compressImage(file, { maxEdge: AVATAR_MAX_EDGE });
-    const ext = upload.name.split('.').pop()?.toLowerCase() || 'png';
-    const path = `${session.user.id}/avatar.${ext}`;
-    const { error: uploadError } = await supabase.storage
-      .from('avatars')
-      // A year, because the URL written to `profiles.avatar_url` below carries
-      // a `?v=` stamped at upload time: a replacement avatar is a different URL
-      // and can never be served from a cache holding the old one. An hour meant
-      // every device re-downloaded every avatar it had already seen, hourly,
-      // for no possible correctness gain.
-      .upload(path, upload, {
-        upsert: true,
-        cacheControl: '31536000',
-        contentType: upload.type,
-      });
-
-    if (uploadError) {
+    try {
+      // Sealed under the profile key and uploaded as opaque bytes (0061): the
+      // bucket is public, and a public URL to a face was the one thing in the
+      // app anybody could open without being anybody's contact.
+      const saved = await updateOwnProfile(
+        { display_name: profile.display_name, bio: profile.bio },
+        { avatar: upload }
+      );
+      setAvatarUrl(saved.avatar_url);
+      // Only the avatar was saved. Publishing `display_name` here would push
+      // the half-typed input up to the app shell as though it had been
+      // committed.
+      onUpdated({ ...profile, avatar_url: saved.avatar_url });
+      toast.success(t('profile.avatarUpdated'));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t('profile.avatarFailed'));
+    } finally {
       setUploading(false);
-      toast.error(uploadError.message);
-      return;
     }
-
-    const { data } = supabase.storage.from('avatars').getPublicUrl(path);
-    const bustedUrl = `${data.publicUrl}?v=${Date.now()}`;
-
-    const { error: profileError } = await supabase
-      .from('profiles')
-      .update({ avatar_url: bustedUrl })
-      .eq('id', session.user.id);
-
-    setUploading(false);
-    if (profileError) {
-      toast.error(profileError.message);
-      return;
-    }
-    setAvatarUrl(bustedUrl);
-    // Only the avatar was saved. Publishing `display_name` here would push the
-    // half-typed input up to the app shell as though it had been committed.
-    onUpdated({ ...profile, avatar_url: bustedUrl });
-    toast.success(t('profile.avatarUpdated'));
   }
 
   const nameChanged = display_name.trim() !== profile.display_name;
@@ -112,19 +88,16 @@ export function ProfilePage({ session, profile, onUpdated }: ProfilePageProps) {
       return;
     }
     setSaving(true);
-    const { error: updateError } = await supabase
-      .from('profiles')
-      .update({ display_name: normalized })
-      .eq('id', session.user.id);
-    setSaving(false);
-
-    if (updateError) {
-      toast.error(
-        /duplicate|unique/i.test(updateError.message)
-          ? t('profile.nameNotSaved')
-          : updateError.message,
+    try {
+      await updateOwnProfile(
+        { display_name: profile.display_name, bio: profile.bio },
+        { display_name: normalized }
       );
+    } catch {
+      toast.error(t('profile.nameNotSaved'));
       return;
+    } finally {
+      setSaving(false);
     }
     onUpdated({ ...profile, display_name: normalized, avatar_url: avatarUrl });
     toast.success(t('profile.nameUpdated'));
@@ -139,24 +112,16 @@ export function ProfilePage({ session, profile, onUpdated }: ProfilePageProps) {
   async function handleSaveBio() {
     if (!bioChanged) return;
     setSavingBio(true);
-    // Null, never '': `bio_length` refuses a blank string, so clearing the
-    // field has to send the absence rather than an empty one.
-    const { error: updateError } = await supabase
-      .from('profiles')
-      .update({ bio: normalizedBio })
-      .eq('id', session.user.id);
-    setSavingBio(false);
-
-    if (updateError) {
-      toast.error(
-        // 23514 is the CHECK constraint — the only way the value itself can be
-        // refused, and the one case where the server's own wording says
-        // nothing useful to the person who typed it.
-        updateError.code === '23514'
-          ? t('profile.bioTooLong', { count: MAX_BIO_LENGTH })
-          : t('profile.bioNotSaved'),
+    try {
+      await updateOwnProfile(
+        { display_name: profile.display_name, bio: profile.bio },
+        { bio: normalizedBio }
       );
+    } catch {
+      toast.error(t('profile.bioNotSaved'));
       return;
+    } finally {
+      setSavingBio(false);
     }
     onUpdated({ ...profile, bio: normalizedBio, avatar_url: avatarUrl });
     toast.success(t('profile.bioUpdated'));

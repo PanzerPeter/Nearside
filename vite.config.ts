@@ -30,7 +30,6 @@ export default defineConfig(({ mode }) => {
       alias: foss
         ? Object.fromEntries(
             [
-              '@capacitor-firebase/crashlytics',
               '@revenuecat/purchases-capacitor',
               'onesignal-cordova-plugin',
             ].map((pkg) => [pkg, fileURLToPath(new URL('./src/foss-stub.ts', import.meta.url))])

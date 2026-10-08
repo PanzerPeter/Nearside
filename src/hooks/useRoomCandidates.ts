@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { revealProfiles } from '../lib/profile-seal';
 import { unreachableMembers } from '../lib/rooms';
 import { blockedPeers } from '../lib/blocks';
 import type { Profile } from '../lib/types';
@@ -53,8 +54,9 @@ export function useRoomCandidates(me: string): RoomCandidates {
         .in('id', peerIds.length ? peerIds : ['00000000-0000-0000-0000-000000000000']);
 
       const noKey = await unreachableMembers(peerIds);
+      const revealed = await revealProfiles((profiles as Profile[] | null) ?? []);
       if (!alive) return;
-      setContacts((profiles as Profile[] | null) ?? []);
+      setContacts(revealed);
       setUnreachable(new Set(noKey));
       setLoading(false);
     })();

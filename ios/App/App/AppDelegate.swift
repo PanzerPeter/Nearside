@@ -1,6 +1,5 @@
 import UIKit
 import Capacitor
-import FirebaseCore
 
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -8,16 +7,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     var window: UIWindow?
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // Crashlytics reports nothing until Firebase has been started, and iOS
-        // has no equivalent of the Android Gradle plugin doing it for us.
-        //
-        // Guarded on the file rather than called outright: `FirebaseApp
-        // .configure()` traps on a missing GoogleService-Info.plist, and that
-        // file is deliberately not in version control. Unguarded, a fresh
-        // clone crashes on launch before showing a single screen.
-        if Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist") != nil {
-            FirebaseApp.configure()
-        }
+        // Override point for customization after application launch.
         return true
     }
 

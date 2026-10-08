@@ -223,7 +223,11 @@ export function forwardRoomDraft(
 /** Is there anything left to forward? A deleted message has had its body and
  *  media stripped. The UI never offers the action for one; this is the belt to
  *  that braces. */
-export function isForwardable(msg: Pick<Message, 'text' | 'media_path' | 'deleted_at'>): boolean {
+export function isForwardable(
+  msg: Pick<Message, 'text' | 'media_path' | 'deleted_at' | 'view_once'>
+): boolean {
+  // A view-once photo passed on would be a second, keepable copy of it.
+  if (msg.view_once) return false;
   return !msg.deleted_at && (!!msg.text?.trim() || !!msg.media_path);
 }
 

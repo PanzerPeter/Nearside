@@ -174,8 +174,12 @@ Deno.serve(async (req) => {
       .from("profiles")
       .select("id, display_name")
       .in("id", [reporter, reportedId]);
-    const nameOf = (id: string) =>
-      `@${profiles?.find((p) => p.id === id)?.display_name ?? "unknown"}`;
+    // A profile sealed since 0061 has no name the server can read, so the
+    // account id stands in: it is what an operator acts on anyway.
+    const nameOf = (id: string) => {
+      const name = profiles?.find((p) => p.id === id)?.display_name;
+      return name ? `@${name}` : id;
+    };
 
     const { data: ticket, error: ticketError } = await admin
       .from("reports")

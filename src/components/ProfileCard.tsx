@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Pencil, ShieldAlert, ShieldCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { revealProfile } from '../lib/profile-seal';
 import type { Profile } from '../lib/types';
 import type { VerificationState } from '../lib/verification';
 import type { PresenceStatus } from '../lib/presence-model';
@@ -83,7 +84,7 @@ export function ProfileCard({
       return;
     }
     setFailed(false);
-    setProfile(data as Profile);
+    setProfile(await revealProfile(data as Profile));
   }, [userId]);
 
   useEffect(() => {

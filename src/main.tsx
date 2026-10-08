@@ -1,8 +1,9 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { FirebaseCrashlytics } from '@capacitor-firebase/crashlytics';
 import App from './App.tsx';
 import { UpdatePrompt } from './components/UpdatePrompt';
+import { CrashPrompt } from './components/CrashPrompt';
+import { recordJsError } from './lib/crash-report';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ToastProvider } from './hooks/useToast';
 import { Toast } from './components/Toast';
@@ -15,7 +16,7 @@ import '@fontsource/inter/500.css';
 import '@fontsource/inter/600.css';
 import '@fontsource/inter/700.css';
 import './index.css';
-import { hasProprietaryPlugins, isMobileNative } from './lib/platform';
+import { isMobileNative } from './lib/platform';
 
 // Outside React: the wake watchdog and the socket-health poll are one
 // per-document concern, not per-mount, and they have to survive StrictMode's
@@ -33,14 +34,10 @@ initLocale();
 // visibly switch.
 initMotionPreference();
 
-// Native crashes are captured by the SDK itself. Unhandled JS rejections are
-// not, and the crypto layer added in Plan 2 is exactly the kind of code that
-// fails asynchronously and silently.
-if (hasProprietaryPlugins()) {
-  window.addEventListener('unhandledrejection', (event) => {
-    void FirebaseCrashlytics.recordException({ message: String(event.reason) });
-  });
-}
+// Kept as context for a crash report, never reported on their own: the crypto
+// layer is exactly the kind of code that fails asynchronously and silently, and
+// the rejection before a crash is often the reason for it. See crash-report.ts.
+window.addEventListener('unhandledrejection', (event) => recordJsError('rejection', event.reason));
 
 if (isMobileNative()) {
   // Also outside React, and before the first render: a link tapped while the
@@ -57,6 +54,7 @@ createRoot(document.getElementById('root')!).render(
         <App />
         <Toast />
         <UpdatePrompt />
+        <CrashPrompt />
       </ToastProvider>
     </ErrorBoundary>
   </StrictMode>

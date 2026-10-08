@@ -21,14 +21,14 @@ interface AccountRailProps {
  * settings, and therefore no sign-out, and therefore no way off the screen but
  * clearing app data.
  *
- * `md:` and up only: the phone reaches the same panel through the tab bar, and a
- * second permanent row above it would cost a conversation.
+ * `md:` and up only: the phone reaches the same panel through its avatar at the
+ * head of the list, and a permanent row at the foot would cost a conversation.
  */
 export function AccountRail({ profile, profileFailed, onOpenSettings }: AccountRailProps) {
   const t = useT();
   return (
-    // The tab bar is `md:hidden`, so on a tablet wide enough for this layout
-    // the rail is what sits on the bottom edge and has to inset itself.
+    // On a tablet wide enough for this layout the rail is what sits on the
+    // bottom edge, so it has to inset itself.
     // The band is `--chrome-bottom` tall so the rail's rule lines up with the
     // composer's across the seam, and the row centres in whatever is left.
     <div className="hidden md:flex md:flex-col md:justify-center shrink-0 border-t border-hairline bg-base-100 p-2 pb-[calc(0.5rem+var(--safe-bottom))] min-h-[calc(var(--chrome-bottom)+var(--safe-bottom))]">

@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
+import { usePrivacyPrefs } from './usePrivacyPrefs';
 
 // Throttle window for last_seen_at writes. 60s is frequent enough that
 // "offline" friends still see a recent-looking timestamp, but coarse enough
@@ -25,10 +26,28 @@ const WRITE_INTERVAL_MS = 60_000;
  */
 export function useLastSeen(session: Session | null): void {
   const lastWriteAt = useRef(0);
+  // "Online status" off used to stop the live dot and nothing else: this kept
+  // stamping the profile row every minute, so the server held a log of when
+  // the app was in use and every friend's header still read "Last seen 3 min
+  // ago" off it. Off now means the column is emptied and left empty.
+  const { presence } = usePrivacyPrefs();
 
   useEffect(() => {
     if (!session) return;
     const me = session.user.id;
+
+    if (!presence) {
+      lastWriteAt.current = 0;
+      supabase
+        .from('profiles')
+        .update({ last_seen_at: null })
+        .eq('id', me)
+        .then(
+          () => {},
+          () => {}
+        );
+      return;
+    }
 
     function write() {
       // A backgrounded tab isn't "seen" right now, no matter what the
@@ -66,5 +85,5 @@ export function useLastSeen(session: Session | null): void {
       window.removeEventListener('focus', write);
       window.clearInterval(interval);
     };
-  }, [session]);
+  }, [session, presence]);
 }

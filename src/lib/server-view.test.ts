@@ -134,7 +134,10 @@ describe('server view', () => {
   });
 
   it('flags a column the database holds and no card describes', () => {
-    const schema = new Map([['profiles', [...(TABLE_REPORTS[0].readable ?? []), 'shoe_size']]]);
+    const card = TABLE_REPORTS[0];
+    const schema = new Map([
+      ['profiles', [...(card.readable ?? []), ...(card.opaque ?? []), 'shoe_size']],
+    ]);
     expect(columnDrift(schema)).toEqual([
       { table: 'profiles', unlisted: ['shoe_size'], missing: [] },
     ]);

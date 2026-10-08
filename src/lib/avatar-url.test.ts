@@ -26,4 +26,10 @@ describe('avatarSrc', () => {
     expect(avatarSrc(null, PROJECT)).toBeNull();
     expect(avatarSrc('', PROJECT)).toBeNull();
   });
+
+  it('draws a picture this device opened from a sealed profile', () => {
+    expect(avatarSrc('blob:https://localhost/1234', 'https://x.supabase.co')).toBe(
+      'blob:https://localhost/1234'
+    );
+  });
 });

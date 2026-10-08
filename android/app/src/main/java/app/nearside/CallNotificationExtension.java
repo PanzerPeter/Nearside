@@ -17,9 +17,8 @@ import org.json.JSONObject;
  * This runs when the app may not be running at all. That is the case it exists
  * for: a call to a phone in a pocket, with the WebView not merely backgrounded
  * but gone. Everything it needs is in the payload, and the payload deliberately
- * carries no more than the message push already does — a caller's id and their
- * display name, which the transparency screen already lists as readable by the
- * server. There is nothing about a call for it to leak; the server never sees a
+ * carries no more than the message push already does — a caller's id. Their
+ * name comes from this phone's own NameStore, since the server holds none. There is nothing about a call for it to leak; the server never sees a
  * call's contents, its duration, or that it happened.
  *
  * Registered from AndroidManifest.xml by class name, under the meta-data key
@@ -59,10 +58,22 @@ public class CallNotificationExtension implements INotificationServiceExtension 
         // itself once a channel exists.
         if (!"call".equals(data.optString("type"))) {
             String channel = AlertStore.channelFor(event.getContext(), from);
-            if (channel != null) {
-                AlertStore.ensureChannels(event.getContext());
-                event.getNotification().setExtender(builder -> builder.setChannelId(channel));
-            }
+            if (channel != null) AlertStore.ensureChannels(event.getContext());
+
+            // The server no longer knows anybody's name (0061), so the banner
+            // arrives as "someone sent a photo" and, for a group, under "a
+            // group". The names this phone already opened go back in here.
+            String sender = NameStore.nameFor(event.getContext(), data.optString("senderId", ""));
+            String room = data.has("roomId")
+                ? NameStore.nameFor(event.getContext(), data.optString("roomId", ""))
+                : null;
+            String body = NameStore.named(event.getNotification().getBody(), sender);
+            event.getNotification().setExtender(builder -> {
+                if (channel != null) builder.setChannelId(channel);
+                if (room != null) builder.setContentTitle(room);
+                if (body != null) builder.setContentText(body);
+                return builder;
+            });
             return;
         }
 
@@ -78,8 +89,19 @@ public class CallNotificationExtension implements INotificationServiceExtension 
             event.getContext(),
             callId,
             data.optString("peerId", ""),
-            data.optString("peerName", ""),
+            // `call-ring` stopped sending a name with 0061; an older server
+            // still might, and either is better than "someone".
+            data.optString(
+                "peerName",
+                ringName(NameStore.nameFor(event.getContext(), data.optString("peerId", "")))
+            ),
             data.optString("kind", "voice")
         );
+    }
+
+    /** What the ring screen draws: `@name` as the server used to send it, or
+     *  "Someone" for an id this phone has no name for. */
+    private static String ringName(String name) {
+        return name == null ? "Someone" : "@" + name;
     }
 }

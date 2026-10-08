@@ -42,9 +42,11 @@ export function messageSnippet(
  * already has that surface and edits like anything else.
  */
 export function canEditBody(
-  msg: Pick<Message, 'text' | 'media_path' | 'media_type' | 'deleted_at'>
+  msg: Pick<Message, 'text' | 'media_path' | 'media_type' | 'deleted_at' | 'view_once'>
 ): boolean {
-  if (msg.deleted_at) return false;
+  // No caption on a view-once row (0058's shape refuses one): a caption is a
+  // body, and bodies are kept.
+  if (msg.deleted_at || msg.view_once) return false;
   if (msg.text) return true;
   return !!msg.media_path && msg.media_type !== 'sticker';
 }

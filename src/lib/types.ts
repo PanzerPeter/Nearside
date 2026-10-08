@@ -86,6 +86,12 @@ export interface Message {
    *  the answers live in their own table and are released by policy, not by
    *  this client. Immutable once written. */
   sealed_prompt: boolean;
+  /** Shown once by the recipient's app, then taken off the server — see
+   *  `lib/view-once.ts` and 0058. Optional because a database without 0058
+   *  returns neither column, and absent reads as an ordinary attachment. */
+  view_once?: boolean;
+  /** When the recipient opened it. Written by `consume_view_once()` only. */
+  viewed_at?: string | null;
   edited_at: string | null;
   deleted_at: string | null;
   /** Server-stamped, never client-supplied — see the BEFORE INSERT trigger in

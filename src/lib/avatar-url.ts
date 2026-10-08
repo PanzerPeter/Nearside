@@ -19,7 +19,12 @@ export function avatarSrc(
   url: string | null | undefined,
   projectUrl: string = import.meta.env.VITE_SUPABASE_URL
 ): string | null {
-  if (!url || !projectUrl) return null;
+  if (!url) return null;
+  // A picture this device opened from a sealed profile (0061). An object URL
+  // resolves only inside the document that minted it, so a string some
+  // contact wrote can name one and still reach no server at all.
+  if (url.startsWith('blob:')) return url;
+  if (!projectUrl) return null;
   const prefix = `${projectUrl.replace(/\/+$/, '')}/storage/v1/object/public/avatars/`;
   return url.startsWith(prefix) ? url : null;
 }

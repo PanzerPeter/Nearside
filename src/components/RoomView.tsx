@@ -42,6 +42,8 @@ import {
   type RoomParticipant,
   type RoomSummary,
 } from '../lib/rooms';
+import { roomReactionSeal } from '../lib/reaction-seal';
+import { revealProfiles } from '../lib/profile-seal';
 import { joinNotices, renameNotice, timerNotice } from '../lib/thread-notices';
 import { blockedByMe } from '../lib/blocks';
 import { useBlockRows } from '../hooks/useBlocks';
@@ -324,7 +326,8 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
   const reactions = useReactions(
     me,
     useMemo(() => messages.map((m) => m.id), [messages]),
-    'room_message_reactions'
+    'room_message_reactions',
+    useMemo(() => (roomKey ? roomReactionSeal(roomKey) : null), [roomKey])
   );
 
   /** Every display name in the room, so `@name` is only highlighted for
@@ -458,9 +461,9 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
   );
 
   const loadInfo = useCallback(async () => {
-    const next = await loadRoomInfo(room.id);
+    const next = await loadRoomInfo(room.id, identity);
     if (next) setInfo(next);
-  }, [room.id]);
+  }, [room.id, identity]);
 
   // A rename made on another phone lands on the next wake or reopen — `rooms`
   // is not on the realtime publication, for the reason the timer gives above.
@@ -469,13 +472,13 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
   useEffect(() => setInfo(null), [room.id]);
   useEffect(() => {
     let alive = true;
-    void loadRoomInfo(room.id).then((next) => {
+    void loadRoomInfo(room.id, identity).then((next) => {
       if (alive && next) setInfo(next);
     });
     return () => {
       alive = false;
     };
-  }, [room.id, generation]);
+  }, [room.id, generation, identity]);
 
   // Re-read on every wake, like every other fetch beside a subscription.
   useEffect(() => {
@@ -669,7 +672,8 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
       .from('profiles')
       .select('id, display_name, avatar_url')
       .in('id', rows.map((r) => r.user_id));
-    setProfiles(new Map(((data as Profile[] | null) ?? []).map((p) => [p.id, p])));
+    const revealed = await revealProfiles((data as Profile[] | null) ?? []);
+    setProfiles(new Map(revealed.map((p) => [p.id, p])));
   }, [room.id]);
 
   const loadMessages = useCallback(async () => {
@@ -1130,7 +1134,7 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
     }
     setRenaming(true);
     try {
-      await renameRoom(room.id, next);
+      await renameRoom(room.id, next, identity);
       setRenameText(null);
       await loadInfo();
     } catch {
@@ -1693,6 +1697,7 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
         staged={media.staged}
         onUnstage={media.unstage}
         onClearStaged={media.clearStaged}
+        mediaOptions={media}
         sentCount={media.sentCount}
         sending={sending}
         uploading={media.uploading || keyMissing}

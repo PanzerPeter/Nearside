@@ -75,7 +75,7 @@ that used to read a body server-side had to move or die:
 | --- | --- |
 | SQL full-text search | search over `src/lib/localdb.ts`, a SQLite mirror of what *this device* decrypted |
 | Conversation previews from the last row | previews from the same local mirror |
-| Push notifications with a message preview | sender only, since the push function has no body it could leak |
+| Push notifications with a message preview | no content and, since `0061`, no name: the Android app fills in names it already holds |
 
 The costs are real and are not bugs: a conversation is unsearchable on a device
 that never loaded it, and there is one database file per account. The app says

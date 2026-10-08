@@ -1,5 +1,7 @@
 // The notification copy lives with the edge functions that send it, in a file
 // with no Deno import, so this suite tests the real one rather than a twin.
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
   PUSH_LOCALES,
@@ -71,5 +73,17 @@ describe('notification copy', () => {
     expect(oneSignalLanguage('zh')).toBe('zh-Hans');
     expect(oneSignalLanguage('xx')).toBe('en');
     for (const locale of LOCALES) expect(CODES).toContain(oneSignalLanguage(locale));
+  });
+
+  it('names every "someone" the Android extension swaps a name into', () => {
+    // NameStore.named() finds the placeholder by these exact words. A word
+    // changed here and not there is a banner that says "someone" forever.
+    const java = readFileSync(
+      fileURLToPath(new URL('../../android/app/src/main/java/app/nearside/NameStore.java', import.meta.url)),
+      'utf8'
+    );
+    for (const word of new Set(Object.values(callerHeading(null)))) {
+      expect(java).toContain(`"${word}"`);
+    }
   });
 });

@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
+import { revealProfiles, syncProfileGrants } from '../lib/profile-seal';
+import { publishNotificationNames } from '../lib/notification-names';
 import { Profile, Friendship, Message, ConversationSummary } from '../lib/types';
 import { isSelfChat, sortConversations } from '../lib/conversation';
 import { formatDisplayName, nicknameFor } from '../lib/nicknames';
@@ -76,6 +78,9 @@ const LIST_POLL_DEGRADED_MS = 12_000;
 const LIST_REFRESH_COALESCE_MS = 400;
 
 interface FriendsListProps {
+  /** The phone's way into settings, drawn at the head of the title row. The
+   *  desktop has the account rail for this and passes nothing. */
+  accountButton?: ReactNode;
   session: Session;
   /** Needed only by the connect dialog, which puts this device's public key
    *  into the QR so scanning it verifies the contact on the spot. */
@@ -118,6 +123,7 @@ export function FriendsList({
   selectedRoomId,
   onSelectRoom,
   onOpenSearchHit,
+  accountButton,
 }: FriendsListProps) {
   const t = useT();
   const toast = useToast();
@@ -180,8 +186,14 @@ export function FriendsList({
     if (error) return;
     // Ordering lives in lib/conversation.ts so it can be tested without a
     // component.
-    const rows = sortConversations((data ?? []) as ConversationSummary[], me);
+    const sorted = sortConversations((data ?? []) as ConversationSummary[], me);
+    // Names and pictures are sealed (0061); opened here so everything below
+    // reads them off the row as it always did.
+    const rows = await revealProfiles(sorted.map((r) => ({ ...r, id: r.peer_id })));
     setConversations(rows);
+    // Throttled inside: a refresh is the moment a new friend would show up,
+    // and the cheapest place to notice they need this account's profile key.
+    void syncProfileGrants();
     setLoaded(true);
     // Sorted, so the cached copy is the list in the order it was shown in and
     // the offline paint does not reshuffle itself when the RPC lands.
@@ -285,10 +297,11 @@ export function FriendsList({
     }
 
     const requesterIds = data.map((f) => f.requester_id);
-    const { data: profiles } = await supabase
+    const { data: rawProfiles } = await supabase
       .from('profiles')
       .select('id, display_name, avatar_url')
       .in('id', requesterIds);
+    const profiles = await revealProfiles((rawProfiles as Profile[] | null) ?? []);
 
     setPendingRequests(
       data.map((f) => ({ ...f, profiles: profiles?.find((p) => p.id === f.requester_id) }))
@@ -313,6 +326,15 @@ export function FriendsList({
     const channel = supabase
       .channel(`friendships:${me}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'friendships' }, () => {
+        // Somebody arrived or left: who holds this account's profile key has
+        // to follow at once, not on the next throttled pass.
+        void syncProfileGrants(true);
+        void fetchConversations();
+        void fetchPendingRequests();
+      })
+      // A friend's app granting its profile key is what turns "Contact" into
+      // their name; RLS limits the stream to grants this account is party to.
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profile_keys' }, () => {
         void fetchConversations();
         void fetchPendingRequests();
       })
@@ -621,6 +643,20 @@ export function FriendsList({
     return map;
   }, [conversations, rooms, me]);
 
+  // The same names, handed to the Android notification extension: a push says
+  // "someone" since 0061, and these are what the banner shows instead. The
+  // self-chat never notifies, so it is left out.
+  useEffect(() => {
+    const peers: Record<string, string> = {};
+    const groups: Record<string, string> = {};
+    for (const target of searchTargets.values()) {
+      if (target.isRoom) groups[target.id] = target.name;
+      else if (!isSelfChat(me, target.id)) peers[target.id] = target.name;
+    }
+    void publishNotificationNames('peers', peers);
+    void publishNotificationNames('rooms', groups);
+  }, [searchTargets, me]);
+
   const search = useGlobalSearch({
     me,
     targets: searchTargets,
@@ -863,7 +899,10 @@ export function FriendsList({
             off, so its rule meets the conversation header's across the seam;
             the search field sits under the rule as the top of the list. */}
         <div className="flex items-center justify-between gap-3 px-4 pt-[calc(1rem+var(--safe-top))] md:pt-0 md:h-(--chrome-top) md:border-b md:border-hairline">
-          <h2 className="text-display font-semibold text-base-content">{t('tabs.chats')}</h2>
+          <div className="flex items-center gap-3 min-w-0">
+            {accountButton}
+            <h2 className="text-display font-semibold text-base-content">{t('tabs.chats')}</h2>
+          </div>
           <div className="flex items-center gap-1">
             {/* Groups start here rather than from a "+" on an empty section:
                 a list without groups no longer spends its first rows on a

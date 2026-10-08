@@ -7,12 +7,12 @@
 // `CallNotificationExtension` on the Android side turns it into a ring rather
 // than a banner.
 //
-// What it carries, and what it cannot. The payload names the caller and says a
-// call is starting. It does not and could not carry anything about the call:
-// there is no call row, no SDP here, no duration and no record that it
-// happened — signalling is realtime broadcast, which the server relays and does
-// not store. The caller's display name is the same field `send-push` already
-// sends and the transparency screen already lists as readable.
+// What it carries, and what it cannot. The payload carries the caller's id and
+// says a call is starting — not their name, which is sealed since 0061; the
+// phone puts the name it knows on the ring screen. It does not and could not
+// carry anything about the call: there is no call row, no SDP here, no
+// duration and no record that it happened — signalling is realtime broadcast,
+// which the server relays and does not store.
 //
 // Authorisation is the part worth reading twice. Anyone could otherwise ring
 // any account, repeatedly, from a script — a notification-spam primitive with
@@ -125,19 +125,9 @@ Deno.serve(async (req) => {
       .maybeSingle();
     if (block) return json({ error: "blocked" }, 403);
 
-    const { data: profile } = await admin
-      .from("profiles")
-      .select("display_name")
-      .eq("id", caller)
-      .maybeSingle();
-
-    // Not the private nickname the receiver gave the caller: since 0041 it is
-    // sealed on the receiver's phone, and the plaintext rows not yet re-sealed
-    // are not something to hand OneSignal. See send-push for the longer note.
-    const displayName = (profile?.display_name as string | undefined) ?? null;
-    // The native ring screen (CallNotificationExtension) draws this as given,
-    // and its own strings are English for now, so its fallback matches them.
-    const name = displayName ? `@${displayName}` : "Someone";
+    // No name (0061): the caller's profile is sealed. The ring screen on the
+    // phone looks the caller up in its own NameStore and says "Someone" when
+    // it has nobody by that id.
     const video = kind === "video";
 
     const response = await fetch("https://api.onesignal.com/notifications", {
@@ -153,7 +143,7 @@ Deno.serve(async (req) => {
         // rather than a device, which is what reaches someone holding two
         // phones and survives a reinstall.
         include_aliases: { external_id: [peer_id] },
-        headings: callerHeading(displayName),
+        headings: callerHeading(null),
         contents: callBody(video),
         android_channel_id: ANDROID_CHANNEL_ID,
         priority: 10,
@@ -169,7 +159,6 @@ Deno.serve(async (req) => {
           type: "call",
           callId: call_id,
           peerId: caller,
-          peerName: name,
           kind: video ? "video" : "voice",
         },
       }),

@@ -88,6 +88,10 @@ current state; this table is about what each file *does*.
 | 57 | `0055_consent_and_media_folders.sql` | Friend requests are inserted pending only; room owners add only themselves or unblocked contacts; a message's media must sit in its own conversation's (or room's) folder; `has_answered()` answers only about the caller |
 | 58 | `0056_shares_read_answers_peers.sql` | `shares_read()` answers only about someone whose watermark row is addressed to the caller. It was also `/rpc/shares_read`, and told any account who had switched read receipts off |
 | 59 | `0057_group_membership.sql` | A group member reads `room_messages` from the moment they joined; `joined_at` and a room message's `created_at` are stamped by the server on insert; `set_room_title()` renames a group and records who did it |
+| 60 | `0058_view_once.sql` | `messages.view_once` and `viewed_at`; `consume_view_once()` clears the key and deletes the object on the recipient's one opening. **Not yet applied** |
+| 61 | `0059_sealed_reactions.sql` | Reaction emoji sealed like a body (`emoji_ciphertext`/`emoji_nonce`); `emoji` kept for older rows. **Not yet applied** |
+| 62 | `0060_sealed_room_titles.sql` | A group's name sealed under the room key; `set_room_title_sealed()`, the no-notice reseal `seal_room_title()`, and `rooms_for_me()` returning the sealed columns. **Not yet applied** |
+| 63 | `0061_sealed_profiles.sql` | Name, bio and picture sealed under a per-account profile key; `profile_keys` grants it to connected readers; signup no longer derives a name from the email; avatars bucket takes octet-stream. **Not yet applied; redeploy `send-push` and `call-ring` after it** |
 
 ## The two files that do not follow the numbering
 

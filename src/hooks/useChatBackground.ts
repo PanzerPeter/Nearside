@@ -15,6 +15,12 @@ import { openFile, sealFile } from '../lib/media-crypto';
 import { openForSelf, sealForSelf } from '../lib/crypto/seal';
 import { fromBase64, toBase64, type Identity } from '../lib/crypto/keys';
 
+/** Which object each conversation last showed, keyed by table, owner and
+ *  scope. Only a pointer into `reusableBackgroundUrl`'s cache, which the
+ *  account teardown empties; the owner id in the key keeps one account from
+ *  ever reading another's entry. */
+const lastPath = new Map<string, string>();
+
 /** How long a background's signed URL stays valid. Matches MediaAttachment. */
 const SIGNED_URL_TTL = 3600;
 
@@ -154,6 +160,9 @@ export function useChatBackground(me: string, target: BackgroundTarget, identity
     const apply = (row: BackgroundRow | null, signedUrl: string | null) => {
       if (loadId.current !== ticket) return;
       rowRef.current = row;
+      const key = `${table}:${me}:${scopeId}`;
+      if (row) lastPath.set(key, row.media_path);
+      else lastPath.delete(key);
       setUrl(signedUrl);
     };
 
@@ -195,9 +204,14 @@ export function useChatBackground(me: string, target: BackgroundTarget, identity
     // retires any load still outstanding from the previous pair.
     loadId.current++;
     rowRef.current = null;
-    setUrl(null);
+    // Unless this conversation's picture is already decrypted in memory, in
+    // which case it paints now rather than after the row query: otherwise every
+    // open showed the bare theme for a beat and then the picture snapped in.
+    // The query below still runs and replaces it if the owner changed it.
+    const held = lastPath.get(`${table}:${me}:${scopeId}`);
+    setUrl(held ? reusableBackgroundUrl(held) : null);
     void load();
-  }, [load]);
+  }, [load, table, me, scopeId]);
 
   useEffect(() => {
     const channel = supabase

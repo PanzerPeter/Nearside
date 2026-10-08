@@ -44,11 +44,11 @@ export function isDesktop(): boolean {
 }
 
 /**
- * A mobile shell that has OneSignal, RevenueCat and Crashlytics in it.
+ * A mobile shell that has OneSignal and RevenueCat in it.
  *
- * False in the F-Droid build, which is Android without them: push, purchases
- * and crash reports there behave as they do in a browser. The gate for those
- * three and nothing else — the seed, the mirror and every other
+ * False in the F-Droid build, which is Android without them: push and
+ * purchases there behave as they do in a browser. The gate for those two and
+ * nothing else — the seed, the mirror and every other
  * plugin still answer to `isMobileNative()`.
  */
 export function hasProprietaryPlugins(): boolean {

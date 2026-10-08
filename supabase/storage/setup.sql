@@ -22,7 +22,9 @@
 -- ============================================================
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 VALUES ('avatars', 'avatars', true, 5242880,
-        ARRAY['image/png', 'image/jpeg', 'image/webp', 'image/gif'])
+        -- octet-stream since 0061: a picture sealed under its owner's profile
+        -- key, which is what every avatar uploaded since then is.
+        ARRAY['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'application/octet-stream'])
 ON CONFLICT (id) DO UPDATE
   SET public = EXCLUDED.public,
       file_size_limit = EXCLUDED.file_size_limit,

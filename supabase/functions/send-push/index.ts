@@ -17,9 +17,8 @@
 // The notification never carries message content, and cannot: after 0023
 // `messages` holds a ciphertext and a nonce and no body column, so code here
 // reaching for plaintext fails at runtime rather than leaking. The copy below
-// must not imply otherwise. Who it is from is the most that can be said, and
-// that name comes from `profiles.display_name`, which the transparency screen
-// already declares readable.
+// must not imply otherwise. Since 0061 it does not even say who it is from:
+// the server holds no names, and the phone fills its own in (NameStore.java).
 //
 // Required Edge Function secrets (Dashboard → Edge Functions → Secrets):
 //   ONESIGNAL_APP_ID      — same id the client ships (VITE_ONESIGNAL_APP_ID)
@@ -179,9 +178,8 @@ function json(body: unknown, status: number): Response {
  * different tables (see 0037), and the banner names a room instead of a
  * person. Sharing a code path between those would be sharing four `if`s.
  *
- * The name is `profiles.display_name`, never the receiver's private nickname
- * for the sender — see the 1:1 path below for why no notification can carry
- * one.
+ * It names nobody: the room's title and the sender's profile are both sealed
+ * (0060, 0061). See the 1:1 path below.
  */
 async function pushRoomMessage(
   admin: ReturnType<typeof createClient>,
@@ -250,16 +248,12 @@ async function pushRoomMessage(
     return json({ sent: 0, reason: "no other members" }, 200);
   }
 
-  const [{ data: room }, { data: sender }] = await Promise.all([
-    admin.from("rooms").select("title").eq("id", msg.room_id).maybeSingle(),
-    admin.from("profiles").select("display_name").eq("id", msg.sender_id).maybeSingle(),
-  ]);
-
-  const heading = groupHeading((room?.title as string | undefined) ?? null);
-  const body = messageBody(
-    (sender?.display_name as string | undefined) ?? null,
-    msg.media_type as string | null,
-  );
+  // No name and no title (0060, 0061): both are sealed, and the server could
+  // not hand OneSignal either if it wanted to. The banner says "someone" in
+  // "a group"; the Android app puts the names it holds back in on the phone
+  // (CallNotificationExtension + NameStore).
+  const heading = groupHeading(null);
+  const body = messageBody(null, msg.media_type as string | null);
 
   // The ladder is per receiver per ROOM, so a group of six talking at once
   // rings a phone on the first few messages rather than on all six, and a
@@ -419,23 +413,11 @@ Deno.serve(async (req) => {
       await admin.from("message_pushes").delete().eq("message_id", msg.id);
     };
 
-    const { data: sender } = await admin
-      .from("profiles")
-      .select("display_name")
-      .eq("id", msg.user_id)
-      .maybeSingle();
-
-    // Not the private nickname the receiver gave the sender. Since 0041 it is
-    // sealed under the receiver's vault key, so the server cannot read it, and
-    // the plaintext column this used to read survives only on rows no device
-    // has re-sealed yet — reading those would hand OneSignal, a third party,
-    // the one name the app promises nobody else sees. The banner says "@bob"
-    // where the app says "Bobby"; the app can say that because it holds the
-    // key and the server does not.
-    const body = messageBody(
-      (sender?.display_name as string | undefined) ?? null,
-      msg.media_type as string | null,
-    );
+    // No name: profiles are sealed since 0061, nicknames since 0041, and a
+    // plaintext column some row still carries is not something to hand
+    // OneSignal, a third party. The banner says "someone"; the Android app
+    // replaces it on the phone with the name it shows in the chat list.
+    const body = messageBody(null, msg.media_type as string | null);
 
     // Alert, or arrive quietly. A conversation is a burst of short messages,
     // and a sound for each of them is a phone buzzing six times while somebody

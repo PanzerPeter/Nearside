@@ -155,10 +155,11 @@ export const privacySections: LegalSection[] = [
           Notifications go through OneSignal, which receives your device&rsquo;s push token, your
           account identifier, and the text of the notification. Delivery to the handset is
           Google&rsquo;s Firebase Cloud Messaging. A notification never contains message content,
-          and cannot: the server has no plaintext to put in one. The most it says is who a message
-          or a call is from, by their display name, what kind of attachment it carried, and the
-          name of the group it was sent in. Never the nickname you gave someone: that is sealed on
-          your phone, where the server cannot read it.
+          and cannot: the server has no plaintext to put in one. It names nobody either. Display
+          names and group titles are sealed, so the server cannot read them; a notification says a
+          message or a call came from &ldquo;someone&rdquo;, and on Android the app puts the name
+          back in on your phone, from its own copy. The most it tells OneSignal is what kind of
+          attachment a message carried.
         </p>
         <p>
           Cloudflare provides the relay that carries a call when the two phones cannot reach each
@@ -166,12 +167,15 @@ export const privacySections: LegalSection[] = [
           addresses of both ends.
         </p>
         <p>
-          Crash reports go to Google Firebase Crashlytics, and include a stack trace, your device
-          model, and the operating system version. They contain no message content.
+          There is no crash reporting service. If the app crashes, it keeps a report on your device
+          and asks, the next time it opens, whether to email it to us. The report is a stack trace,
+          the app and operating system versions, and your device model, with no message content and
+          no account identifier. It opens in your own mail app, where you can read it before
+          anything is sent; if you decline, it is deleted and nothing is sent.
         </p>
         <p>
           A report you file about another person is emailed to us through Resend. It carries your
-          complaint, both accounts&rsquo; display names and identifiers, and, only if you choose to
+          complaint, both accounts&rsquo; identifiers, and, only if you choose to
           include them, the last 30 messages of that conversation as your device decrypted them.
           This is the only way anyone at Nearside ever reads a message, and it happens only when
           you send it. The text is not stored in our database; we keep a record that a report was

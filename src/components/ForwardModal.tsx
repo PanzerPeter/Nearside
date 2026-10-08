@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { revealProfiles } from '../lib/profile-seal';
 import { Modal } from './Modal';
 import { Avatar } from './Avatar';
 import { useToast } from '../hooks/useToast';
@@ -97,19 +98,21 @@ export function ForwardModal({
 
   useEffect(() => {
     let active = true;
-    supabase.rpc('conversation_list').then(({ data, error }) => {
+    supabase.rpc('conversation_list').then(async ({ data, error }) => {
       if (!active) return;
       if (error) {
         toast.error(t('forward.loadFailed'));
         setRows([]);
         return;
       }
-      setRows((data ?? []) as ConversationSummary[]);
+      const rows = (data ?? []) as ConversationSummary[];
+      const revealed = await revealProfiles(rows.map((r) => ({ ...r, id: r.peer_id })));
+      if (active) setRows(revealed);
     });
     // Groups load beside the friends rather than after them, and a failure here
     // is silent: a picker with no groups in it is still a usable picker, and a
     // second red toast for the same open would say the sheet is broken.
-    listRooms()
+    listRooms(identity)
       .then((list) => {
         if (active) setRooms(list);
       })

@@ -8,8 +8,9 @@ import { RoomView } from './components/RoomView';
 import { SettingsModal } from './components/SettingsModal';
 import { SettingsPanel } from './components/SettingsPanel';
 import { ProfileUnavailable } from './components/ProfileUnavailable';
-import { TabBar, type Tab } from './components/TabBar';
 import { AccountRail } from './components/AccountRail';
+import { Avatar } from './components/Avatar';
+import { ArrowLeft } from 'lucide-react';
 import { supabase } from './lib/supabase';
 import { Profile } from './lib/types';
 import type { RoomSummary } from './lib/rooms';
@@ -17,6 +18,14 @@ import { useMessageNotifications } from './hooks/useMessageNotifications';
 import { useLastSeen } from './hooks/useLastSeen';
 import { useIdentity } from './hooks/useIdentity';
 import { syncPublicKeys } from './lib/identity-sync';
+import { forgetNotificationNames } from './lib/notification-names';
+import {
+  releaseProfiles,
+  revealProfile,
+  sealOwnProfileIfNeeded,
+  setProfileSession,
+  syncProfileGrants,
+} from './lib/profile-seal';
 import { isSecureStorageAvailable } from './lib/keystore';
 import { IdentitySetup } from './components/IdentitySetup';
 import { NotificationsPrompt } from './components/NotificationsPrompt';
@@ -91,10 +100,9 @@ function App() {
    *  conversation again afterwards opens it at the newest message. */
   const [openAt, setOpenAt] = useState<{ messageId: string; createdAt: string } | null>(null);
   const [myProfile, setMyProfile] = useState<Profile | null>(null);
-  // The phone's tab bar selection. Desktop shows both panes at once and reaches
-  // settings through the top bar's dialog, so this only decides what the
-  // single-pane layout is showing.
-  const [tab, setTab] = useState<Tab>('chats');
+  /** The phone's two screens. Desktop shows the list and a conversation side
+   *  by side and opens settings as a dialog instead. */
+  const [tab, setTab] = useState<'chats' | 'settings'>('chats');
   const [showSettings, setShowSettings] = useState(false);
   // Owned here, reported up by FriendsList: presence needs the friend set to
   // scope its channels, and the chat pane needs it below the provider.
@@ -174,7 +182,9 @@ function App() {
       .eq('id', session.user.id)
       .maybeSingle();
     if (data) {
-      setMyProfile(data);
+      // Opened when the identity is there to open it; before that the row is
+      // shown as it came, and the identity effect below asks again once it is.
+      setMyProfile(await revealProfile(data));
       setProfileFailed(false);
     } else {
       setProfileFailed(true);
@@ -241,8 +251,24 @@ function App() {
     useIdentity(session);
 
   // Only the public halves, and only when they differ from what is stored.
+  // Then the profile: sealed if it is still plaintext, and its key handed to
+  // whoever should hold it (0061) — after the keys, because a grant is sealed
+  // to the reader's published key and this account's own must be up first.
   useEffect(() => {
-    if (session && identity) void syncPublicKeys(session, identity);
+    if (!session || !identity) return;
+    setProfileSession(session.user.id, identity);
+    void (async () => {
+      await syncPublicKeys(session, identity);
+      try {
+        await sealOwnProfileIfNeeded();
+      } catch (error) {
+        console.error('profile seal failed', error);
+      }
+      await syncProfileGrants(true);
+      void fetchMyProfile();
+    })();
+    // `fetchMyProfile` is keyed on the session, which is already a dependency.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, identity]);
 
   // Private friend nicknames, loaded once and kept live for the whole app. The
@@ -312,6 +338,11 @@ function App() {
     // behind, the next account's first list refresh would be compared against
     // it and skip the write that corrects it.
     forgetMutedIds();
+    // Opened profiles, the profile key and decrypted pictures (0061). The next
+    // account holds different grants and must open nothing with these.
+    releaseProfiles();
+    // The names the notification extension shows, which are plaintext on disk.
+    forgetNotificationNames();
     // The per-conversation loudness, beside it: the next account on this phone
     // must not inherit which of the previous one's conversations were loud.
     forgetAlertLevels();
@@ -484,7 +515,7 @@ function App() {
       .maybeSingle();
     if (data) {
       setSelectedRoom(null);
-      setSelectedFriend(data);
+      setSelectedFriend(await revealProfile(data));
       // A notification tapped while the settings tab is up would otherwise
       // mount the conversation behind a hidden pane, and read as doing nothing.
       setTab('chats');
@@ -663,6 +694,27 @@ function App() {
                 setOpenAt(null);
                 setSelectedRoom(room);
               }}
+              accountButton={
+                // Settings sat behind a bottom bar of exactly two tabs, one of
+                // them the screen already showing — a permanent band of chrome
+                // to reach a page opened a few times a month. The avatar at the
+                // head of the list is where messengers keep it, and the row it
+                // freed goes back to conversations.
+                <button
+                  type="button"
+                  className="md:hidden rounded-full focus-visible:ring-2 focus-visible:ring-primary"
+                  onClick={() => setTab('settings')}
+                  title={t('settings.title')}
+                  aria-label={t('settings.title')}
+                >
+                  <Avatar
+                    display_name={myProfile?.display_name ?? ''}
+                    seed={session.user.id}
+                    url={myProfile?.avatar_url ?? null}
+                    size={36}
+                  />
+                </button>
+              }
               onOpenSearchHit={(chat, at) => {
                 setOpenAt(at);
                 if (chat.kind === 'room') {
@@ -730,12 +782,21 @@ function App() {
           )}
         </main>
 
-        {/* Settings, as the phone's second tab. The same panel the desktop
+        {/* Settings, as the phone's second screen. The same panel the desktop
             dialog renders — mounted only while the tab is up, so its push and
             entitlement checks don't run on every launch. */}
         {tab === 'settings' && !chatOpen && (
           <section className="w-full md:hidden flex flex-col min-w-0 bg-base-100">
-            <div className="px-4 pb-3 pt-[calc(1rem+var(--safe-top))] border-b border-hairline shrink-0">
+            <div className="flex items-center gap-1 px-2 pb-3 pt-[calc(1rem+var(--safe-top))] border-b border-hairline shrink-0">
+              <button
+                type="button"
+                className="btn btn-ghost btn-circle"
+                onClick={() => setTab('chats')}
+                title={t('common.back')}
+                aria-label={t('common.back')}
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
               <h2 className="text-display font-semibold text-base-content">{t('settings.title')}</h2>
             </div>
             <div className="flex-1 overflow-y-auto p-4">
@@ -768,9 +829,6 @@ function App() {
         )}
       </div>
 
-      {/* Hidden while a conversation is open: the composer owns the bottom edge
-          there, and "chats" would be a button leading to where you already are. */}
-      {!chatOpen && <TabBar tab={tab} onSelect={setTab} unread={unreadTotal} />}
 
       {/* Not gated on the profile: the rail can be pressed without one, and the
           dialog is where sign-out lives. */}

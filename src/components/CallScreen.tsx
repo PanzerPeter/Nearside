@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useCall } from '../hooks/useCall';
 import { supabase } from '../lib/supabase';
+import { revealProfile } from '../lib/profile-seal';
 import { Avatar } from './Avatar';
 import { callDuration, endLabel, formatDuration } from '../lib/call/state';
 import { useT } from '../hooks/useT';
@@ -57,11 +58,12 @@ function usePeerAvatar(peerId: string | null) {
     let live = true;
     void supabase
       .from('profiles')
-      .select('avatar_url')
+      .select('id, avatar_url')
       .eq('id', peerId)
       .maybeSingle()
-      .then(({ data }) => {
-        if (live) setUrl(data?.avatar_url ?? null);
+      .then(async ({ data }) => {
+        const p = await revealProfile(data ?? { id: peerId, avatar_url: null });
+        if (live) setUrl(p.avatar_url ?? null);
       });
     return () => {
       live = false;

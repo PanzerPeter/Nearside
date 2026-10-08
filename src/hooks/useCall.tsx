@@ -28,6 +28,7 @@ import type { Session } from '@supabase/supabase-js';
 import type { Identity } from '../lib/crypto/keys';
 import { toBase64 } from '../lib/crypto/keys';
 import { supabase } from '../lib/supabase';
+import { revealProfile } from '../lib/profile-seal';
 import { useConnection } from '../lib/connection';
 import { peerPublicKey } from '../lib/peer-keys';
 import { verificationState } from '../lib/verification';
@@ -403,11 +404,13 @@ export function CallProvider({
         // straight into a ring.
         const { data } = await supabase
           .from('profiles')
-          .select('display_name')
+          .select('id, display_name')
           .eq('id', offer.peerId)
           .maybeSingle();
-        if (!data?.display_name || offerRef.current?.callId !== offer.callId) return;
-        const peerName = `@${data.display_name}`;
+        if (!data || offerRef.current?.callId !== offer.callId) return;
+        const { display_name } = await revealProfile(data);
+        if (offerRef.current?.callId !== offer.callId) return;
+        const peerName = `@${display_name}`;
         dispatch({ type: 'peer-name', callId: offer.callId, peerName });
         // Corrects the notification in place. Re-posting the same id is silent —
         // `setOnlyAlertOnce` — so the ringtone is not restarted by a name. Not

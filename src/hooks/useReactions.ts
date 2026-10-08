@@ -2,6 +2,24 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { Reaction } from '../lib/types';
 import { useConnection } from '../lib/connection';
+import { reactionEmoji, type ReactionColumns, type ReactionSeal } from '../lib/reaction-seal';
+
+/** A row as the server holds it: the emoji sealed, or plaintext on a row from
+ *  before 0059. */
+type ReactionRow = Omit<Reaction, 'emoji'> & ReactionColumns;
+
+/** Open a page of rows, leaving out any this device cannot read. */
+async function openReactions(rows: ReactionRow[], sealer: ReactionSeal | null): Promise<Reaction[]> {
+  const opened = await Promise.all(
+    rows.map(async (row) => {
+      const emoji = await reactionEmoji(row, sealer);
+      return emoji
+        ? { id: row.id, message_id: row.message_id, user_id: row.user_id, emoji, created_at: row.created_at }
+        : null;
+    })
+  );
+  return opened.filter((r): r is Reaction => r !== null);
+}
 
 /**
  * Which table the reactions live in.
@@ -21,8 +39,15 @@ export type ReactionTable = 'message_reactions' | 'room_message_reactions';
 export function useReactions(
   me: string,
   messageIds: string[],
-  table: ReactionTable = 'message_reactions'
+  table: ReactionTable,
+  /** How this conversation's reactions are sealed. Null while the key it
+   *  needs — a group's room key — is still being opened: nothing can be added
+   *  then, and sealed rows wait to be fetched until it arrives. */
+  sealer: ReactionSeal | null
 ) {
+  const sealerRef = useRef(sealer);
+  sealerRef.current = sealer;
+  const sealerReady = sealer !== null;
   const [reactions, setReactions] = useState<Reaction[]>([]);
   // Message ids whose reactions we've already fetched. Prevents a full
   // re-query on every new message — realtime keeps the set fresh after the
@@ -43,6 +68,7 @@ export function useReactions(
       lastGeneration.current = generation;
       fetchedIds.current = new Set();
     }
+    if (!sealerReady) return;
     // Conversation switched (list cleared): reset and wait for the reload.
     if (messageIds.length === 0) {
       fetchedIds.current = new Set();
@@ -57,14 +83,16 @@ export function useReactions(
       .from(table)
       .select('*')
       .in('message_id', missing)
-      .then(({ data, error }) => {
+      .then(async ({ data: rows, error }) => {
         if (!active) return;
         if (error) {
           // Let a later change retry these ids rather than silently dropping.
           missing.forEach((id) => fetchedIds.current.delete(id));
           return;
         }
-        if (!data || data.length === 0) return;
+        if (!rows || rows.length === 0) return;
+        const data = await openReactions(rows as ReactionRow[], sealerRef.current);
+        if (!active) return;
         setReactions((prev) => {
           const have = new Set(prev.map((r) => r.id));
           const added = data.filter((r) => !have.has(r.id));
@@ -75,7 +103,7 @@ export function useReactions(
       active = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [idsKey, generation, table]);
+  }, [idsKey, generation, table, sealerReady]);
 
   // The live set of message ids on screen, read by the subscription without
   // re-subscribing every time the list grows.
@@ -95,11 +123,14 @@ export function useReactions(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table },
         (payload) => {
-          const r = payload.new as Reaction;
+          const row = payload.new as ReactionRow;
           // The stream is RLS-scoped to us, not to this conversation, so rows
           // for other chats arrive too and would accumulate unboundedly.
-          if (!visibleIds.current.has(r.message_id)) return;
-          setReactions((prev) => (prev.some((x) => x.id === r.id) ? prev : [...prev, r]));
+          if (!visibleIds.current.has(row.message_id)) return;
+          void openReactions([row], sealerRef.current).then(([r]) => {
+            if (!r) return;
+            setReactions((prev) => (prev.some((x) => x.id === r.id) ? prev : [...prev, r]));
+          });
         }
       )
       .on(
@@ -138,13 +169,30 @@ export function useReactions(
           setReactions((prev) => (prev.some((x) => x.id === mine.id) ? prev : [...prev, mine]));
         }
       } else {
+        // No plaintext path: without the key there is nothing to add, the same
+        // rule a message body follows.
+        const current = sealerRef.current;
+        if (!current) return;
+        let sealed;
+        try {
+          sealed = await current.seal(emoji);
+        } catch (error) {
+          console.error('reaction seal failed', error);
+          return;
+        }
         const { data } = await supabase
           .from(table)
-          .insert({ message_id: messageId, user_id: me, emoji })
-          .select('*')
+          .insert({
+            message_id: messageId,
+            user_id: me,
+            emoji_ciphertext: sealed.ciphertext,
+            emoji_nonce: sealed.nonce,
+          })
+          .select('id, message_id, user_id, created_at')
           .single();
         if (data) {
-          setReactions((prev) => (prev.some((x) => x.id === data.id) ? prev : [...prev, data]));
+          const added: Reaction = { ...data, emoji };
+          setReactions((prev) => (prev.some((x) => x.id === added.id) ? prev : [...prev, added]));
         }
       }
     },

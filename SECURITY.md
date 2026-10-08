@@ -39,11 +39,16 @@ Anything that breaks one of these:
 Not because it does not matter, but because the app already says so on its own
 transparency screen and in [README.md](README.md#where-the-protection-stops):
 
-- **Metadata.** The server knows who talks to whom and when, plus
-  `display_name`, `bio` and `last_seen_at`. This is not encrypted and is not
-  claimed to be. The private nickname you give a contact is the one profile
-  field that is: `0041` sealed it under the owner's vault key, and rows written
-  before that are re-sealed as each device meets them.
+- **Metadata.** The server knows who talks to whom and when, which messages
+  were reacted to, a message's attachment kind and size, a voice note's
+  length, and `last_seen_at` while Online status is on. This is not encrypted
+  and is not claimed to be. Names, bios, profile pictures (`0061`), group names
+  (`0060`), reaction emoji (`0059`) and private nicknames (`0041`) are sealed;
+  rows written before each of those migrations stay readable until the device
+  that owns them reseals them.
+- **View-once** (`0058`) deletes the attachment from the server after its one
+  opening and blocks screenshots while it is shown. A modified client can keep
+  the bytes, and a second camera defeats any screenshot block.
 - **A compromised device.** The seed lives in the Android Keystore or the iOS
   Keychain, but a rooted or jailbroken phone can reach what runs on it.
 - **A recipient keeping a copy.** Screenshots, a camera pointed at a screen, and
@@ -76,8 +81,9 @@ transparency screen and in [README.md](README.md#where-the-protection-stops):
   candidates, because a candidate carries the device's LAN address and public
   IP. Broadcast persists nothing, so there is no `calls` table by
   construction.
-- **Notifications** carry a sender and never content. Not as a policy: after
-  `0023` the push function has no body it could leak.
+- **Notifications** carry neither content nor a name. Not as a policy: after
+  `0023` the push function has no body it could leak, and after `0061` no name
+  either. The Android app fills in names it already holds, on the phone.
 - **Sealed exchange.** A question whose two answers are released only once both
   exist. Fair exchange between parties who distrust each other is impossible
   without a referee, so there is one: the RLS policy on `sealed_answers`

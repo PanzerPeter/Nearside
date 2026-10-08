@@ -34,6 +34,12 @@ any of them; `android/app/proguard-rules.pro` is the only thing keeping them,
 and a missing rule shows up as a runtime crash rather than a build failure.
 **Test a release build on hardware, not just a debug one.**
 
+Keep each release's `android/app/build/outputs/mapping/release/mapping.txt`.
+A crash report from a release build (the user emails it; nothing is uploaded
+automatically) names obfuscated classes, and only that file turns it back:
+`~/Android/Sdk/cmdline-tools/latest/bin/retrace mapping.txt report.txt`. The
+next build overwrites it.
+
 Two files are needed locally and are deliberately not in version control:
 `android/app/google-services.json`, and `android/keystore.properties`, which
 points at the upload keystore:
@@ -92,15 +98,7 @@ Then in Xcode, once, by hand:
 1. **Signing & Capabilities**, choose your team. Add **Push Notifications** and
    **Background Modes → Remote notifications**. The `Info.plist` key is already
    there; the entitlement is not, and only Xcode can add it.
-2. Drag `GoogleService-Info.plist` into the `App` target. It is gitignored for
-   the same reason `google-services.json` is. `AppDelegate` starts Firebase only
-   when the file is present, so the app still launches without it, with no crash
-   reporting.
-3. Crashlytics needs the dSYM upload script. **Build Phases → + → New Run Script
-   Phase**, `"${PODS_ROOT}/FirebaseCrashlytics/run"`, with input files
-   `${DWARF_DSYM_FOLDER_PATH}/${DWARF_DSYM_FILE_NAME}/Contents/Resources/DWARF/${TARGET_NAME}`
-   and `$(SRCROOT)/$(BUILT_PRODUCTS_DIR)/$(INFOPLIST_PATH)`.
-4. Upload an APNs auth key (.p8) to OneSignal, and add
+2. Upload an APNs auth key (.p8) to OneSignal, and add
    `app.nearside://auth/confirm` and `app.nearside://auth/recovery` to
    Supabase's redirect allow-list. The scheme is claimed in `Info.plist` and
    works the same way as Android's intent filter.
