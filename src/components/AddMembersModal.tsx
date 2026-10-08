@@ -7,6 +7,7 @@ import { useRoomCandidates } from '../hooks/useRoomCandidates';
 import { MemberPicker } from './MemberPicker';
 import { Modal } from './Modal';
 import { useT } from '../hooks/useT';
+import { toggleSelected } from '../lib/selection';
 
 interface AddMembersModalProps {
   me: string;
@@ -54,12 +55,7 @@ export function AddMembersModal({
   );
 
   function toggle(id: string) {
-    setPicked((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+    setPicked((prev) => toggleSelected(prev, id));
   }
 
   async function add() {

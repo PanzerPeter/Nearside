@@ -161,17 +161,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 // contract (provider + consumer colocated), so it's suppressed rather than
 // split across files.
 // eslint-disable-next-line react-refresh/only-export-components
-export function useToast(): {
-  toasts: ToastItem[];
-  dismiss: (id: number) => void;
-  /** Take a toast's offered action, which cancels its `onExpire`. */
-  act: (id: number) => void;
-  error: (message: string) => void;
-  success: (message: string) => void;
-  /** A toast that offers a way out, and does something when nobody takes it.
-   *  Returns nothing: the caller's `onExpire` is the continuation. */
-  offer: (message: string, action: ToastItem['action'], onExpire: () => void) => void;
-} {
+export function useToast(): ToastContextValue {
   const ctx = useContext(ToastContext);
   if (!ctx) throw new Error('useToast must be used within a ToastProvider');
   return ctx;

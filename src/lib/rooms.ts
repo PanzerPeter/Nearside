@@ -874,6 +874,30 @@ export async function deleteRoomMessage(id: string, identity: Identity): Promise
 }
 
 /**
+ * Up to `limit` of a group's rows, newest first, older than `before` when it
+ * is given. Still sealed, like everything `message-queries.ts` returns.
+ *
+ * Null when the read failed: the thread keeps what it is showing, and the
+ * back-fill throws to stop where its bookmark already is.
+ */
+export async function fetchRoomPage(
+  roomId: string,
+  limit: number,
+  before?: string
+): Promise<RoomMessage[] | null> {
+  let query = supabase
+    .from('room_messages')
+    .select(ROOM_MESSAGE_COLUMNS)
+    .eq('room_id', roomId)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (before) query = query.lt('created_at', before);
+  const { data, error } = await query;
+  if (error) return null;
+  return (data as unknown as RoomMessage[] | null) ?? [];
+}
+
+/**
  * Verifies, then opens.
  *
  * A row whose signature fails comes back as `sender: 'unverified'` with no

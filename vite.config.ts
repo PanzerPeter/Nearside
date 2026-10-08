@@ -44,15 +44,15 @@ export default defineConfig(({ mode }) => {
         // `disable` swaps that for a no-op stub. Dropping the plugin outright
         // breaks the native build at import resolution instead.
         disable: native,
+        // The generated worker: app-shell precache, the SPA fallback to
+        // index.html, and the SKIP_WAITING handler `prompt` needs. Background
+        // notifications are OneSignal's job on Android, never the service
+        // worker's — two transports competing for one tray entry was a bug.
         registerType: 'prompt',
-        // Custom service worker so we can add Web Push handlers on top of the
-        // Workbox precache. See src/sw.ts.
-        strategies: 'injectManifest',
-        srcDir: 'src',
-        filename: 'sw.ts',
         includeAssets: ['favicon.svg', 'apple-touch-icon.png', 'pwa-192x192.png', 'pwa-512x512.png'],
-        injectManifest: {
+        workbox: {
           globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
+          navigateFallbackDenylist: [/^\/api/, /^\/auth/],
         },
         manifest: {
           name: 'Nearside',

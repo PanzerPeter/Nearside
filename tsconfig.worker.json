@@ -16,5 +16,5 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src/sw.ts", "src/lib/qr-worker.ts"]
+  "include": ["src/lib/qr-worker.ts"]
 }

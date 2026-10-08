@@ -20,10 +20,10 @@ import {
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import {
-  ROOM_MESSAGE_COLUMNS,
   deleteRoom,
   deleteRoomMessage,
   editRoomMessage,
+  fetchRoomPage,
   leaveRoom,
   loadRoomInfo,
   openRoomRows,
@@ -134,6 +134,13 @@ const TYPING_LINGER_MS = 3_000;
 const TYPING_THROTTLE_MS = 2_000;
 /** Polling cadence while realtime is down, matching ChatRoom's fallback. */
 const POLL_DEGRADED_MS = 5_000;
+
+/** `older` above `current`, less any row already on screen — a page can
+ *  overlap what the socket delivered while it was in flight. */
+function prependRows(older: RoomMessage[], current: RoomMessage[]): RoomMessage[] {
+  const known = new Set(current.map((m) => m.id));
+  return [...older.filter((m) => !known.has(m.id)), ...current];
+}
 
 /** A daisyUI dropdown is held open by focus, so a menu item that only runs its
  *  handler leaves the menu standing over the answer — see `ChatHeader`. The
@@ -601,16 +608,8 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
     fetchOlder: useCallback(
       async (cursor) => {
         if (!roomKey) return [];
-        let query = supabase
-          .from('room_messages')
-          .select(ROOM_MESSAGE_COLUMNS)
-          .eq('room_id', room.id)
-          .order('created_at', { ascending: false })
-          .limit(PAGE_SIZE);
-        if (cursor) query = query.lt('created_at', cursor.created_at);
-        const { data, error } = await query;
-        if (error) throw error;
-        const page = (data as unknown as RoomMessage[] | null) ?? [];
+        const page = await fetchRoomPage(room.id, PAGE_SIZE, cursor?.created_at);
+        if (!page) throw new Error('room page did not load');
         await openPage(page, roomKey);
         return page;
       },
@@ -676,25 +675,31 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
     setProfiles(new Map(revealed.map((p) => [p.id, p])));
   }, [room.id]);
 
+  /**
+   * A page for the thread, oldest first and opened, plus whether anything is
+   * older still. Null when the read failed. The newest page, the older-page
+   * load and the search jump all come through here.
+   */
+  const threadPage = useCallback(
+    async (key: Uint8Array, before?: string) => {
+      // One more than the page, purely to answer "is there anything older?"
+      // without a second round trip or a count.
+      const page = await fetchRoomPage(room.id, PAGE_SIZE + 1, before);
+      if (!page) return null;
+      const opened = await openPage(page.slice(0, PAGE_SIZE).reverse(), key);
+      for (const m of opened) seenIds.current.add(m.id);
+      return { opened, more: page.length > PAGE_SIZE };
+    },
+    [room.id, openPage]
+  );
+
   const loadMessages = useCallback(async () => {
     if (!roomKey) return;
-    // One more than the page, purely to answer "is there anything older?"
-    // without a second round trip or a count.
-    const { data, error } = await supabase
-      .from('room_messages')
-      .select(ROOM_MESSAGE_COLUMNS)
-      .eq('room_id', room.id)
-      .order('created_at', { ascending: false })
-      .limit(PAGE_SIZE + 1);
-    if (error) return;
-
-    const page = (data as unknown as RoomMessage[] | null) ?? [];
-    setHasMore(page.length > PAGE_SIZE);
-    const rows = page.slice(0, PAGE_SIZE).reverse();
-    const opened = await openPage(rows, roomKey);
-    for (const m of opened) seenIds.current.add(m.id);
-    setMessages(opened);
-  }, [room.id, roomKey, openPage]);
+    const page = await threadPage(roomKey);
+    if (!page) return;
+    setHasMore(page.more);
+    setMessages(page.opened);
+  }, [roomKey, threadPage]);
 
   /**
    * Another page, older than what is on screen.
@@ -706,20 +711,10 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
     if (!roomKey || loadingOlder || messages.length === 0) return;
     setLoadingOlder(true);
     try {
-      const { data, error } = await supabase
-        .from('room_messages')
-        .select(ROOM_MESSAGE_COLUMNS)
-        .eq('room_id', room.id)
-        .lt('created_at', messages[0].created_at)
-        .order('created_at', { ascending: false })
-        .limit(PAGE_SIZE + 1);
-      if (error) return;
-
-      const page = (data as unknown as RoomMessage[] | null) ?? [];
-      setHasMore(page.length > PAGE_SIZE);
-      const older = await openPage(page.slice(0, PAGE_SIZE).reverse(), roomKey);
-      if (older.length === 0) return;
-      for (const m of older) seenIds.current.add(m.id);
+      const page = await threadPage(roomKey, messages[0].created_at);
+      if (!page) return;
+      setHasMore(page.more);
+      if (page.opened.length === 0) return;
 
       // The browser keeps the scroll offset, not the content under it, so
       // prepending would silently carry the reader up the thread. Measured
@@ -728,10 +723,7 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
       const list = scroll.listRef.current;
       const before = list?.scrollHeight ?? 0;
       scroll.skipAutoScroll.current = true;
-      setMessages((current) => {
-        const known = new Set(current.map((m) => m.id));
-        return [...older.filter((m) => !known.has(m.id)), ...current];
-      });
+      setMessages((current) => prependRows(page.opened, current));
       requestAnimationFrame(() => {
         if (!list) return;
         list.scrollTop += list.scrollHeight - before;
@@ -739,7 +731,7 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
     } finally {
       setLoadingOlder(false);
     }
-  }, [room.id, roomKey, messages, loadingOlder, openPage, scroll.listRef, scroll.skipAutoScroll]);
+  }, [roomKey, messages, loadingOlder, threadPage, scroll.listRef, scroll.skipAutoScroll]);
 
   /**
    * Follow a search result back to its message, loading pages until it is on
@@ -769,28 +761,13 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
         let more: boolean = hasMore;
         let found = false;
         for (let page = 0; page < MAX_JUMP_PAGES && more && cursor; page++) {
-          const { data, error } = await supabase
-            .from('room_messages')
-            .select(ROOM_MESSAGE_COLUMNS)
-            .eq('room_id', room.id)
-            .lt('created_at', cursor)
-            .order('created_at', { ascending: false })
-            .limit(PAGE_SIZE + 1);
-          if (error) break;
-
-          const rows = (data as unknown as RoomMessage[] | null) ?? [];
-          more = rows.length > PAGE_SIZE;
-          const older = await openPage(rows.slice(0, PAGE_SIZE).reverse(), roomKey);
-          if (older.length === 0) {
-            more = false;
-            break;
-          }
-          for (const m of older) seenIds.current.add(m.id);
+          const fetched = await threadPage(roomKey, cursor);
+          if (!fetched) break;
+          const older = fetched.opened;
+          if (older.length === 0) break;
+          more = fetched.more;
           scroll.skipAutoScroll.current = true;
-          setMessages((prev) => {
-            const known = new Set(prev.map((m) => m.id));
-            return [...older.filter((m) => !known.has(m.id)), ...prev];
-          });
+          setMessages((current) => prependRows(older, current));
           setHasMore(more);
           found = older.some((m) => m.id === id);
           if (found) break;
@@ -808,7 +785,7 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
         jumpInFlight.current = false;
       }
     },
-    [room.id, roomKey, messages, hasMore, openPage, scroll, toast, t]
+    [roomKey, messages, hasMore, threadPage, scroll, toast, t]
   );
 
   // Land on the message a search result named, once, after the first page is
@@ -830,7 +807,9 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
   }, [openAt, messages.length]);
 
   /**
-   * Verify, open and append one row that arrived over the socket.
+   * Verify, open and fold in one row that arrived over the socket: a new
+   * message (`appendIfMissing`), or one that changed under us — an edit or a
+   * tombstone.
    *
    * The subscription used to call `loadMessages`, which re-read the newest
    * fifty rows and every sender's profile for a row the event had already
@@ -841,44 +820,28 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
    * De-duplicated by id because the sender's own insert is echoed back here as
    * well as returned to `send`, and because a poll running underneath a
    * recovering socket can deliver the same row twice.
-   */
-  const appendMessage = useCallback(
-    async (row: RoomMessage) => {
-      if (!roomKey) return;
-      const signing = await roomSigningKeys([row.sender_id]);
-      const [opened] = await openRoomRows([row], roomKey, signing);
-      setMessages((prev) =>
-        prev.some((m) => m.id === opened.id)
-          ? prev.map((m) => (m.id === opened.id ? opened : m))
-          : [...prev, opened]
-      );
-    },
-    [roomKey]
-  );
-
-  /**
-   * Verify, open and fold in one row that changed under us — an edit or a
-   * tombstone.
    *
-   * Verification runs first here exactly as it does on an insert: a deletion is
-   * re-signed over the emptied row (see `deleteRoomMessage`), so a tombstone
+   * Verification runs on an update exactly as it does on an insert: a deletion
+   * is re-signed over the emptied row (see `deleteRoomMessage`), so a tombstone
    * that arrives with the old signature still on it is not a deletion this
    * group should trust.
    *
-   * A row that is not on screen is dropped rather than appended: an edit to a
-   * message older than the loaded window belongs where that message is, and
-   * appending it would drop a lone out-of-order bubble at the bottom of the
-   * thread.
+   * An updated row that is not on screen is dropped rather than appended: an
+   * edit to a message older than the loaded window belongs where that message
+   * is, and appending it would drop a lone out-of-order bubble at the bottom of
+   * the thread.
    */
-  const replaceMessage = useCallback(
-    async (row: RoomMessage) => {
+  const foldRow = useCallback(
+    async (row: RoomMessage, appendIfMissing: boolean) => {
       if (!roomKey) return;
       const signing = await roomSigningKeys([row.sender_id]);
       const [opened] = await openRoomRows([row], roomKey, signing);
       setMessages((prev) =>
         prev.some((m) => m.id === opened.id)
           ? prev.map((m) => (m.id === opened.id ? opened : m))
-          : prev
+          : appendIfMissing
+            ? [...prev, opened]
+            : prev
       );
     },
     [roomKey]
@@ -903,7 +866,7 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'room_messages', filter: `room_id=eq.${room.id}` },
-        (payload) => void appendMessage(payload.new as RoomMessage)
+        (payload) => void foldRow(payload.new as RoomMessage, true)
       )
       // Edits and deletions. Without this an edit made on somebody else's
       // phone never reached this one: the row changed, no INSERT fired, and the
@@ -912,7 +875,7 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
       .on(
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'room_messages', filter: `room_id=eq.${room.id}` },
-        (payload) => void replaceMessage(payload.new as RoomMessage)
+        (payload) => void foldRow(payload.new as RoomMessage, false)
       )
       // Who is typing, by id. A group needs the id — "someone is typing" in a
       // room of six is not worth showing, and the name is what makes it worth
@@ -943,7 +906,7 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
       forgetChannel(channelKey);
       void supabase.removeChannel(channel);
     };
-  }, [room.id, roomKey, generation, me, appendMessage, replaceMessage, loadMembers]);
+  }, [room.id, roomKey, generation, me, foldRow, loadMembers]);
 
   // Typing marks expire on a timer rather than on a "stopped" broadcast: a
   // sender who closes the app sends nothing, and a mark waiting for a message
@@ -1039,7 +1002,7 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
    * Commit an edit.
    *
    * Nothing is written back into `messages` here: the update comes home over
-   * the socket through `replaceMessage`, which verifies the new signature — so
+   * the socket through `foldRow`, which verifies the new signature — so
    * this device sees its own edit the same way every other member does, and a
    * re-signing bug cannot hide behind an optimistic local copy.
    */
@@ -1115,9 +1078,9 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
       notifyRoom(row.id);
       // The insert returned the row, so the bubble is built from it rather than
       // by re-reading the page it belongs to. The echo of our own insert
-      // arrives over the socket a moment later and `appendMessage`
+      // arrives over the socket a moment later and `foldRow`
       // de-duplicates it by id.
-      await appendMessage(row);
+      await foldRow(row, true);
     } catch {
       toast.error(t('room.sendFailed'));
     } finally {

@@ -27,9 +27,8 @@ export function permissionSettingsLocation(): string {
  * wired to the file picker.
  */
 export function supportsCameraCapture(): boolean {
-  if (typeof window === 'undefined' || typeof HTMLInputElement === 'undefined') return false;
-  if (!('capture' in HTMLInputElement.prototype)) return false;
-  return window.matchMedia?.('(pointer: coarse)').matches ?? false;
+  if (typeof HTMLInputElement === 'undefined') return false;
+  return 'capture' in HTMLInputElement.prototype && isCoarsePointer();
 }
 
 /**

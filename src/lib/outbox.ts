@@ -189,7 +189,12 @@ export async function listFor(me: string, peerId: string): Promise<PendingMessag
     .sort((a, b) => (a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0));
 }
 
-export async function bumpAttempts(id: string): Promise<PendingMessage | null> {
+/** Rewrite one queued row in a single transaction. Null when the row is no
+ *  longer there, or the store would not answer. */
+function patchQueued(
+  id: string,
+  patch: (row: PendingMessage) => PendingMessage
+): Promise<PendingMessage | null> {
   return withStore<PendingMessage | null>('readwrite', null, (store, resolve) => {
     const getReq = store.get(id);
     getReq.onsuccess = () => {
@@ -198,22 +203,24 @@ export async function bumpAttempts(id: string): Promise<PendingMessage | null> {
         resolve(null);
         return;
       }
-      const attempts = existing.attempts + 1;
-      // The row that runs out of attempts is marked, not deleted. `flush`
-      // reads the mark and leaves it alone; the bubble reads it and offers a
-      // retry. This is the whole of the fix for a message that used to be
-      // erased at the end of its backoff, with a toast the sender only saw if
-      // they happened to still be looking at that conversation.
-      const updated: PendingMessage = {
-        ...existing,
-        attempts,
-        failed: attempts >= MAX_ATTEMPTS,
-      };
+      const updated = patch(existing);
       const putReq = store.put(updated);
       putReq.onsuccess = () => resolve(updated);
       putReq.onerror = () => resolve(null);
     };
     getReq.onerror = () => resolve(null);
+  });
+}
+
+export async function bumpAttempts(id: string): Promise<PendingMessage | null> {
+  return patchQueued(id, (existing) => {
+    const attempts = existing.attempts + 1;
+    // The row that runs out of attempts is marked, not deleted. `flush`
+    // reads the mark and leaves it alone; the bubble reads it and offers a
+    // retry. This is the whole of the fix for a message that used to be
+    // erased at the end of its backoff, with a toast the sender only saw if
+    // they happened to still be looking at that conversation.
+    return { ...existing, attempts, failed: attempts >= MAX_ATTEMPTS };
   });
 }
 
@@ -223,21 +230,7 @@ export async function bumpAttempts(id: string): Promise<PendingMessage | null> {
  * is what a message that arrived over realtime in the meantime looks like.
  */
 export async function reviveQueued(id: string): Promise<PendingMessage | null> {
-  return withStore<PendingMessage | null>('readwrite', null, (store, resolve) => {
-    const getReq = store.get(id);
-    getReq.onsuccess = () => {
-      const existing = getReq.result as PendingMessage | undefined;
-      if (!existing) {
-        resolve(null);
-        return;
-      }
-      const updated: PendingMessage = { ...existing, attempts: 0, failed: false };
-      const putReq = store.put(updated);
-      putReq.onsuccess = () => resolve(updated);
-      putReq.onerror = () => resolve(null);
-    };
-    getReq.onerror = () => resolve(null);
-  });
+  return patchQueued(id, (existing) => ({ ...existing, attempts: 0, failed: false }));
 }
 
 /** Whether the flush loop should attempt this row. A failed message waits for

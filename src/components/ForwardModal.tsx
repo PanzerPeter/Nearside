@@ -19,6 +19,7 @@ import type { Identity } from '../lib/crypto/keys';
 import type { ConversationSummary } from '../lib/types';
 import { NotebookPen, Search, Users } from 'lucide-react';
 import { useT } from '../hooks/useT';
+import { toggleSelected } from '../lib/selection';
 
 interface ForwardModalProps {
   me: string;
@@ -167,12 +168,7 @@ export function ForwardModal({
   );
 
   function toggle(key: string) {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
+    setSelected((prev) => toggleSelected(prev, key));
   }
 
   /**
