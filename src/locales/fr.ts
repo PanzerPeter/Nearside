@@ -840,7 +840,7 @@ export const fr: Catalog = {
   'appearance.reduceMotion': 'Réduire les animations',
   'appearance.reduceMotionOs': 'Ton appareil demande déjà des animations réduites, donc ceci reste activé.',
   'appearance.reduceMotionOn': 'Fondus et glissements sobres.',
-  'appearance.reduceMotionOff': 'Les messages surgissent, les feuilles montent, un message scellé s’illumine.',
+  'appearance.reduceMotionOff': 'Les écrans glissent, les messages surgissent, les feuilles montent, un message scellé s’illumine.',
   'appearance.hapticsNote': 'Le retour haptique suit aussi cet interrupteur.',
 
   'themes.title': 'Apparence',
@@ -1221,6 +1221,7 @@ export const fr: Catalog = {
   'viewOnce.viewerHint': 'C’est l’unique vue. Il a déjà été supprimé du serveur.',
   'viewOnce.toggle': 'Vue unique',
   'viewOnce.toggleHint': 'Ouvrable une fois, puis supprimé du serveur. Cela n’empêche pas une photo de l’écran.',
+  'viewOnce.about': 'À propos de la vue unique',
   'review.title': 'Envoyer des photos et vidéos',
   'review.position': '{index} sur {total}',
   'review.discard': 'Abandonner',

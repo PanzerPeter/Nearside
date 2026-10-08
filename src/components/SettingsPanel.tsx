@@ -101,12 +101,21 @@ export function SettingsPanel({
   onAddAccount,
 }: SettingsPanelProps) {
   const [section, setSection] = useState<Section | null>(null);
+  // Whether the list is showing because a page was just left, which is the
+  // one time it should slide back in rather than simply be there.
+  const [returned, setReturned] = useState(false);
   const t = useT();
   const locale = useLocale();
 
   if (section) {
     return (
-      <SettingsPage title={t(TITLES[section])} onBack={() => setSection(null)}>
+      <SettingsPage
+        title={t(TITLES[section])}
+        onBack={() => {
+          setSection(null);
+          setReturned(true);
+        }}
+      >
         {section === 'profile' && (
           <ProfilePage profile={profile} onUpdated={onUpdated} />
         )}
@@ -135,7 +144,7 @@ export function SettingsPanel({
   const lockOn = appLock.state !== 'off' && appLock.state !== 'loading';
 
   return (
-    <>
+    <div className={returned ? 'motion-screen-back' : undefined}>
       {/* The profile is the one row worth a face rather than an icon: it is what
           the other person sees, and a 24-pixel cog would not show whether the
           avatar uploaded. */}
@@ -216,6 +225,6 @@ export function SettingsPanel({
           onClick={() => setSection('about')}
         />
       </Card>
-    </>
+    </div>
   );
 }

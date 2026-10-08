@@ -838,7 +838,7 @@ export const pl: Catalog = {
   'appearance.reduceMotion': 'Ogranicz ruch',
   'appearance.reduceMotionOs': 'Twoje urządzenie już prosi o ograniczony ruch, więc to zostaje włączone.',
   'appearance.reduceMotionOn': 'Zwyczajne przejścia i przesunięcia.',
-  'appearance.reduceMotionOff': 'Wiadomości wskakują, panele się unoszą, zapieczętowana wiadomość rozjarza się.',
+  'appearance.reduceMotionOff': 'Ekrany wsuwają się, wiadomości wskakują, panele się unoszą, zapieczętowana wiadomość rozjarza się.',
   'appearance.hapticsNote': 'Wibracje też idą za tym przełącznikiem.',
 
   'themes.title': 'Wygląd',
@@ -1219,6 +1219,7 @@ export const pl: Catalog = {
   'viewOnce.viewerHint': 'To jedyne wyświetlenie. Na serwerze już tego nie ma.',
   'viewOnce.toggle': 'Jednorazowe',
   'viewOnce.toggleHint': 'Można to otworzyć raz, potem znika z serwera. Nie zapobiegnie zdjęciu ekranu.',
+  'viewOnce.about': 'Czym jest wysyłka jednorazowa',
   'review.title': 'Wyślij zdjęcia i filmy',
   'review.position': '{index} z {total}',
   'review.discard': 'Odrzuć',

@@ -34,6 +34,22 @@ export async function peerPublicKey(peerId: string): Promise<Uint8Array | null> 
 }
 
 /**
+ * A key good enough to open rows this device already holds, without waiting
+ * on the network for it.
+ *
+ * Painting a cached conversation used to go through `peerPublicKey`, whose
+ * first call per peer per session is a round trip to `profiles` — so the very
+ * thread the cache exists to show at once waited on the server anyway, and on
+ * a slow link the "instant" open was a blank screen and then everything at
+ * once. The recorded key is the one those rows were read with before; the
+ * published key is still fetched and compared by the next `peerPublicKey`
+ * call, which is what every fetch and every send goes through.
+ */
+export async function knownPeerKey(peerId: string): Promise<Uint8Array | null> {
+  return cache.get(peerId) ?? (await recordedKey(peerId)) ?? peerPublicKey(peerId);
+}
+
+/**
  * The key this device wrote down the first time it spoke to this peer.
  *
  * Reached only when the profile read came back with nothing, which on a phone

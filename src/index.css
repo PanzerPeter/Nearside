@@ -809,6 +809,13 @@
     animation: message-in 190ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 
+  /* A small piece of help or status appearing over what is already on screen.
+     Same fade-and-rise as a message, because it is the same kind of arrival;
+     the expressive set swaps in the springier pop below. */
+  .motion-pop {
+    animation: message-in 180ms var(--motion-enter-easing);
+  }
+
   /* The dots in the typing bubble. Static here on purpose: the bounce is an
      ambient, endlessly repeating animation, so it lives in the expressive set
      below with the other two, and this is what is left when somebody has asked
@@ -1024,6 +1031,32 @@
     animation: scrim-in 220ms var(--motion-enter-easing);
   }
 
+  /* The way out. `Modal` stamps `data-closing` and holds the dialog open for
+     MOTION.exit before closing it, so a dismissal leaves instead of vanishing.
+     Shorter than the way in and with no overshoot — a slow exit reads as lag.
+     `forwards` holds the last frame until the element is gone; without it the
+     box flashes back to full opacity for the frame before unmount. */
+  @keyframes dialog-out {
+    to {
+      opacity: 0;
+      transform: translate3d(0, 10px, 0) scale(0.97);
+    }
+  }
+
+  @keyframes scrim-out {
+    to {
+      opacity: 0;
+    }
+  }
+
+  :root[data-motion='expressive'] dialog.modal[data-closing] > .modal-box {
+    animation: dialog-out var(--motion-exit-duration) var(--motion-exit-easing) forwards;
+  }
+
+  :root[data-motion='expressive'] dialog.modal[data-closing]::backdrop {
+    animation: scrim-out var(--motion-exit-duration) var(--motion-exit-easing) forwards;
+  }
+
   /* A bottom sheet rises to meet the thumb. Decelerating, not springy: a
      spring would carry the sheet above its resting edge and open a strip of
      scrim underneath it for a frame. */
@@ -1057,6 +1090,10 @@
       opacity: 1;
       transform: none;
     }
+  }
+
+  :root[data-motion='expressive'] .motion-pop {
+    animation: pop-in 260ms var(--motion-spring-soft);
   }
 
   :root[data-motion='expressive'] .motion-toast {
@@ -1128,10 +1165,40 @@
      an ancestor of the thread — anything longer would keep `position: fixed`
      descendants (the message menu, the emoji popover) resolving against this
      element instead of the viewport. */
+  /* Going back is the same travel the other way: the screen underneath slides
+     back in from the edge it was pushed towards. */
+  @keyframes screen-back {
+    from {
+      opacity: 0;
+      transform: translate3d(-3.5%, 0, 0);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
   @media (max-width: 767px) {
     :root[data-motion='expressive'] main[data-chat-open='true'] {
       animation: screen-in 240ms var(--motion-enter-easing);
     }
+
+    /* The chat list is hidden, never unmounted, while a chat or settings is
+       up. Leaving `display: none` restarts an animation, so this plays on
+       every return to the list and on nothing else. */
+    :root[data-motion='expressive'] aside[data-screen='list'] {
+      animation: screen-back 240ms var(--motion-enter-easing);
+    }
+  }
+
+  /* Settings and its pages are navigations on every size of screen — the
+     desktop dialog swaps pages in place, so they get the travel there too. */
+  :root[data-motion='expressive'] .motion-screen {
+    animation: screen-in 240ms var(--motion-enter-easing);
+  }
+
+  :root[data-motion='expressive'] .motion-screen-back {
+    animation: screen-back 240ms var(--motion-enter-easing);
   }
 
   /* --- Small, repeated feedback ------------------------------------------ */

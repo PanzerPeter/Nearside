@@ -848,7 +848,7 @@ export const de: Catalog = {
     'Dein Gerät bittet bereits um reduzierte Bewegung, deshalb bleibt das an.',
   'appearance.reduceMotionOn': 'Schlichtes Ein- und Ausblenden.',
   'appearance.reduceMotionOff':
-    'Nachrichten federn herein, Flächen fahren hoch, eine versiegelte Nachricht leuchtet auf.',
+    'Bildschirme gleiten herein, Nachrichten federn herein, Flächen fahren hoch, eine versiegelte Nachricht leuchtet auf.',
   'appearance.hapticsNote': 'Das Haptik-Feedback richtet sich ebenfalls nach diesem Schalter.',
 
   'themes.title': 'Darstellung',
@@ -1239,6 +1239,7 @@ export const de: Catalog = {
   'viewOnce.viewerHint': 'Das ist die einzige Ansicht. Auf dem Server ist es schon gelöscht.',
   'viewOnce.toggle': 'Einmal ansehen',
   'viewOnce.toggleHint': 'Es lässt sich einmal öffnen und wird dann vom Server gelöscht. Ein Foto vom Bildschirm kann es nicht verhindern.',
+  'viewOnce.about': 'Was „Einmal ansehen“ bewirkt',
   'review.title': 'Fotos und Videos senden',
   'review.position': '{index} von {total}',
   'review.discard': 'Verwerfen',

@@ -4,7 +4,14 @@
 // questions: `useChatThread` decides which messages exist, this decides
 // whether the view follows them.
 
-import { useEffect, useRef, useState, type MutableRefObject, type RefObject } from 'react';
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type MutableRefObject,
+  type RefObject,
+} from 'react';
 import { Message, PendingMessage } from '../lib/types';
 import { prefersReducedMotion } from '../lib/motion';
 
@@ -124,7 +131,11 @@ export function useThreadScroll({
     return clearHighlightTimer;
   }, [peerId]);
 
-  useEffect(() => {
+  // A layout effect so the first scroll lands before the browser paints. As a
+  // passive effect it ran a frame late: the conversation showed its top for a
+  // frame, then jumped, which on a phone read as the thread loading in front
+  // of you.
+  useLayoutEffect(() => {
     const messagesChanged = messages !== prevMessagesRef.current;
     const pendingGrew = pending.length > prevPendingLenRef.current;
     prevMessagesRef.current = messages;
@@ -176,16 +187,36 @@ export function useThreadScroll({
     if (isMine || atBottomRef.current) {
       // Jump straight to the bottom on the first paint of a conversation —
       // animating a fresh 30-message list scrolls visibly past all of it.
-      // `behavior: 'smooth'` passed explicitly here always wins over the
-      // CSS reduced-motion rule in index.css, so that preference has to be
+      // The same holds for any distance over a screen: a glide that long is
+      // the thread racing past, not a message arriving, so only a short one
+      // animates. `behavior: 'smooth'` passed explicitly here always wins over
+      // the CSS reduced-motion rule in index.css, so that preference has to be
       // applied on this side too.
+      const el = listRef.current;
+      const near = !!el && el.scrollHeight - el.scrollTop - el.clientHeight < el.clientHeight;
       bottomRef.current?.scrollIntoView({
-        behavior: didFirstScroll.current && !prefersReducedMotion() ? 'smooth' : 'auto',
+        behavior: didFirstScroll.current && near && !prefersReducedMotion() ? 'smooth' : 'auto',
       });
       didFirstScroll.current = true;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages, pending, unreadDividerId]);
+
+  // Pictures size themselves when they decode, which is after the scroll that
+  // put the reader at the bottom. Each one pushed the bottom further down, and
+  // the next message to arrive then glided the whole distance back. Held at
+  // the bottom instead, for as long as the reader is there. Re-wired once
+  // there are messages, since the list may not be rendered before that.
+  const hasMessages = messages.length > 0;
+  useEffect(() => {
+    const el = listRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => {
+      if (atBottomRef.current) el.scrollTop = el.scrollHeight;
+    });
+    for (const child of el.children) observer.observe(child);
+    return () => observer.disconnect();
+  }, [peerId, hasMessages]);
 
   // The typing bubble appearing grows the list by its own height. A reader
   // sitting at the bottom would otherwise have it land under the fold, which
@@ -219,6 +250,9 @@ export function useThreadScroll({
   /** Scroll a rendered bubble into view and ring it briefly so a search
    *  result reads as "found", not just silently present on screen. */
   function scrollToMessage(id: string) {
+    // Said before the scroll event does, so the bottom-holding observer above
+    // does not drag the view back down while this one is on its way up.
+    atBottomRef.current = false;
     // Same reduced-motion override as the auto-scroll effect above: a
     // `behavior: 'smooth'` passed here would otherwise animate regardless
     // of the OS setting.

@@ -859,7 +859,7 @@ export const en = {
   'appearance.reduceMotion': 'Reduce motion',
   'appearance.reduceMotionOs': 'Your device already asks for reduced motion, so this stays on.',
   'appearance.reduceMotionOn': 'Plain fades and slides.',
-  'appearance.reduceMotionOff': 'Messages spring in, sheets rise, a sealed message glows.',
+  'appearance.reduceMotionOff': 'Screens slide in, messages spring in, sheets rise, a sealed message glows.',
   'appearance.hapticsNote': 'Haptics follow this switch too.',
 
   // ------------------------------------------------------- theme store
@@ -1267,6 +1267,7 @@ export const en = {
   'viewOnce.viewerHint': 'This is the one view. It is already gone from the server.',
   'viewOnce.toggle': 'View once',
   'viewOnce.toggleHint': 'They can open it once, then it is deleted from the server. It cannot stop a photo of the screen.',
+  'viewOnce.about': 'What view once does',
   'review.title': 'Send photos and videos',
   'review.position': '{index} of {total}',
   'review.discard': 'Discard',

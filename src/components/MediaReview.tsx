@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronLeft, ChevronRight, Plus, Send, Trash2, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Info, Plus, Send, Trash2, X } from 'lucide-react';
 import type { StagedMedia } from '../lib/staging';
 import { MAX_MESSAGE_LENGTH } from '../lib/conversation';
 import { useMobileBackClose } from '../hooks/useMobileBackClose';
@@ -65,6 +65,7 @@ export function MediaReview({
   const at = Math.min(index, staged.length - 1);
   const current = staged[at];
   const swipeFrom = useRef<number | null>(null);
+  const [aboutViewOnce, setAboutViewOnce] = useState(false);
   const hasImage = staged.some((item) => item.file.type.startsWith('image/'));
 
   useMobileBackClose(true, onDiscard);
@@ -187,7 +188,18 @@ export function MediaReview({
         )}
       </div>
 
-      <div className="shrink-0 px-3 pt-3 pb-[calc(0.75rem+var(--safe-bottom))] bg-gradient-to-t from-black via-black/90 to-transparent">
+      <div className="relative shrink-0 px-3 pt-3 pb-[calc(0.75rem+var(--safe-bottom))] bg-gradient-to-t from-black via-black/90 to-transparent">
+        {/* Floats over the picture rather than taking a line in this column:
+            in the flow it shrank the photo the moment the chip was tapped,
+            which made the whole screen jump for one sentence. */}
+        {aboutViewOnce && (
+          <p
+            id="view-once-about"
+            className="motion-pop absolute bottom-full inset-x-3 mb-2 p-3 rounded-box bg-black/85 backdrop-blur-xs border border-white/15 text-meta text-white/85 shadow-overlay"
+          >
+            {t('viewOnce.toggleHint')}
+          </p>
+        )}
         <div className="flex gap-2 overflow-x-auto pb-3 scrollbar-none [&::-webkit-scrollbar]:hidden">
           {staged.map((item, i) => (
             <button
@@ -236,8 +248,20 @@ export function MediaReview({
               {t('viewOnce.toggle')}
             </Chip>
           )}
+          {canViewOnce && (
+            <button
+              type="button"
+              onClick={() => setAboutViewOnce((o) => !o)}
+              aria-expanded={aboutViewOnce}
+              aria-controls="view-once-about"
+              title={t('viewOnce.about')}
+              aria-label={t('viewOnce.about')}
+              className="inline-flex items-center justify-center h-8 w-8 rounded-full text-white/70"
+            >
+              <Info className="w-4.5 h-4.5" />
+            </button>
+          )}
         </div>
-        {viewOnce && <p className="pb-3 text-meta text-white/70">{t('viewOnce.toggleHint')}</p>}
         {replyingTo && (
           <p className="pb-2 text-meta text-white/70 truncate">
             {t('composer.replyingTo', { name: replyingTo })}

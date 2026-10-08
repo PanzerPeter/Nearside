@@ -627,18 +627,34 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
           </>
         ) : (
           <>
-            {toolsFolded ? (
-              <button
-                type="button"
-                className="btn btn-ghost btn-circle btn-sm self-center"
-                onClick={() => setToolsOpen(true)}
-                title={t('composer.showTools')}
-                aria-label={t('composer.showTools')}
+            {/* Both states stay mounted and trade width, so folding reads as
+                the box sliding over the tools instead of the row jumping a
+                quarter of its width under the first letter typed. `inert`
+                takes whichever half is collapsed out of the tab order and
+                away from a screen reader. */}
+            <div className="flex items-center shrink-0">
+              <div
+                inert={!toolsFolded}
+                className={`overflow-hidden transition-[max-width,opacity] duration-200 ease-out ${
+                  toolsFolded ? 'max-w-10 opacity-100' : 'max-w-0 opacity-0'
+                }`}
               >
-                <ChevronRight className="w-5 h-5" />
-              </button>
-            ) : (
-              <>
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-circle btn-sm"
+                  onClick={() => setToolsOpen(true)}
+                  title={t('composer.showTools')}
+                  aria-label={t('composer.showTools')}
+                >
+                  <ChevronRight className="w-5 h-5" />
+                </button>
+              </div>
+              <div
+                inert={toolsFolded}
+                className={`flex items-center gap-2 overflow-hidden transition-[max-width,opacity] duration-200 ease-out ${
+                  toolsFolded ? 'max-w-0 opacity-0' : 'max-w-24 opacity-100'
+                }`}
+              >
                 <button
                   type="button"
                   className="btn btn-ghost btn-square"
@@ -665,15 +681,15 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
                 >
                   <Smile className="w-5 h-5" />
                 </button>
-                <EmojiPopover
-                  open={emojiOpen}
-                  anchorRef={emojiBtnRef}
-                  onSelect={insertEmoji}
-                  onClose={() => setEmojiOpen(false)}
-                  stickers={stickers}
-                />
-              </>
-            )}
+              </div>
+            </div>
+            <EmojiPopover
+              open={emojiOpen}
+              anchorRef={emojiBtnRef}
+              onSelect={insertEmoji}
+              onClose={() => setEmojiOpen(false)}
+              stickers={stickers}
+            />
 
             <textarea
               ref={textareaRef}

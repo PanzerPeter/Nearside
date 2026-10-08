@@ -840,7 +840,7 @@ export const zh: Catalog = {
   'appearance.reduceMotion': '减少动效',
   'appearance.reduceMotionOs': '你的设备已经要求减少动效，所以这一项保持开启。',
   'appearance.reduceMotionOn': '朴素的淡入和滑动。',
-  'appearance.reduceMotionOff': '消息弹进来，面板升起来，封存的消息会发光。',
+  'appearance.reduceMotionOff': '页面滑入，消息弹进来，面板升起来，封存的消息会发光。',
   'appearance.hapticsNote': '震动反馈也跟着这个开关。',
 
   'themes.title': '外观',
@@ -1221,6 +1221,7 @@ export const zh: Catalog = {
   'viewOnce.viewerHint': '这是唯一一次查看，服务器上已删除。',
   'viewOnce.toggle': '仅查看一次',
   'viewOnce.toggleHint': '对方可打开一次，之后从服务器删除。无法阻止对屏幕拍照。',
+  'viewOnce.about': '关于仅查看一次',
   'review.title': '发送照片和视频',
   'review.position': '第 {index} 个，共 {total} 个',
   'review.discard': '放弃',

@@ -196,20 +196,22 @@ export function SettingsPage({
 
   return (
     <NestedPage.Provider value={setNested}>
-      {!nested && (
-        <div className="flex items-center gap-1 mb-4 -ml-2">
-          <button
-            type="button"
-            className="btn btn-ghost btn-sm btn-square"
-            onClick={onBack}
-            aria-label={t('settings.backToSettings')}
-          >
-            <ChevronLeft className="w-5 h-5" />
-          </button>
-          <h3 className="text-title font-semibold">{title}</h3>
-        </div>
-      )}
-      {children}
+      <div className="motion-screen">
+        {!nested && (
+          <div className="flex items-center gap-1 mb-4 -ml-2">
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm btn-square"
+              onClick={onBack}
+              aria-label={t('settings.backToSettings')}
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+            <h3 className="text-title font-semibold">{title}</h3>
+          </div>
+        )}
+        {children}
+      </div>
     </NestedPage.Provider>
   );
 }

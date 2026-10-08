@@ -836,7 +836,7 @@ export const es: Catalog = {
     'Tu dispositivo ya pide movimiento reducido, así que esto queda activado.',
   'appearance.reduceMotionOn': 'Fundidos y desplazamientos sencillos.',
   'appearance.reduceMotionOff':
-    'Los mensajes entran con impulso, los paneles suben, un mensaje sellado brilla.',
+    'Las pantallas se deslizan, los mensajes entran con impulso, los paneles suben, un mensaje sellado brilla.',
   'appearance.hapticsNote': 'La vibración también sigue este interruptor.',
 
   'themes.title': 'Apariencia',
@@ -1225,6 +1225,7 @@ export const es: Catalog = {
   'viewOnce.viewerHint': 'Esta es la única vista. Ya no está en el servidor.',
   'viewOnce.toggle': 'Ver una vez',
   'viewOnce.toggleHint': 'Podrá abrirlo una vez y luego se borra del servidor. No puede impedir una foto de la pantalla.',
+  'viewOnce.about': 'Qué hace «Ver una vez»',
   'review.title': 'Enviar fotos y vídeos',
   'review.position': '{index} de {total}',
   'review.discard': 'Descartar',

@@ -23,7 +23,7 @@ import { timerNotice } from '../lib/thread-notices';
 import { openRows } from '../lib/sealed-body';
 import { putSealedRows } from '../lib/localdb';
 import { PAGE_SIZE, fetchLatestPage, fetchOlderPage } from '../lib/message-queries';
-import { peerPublicKey } from '../lib/peer-keys';
+import { knownPeerKey, peerPublicKey } from '../lib/peer-keys';
 import { conversationReactionSeal } from '../lib/reaction-seal';
 import type { Identity } from '../lib/crypto/keys';
 import { formatDisplayName, useNickname } from '../lib/nicknames';
@@ -181,6 +181,13 @@ export function ChatRoom({ session, friend, identity, openAt, onBack }: ChatRoom
       openRows(identity, await peerPublicKey(friend.id), friend.id, rows),
     [identity, friend.id]
   );
+  /** The same boundary for rows read back from disk, which must not wait on
+   *  the network for a key — see `knownPeerKey`. */
+  const openCached = useCallback(
+    async (rows: Message[]): Promise<Message[]> =>
+      openRows(identity, await knownPeerKey(friend.id), friend.id, rows),
+    [identity, friend.id]
+  );
 
   /**
    * The rest of this conversation, fetched into the local mirror when
@@ -241,6 +248,7 @@ export function ChatRoom({ session, friend, identity, openAt, onBack }: ChatRoom
     identity,
     isSelf,
     open,
+    openCached,
     onError: toast.error,
     onQueued: clearComposer,
   });

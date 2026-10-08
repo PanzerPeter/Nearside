@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { useLayoutEffect, useRef } from 'react';
 import { X } from 'lucide-react';
 import { useT } from '../hooks/useT';
+import { expressiveMotion, MOTION } from '../lib/motion';
 
 interface ModalProps {
   title: string;
@@ -27,6 +28,27 @@ export function Modal({ title, onClose, children, actions, className = '' }: Mod
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
 
+  /**
+   * Close the way the dialog opened: animated. The dialog stays open, marked
+   * `data-closing`, for the exit animation in index.css, then closes for real,
+   * which fires `close` and so `onClose` exactly as before. Only the three
+   * routes the dialog owns come through here — the X, the scrim and Escape. A
+   * caller unmounting us directly (a footer button) still leaves at once:
+   * there is nothing left to animate by the time we hear about it.
+   */
+  function dismiss() {
+    const dialog = ref.current;
+    if (!dialog?.open || dialog.hasAttribute('data-closing')) return;
+    if (!expressiveMotion()) {
+      dialog.close();
+      return;
+    }
+    dialog.setAttribute('data-closing', '');
+    setTimeout(() => dialog.close(), MOTION.exit.duration);
+  }
+  const dismissRef = useRef(dismiss);
+  dismissRef.current = dismiss;
+
   useLayoutEffect(() => {
     const dialog = ref.current;
     if (!dialog) return;
@@ -42,13 +64,20 @@ export function Modal({ title, onClose, children, actions, className = '' }: Mod
       if (dialog!.open) return;
       onCloseRef.current();
     }
-    // Escape fires a cancelable `cancel` event whose default (unprevented)
-    // action closes the dialog and fires `close` right after — so `close`
-    // alone already covers Escape. Do not also listen for `cancel`; that
-    // just double-fires onClose for the same user action.
+    // Escape fires a cancelable `cancel` whose default action closes the
+    // dialog and fires `close` right after. It is prevented here only to be
+    // routed through `dismiss`, which ends in the same `close` — so `onClose`
+    // still fires once. Chrome refuses to let a page cancel a second Escape
+    // without a click between; that one closes at once, which is fine.
+    function handleCancel(e: Event) {
+      e.preventDefault();
+      dismissRef.current();
+    }
     dialog.addEventListener('close', handleClose);
+    dialog.addEventListener('cancel', handleCancel);
     return () => {
       dialog.removeEventListener('close', handleClose);
+      dialog.removeEventListener('cancel', handleCancel);
       // A close triggered without going through dialog.close() (a footer
       // button, or a caller like AddFriendModal's success path, calling
       // onClose directly) unmounts us before the dialog's own close() ever
@@ -76,7 +105,7 @@ export function Modal({ title, onClose, children, actions, className = '' }: Mod
           <h3 className="font-bold text-title">{title}</h3>
           <button
             className="btn btn-ghost btn-sm btn-square"
-            onClick={() => ref.current?.close()}
+            onClick={dismiss}
             title={t('common.close')}
           >
             <X className="w-4 h-4" />
@@ -85,7 +114,14 @@ export function Modal({ title, onClose, children, actions, className = '' }: Mod
         {children}
         {actions && <div className="modal-action">{actions}</div>}
       </div>
-      <form method="dialog" className="modal-backdrop">
+      <form
+        method="dialog"
+        className="modal-backdrop"
+        onSubmit={(e) => {
+          e.preventDefault();
+          dismiss();
+        }}
+      >
         <button>close</button>
       </form>
     </dialog>

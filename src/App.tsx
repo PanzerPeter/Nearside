@@ -670,6 +670,8 @@ function App() {
             bar is showing, so tearing it down on a tab switch would drop all
             three and pay for a full refetch on the way back. */}
         <aside
+          // Slides back in on every return to the list — see index.css.
+          data-screen="list"
           className={`w-full md:w-80 xl:w-96 md:border-r md:border-hairline shrink-0 transition-all duration-200 ${
             chatOpen || tab === 'settings' ? 'hidden md:flex md:flex-col' : 'flex flex-col'
           }`}
@@ -786,7 +788,7 @@ function App() {
             dialog renders — mounted only while the tab is up, so its push and
             entitlement checks don't run on every launch. */}
         {tab === 'settings' && !chatOpen && (
-          <section className="w-full md:hidden flex flex-col min-w-0 bg-base-100">
+          <section className="motion-screen w-full md:hidden flex flex-col min-w-0 bg-base-100">
             <div className="flex items-center gap-1 px-2 pb-3 pt-[calc(1rem+var(--safe-top))] border-b border-hairline shrink-0">
               <button
                 type="button"

@@ -840,7 +840,7 @@ export const hu: Catalog = {
   'appearance.reduceMotion': 'Mozgás csökkentése',
   'appearance.reduceMotionOs': 'A készüléked már kéri a mozgás csökkentését, ezért ez bekapcsolva marad.',
   'appearance.reduceMotionOn': 'Egyszerű áttűnések és csúszások.',
-  'appearance.reduceMotionOff': 'Az üzenetek beugranak, a lapok felemelkednek, a pecsételt üzenet felizzik.',
+  'appearance.reduceMotionOff': 'A képernyők beúsznak, az üzenetek beugranak, a lapok felemelkednek, a pecsételt üzenet felizzik.',
   'appearance.hapticsNote': 'A rezgés is ezt a kapcsolót követi.',
 
   'themes.title': 'Megjelenés',
@@ -1221,6 +1221,7 @@ export const hu: Catalog = {
   'viewOnce.viewerHint': 'Ez az egyetlen megtekintés. A szerverről már törölve.',
   'viewOnce.toggle': 'Egyszer megtekinthető',
   'viewOnce.toggleHint': 'Egyszer nyitható meg, utána törlődik a szerverről. A képernyő lefényképezését nem akadályozza meg.',
+  'viewOnce.about': 'Mit jelent az egyszer megtekinthető',
   'review.title': 'Fényképek és videók küldése',
   'review.position': '{index} / {total}',
   'review.discard': 'Elvetés',

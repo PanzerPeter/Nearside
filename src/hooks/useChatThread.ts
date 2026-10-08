@@ -92,6 +92,9 @@ interface ChatThreadOptions {
   /** The decrypt boundary. Every fetch and realtime arrival passes through it
    *  once, on the way into state. */
   open: (rows: Message[]) => Promise<Message[]>;
+  /** `open` for rows painted from the local store, which must not wait on a
+   *  round trip. Falls back to `open`. */
+  openCached?: (rows: Message[]) => Promise<Message[]>;
   onError: (message: string) => void;
   /** Composer housekeeping, run when a text send becomes an optimistic bubble. */
   onQueued: () => void;
@@ -103,6 +106,7 @@ export function useChatThread({
   identity,
   isSelf,
   open,
+  openCached = open,
   onError,
   onQueued,
 }: ChatThreadOptions): ChatThread {
@@ -326,7 +330,10 @@ export function useChatThread({
     try {
       const cached = await cachedSealedRows(forFriend);
       if (cached.length === 0 || loadedFor.current !== forFriend) return [];
-      const rows = await open(cached as Message[]);
+      const rows = await openCached(cached as Message[]);
+      // Re-checked after the decrypt: a chat switched away from meanwhile
+      // would otherwise have this one's rows spliced into it.
+      if (loadedFor.current !== forFriend) return [];
       markSeen(rows.map((m) => m.id));
       setMessages((prev) => mergeMessages(prev, rows));
       return cached;

@@ -1,0 +1,1 @@
+Opening a chat shows the messages already on your phone straight away, without scrolling past them as pictures load. Smoother transitions between screens, a calmer view-once explanation behind an info button, and the composer buttons fold away gently as you type.

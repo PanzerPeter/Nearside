@@ -14,6 +14,26 @@ one of them drifts.
 
 ## [Unreleased]
 
+## [1.21.1] — 2026-10-08
+
+### Changed
+
+- **Opening a conversation shows what this phone already has at once.** The
+  first open of a chat after launch used to wait on the server for the other
+  person's key before painting messages that were already on the phone, so the
+  thread arrived blank and then all at once. It no longer waits, and it no
+  longer glides down past the whole conversation as pictures finish loading:
+  it opens at the bottom and stays there.
+- The view-once explanation on the photo send screen sits behind an ⓘ button
+  and floats over the picture, instead of appearing under the chip and
+  shrinking the photo the moment you tap it.
+- The paperclip and emoji buttons fold away smoothly when you start typing,
+  instead of disappearing in one jump.
+- Settings pages slide in, going back slides the previous screen back, and
+  dialogs fade out when closed instead of vanishing. All of it follows the
+  Reduce motion switch, and none of it runs when the phone asks for no
+  animation at all.
+
 ## [1.21.0] — 2026-10-08
 
 ### Added
