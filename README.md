@@ -1,8 +1,8 @@
 # Nearside
 
 An end-to-end encrypted messenger for Android and iOS. One-to-one chats and
-group rooms, with text, photos, video, voice notes and calls, the keys held on
-the device and nothing readable on the server.
+group rooms, with text, photos, video, voice notes and calls. The keys live on
+the device, and the server holds nothing it could read.
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 ![Platform](https://img.shields.io/badge/platform-Android%20%7C%20iOS-lightgrey)
@@ -10,231 +10,225 @@ the device and nothing readable on the server.
 
 ## Why Nearside
 
-**The server holds no message bodies.** Not encrypted-at-rest by the operator:
-absent. Migration `0023` dropped the `content` column and the server-side search
-that read it, so there is no column a plaintext could arrive in. The cost is
-paid openly: search and previews read a local SQLite mirror of what *this
-device* decrypted, so a conversation is unsearchable on a phone that never
+**The server holds no message bodies.** They are not encrypted at rest on the
+server; they are absent. Migration `0023` dropped the `content` column and the
+server-side search that read it, so there is nowhere for plaintext to arrive.
+Search and conversation previews read a local SQLite copy of what this device
+decrypted, which means a conversation is not searchable on a phone that never
 loaded it.
 
-**Nobody can look you up.** There is no directory, no phone number and no search
-by name. You connect by scanning a QR code or reading an eight-character code
-aloud, and the scan also verifies the contact, because the key travelled in the
-QR. Display names collide freely and mean nothing.
+**Nobody can look you up.** There is no directory, no phone number and no
+search by name. You connect by scanning a QR code or reading out an
+eight-character code, and the scan also verifies the contact, because the key
+travels inside the QR code. Display names can collide and carry no authority.
 
-**Privacy is not a tier.** Six decorative theme packs and donation tiers are the
-entire revenue line. No advertising SDK is in the build, and a CI test fails if
-one appears.
+**Privacy is not a paid tier.** Revenue comes from optional theme packs and
+donations. There is no advertising SDK in the build, and a CI test fails if one
+is added.
 
-**The claims are checkable rather than written.** The repository is public, the
-in-app transparency screen reads the live schema instead of reciting copy, and
-two tests hold the line in CI: `no-plaintext.test.ts` fails if a body ever
-reaches an insert payload, `no-ads.test.ts` fails if an ad SDK reaches
+**The claims can be checked.** The repository is public, the in-app
+transparency screen reads the live schema instead of reciting copy, and two
+tests enforce the core promises: `no-plaintext.test.ts` fails if a message body
+reaches an insert payload, and `no-ads.test.ts` fails if an ad SDK reaches
 `package.json` or the Gradle build.
 
-**It is not a Signal replacement**, and says so in the app. Metadata is not
+**It is not a Signal replacement**, and the app says so. Metadata is not
 encrypted: the server knows who talks to whom and when. If you are at serious
 risk, use Signal.
 
-React + TypeScript + Vite in a Capacitor shell, backed by Supabase. The browser
-and Electron builds are development conveniences; the shipping targets are the
-two native ones.
+## Features
 
-## What it does
+### Conversations
 
-**Chats.** Realtime 1:1 with typing indicators, read receipts, replies,
-reactions, editing, soft delete, forwarding, drafts, per-chat mute, and a
-note-to-self vault pinned to the top of the list.
+- Realtime 1:1 chat with typing indicators, read receipts, replies, reactions,
+  editing, deletion, forwarding, drafts and per-chat mute.
+- A note-to-self vault pinned to the top of the chat list, sealed under a key
+  only you hold.
+- Disappearing messages (5 minutes up to a week), set per conversation rather
+  than per person, so one side cannot quietly keep what the other believes is
+  gone.
+- Sealed exchange: ask a question with your own answer attached, and neither
+  side sees the other's answer until both exist. The database policy enforces
+  this, not the client.
+- An "In this conversation" panel listing the dates people mentioned and the
+  links they sent, each one jumping back to its message. It is built on the
+  device from the local copy.
 
-**Rooms.** One symmetric key per room, sealed to each member, so adding someone
-is one row rather than a re-encryption of the history. The owner can add people
-later, anyone in it can rename it, and a newcomer reads from when they joined. A
-message whose signature fails renders as a warning rather than disappearing,
-because a dropped message is an attack the user never learns about. `@`
-completes against the member list on the device, since the mention travels
-inside the sealed body.
+### Groups
 
-**Media.** Images re-encode to WebP on the device, which drops EXIF on the way;
-an animated image, or one that would lose its orientation, passes through with
-its metadata stripped instead. Video, and voice notes up to two minutes with a
-live level meter. Cleanup is per conversation and client-side; pinning writes a
-decrypted copy into app-private storage so it survives that.
+- One symmetric key per room, sealed to each member, with every message signed.
+  A message whose signature fails shows a warning instead of vanishing.
+- The owner can add contacts later and any member can rename the group. The
+  thread shows who joined and who renamed it.
+- Someone added later reads from the moment they joined. The add screen says
+  that the server enforces this, since a shared key alone cannot.
+- `@` mentions complete against the member list on the device, because the
+  mention travels inside the encrypted message.
 
-**Stickers.** A personal library sealed under your vault key, label included.
-Sending one takes the ordinary attachment path with a fresh key and a fresh
-upload, because referencing a shared object would put "who sent which picture to
-whom, and when" on the server for the one message type where the picture is the
-whole message.
+### Media and calls
 
-**Calls.** Peer-to-peer WebRTC, media keys from the DTLS handshake, so a TURN
-relay in the path forwards SRTP it cannot read. Signalling is sealed
-`crypto_box` over a Realtime broadcast topic, SDP and ICE alike, because a
-candidate line carries the device's addresses. Broadcast leaves no row, so there
-is no `calls` table and no record a call happened. A locked phone rings through
-a full-screen notification and answering goes straight to "Connecting…".
+- Photos are re-encoded to WebP on the device, which removes EXIF and location.
+  Animated images and videos keep their format and have their metadata stripped
+  in place.
+- Voice notes up to two minutes, with a live level meter.
+- A personal sticker library, encrypted label included. Each send is a fresh
+  encrypted upload, so the server never learns who sent which sticker to whom.
+- Peer-to-peer voice and video calls. Media keys come from the DTLS handshake,
+  so a TURN relay forwards traffic it cannot read. Signalling is encrypted and
+  sent over a broadcast channel, so no record of a call is stored.
+- A locked phone rings through a full-screen notification, and answering goes
+  straight to connecting.
 
-**Trust.** Safety numbers, a verified badge in the header, and a blocked
-composer when a contact's key changes. The app does not guess whether that was
-a reinstall or an interception.
+### Trust and safety
 
-**Block and report.** A block is enforced by the database, not the app: no
-message, edit, reaction, pin, timer change or call gets through in either
-direction, while both people keep the history and the blocked side is told.
-Each direction is its own row, so when both have blocked, one unblocking does
-not reopen the conversation. A report is emailed to the team as a ticket, and
-the reporter chooses whether to include the last 30 messages. That choice is
-the only way a message body ever leaves a device in readable form, and the
-database keeps a who-reported-whom row and none of the text.
+- Safety numbers, a verified badge, and a blocked composer when a contact's key
+  changes.
+- Blocking is enforced by the database in both directions. Both sides keep the
+  history. In a shared group, a blocked person's messages fold into one line
+  and do not notify you.
+- Reports go to the team as an email ticket. You choose whether to attach the
+  last 30 messages, which is the only way a message body ever leaves a device
+  in readable form.
+- App lock with a passphrase, using the recovery phrase as the way back in. The
+  recovery phrase and lock screens are kept out of screenshots and the recents
+  view, and the app is excluded from Android backups.
 
-**Sealed exchange.** A question carrying the asker's own answer, where neither
-side reads the other's until both exist. The referee is the SELECT policy on
-`sealed_answers`, not a client-side check. This repository is public, and a
-check in the client is one anyone can delete.
+### Everyday use
 
-**In this conversation.** A panel pulling the days somebody named and the links
-somebody sent out of the local mirror. Every row keeps the exact phrase and
-jumps to its message, and a phrase resolves against its own message's timestamp,
-so a year-old "friday" does not land this week.
-
-**Private nicknames and chat backgrounds.** Both sealed under your vault key, so
-"only you can see this" is true of the server as well as the app. The other
-person is never told.
-
-**Disappearing messages.** Off, 5 minutes, an hour, a day, a week. The timer
-belongs to the conversation, not to one side's preference: a per-user setting
-would let one party keep a copy the other believed was gone. Screenshots are
-still possible, and the app says so beside the setting.
-
-**App lock and `FLAG_SECURE`.** A passphrase in front of the app and the mirror,
-with the twelve words as the way back in. It is not a second layer of encryption
-and does not claim to be. The recovery phrase and lock screens are kept out of
-screenshots and the recents thumbnail, and the app is excluded from Android
-backups, since the pinned files and the mirror are plaintext.
-
-**Living with it.** Up to five accounts per phone, each with its own seed slot
-and mirror. Eight languages, typed against English so a missing line fails
-`npm run typecheck`. An IndexedDB outbox whose client-generated uuids make a
-retry collide instead of double-sending. Reconnection on a doubling backoff, and
-polling when a proxy blocks the WebSocket but leaves HTTPS alone.
+- Up to five accounts per phone, each with its own key slot and local database.
+- Eight languages (English, German, Spanish, French, Hungarian, Polish, Russian,
+  Chinese), including notifications.
+- Private nicknames and chat backgrounds, encrypted under your own key, so
+  "only you can see this" holds for the server too.
+- Nine themes, three of them free, with a split chat-list view on tablets and a
+  centred reading column on wide screens.
+- A built-in QR scanner that reads the camera on the device, with no Google
+  Play Services involved.
+- Unsent messages wait in an outbox and retry without duplicates. The app
+  reconnects on its own and falls back to polling when a proxy blocks
+  WebSockets.
+- Screen reader support, including announcements for incoming messages.
 
 ## Encryption
 
-Twelve words produce a seed. The seed is stored per account in Android's
-Keystore or the iOS Keychain and never leaves the device. Three keys derive from
-it through fixed context labels: a box key for peer messages, an Ed25519 signing
-key, and a vault key for your own data.
+A twelve-word recovery phrase produces a seed, stored per account in the
+Android Keystore or the iOS Keychain. It never leaves the device. Three keys are
+derived from it with fixed context labels: a box key for peer messages, an
+Ed25519 signing key, and a vault key for your own data. All primitives come from
+libsodium.
 
-| Sealed thing | Sealed with |
+| Data | Sealed with |
 | --- | --- |
-| Self-chat | `crypto_secretbox` under the vault key |
-| One-to-one | `crypto_box` to the peer's published public key |
-| Room | one room key sealed per member, plus an Ed25519 signature **verified before decryption**, since every member holds the room key and only the signature establishes authorship |
-| Attachment | a random per-file key, uploaded as `application/octet-stream` with the nonce prepended, the key travelling sealed in the message row |
-| Sticker, chat background, private nickname | the owner's vault key, label and nickname sealed alongside the file |
+| Note-to-self | `crypto_secretbox` under the vault key |
+| 1:1 message | `crypto_box` to the peer's published public key |
+| Room message | The room key, sealed once per member, plus an Ed25519 signature verified before decryption |
+| Attachment | A random per-file key; the nonce is prepended to the upload and the key travels sealed in the message |
+| Sticker, chat background, nickname | The owner's vault key |
 
-`src/lib/sealed-body.ts` is the only place a body is sealed or opened, and there
-is no plaintext fallback: `sealBody` throws when a peer has published no key
-rather than degrading, because a silent fallback would be invisible to the
-sender.
+`src/lib/sealed-body.ts` is the only place a message is sealed or opened. There
+is no plaintext fallback: sending throws when a peer has no published key,
+because a silent downgrade would be invisible to the sender.
 
-Losing the twelve words loses the history. There is no reset path.
+Losing the recovery phrase means losing the history. There is no reset.
 
-Primitives, the threat model and what is in scope for a report:
-[SECURITY.md](SECURITY.md). The reasoning under every decision above:
-[DESIGN.md](DESIGN.md).
+[SECURITY.md](SECURITY.md) covers the primitives, the threat model and how to
+report a vulnerability. [DESIGN.md](DESIGN.md) explains the reasoning behind
+each decision.
 
-## What it does not protect
+## Where the protection stops
 
-The app ships a screen saying this too.
+The app shows this list on its own screen as well.
 
-- The server knows who talks to whom, and when. Metadata is not encrypted.
-- `display_name`, `bio`, `last_seen_at` and room titles are ordinary text
-  columns. The nickname *you* give a contact is not one.
-- A video keeps its capture timestamp; it sits in a structural part of the
-  container. Location, device and GPS are stripped, and photos lose their EXIF.
+- The server knows who talks to whom and when. Display names, bios, last-seen
+  times and room titles are ordinary text. The nickname you give a contact is
+  not.
+- There is no forward secrecy. Messages are sealed between long-lived identity
+  keys, so a seed obtained later opens recorded traffic.
+- A rooted or jailbroken phone can reach the seed.
+- A video keeps its capture timestamp, which sits in a structural part of the
+  file. Location and device details are removed.
 - A relayed call passes through a TURN provider, which sees two addresses
-  exchanging packets and not what was in them.
-- A rooted or jailbroken phone can reach the seed. A compromised device is a
-  compromised account.
-- Removing someone from a room does not claw back what they already hold.
-- Someone added to a room later reads from when they joined because the server
-  withholds the earlier rows, not because the room key cannot open them.
-- A block covers one-to-one conversations. In a group you share with someone
-  you blocked, their messages still reach your phone, because the other
-  members blocked nobody. The app folds them into one line you can open and
-  does not notify you of them; leaving the group is the way to stop receiving
-  them at all.
-- A report with messages attached sends them to the team in readable form, by
-  email. The app asks first, every time.
+  exchanging packets but not their content.
+- Removing someone from a room does not take back what they already have, and
+  the room key is not rotated. Newcomers are kept from older messages by the
+  server, not by the cryptography.
+- Blocking covers 1:1 chats. In a group you share, the blocked person's
+  messages still reach your phone, folded away. Leaving the group stops them.
+- A report with messages attached sends them to the team in readable form. The
+  app asks every time.
 
-## Quick start
+## Getting started
 
-You need Node 22 and a Supabase project.
+Requirements: Node 22 and a Supabase project.
 
 ```bash
 npm install
-cp .env.example .env      # VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY
+cp .env.example .env      # set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY
 npm run dev
 ```
 
-Server setup (schema, buckets, `pg_cron`, the auth redirect URLs and the five
-edge functions) is in [`supabase/README.md`](supabase/README.md). Read it
-before touching a live project: apply order is not numeric order, and
-`npm run db:verify` is the dry-run.
+Server setup (schema, storage buckets, `pg_cron`, auth redirect URLs and the
+edge functions) is in [supabase/README.md](supabase/README.md). Read it before
+touching a live project: migrations are not applied in numeric order, and
+`npm run db:verify` is the dry run.
 
-Native builds need Android SDK 36 with JDK 21, or macOS with Xcode 15+ and
-CocoaPods. `npm run android:sync` then `./gradlew assembleDebug`.
-[docs/BUILDING.md](docs/BUILDING.md) covers signing, the R8 rules a missing entry
-turns into a runtime crash, and the iOS project, which is configured but has
-never been compiled. The Electron shell in `electron/` is a convenience build
-with no Keystore and no local mirror; see [commands.md](commands.md).
+### Platforms
+
+- **Android** is the mature target. It needs Android SDK 36 and JDK 21:
+  `npm run android:sync`, then `./gradlew assembleDebug` in `android/`.
+- **F-Droid**: a separate build from the same source with no Google or other
+  closed-source libraries. It has no push notifications, theme packs or crash
+  reports. `scripts/fdroid-prebuild.sh` prepares it.
+- **iOS** needs macOS with Xcode 15+ and CocoaPods. CI compiles an unsigned
+  build for sideloading ([docs/IOS-SIDELOAD.md](docs/IOS-SIDELOAD.md)); it has
+  not yet been tested on a real iPhone.
+- **Browser and desktop** (Electron, see [commands.md](commands.md)) are
+  development builds. They lack secure key storage and the local database.
+
+[docs/BUILDING.md](docs/BUILDING.md) covers signing, the R8 keep rules (a
+missing one is a runtime crash, not a build error) and the iOS project.
+
+### Commands
 
 | Command | Purpose |
 | --- | --- |
-| `npm run dev` · `build` · `preview` | Dev server, production build, preview it |
-| `npm run test` · `typecheck` · `lint` | vitest, tsc on both tsconfigs, ESLint |
+| `npm run dev` / `build` / `preview` | Dev server, production build, preview |
+| `npm run test` / `typecheck` / `lint` | Vitest, TypeScript on both configs, ESLint |
 | `npm run db:verify` | Replay migrations against `schema.sql` in Docker and diff |
-| `npm run db:audit -- '<url>'` | Diff the **live** project against `schema.sql`, read-only |
-| `npm run android:sync` · `ios:sync` | Native build into `android/` · `ios/` |
-| `npm run electron:install` · `start` · `pack` | Desktop shell |
+| `npm run db:audit -- '<url>'` | Diff the live database against `schema.sql`, read-only |
+| `npm run android:sync` / `ios:sync` | Build the web app into `android/` or `ios/` |
+| `npm run electron:install` / `start` / `pack` | Desktop shell |
 
-## Code tour
+## Project layout
 
 ```
 src/
-  components/   UI. ChatRoom is a shell; the work lives in hooks/.
-                settings/ holds one file per settings page
-  hooks/        useChatThread is the conversation hub, composing the outbox,
-                receipts and scroll position; useCall owns calls app-wide
-  lib/          Everything testable: crypto/, sealed-body.ts (the seal
-                boundary), message-queries.ts (returns rows still sealed),
-                localdb.ts (the local SQLite mirror), connection.ts (wake and
-                the generation counter), rooms.ts, stickers.ts, purchases.ts
-  lib/call/     session.ts (the peer connection), signaling.ts (sealed
-                broadcast), state.ts + routing.ts (the interleavings, as pure
-                functions), warmup.ts (capture that starts early)
-  locales/      en, es, de, ru, hu, fr, pl, zh, each typed against en
+  components/   UI; settings/ holds one file per settings page
+  hooks/        useChatThread (the conversation hub), useCall (calls, app-wide)
+  lib/          Testable logic: crypto/, sealed-body.ts, message-queries.ts,
+                localdb.ts (local SQLite copy), connection.ts, rooms.ts
+  lib/call/     Peer connection, encrypted signalling, call state as pure functions
+  locales/      Translations, each typed against en so a missing string fails typecheck
 supabase/       schema.sql, migrations/, storage/, functions/, verify/
-android/        Capacitor shell, the mature target
-ios/            Capacitor shell, configured but never compiled
-electron/       Desktop shell, a convenience build
+android/        Capacitor shell
+ios/            Capacitor shell
+electron/       Desktop shell
+docs/           Building, appearance, sideloading
 ```
 
-Four seams to know before changing anything:
+A few things to know before changing code:
 
-- **`lib/sealed-body.ts`** is the only sealer/opener. Queries return rows still
-  sealed; they open at the component boundary, the only layer holding both an
-  identity and a peer key.
-- **`lib/connection.ts`** owns wake detection and the `generation` counter.
-  Every realtime subscriber keys its channel effect on it, so don't add
-  per-hook wake logic.
-- **`App.signOut`** and `releaseAccount()` tear down every per-account cache. A
-  new one has to be added there or it leaks into the next account on the phone.
-- **`index.css`** folds two safe-area mechanisms into `--safe-top` /
-  `--safe-bottom`. Use those, never `env()`, or the fix works on half the fleet.
+- `lib/sealed-body.ts` is the only sealer and opener. Queries return rows still
+  sealed, and they are opened at the component boundary.
+- `lib/connection.ts` detects wake-ups and bumps a `generation` counter that
+  every realtime subscription keys on. Don't add per-hook reconnect logic.
+- `App.signOut` and `releaseAccount()` clear every per-account cache. A new
+  cache has to be added there, or it leaks into the next account.
+- Use `--safe-top` / `--safe-bottom` from `index.css`, never `env()` directly,
+  or the safe-area fix works on only half of Android devices.
 
-Themes, the two motion tiers, why the Tailwind `shadow-xl`/`shadow-2xl` classes
-are banned, and the mark: [docs/APPEARANCE.md](docs/APPEARANCE.md).
+Themes, motion and elevation are documented in
+[docs/APPEARANCE.md](docs/APPEARANCE.md).
 
 ## Testing
 
@@ -244,38 +238,38 @@ npx vitest run src/lib/outbox.test.ts         # one file
 npx vitest run -t 'never puts a message body' # one test by name
 ```
 
-vitest in a **node** environment over `src/**/*.test.ts`. There is no DOM setup,
-deliberately: logic that needs testing gets pushed out of components into
-`src/lib/`, where it can be tested without a renderer.
+Tests run in Vitest's Node environment over `src/**/*.test.ts`. There is no DOM
+setup by design: logic that needs testing moves out of components into
+`src/lib/`.
 
-Four tests guard a decision rather than a function. `no-plaintext.test.ts` and
-`no-ads.test.ts` keep the store listing true by construction, `elevation.test.ts`
-fails if a banned shadow class comes back, and `version.test.ts` fails when the
-places carrying the version number drift apart.
+Some tests guard a decision rather than a function. `no-plaintext.test.ts` and
+`no-ads.test.ts` keep the store listing true, `elevation.test.ts` blocks banned
+shadow classes, and `version.test.ts` fails when the six places holding the
+version number drift apart.
 
 ## Contributing
 
 Issues and pull requests are welcome. Before opening one:
 
-- `npm run typecheck`, `npm run lint` and `npm run test` all pass.
-- **Do not change** `BOX_CONTEXT`, `SIGN_CONTEXT` or `VAULT_CONTEXT` in
-  `src/lib/crypto/keys.ts`. It invalidates every existing user's keys.
-- A schema change is two edits, a migration and the same change folded into
-  `schema.sql`. `npm run db:verify` fails if you do only one.
-- A user-visible change gets a `CHANGELOG.md` entry written with it, saying what
-  changed for someone using the app.
-- Comments explain *why*, and usually name the failure the code prevents.
+- Make sure `npm run typecheck`, `npm run lint` and `npm run test` pass.
+- Never change `BOX_CONTEXT`, `SIGN_CONTEXT` or `VAULT_CONTEXT` in
+  `src/lib/crypto/keys.ts`. That invalidates every existing user's keys.
+- A schema change is two edits: a new migration and the same change in
+  `schema.sql`. `npm run db:verify` fails if only one is made.
+- A user-visible change needs a [CHANGELOG.md](CHANGELOG.md) entry describing
+  what changed for someone using the app.
+- Comments explain why, usually by naming the failure the code prevents.
 
-Bug reports go through the [issue form](.github/ISSUE_TEMPLATE/bug_report.yml),
-which asks for the platform and the network conditions, because several bugs
-here only appear on a reconnect. Never paste a recovery phrase, key or token
-into one. Security problems go to a **private security advisory** rather than a
-public issue; [SECURITY.md](SECURITY.md) says what is in scope.
+Report bugs through the [issue form](.github/ISSUE_TEMPLATE/bug_report.yml). It
+asks for the platform and network conditions, because several bugs only show
+up on reconnect. Never paste a recovery phrase, key or token into an issue.
+Security problems go to a private security advisory; [SECURITY.md](SECURITY.md)
+says what is in scope.
 
-This is a solo project on a competition deadline, so reviews may be slow and a
-large unsolicited pull request may not be merged. Ask in an issue first.
+This is a solo project, so reviews can be slow. For anything large, open an
+issue first.
 
 ## License
 
-GNU General Public License v3.0. See [LICENSE](LICENSE). Copyleft is deliberate:
-a closed fork is a fork whose crypto nobody can check.
+[GNU General Public License v3.0](LICENSE). The copyleft is deliberate: a
+closed fork would be one whose cryptography nobody can check.
