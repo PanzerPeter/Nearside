@@ -34,7 +34,8 @@ export function AppLockScreen({ onUnlock, onUnlockWithRecoveryPhrase, waitMs, on
     return () => window.clearInterval(tick);
   }, [waitMs]);
 
-  const blocked = busy || remaining > 0;
+  // The wait is the passphrase's alone; the twelve words are the way out of it.
+  const blocked = busy || (remaining > 0 && !usingPhrase);
   const ready = usingPhrase
     ? phrase.trim().split(/\s+/).length >= 12
     : passphrase.length >= MIN_PASSPHRASE_LENGTH;

@@ -37,7 +37,10 @@ export type Signal =
   | { t: 'busy' }
   | { t: 'hangup' };
 
-export const ENVELOPE_VERSION = 1;
+/** 2 since the call id, sender and time moved inside the seal. A build on 1
+ *  and a build on 2 ignore each other's envelopes, so the two cannot call each
+ *  other — deliberate: accepting the old shape is accepting the replay. */
+export const ENVELOPE_VERSION = 2;
 
 export interface Envelope {
   v: number;

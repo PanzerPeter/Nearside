@@ -51,6 +51,24 @@ const COLUMNS = 'owner_id, peer_id, nickname, nickname_ciphertext, nickname_nonc
 
 /** True for a row still carrying its name in the clear. Pure, and the whole
  *  test for whether 0041's migration still has work left on this device. */
+/**
+ * The nickname columns of every write, sealed under the owner's vault key.
+ *
+ * `nickname` is explicitly null, not omitted: a write onto a pre-0041 row would
+ * otherwise leave the old plaintext beside the new ciphertext, and the reader
+ * prefers the ciphertext — so the stale name would sit in the database,
+ * readable, for as long as the row lived. One builder for both writers, so the
+ * test in `no-plaintext.test.ts` reads the payload the app actually sends.
+ */
+export async function sealedNicknameColumns(identity: Identity, nickname: string) {
+  const sealed = await sealForSelf(identity.vaultKey, nickname);
+  return {
+    nickname: null,
+    nickname_ciphertext: sealed.ciphertext,
+    nickname_nonce: sealed.nonce,
+  };
+}
+
 export function isPlaintextRow(row: NicknameRow): boolean {
   return row.nickname !== null && row.nickname_ciphertext === null;
 }
@@ -192,17 +210,12 @@ async function resealPlaintext(me: string, rows: NicknameRow[], identity: Identi
     const nickname = normalizeNickname(row.nickname ?? '');
     if (!nickname) continue;
     try {
-      const sealed = await sealForSelf(identity.vaultKey, nickname);
       const { error } = await supabase
         .from('friend_nicknames')
         // One write, both halves: a row that dropped its plaintext without
         // gaining a ciphertext would be a name nobody could read again, and
         // `nickname_plaintext_or_sealed` refuses it anyway.
-        .update({
-          nickname: null,
-          nickname_ciphertext: sealed.ciphertext,
-          nickname_nonce: sealed.nonce,
-        })
+        .update(await sealedNicknameColumns(identity, nickname))
         .eq('owner_id', me)
         .eq('peer_id', row.peer_id);
       if (error) throw error;
@@ -342,21 +355,10 @@ export async function saveNickname(
   next.set(peerId, nickname);
   publish(next);
 
-  const sealed = await sealForSelf(identity.vaultKey, nickname);
   const { error } = await supabase
     .from('friend_nicknames')
     .upsert(
-      {
-        owner_id: me,
-        peer_id: peerId,
-        // Explicitly null, not omitted: an upsert onto a pre-0041 row would
-        // otherwise leave the old plaintext beside the new ciphertext, and the
-        // reader prefers the ciphertext — so the stale name would sit in the
-        // database, readable, for as long as the row lived.
-        nickname: null,
-        nickname_ciphertext: sealed.ciphertext,
-        nickname_nonce: sealed.nonce,
-      },
+      { owner_id: me, peer_id: peerId, ...(await sealedNicknameColumns(identity, nickname)) },
       { onConflict: 'owner_id,peer_id' }
     );
 

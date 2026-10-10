@@ -23,7 +23,8 @@
  * from under the table pointing at it. Patching those tables is possible and is
  * where this would go wrong at three in the morning on somebody's holiday
  * footage. The file therefore stays exactly the size it was; what it no longer
- * holds is the coordinates.
+ * holds is the coordinates — including a metadata track's own samples, which
+ * are zeroed where they sit in `mdat` (`trackSampleSpans`).
  *
  * Works on bytes and returns bytes, so the node suite can drive it against real
  * container shapes.
@@ -131,15 +132,93 @@ function trackHandler(bytes: Uint8Array, trak: Box): string | null {
   return ascii(bytes, hdlr.dataStart + 8);
 }
 
+/** A byte range `[start, end)` to zero without moving anything. */
+type Span = [number, number];
+
+/**
+ * Where a track's samples sit in the file, one span per chunk, or null when
+ * the tables do not add up.
+ *
+ * Unlinking a metadata track (below) leaves its samples in `mdat`, and for an
+ * action camera those samples *are* the GPS trace — readable by anyone who
+ * looks, which is exactly the person the file is going to. So they are zeroed
+ * too, in place, which moves nothing.
+ *
+ * The walk is `stco`/`co64` for where each chunk starts, `stsc` for how many
+ * samples each chunk holds, `stsz` for how big they are. Any disagreement — a
+ * count that does not come out exact, a span outside `mdat`, a table longer
+ * than its box — returns null, and the caller then zeroes nothing: blanking
+ * the wrong bytes would be a corrupted video, and a still-present trace is the
+ * behaviour this file had before.
+ */
+function trackSampleSpans(bytes: Uint8Array, trak: Box, media: Span[]): Span[] | null {
+  const mdia = childBox(bytes, trak, 'mdia');
+  const minf = mdia && childBox(bytes, mdia, 'minf');
+  const stbl = minf && childBox(bytes, minf, 'stbl');
+  if (!stbl) return null;
+  const stsz = childBox(bytes, stbl, 'stsz');
+  const stsc = childBox(bytes, stbl, 'stsc');
+  const stco = childBox(bytes, stbl, 'stco') ?? childBox(bytes, stbl, 'co64');
+  if (!stsz || !stsc || !stco) return null;
+
+  // Every one of the three is a FullBox: four bytes of version and flags first.
+  const sizeAt = stsz.dataStart + 4;
+  if (sizeAt + 8 > stsz.end) return null;
+  const uniform = u32be(bytes, sizeAt);
+  const sampleCount = u32be(bytes, sizeAt + 4);
+  if (!uniform && sizeAt + 8 + sampleCount * 4 > stsz.end) return null;
+
+  if (stco.dataStart + 8 > stco.end || stsc.dataStart + 8 > stsc.end) return null;
+  const chunkCount = u32be(bytes, stco.dataStart + 4);
+  const wide = stco.type === 'co64';
+  if (stco.dataStart + 8 + chunkCount * (wide ? 8 : 4) > stco.end) return null;
+  const runs = u32be(bytes, stsc.dataStart + 4);
+  if (stsc.dataStart + 8 + runs * 12 > stsc.end) return null;
+
+  const spans: Span[] = [];
+  let sample = 0;
+  let run = 0;
+  for (let chunk = 0; chunk < chunkCount; chunk += 1) {
+    // `stsc` runs are 1-based first-chunk numbers; a run lasts until the next.
+    while (
+      run + 1 < runs &&
+      u32be(bytes, stsc.dataStart + 8 + (run + 1) * 12) <= chunk + 1
+    ) {
+      run += 1;
+    }
+    if (runs === 0) return null;
+    const perChunk = u32be(bytes, stsc.dataStart + 8 + run * 12 + 4);
+    if (sample + perChunk > sampleCount) return null;
+
+    const entry = stco.dataStart + 8 + chunk * (wide ? 8 : 4);
+    if (wide && u32be(bytes, entry) !== 0) return null;
+    const start = u32be(bytes, wide ? entry + 4 : entry);
+    let length = uniform * perChunk;
+    if (!uniform) {
+      for (let i = 0; i < perChunk; i += 1) length += u32be(bytes, sizeAt + 8 + (sample + i) * 4);
+    }
+    sample += perChunk;
+    const end = start + length;
+    if (!media.some(([from, to]) => start >= from && end <= to)) return null;
+    spans.push([start, end]);
+  }
+  return sample === sampleCount ? spans : null;
+}
+
 /** Every box in the file that should not reach the recipient, innermost first
- *  is irrelevant — none of them nest inside each other. */
-function redactions(bytes: Uint8Array): Box[] {
+ *  is irrelevant — none of them nest inside each other — and the sample bytes
+ *  of any track that carried nothing but metadata. */
+function redactions(bytes: Uint8Array): { found: Box[]; samples: Span[] } {
   const top = boxes(bytes, 0, bytes.length);
   // Not an ISO base media file. `ftyp` is required to be first by every
   // profile; without it this is some other container and the offsets below
   // would be read out of arbitrary bytes.
-  if (top[0]?.type !== 'ftyp') return [];
+  if (top[0]?.type !== 'ftyp') return { found: [], samples: [] };
 
+  const media: Span[] = top
+    .filter((box) => box.type === 'mdat')
+    .map((box) => [box.dataStart, box.end]);
+  const samples: Span[] = [];
   const found: Box[] = [];
   for (const box of top) {
     if (box.type === 'uuid' || box.type === 'meta') {
@@ -155,12 +234,11 @@ function redactions(bytes: Uint8Array): Box[] {
       }
       if (child.type !== 'trak') continue;
 
-      // A track that carries nothing but metadata goes whole. Its samples stay
-      // in `mdat` — moving them is the byte-shifting this file exists to avoid
-      // — but with the track gone nothing describes or can find them, and no
-      // player will read them back.
+      // A track that carries nothing but metadata goes whole, and its samples
+      // are zeroed where they lie in `mdat` — see `trackSampleSpans`.
       if (trackHandler(bytes, child) === METADATA_HANDLER) {
         found.push(child);
+        samples.push(...(trackSampleSpans(bytes, child, media) ?? []));
         continue;
       }
       // Per-track user data: the same `©xyz` again on some recorders.
@@ -169,7 +247,7 @@ function redactions(bytes: Uint8Array): Box[] {
       }
     }
   }
-  return found;
+  return { found, samples };
 }
 
 /**
@@ -225,15 +303,18 @@ export function stripVideoMetadata(
   inPlace = false
 ): Uint8Array {
   if (!isStrippableVideo(type)) return bytes;
-  let targets: Box[];
+  let targets: { found: Box[]; samples: Span[] };
   try {
     targets = redactions(bytes);
   } catch {
     return bytes;
   }
-  if (targets.length === 0) return bytes;
+  if (targets.found.length === 0) return bytes;
 
+  // Every offset is read before anything is written: with `inPlace` the tables
+  // being walked and the bytes being blanked are the same buffer.
   const out = inPlace ? bytes : new Uint8Array(bytes);
-  for (const box of targets) neutralize(out, box);
+  for (const [start, end] of targets.samples) out.fill(0, start, end);
+  for (const box of targets.found) neutralize(out, box);
   return out;
 }

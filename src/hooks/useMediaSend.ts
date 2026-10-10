@@ -838,11 +838,9 @@ export function useMediaSend({
       sealed.push({ ids, body: await sealBody(identity, peerKey, me, peerId, label) });
     }
 
-    // Rows first, then the objects they named — the order `deleteSticker` uses,
-    // and for the same reason. A row relabelled ahead of its file leaves bytes
-    // nothing points at, which the account-deletion sweep collects; a file
-    // deleted ahead of its row leaves a photo that can never be shown or
-    // explained.
+    // Only the rows are written. Clearing `media_path` is what deletes the
+    // objects, server-side and in the same transaction, so a row and its file
+    // can no longer be left half-removed in either order.
     const relabelled = new Set<string>();
     for (const { ids, body } of sealed) {
       const { error } = await supabase
@@ -862,15 +860,13 @@ export function useMediaSend({
       else for (const id of ids) relabelled.add(id);
     }
 
-    // Both objects per row. A thumbnail whose attachment was collected is
-    // bytes in the bucket that nothing points at and nothing will ever collect.
+    // Both objects per row went with the relabel, deleted by the server in the
+    // same transaction (`drop_replaced_media`, 0062).
     const paths = myStale
       .filter((row) => relabelled.has(row.id))
       .flatMap((row) => [row.media_path, row.media_thumb_path])
       .filter((path): path is string => !!path);
-    if (!paths.length) return;
 
-    await supabase.storage.from('chat-media').remove(paths);
     // The decrypted copy this session was holding describes a file that no
     // longer exists, and the cache is keyed on the path, so a re-forward or a
     // second thread would be served bytes from a message that now reads

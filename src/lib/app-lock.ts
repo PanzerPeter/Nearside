@@ -207,4 +207,53 @@ export async function clearLock(userId: string): Promise<void> {
   } catch {
     // Already absent.
   }
+  await clearFailures(userId);
+}
+
+/**
+ * Wrong passphrases, counted across launches.
+ *
+ * Held in memory only, the backoff was a speed bump the person it is aimed at
+ * — someone holding an unlocked phone — could drive round by swiping the app
+ * away: four free guesses per launch, forever. Stored beside the verifier, it
+ * survives that. The owner is never trapped by it: the wait is the backoff and
+ * no longer, and the recovery phrase does not share the counter, because twelve
+ * words with a checksum are not something anyone guesses.
+ */
+export interface LockFailures {
+  count: number;
+  /** Epoch millis of the last miss; the backoff runs from here. */
+  at: number;
+}
+
+const failuresKey = (userId: string) => `${LOCK_KEY}.failures.${userId}`;
+
+export async function loadFailures(userId: string): Promise<LockFailures> {
+  try {
+    const { value } = await SecureStoragePlugin.get({ key: failuresKey(userId) });
+    const parsed = JSON.parse(value ?? '') as Partial<LockFailures>;
+    if (typeof parsed.count === 'number' && typeof parsed.at === 'number') {
+      return { count: parsed.count, at: parsed.at };
+    }
+  } catch {
+    // None recorded — the plugin throws for an absent key.
+  }
+  return { count: 0, at: 0 };
+}
+
+export async function saveFailures(userId: string, failures: LockFailures): Promise<void> {
+  await SecureStoragePlugin.set({ key: failuresKey(userId), value: JSON.stringify(failures) });
+}
+
+export async function clearFailures(userId: string): Promise<void> {
+  try {
+    await SecureStoragePlugin.remove({ key: failuresKey(userId) });
+  } catch {
+    // Already absent.
+  }
+}
+
+/** How long is still left to wait, given the recorded misses and now. */
+export function remainingWaitMs(failures: LockFailures, now: number): number {
+  return Math.max(0, failures.at + backoffMs(failures.count) - now);
 }

@@ -84,6 +84,10 @@ export interface CachedContact {
    *  string so a key change is a string inequality rather than a byte walk. */
   public_key: string;
   verified_at: string | null;
+  /** The Ed25519 key a group message from this peer is checked against, as
+   *  first seen. Null on a row written before groups pinned it, or by a path
+   *  that never asked for it; the first group read fills it in. */
+  signing_key?: string | null;
 }
 
 /**
@@ -186,7 +190,8 @@ CREATE INDEX IF NOT EXISTS messages_cache_peer_time
 CREATE TABLE IF NOT EXISTS contacts (
   peer_id      TEXT PRIMARY KEY,
   public_key   TEXT NOT NULL,
-  verified_at  TEXT
+  verified_at  TEXT,
+  signing_key  TEXT
 );
 
 CREATE TABLE IF NOT EXISTS pins (
@@ -313,6 +318,12 @@ export async function openLocalDb(userId: string): Promise<void> {
     owner = userId;
     db = await sqlite.createConnection(dbName(userId), false, 'no-encryption', 1, false);
     await db.open();
+    // A DELETE otherwise only unlinks the page: the text of a deleted,
+    // expired or "cleared" message stays in the file's free pages until
+    // something happens to reuse them. A per-connection setting, so every
+    // open sets it; outside a transaction because some pragmas are silently
+    // ignored inside one.
+    await db.execute('PRAGMA secure_delete = ON;', false);
     // The whole script, every open, not a versioned upgrade path. That is what
     // gives a device already running an older build the `contacts` table: the
     // connection version stays 1, so a bump would never fire, but every
@@ -339,6 +350,8 @@ export async function openLocalDb(userId: string): Promise<void> {
       'chat_flags ADD COLUMN alert_level TEXT',
       // 0 or 1. See `PinnedMedia.auto`.
       'pins ADD COLUMN auto INTEGER',
+      // The pinned signing key. See `CachedContact.signing_key`.
+      'contacts ADD COLUMN signing_key TEXT',
     ]) {
       try {
         await db.execute(`ALTER TABLE ${column}`);
@@ -698,12 +711,13 @@ export async function putContact(row: CachedContact): Promise<void> {
     return;
   }
   await db?.run(
-    `INSERT INTO contacts (peer_id, public_key, verified_at)
-     VALUES (?, ?, ?)
+    `INSERT INTO contacts (peer_id, public_key, verified_at, signing_key)
+     VALUES (?, ?, ?, ?)
      ON CONFLICT(peer_id) DO UPDATE SET
        public_key = excluded.public_key,
-       verified_at = excluded.verified_at`,
-    [row.peer_id, row.public_key, row.verified_at]
+       verified_at = excluded.verified_at,
+       signing_key = excluded.signing_key`,
+    [row.peer_id, row.public_key, row.verified_at, row.signing_key ?? null]
   );
 }
 

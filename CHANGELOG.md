@@ -14,6 +14,65 @@ one of them drifts.
 
 ## [Unreleased]
 
+## [1.22.0] — 2026-10-10
+
+A security release. Most of it closes things a hostile server, or someone who
+can listen in on the call channel, could have done.
+
+### Security
+
+- **Groups now remember everyone's keys, as one-to-one chats always have.** A
+  group used to accept whatever keys the server said a member had, every time.
+  A server that swapped them could have read a new group, or posted under a
+  member's name with the "verified" mark. Now a key that changes after this
+  phone first saw it is refused until you verify that person again.
+- **An old group message can no longer be given a photo it never had.** Group
+  messages from before attachments existed were signed over their text alone,
+  so a picture attached to one later still looked authentic. Such messages now
+  show the unverified warning.
+- **Calls can't be replayed.** Someone able to watch the call channel between
+  two people could record a ring and play it back later, making a friend's
+  phone ring at any hour, or end a call in progress. Every call signal now
+  carries its own call and time inside the encryption. Calls between this
+  version and older ones don't connect; update both phones.
+- **Photos sent in full quality no longer carry a hidden second copy.** Some
+  phones store a second image (with its own location data) or a short video
+  inside a photo. Both are now removed when a photo is sent as-is. A rotated
+  photo keeps only the tag that keeps it upright, instead of all of its camera
+  data.
+- **GPS traces from action cameras are erased from videos.** The track was
+  already unlinked, but its data stayed in the file. It is now wiped in place.
+- **Killing the app no longer resets the lock's wait after wrong passphrases.**
+  The recovery phrase still works at any time, wait or not.
+- **A sealed question can't be changed after it has been answered.**
+- **Deleted attachments are removed from the server, previews included.** In
+  groups they used to stay there for good, though no one could open them.
+- **In a chat, you can delete only what you uploaded.** Either person could
+  previously delete the other's photos from the shared folder.
+- **The server's clock decides when a message, reaction or friend request was
+  sent**, so flood limits can't be dodged by backdating.
+
+### Changed
+
+- The privacy policy now says exactly what OneSignal receives: the sender's
+  account identifier with each notification (and a group's identifier), as
+  well as yours. That is what lets your phone show the sender's name.
+- Your phone overwrites the text of deleted messages in its local database
+  instead of only unlinking it.
+- A message that can't get through on a dead connection is retried after 30
+  seconds instead of holding up the rest of the chat.
+- "Today", "Tomorrow" and day names in the conversation panel follow the app's
+  language. A date that doesn't exist, like "April 31", is no longer read as
+  the next day.
+- Updating from a very old version no longer loses an account's key if the
+  recovery phrase isn't to hand. The key is kept for its owner instead of being
+  deleted.
+
+### Fixed
+
+- **Cancelling a sealed question works.** The server refused it every time and
+  the app said the message could not be deleted.
+
 ## [1.21.1] — 2026-10-08
 
 ### Changed

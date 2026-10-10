@@ -170,19 +170,61 @@ describe('stripImageMetadata', () => {
     expect([...stripped.subarray(-6)]).toEqual([...ENTROPY, 0xff, 0xd9]);
   });
 
-  it('refuses to strip a JPEG that is not upright', () => {
+  it('keeps only the orientation of a JPEG that is not upright', () => {
     // The pixels are not being re-encoded here, so the tag is the only thing
-    // keeping the photo the right way up.
-    const rotated = jpeg([exifApp1(6), dqt()]);
-    expect(stripImageMetadata(rotated, 'image/jpeg')).toBe(rotated);
+    // keeping the photo the right way up — and the only thing that may stay.
+    const gps = segment(0xe1, [...chars('Exif'), 0x00, 0x00, ...tiff(6), ...chars('GPS-51N')]);
+    const rotated = jpeg([gps, dqt()]);
+    const stripped = stripImageMetadata(rotated, 'image/jpeg');
+
+    expect(has(stripped, 'GPS-51N')).toBe(false);
+    expect(imageOrientation(stripped, 'image/jpeg')).toBe(6);
+    expect([...stripped.subarray(-6)]).toEqual([...ENTROPY, 0xff, 0xd9]);
   });
 
   it('keeps an ICC profile and drops an embedded second image', () => {
-    const original = jpeg([iccApp2(), mpfApp2(), dqt()]);
+    // MPF is an index; the second photo it points at, with its own EXIF, is a
+    // whole JPEG after the first one's EOI. A motion photo appends its video
+    // there too.
+    const second = jpeg([segment(0xe1, [...chars('Exif'), 0x00, 0x00, ...chars('GPS-2ND')])]);
+    const original = new Uint8Array([
+      ...jpeg([iccApp2(), mpfApp2(), dqt()]),
+      ...second,
+      ...chars('ftypmp42-GPS-VIDEO'),
+    ]);
     const stripped = stripImageMetadata(original, 'image/jpeg');
 
     expect(has(stripped, 'ICC_PROFILE')).toBe(true);
     expect(has(stripped, 'MPF')).toBe(false);
+    expect(has(stripped, 'GPS-2ND')).toBe(false);
+    expect(has(stripped, 'GPS-VIDEO')).toBe(false);
+    expect([...stripped.subarray(-6)]).toEqual([...ENTROPY, 0xff, 0xd9]);
+  });
+
+  it('cuts a clean file at its EOI even with no metadata to drop', () => {
+    const clean = jpeg([dqt()]);
+    const trailed = new Uint8Array([...clean, ...chars('ftypmp42-trailer')]);
+    expect([...stripImageMetadata(trailed, 'image/jpeg')]).toEqual([...clean]);
+  });
+
+  it('walks past FF D9 inside a table between progressive scans', () => {
+    // A quantisation table is bytes like any other; a search for EOI would
+    // cut the picture inside the second scan's tables.
+    const tableWithEoiBytes = segment(0xdb, [0x00, 0xff, 0xd9, 0x20]);
+    const progressive = new Uint8Array([
+      0xff, 0xd8, ...exifApp1(1),
+      ...SCAN, ...ENTROPY,
+      ...tableWithEoiBytes,
+      ...SCAN, 0x11, 0xff, 0x00, 0x22, 0xff, 0xd3, 0x33,
+      0xff, 0xd9,
+      ...chars('TRAILER'),
+    ]);
+    const stripped = stripImageMetadata(progressive, 'image/jpeg');
+
+    expect(has(stripped, 'Exif')).toBe(false);
+    expect(has(stripped, 'TRAILER')).toBe(false);
+    expect(has(stripped, String.fromCharCode(0x00, 0xff, 0xd9, 0x20))).toBe(true);
+    expect([...stripped.subarray(-3)]).toEqual([0x33, 0xff, 0xd9]);
   });
 
   it('hands back the same array when there is nothing to take off', () => {

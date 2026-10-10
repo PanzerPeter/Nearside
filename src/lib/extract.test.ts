@@ -202,3 +202,12 @@ describe('formatWhen', () => {
     expect(formatWhen(event, new Date(2026, 2, 2, 9).getTime())).toMatch(/Apr/);
   });
 });
+
+describe('a day the month does not have', () => {
+  it('is dropped rather than rolled into the next month', () => {
+    const msg = { id: 'm', user_id: 'u', created_at: '2027-01-10T10:00:00Z' };
+    expect(extractDates([{ ...msg, text: 'see you April 31' }])).toEqual([]);
+    expect(extractDates([{ ...msg, text: 'Feb 29 then' }])).toEqual([]);
+    expect(extractDates([{ ...msg, text: 'April 30 then' }])).toHaveLength(1);
+  });
+});

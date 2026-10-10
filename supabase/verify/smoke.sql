@@ -666,4 +666,124 @@ $$;
 
 RESET ROLE;
 
+-- ---------------------------------------------------------------------------
+-- Write integrity (0062). `created_at` is the server's on insert, a sealed
+-- question cannot be re-sealed, a message's objects leave with it — the
+-- sender's only — and a 1:1 participant deletes only what they uploaded.
+-- ---------------------------------------------------------------------------
+
+INSERT INTO auth.users (id, email) VALUES
+  ('cccccccc-0000-0000-0000-0000000000c3', 'integrity@verify.test');
+
+INSERT INTO public.messages (id, user_id, receiver_id, ciphertext, nonce, created_at) VALUES
+  ('62626262-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001',
+   'bbbbbbbb-0000-0000-0000-000000000002', 'sealed', 'nonce', '2000-01-01T00:00:00Z');
+INSERT INTO public.friendships (requester_id, addressee_id, status, created_at) VALUES
+  ('cccccccc-0000-0000-0000-0000000000c3', 'aaaaaaaa-0000-0000-0000-000000000001',
+   'pending', '2000-01-01T00:00:00Z');
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM public.messages
+                  WHERE id = '62626262-0000-0000-0000-000000000001' AND created_at = now()) THEN
+    RAISE EXCEPTION 'integrity: a message kept the client''s created_at';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM public.friendships
+                  WHERE requester_id = 'cccccccc-0000-0000-0000-0000000000c3'
+                    AND created_at = now()) THEN
+    RAISE EXCEPTION 'integrity: a friend request kept the client''s created_at';
+  END IF;
+END;
+$$;
+
+INSERT INTO public.messages (id, user_id, receiver_id, ciphertext, nonce, sealed_prompt) VALUES
+  ('62626262-0000-0000-0000-000000000002', 'aaaaaaaa-0000-0000-0000-000000000001',
+   'bbbbbbbb-0000-0000-0000-000000000002', 'question', 'nonce', true);
+
+DO $$
+DECLARE
+  refused boolean := false;
+BEGIN
+  BEGIN
+    UPDATE public.messages SET ciphertext = 'another question', nonce = 'n2'
+     WHERE id = '62626262-0000-0000-0000-000000000002';
+  EXCEPTION WHEN raise_exception THEN
+    refused := true;
+  END;
+  IF NOT refused THEN
+    RAISE EXCEPTION 'integrity: a sealed question was re-sealed';
+  END IF;
+  -- Withdrawing it is still a tombstone, and still allowed.
+  UPDATE public.messages
+     SET deleted_at = now(), ciphertext = NULL, nonce = NULL
+   WHERE id = '62626262-0000-0000-0000-000000000002';
+END;
+$$;
+
+INSERT INTO storage.objects (bucket_id, name, owner) VALUES
+  ('chat-media', 'aaaaaaaa-0000-0000-0000-000000000001_bbbbbbbb-0000-0000-0000-000000000002/mine.bin',
+   'aaaaaaaa-0000-0000-0000-000000000001'),
+  ('chat-media', 'aaaaaaaa-0000-0000-0000-000000000001_bbbbbbbb-0000-0000-0000-000000000002/mine-thumb.bin',
+   'aaaaaaaa-0000-0000-0000-000000000001'),
+  ('chat-media', 'aaaaaaaa-0000-0000-0000-000000000001_bbbbbbbb-0000-0000-0000-000000000002/theirs.bin',
+   'bbbbbbbb-0000-0000-0000-000000000002'),
+  ('chat-media', 'dddddddd-0000-0000-0000-000000000004/room-mine.bin',
+   'aaaaaaaa-0000-0000-0000-000000000001');
+
+INSERT INTO public.messages (id, user_id, receiver_id, media_path, media_thumb_path, media_type) VALUES
+  ('62626262-0000-0000-0000-000000000003', 'aaaaaaaa-0000-0000-0000-000000000001',
+   'bbbbbbbb-0000-0000-0000-000000000002',
+   'aaaaaaaa-0000-0000-0000-000000000001_bbbbbbbb-0000-0000-0000-000000000002/mine.bin',
+   'aaaaaaaa-0000-0000-0000-000000000001_bbbbbbbb-0000-0000-0000-000000000002/mine-thumb.bin',
+   'image'),
+  -- Alice's row naming Bob's upload: clearing it must not delete his file.
+  ('62626262-0000-0000-0000-000000000004', 'aaaaaaaa-0000-0000-0000-000000000001',
+   'bbbbbbbb-0000-0000-0000-000000000002',
+   'aaaaaaaa-0000-0000-0000-000000000001_bbbbbbbb-0000-0000-0000-000000000002/theirs.bin',
+   NULL, 'image');
+INSERT INTO public.room_messages (id, room_id, sender_id, media_path, media_type, signature) VALUES
+  ('62626262-0000-0000-0000-000000000005', 'dddddddd-0000-0000-0000-000000000004',
+   'aaaaaaaa-0000-0000-0000-000000000001',
+   'dddddddd-0000-0000-0000-000000000004/room-mine.bin', 'image', 'sig');
+
+UPDATE public.messages
+   SET deleted_at = now(), media_path = NULL, media_type = NULL, media_thumb_path = NULL
+ WHERE id IN ('62626262-0000-0000-0000-000000000003', '62626262-0000-0000-0000-000000000004');
+UPDATE public.room_messages
+   SET deleted_at = now(), media_path = NULL, media_type = NULL
+ WHERE id = '62626262-0000-0000-0000-000000000005';
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM storage.objects
+              WHERE name IN (
+                'aaaaaaaa-0000-0000-0000-000000000001_bbbbbbbb-0000-0000-0000-000000000002/mine.bin',
+                'aaaaaaaa-0000-0000-0000-000000000001_bbbbbbbb-0000-0000-0000-000000000002/mine-thumb.bin',
+                'dddddddd-0000-0000-0000-000000000004/room-mine.bin')) THEN
+    RAISE EXCEPTION 'integrity: a deleted message left its objects behind';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM storage.objects
+                  WHERE name = 'aaaaaaaa-0000-0000-0000-000000000001_bbbbbbbb-0000-0000-0000-000000000002/theirs.bin') THEN
+    RAISE EXCEPTION 'integrity: clearing a row deleted an object somebody else uploaded';
+  END IF;
+END;
+$$;
+
+-- Alice tries to delete Bob's upload from their shared folder directly.
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claim.sub = 'aaaaaaaa-0000-0000-0000-000000000001';
+SELECT set_config('storage.allow_delete_query', 'true', true);
+DELETE FROM storage.objects
+ WHERE name = 'aaaaaaaa-0000-0000-0000-000000000001_bbbbbbbb-0000-0000-0000-000000000002/theirs.bin';
+RESET ROLE;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM storage.objects
+                  WHERE name = 'aaaaaaaa-0000-0000-0000-000000000001_bbbbbbbb-0000-0000-0000-000000000002/theirs.bin') THEN
+    RAISE EXCEPTION 'integrity: a participant deleted the other person''s upload';
+  END IF;
+END;
+$$;
+
 ROLLBACK;

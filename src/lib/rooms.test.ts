@@ -865,3 +865,36 @@ describe('normalizeRoomTitle', () => {
     expect(out).toBe('🎉'.repeat(ROOM_TITLE_MAX));
   });
 });
+
+describe('room signature version', () => {
+  // `sig_v` is a column outside the signature. A v1 row is signed over its
+  // nonce and ciphertext alone, so the server could hand an old text row a
+  // photo and a file key from another message and keep it verifying.
+  it('refuses a v1 row carrying an attachment its version never signed', async () => {
+    const roomKey = await aRoomKey();
+    const alice = await anIdentity();
+    const signing = new Map([['alice', await toBase64(alice.signPublic)]]);
+    const legacy = await aLegacyRow(roomKey, alice, 'alice', 'see you there');
+
+    const [honest] = await openRoomRows([legacy], roomKey, signing);
+    expect(honest.sender).toBe('verified');
+
+    const [repointed] = await openRoomRows(
+      [{ ...legacy, media_path: 'r1/other.bin', media_type: 'image' }],
+      roomKey,
+      signing
+    );
+    expect(repointed.sender).toBe('unverified');
+    expect(repointed.text).toBeNull();
+  });
+
+  it('refuses a v3 row claiming to be forwarded', async () => {
+    const roomKey = await aRoomKey();
+    const alice = await anIdentity();
+    const signing = new Map([['alice', await toBase64(alice.signPublic)]]);
+    const row = await aV3Row(roomKey, alice, 'alice', 'my own words');
+
+    const [opened] = await openRoomRows([{ ...row, forwarded: true }], roomKey, signing);
+    expect(opened.sender).toBe('unverified');
+  });
+});

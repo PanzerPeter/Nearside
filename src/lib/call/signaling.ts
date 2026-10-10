@@ -23,10 +23,11 @@
 //
 // No Ed25519 signature, unlike `lib/rooms.ts`. Rooms need one because every
 // member holds the same symmetric key, so decryption proves membership and not
-// authorship. Here the seal is `crypto_box` between exactly two keypairs: a
-// payload that opens with our private key and their public key could only have
-// been sealed by someone holding their private key. Authorship is already
-// established by the fact that it opened at all.
+// authorship. Here the seal is `crypto_box` between exactly two keypairs, so a
+// payload that opens came from one of the two of us — but `crypto_box` is
+// symmetric between them, so it cannot say which, and it says nothing about
+// when. That is why the call id, the sender and the time travel inside the
+// seal (see `openSignal`), not only beside it.
 
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import type { Identity } from '../crypto/keys';
@@ -46,14 +47,32 @@ export function signalTopic(me: string, peerId: string): string {
   return `call:${conversationKey(me, peerId)}`;
 }
 
+/**
+ * How far a signal's sealed timestamp may sit from this device's clock, either
+ * way. Wide enough for two phones whose clocks disagree by a minute or two; an
+ * offer recorded off the topic and sent again later is outside it.
+ */
+export const SIGNAL_MAX_SKEW_MS = 5 * 60_000;
+
+/** What the seal actually holds. The clear `callId` and `from` on the envelope
+ *  are only there so a client can route before it opens anything. */
+interface SealedSignal {
+  callId: string;
+  from: string;
+  at: number;
+  signal: Signal;
+}
+
 export async function sealSignal(
   identity: Identity,
   peerPublic: Uint8Array,
   from: string,
   callId: string,
-  signal: Signal
+  signal: Signal,
+  now: number = Date.now()
 ): Promise<Envelope> {
-  const sealed = await sealFor(identity.boxPrivate, peerPublic, JSON.stringify(signal));
+  const inner: SealedSignal = { callId, from, at: now, signal };
+  const sealed = await sealFor(identity.boxPrivate, peerPublic, JSON.stringify(inner));
   return { v: ENVELOPE_VERSION, callId, from, ...sealed };
 }
 
@@ -66,19 +85,38 @@ export async function sealSignal(
  * exception some call site will forget to catch. A forged payload fails the
  * Poly1305 tag and lands here as null, indistinguishable from noise, which is
  * what it should be.
+ *
+ * Opening is not enough on its own. A sealed signal that was recorded off the
+ * topic opens forever, and the clear `callId` can be set to anything: an old
+ * offer re-sent under a fresh id rang the phone "from" a friend at any hour,
+ * and an old hangup under the live call's id ended it. Our own envelopes also
+ * open, because `crypto_box` is symmetric between the two of us. So the sealed
+ * copy of the call id and the sender must match the clear ones — the hub has
+ * already checked the clear sender is the peer — and the sealed time must be
+ * within `SIGNAL_MAX_SKEW_MS` of now.
  */
 export async function openSignal(
   identity: Identity,
   peerPublic: Uint8Array,
-  envelope: Envelope
+  envelope: Envelope,
+  now: number = Date.now()
 ): Promise<Signal | null> {
   try {
     const json = await openFrom(identity.boxPrivate, peerPublic, {
       ciphertext: envelope.ciphertext,
       nonce: envelope.nonce,
     });
-    const parsed: unknown = JSON.parse(json);
-    return isSignal(parsed) ? parsed : null;
+    const inner = JSON.parse(json) as Partial<SealedSignal> | null;
+    if (
+      !inner ||
+      inner.callId !== envelope.callId ||
+      inner.from !== envelope.from ||
+      typeof inner.at !== 'number' ||
+      Math.abs(now - inner.at) > SIGNAL_MAX_SKEW_MS
+    ) {
+      return null;
+    }
+    return isSignal(inner.signal) ? inner.signal : null;
   } catch {
     return null;
   }

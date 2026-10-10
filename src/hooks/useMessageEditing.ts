@@ -12,6 +12,7 @@ import { sealBody } from '../lib/sealed-body';
 import { peerPublicKey } from '../lib/peer-keys';
 import { forgetCachedMessage } from '../lib/localdb';
 import { repinCaption } from '../lib/pins';
+import { forgetMedia } from '../lib/media-cache';
 import type { Identity } from '../lib/crypto/keys';
 import { t } from '../lib/i18n';
 
@@ -114,11 +115,12 @@ export function useMessageEditing({
     setEditingId(null);
   }
 
+  // The attachment and its preview are deleted by the server with the row
+  // (`drop_replaced_media`, 0062), which is what a group delete needs anyway
+  // and what this path used to half-do: it removed the full file first and
+  // forgot the preview.
   async function deleteMessage(msg: Message) {
     setEditingId(null);
-    if (msg.media_path) {
-      await supabase.storage.from('chat-media').remove([msg.media_path]);
-    }
     const { error: deleteError } = await supabase
       .from('messages')
       .update(tombstonePatch())
@@ -131,6 +133,8 @@ export function useMessageEditing({
     // with it, or the body the user just deleted stays in search results and
     // in the sidebar preview for as long as the mirror lives.
     await forgetCachedMessage(msg.id);
+    // The decrypted bytes this session holds, keyed on the paths that are gone.
+    for (const path of [msg.media_path, msg.media_thumb_path]) if (path) forgetMedia(path);
   }
 
   return {

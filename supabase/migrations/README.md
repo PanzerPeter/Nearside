@@ -92,6 +92,7 @@ current state; this table is about what each file *does*.
 | 61 | `0059_sealed_reactions.sql` | Reaction emoji sealed like a body (`emoji_ciphertext`/`emoji_nonce`); `emoji` kept for older rows. **Not yet applied** |
 | 62 | `0060_sealed_room_titles.sql` | A group's name sealed under the room key; `set_room_title_sealed()`, the no-notice reseal `seal_room_title()`, and `rooms_for_me()` returning the sealed columns. **Not yet applied** |
 | 63 | `0061_sealed_profiles.sql` | Name, bio and picture sealed under a per-account profile key; `profile_keys` grants it to connected readers; signup no longer derives a name from the email; avatars bucket takes octet-stream. **Not yet applied; redeploy `send-push` and `call-ring` after it** |
+| 64 | `0062_write_integrity.sql` | `created_at` stamped on insert wherever a rate limit counts it; a sealed question cannot be re-sealed; a message's objects are deleted with it (sender's uploads only); a 1:1 participant deletes only their own uploads. **Not yet applied; apply before shipping 1.22.0, which stops deleting attachments from the client** |
 
 ## The two files that do not follow the numbering
 

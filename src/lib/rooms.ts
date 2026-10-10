@@ -20,12 +20,14 @@ import {
   signedPayloadV3,
   signedPayloadV4,
   verifyBytes,
+  versionCovers,
   openForSelf,
   sealForSelf,
   type Sealed,
 } from './crypto/seal';
 import { supabase } from './supabase';
 import { cacheMessage, forgetCachedMessage } from './localdb';
+import { pinnedKeys } from './verification';
 import type { Message } from './types';
 import { t } from './i18n';
 
@@ -217,7 +219,14 @@ async function publishedKeys(userIds: string[]): Promise<Map<string, PublishedKe
     .in('id', missing);
 
   for (const row of data ?? []) {
-    const keys = { public_key: row.public_key, signing_key: row.signing_key };
+    // Through the same trust-on-first-use record the 1:1 path seals against:
+    // a key the server swapped after this device first saw it comes back null,
+    // which makes the member unreachable and their messages unverifiable rather
+    // than sealed to, or signed by, whoever the server chose.
+    const keys = await pinnedKeys(row.id, {
+      public_key: row.public_key,
+      signing_key: row.signing_key,
+    });
     map.set(row.id, keys);
     if (keys.public_key && keys.signing_key) publishedKeyCache.set(row.id, keys);
   }
@@ -925,6 +934,9 @@ export async function openRoomRows(
       if (version !== 1 && version !== 2 && version !== 3 && version !== 4) {
         return { ...row, text: null, sender: 'unverified' };
       }
+      // The downgrade: an older version claimed for a row carrying fields that
+      // version never signed. See `versionCovers`.
+      if (!versionCovers(version, row)) return { ...row, text: null, sender: 'unverified' };
       const payload =
         version === 1
           ? signedPayload({ nonce: row.nonce ?? '', ciphertext: row.ciphertext ?? '' })

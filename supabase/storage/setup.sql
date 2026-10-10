@@ -137,6 +137,13 @@ CREATE POLICY "chat_media_insert_participant" ON storage.objects
     )
   );
 
+-- Your own uploads only (0062). Either participant used to be able to delete
+-- anything in the pair's folder — the other person's photos, from both
+-- histories, and their chat background — which is the reason the room folders
+-- below have no DELETE policy at all. A message's objects now leave with it
+-- through `drop_replaced_media()`, so the client only ever deletes what it put
+-- there itself. `owner` and `owner_id` both: the platform writes both, and an
+-- old object may carry only one.
 DROP POLICY IF EXISTS "chat_media_delete_participant" ON storage.objects;
 CREATE POLICY "chat_media_delete_participant" ON storage.objects
   FOR DELETE TO authenticated
@@ -146,6 +153,7 @@ CREATE POLICY "chat_media_delete_participant" ON storage.objects
       split_part((storage.foldername(name))[1], '_', 1),
       split_part((storage.foldername(name))[1], '_', 2)
     )
+    AND (owner = (select auth.uid()) OR owner_id = (select auth.uid())::text)
   );
 
 -- ============================================================

@@ -20,6 +20,7 @@ vi.mock('capacitor-secure-storage-plugin', () => ({
 }));
 
 import { clearSeed, isSeedConfirmed, loadSeed, markSeedConfirmed, storeSeed } from './keystore';
+import { identityFromSeed, toBase64 } from './crypto/keys';
 
 const ALICE = '29a4782b-b764-43a4-87e5-21a606b05ff3';
 const BOB = '4c991d02-8ab2-4707-94d0-ba6484b71e13';
@@ -105,24 +106,46 @@ describe('keystore', () => {
   });
 
   describe('the unscoped seed left by builds before this fix', () => {
-    it('is never adopted by an account', async () => {
-      // It cannot be attributed: the device-wide slot was written by whichever
-      // account onboarded first and then read by every account after it.
-      // Guessing an owner is how the wrong account gets a private key.
-      store.set('nearside.identity.seed', 'AAAA');
+    // A real seed, so the box key it derives can be published.
+    const legacySeed = new Uint8Array(32).fill(3);
+    const owned = async () =>
+      toBase64((await identityFromSeed(legacySeed)).boxPublic);
+
+    it('is never adopted by an account it does not belong to', async () => {
+      // The device-wide slot was written by whichever account onboarded first
+      // and read by every account after it. Guessing an owner is how the wrong
+      // account gets a private key.
+      store.set('nearside.identity.seed', await toBase64(legacySeed));
       store.set('nearside.identity.confirmed', 'true');
-      expect(await loadSeed(ALICE)).toBeNull();
+      expect(await loadSeed(ALICE, async () => 'somebody-elses-key')).toBeNull();
+      expect(await loadSeed(BOB)).toBeNull();
       expect(await isSeedConfirmed(ALICE)).toBe(false);
     });
 
-    it('is purged from the device on the first scoped read', async () => {
-      // Unowned private key material must not sit in the keystore forever.
-      // The phrase is the user's copy; this device's copy has no owner.
-      store.set('nearside.identity.seed', 'AAAA');
+    it('is left in place for its owner rather than deleted by a stranger', async () => {
+      store.set('nearside.identity.seed', await toBase64(legacySeed));
+      await loadSeed(ALICE, async () => 'somebody-elses-key');
+      expect(store.has('nearside.identity.seed')).toBe(true);
+    });
+
+    it('is adopted by the account whose published key it derives', async () => {
+      // Deleting it here lost the account of anyone without their phrase.
+      store.set('nearside.identity.seed', await toBase64(legacySeed));
       store.set('nearside.identity.confirmed', 'true');
-      await loadSeed(ALICE);
+      const adopted = await loadSeed(ALICE, owned);
+      expect(Array.from(adopted as Uint8Array)).toEqual(Array.from(legacySeed));
       expect(store.has('nearside.identity.seed')).toBe(false);
-      expect(store.has('nearside.identity.confirmed')).toBe(false);
+      // The phrase screen shows once more: the flag was device-wide too.
+      expect(await isSeedConfirmed(ALICE)).toBe(false);
+    });
+
+    it('decides nothing when the published key cannot be read', async () => {
+      store.set('nearside.identity.seed', await toBase64(legacySeed));
+      const offline = async (): Promise<string | null> => {
+        throw new Error('offline');
+      };
+      expect(await loadSeed(ALICE, offline)).toBeNull();
+      expect(store.has('nearside.identity.seed')).toBe(true);
     });
   });
 });

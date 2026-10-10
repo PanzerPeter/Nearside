@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { identityFromSeed, type Identity } from '../crypto/keys';
 import { seedFromMnemonic } from '../crypto/mnemonic';
-import { openSignal, sealSignal, signalTopic } from './signaling';
+import { SIGNAL_MAX_SKEW_MS, openSignal, sealSignal, signalTopic } from './signaling';
 import { ENVELOPE_VERSION, isEnvelope, isSignal, type Signal } from './types';
 
 const ALICE_PHRASE =
@@ -94,6 +94,34 @@ describe('sealed signals', () => {
     const mallory = await identityFromSeed(new Uint8Array(32).fill(7));
     const envelope = await sealSignal(alice, bob.boxPublic, 'alice', 'c', OFFER);
     expect(await openSignal(mallory, alice.boxPublic, envelope)).toBeNull();
+  });
+});
+
+describe('replayed and reflected signals', () => {
+  // The call id is in clear and anyone who knows the two user ids can join the
+  // topic, record a sealed signal and send it again.
+  it('refuses an old offer re-sent under a new call id', async () => {
+    const { alice, bob } = await identities();
+    const recorded = await sealSignal(alice, bob.boxPublic, 'alice', 'call-1', OFFER);
+    expect(await openSignal(bob, alice.boxPublic, { ...recorded, callId: 'call-2' })).toBeNull();
+  });
+
+  it('refuses a signal sealed too long ago', async () => {
+    const { alice, bob } = await identities();
+    const now = Date.parse('2026-10-10T12:00:00Z');
+    const recorded = await sealSignal(alice, bob.boxPublic, 'alice', 'c', { t: 'hangup' }, now);
+    expect(await openSignal(bob, alice.boxPublic, recorded, now + 60_000)).toEqual({ t: 'hangup' });
+    expect(
+      await openSignal(bob, alice.boxPublic, recorded, now + SIGNAL_MAX_SKEW_MS + 1)
+    ).toBeNull();
+  });
+
+  it('refuses our own envelope sent back to us as the peer\u2019s', async () => {
+    // crypto_box is symmetric between the two of us, so Bob's own envelope
+    // opens with his key and Alice's — only the sealed sender tells them apart.
+    const { alice, bob } = await identities();
+    const mine = await sealSignal(bob, alice.boxPublic, 'bob', 'c', OFFER);
+    expect(await openSignal(bob, alice.boxPublic, { ...mine, from: 'alice' })).toBeNull();
   });
 });
 

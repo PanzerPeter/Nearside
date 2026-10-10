@@ -61,6 +61,13 @@ export function roomReactionSeal(roomKey: Uint8Array): ReactionSeal {
   };
 }
 
+/** The emoji columns of an insert. The only place a reaction row's payload
+ *  is built, so `no-plaintext.test.ts` checks what is actually sent. */
+export async function sealedReactionColumns(sealer: ReactionSeal, emoji: string) {
+  const sealed = await sealer.seal(emoji);
+  return { emoji_ciphertext: sealed.ciphertext, emoji_nonce: sealed.nonce };
+}
+
 /** The emoji a fetched row stands for, or null to leave it out. */
 export async function reactionEmoji(
   row: ReactionColumns,

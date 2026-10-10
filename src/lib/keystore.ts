@@ -6,7 +6,7 @@
 // in on a phone silently inherited the first one's private key, published it as
 // its own, and could open everything sealed to the first.
 import { SecureStoragePlugin } from 'capacitor-secure-storage-plugin';
-import { fromBase64, toBase64 } from './crypto/keys';
+import { fromBase64, identityFromSeed, toBase64 } from './crypto/keys';
 import { isMobileNative } from './platform';
 
 const SEED_KEY = 'nearside.identity.seed';
@@ -47,23 +47,57 @@ async function remove(key: string): Promise<void> {
 }
 
 /**
- * Deletes the unscoped entries written by builds before accounts were scoped.
+ * The unscoped seed written by builds before accounts were scoped, adopted
+ * only by the account that can be shown to own it.
  *
- * They are deliberately not adopted by whoever reads next. The old slot was
- * written by whichever account onboarded first and then read by every account
- * after it, so nothing on the device says who it belongs to — and handing an
- * unowned private key to a guessed owner is the failure being fixed, not a
- * migration. The user's twelve words are the copy that survives; restoring them
- * puts the key back under the account that actually owns it.
+ * The old slot was written by whichever account onboarded first and then read
+ * by every account after it, so the device cannot say whose it is — but the
+ * key can. A seed derives exactly one box key, and an account publishes
+ * exactly one; when they match, the seed is that account's and nobody else's,
+ * and it moves into that account's slot. Handing it to anyone else is the
+ * failure scoping fixed, so nobody else gets it.
+ *
+ * It used to be deleted on the first read by any account, which lost the
+ * account of anyone who upgraded without their twelve words to hand — or whose
+ * phone was first opened by a second account. Now it stays, in the same
+ * Keystore-backed storage as every scoped seed, until its owner signs in. A
+ * lookup that fails (offline, say) decides nothing.
+ *
+ * The confirmation flag is never adopted: it was device-wide too, and the
+ * phrase screen showing once more is the cheap side of that mistake.
  */
-async function purgeLegacyEntries(): Promise<void> {
+async function adoptLegacySeed(
+  userId: string,
+  publishedKey: (userId: string) => Promise<string | null>
+): Promise<void> {
+  const legacy = await read(SEED_KEY);
+  if (!legacy) return;
+  let published: string | null;
+  try {
+    published = await publishedKey(userId);
+  } catch {
+    return;
+  }
+  if (!published) return;
+  const seed = await fromBase64(legacy).catch(() => null);
+  if (!seed || (await toBase64((await identityFromSeed(seed)).boxPublic)) !== published) return;
+  await storeSeed(userId, seed);
   await Promise.all([remove(SEED_KEY), remove(CONFIRMED_KEY)]);
 }
 
-export async function loadSeed(userId: string): Promise<Uint8Array | null> {
-  await purgeLegacyEntries();
+/**
+ * `publishedKey` is the account's box key as the server holds it, for
+ * `adoptLegacySeed`. Without one a legacy entry is left where it is.
+ */
+export async function loadSeed(
+  userId: string,
+  publishedKey: (userId: string) => Promise<string | null> = async () => null
+): Promise<Uint8Array | null> {
   const value = await read(seedKey(userId));
-  return value ? await fromBase64(value) : null;
+  if (value) return await fromBase64(value);
+  await adoptLegacySeed(userId, publishedKey);
+  const adopted = await read(seedKey(userId));
+  return adopted ? await fromBase64(adopted) : null;
 }
 
 export async function storeSeed(userId: string, seed: Uint8Array): Promise<void> {

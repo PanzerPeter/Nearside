@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <application
         android:name=".NearsideApp"
@@ -77,6 +78,13 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- RevenueCat's Android SDK depends on Google's advertising-ID library.
+         Nothing here asks for the ID, and on Android 13+ it reads as zeros
+         without this permission, so the permission is removed outright and no
+         library added later can merge it back in. `no-ads.test.ts` checks
+         this line is here. -->
+    <uses-permission android:name="com.google.android.gms.permission.AD_ID" tools:node="remove" />
 
     <!-- Scanning a friend's connect QR. Requested at scan time, never at
          launch: a messenger that asks for the camera on first run reads as a

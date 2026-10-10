@@ -241,6 +241,39 @@ export function signedPayloadV4(f: RoomSignedFields): Uint8Array {
   ]);
 }
 
+/**
+ * Whether every field a row carries is inside the payload its version signs.
+ *
+ * `sig_v` is a column like any other, outside the signature, so the version a
+ * row claims is the server's word. Refusing unknown versions stops an upgrade
+ * to a payload nobody can build; this stops the downgrade. A version-1 row was
+ * signed over its nonce and ciphertext alone, so one handed a `media_path` and
+ * a sealed file key from another message would verify — the repointed photo
+ * under somebody's name that version 2 exists to refuse. Each column arrived
+ * with the version that signs it (media and replies in 0036, the thumbnail in
+ * 0044, `forwarded` in 0046), so no row written honestly carries a field its
+ * version does not cover.
+ */
+export function versionCovers(version: number, f: RoomSignedFields): boolean {
+  const present = (v: unknown) => v !== null && v !== undefined;
+  if (version < 4 && f.forwarded) return false;
+  if (version < 3 && present(f.media_thumb_path)) return false;
+  if (
+    version < 2 &&
+    [
+      f.media_path,
+      f.media_type,
+      f.media_duration_ms,
+      f.media_key_nonce,
+      f.media_key_ciphertext,
+      f.reply_to_id,
+    ].some(present)
+  ) {
+    return false;
+  }
+  return true;
+}
+
 /** Fixed order, absent fields as empty strings, `.` as the separator because it
  *  cannot occur in base64 (ORIGINAL variant), in a uuid, or in an integer. */
 function encodeFields(fields: readonly (string | number | null | undefined)[]): Uint8Array {

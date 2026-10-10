@@ -71,3 +71,4 @@
 0059_sealed_reactions.sql
 0060_sealed_room_titles.sql
 0061_sealed_profiles.sql
+0062_write_integrity.sql

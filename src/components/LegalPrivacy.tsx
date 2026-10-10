@@ -158,8 +158,11 @@ export const privacySections: LegalSection[] = [
           and cannot: the server has no plaintext to put in one. It names nobody either. Display
           names and group titles are sealed, so the server cannot read them; a notification says a
           message or a call came from &ldquo;someone&rdquo;, and on Android the app puts the name
-          back in on your phone, from its own copy. The most it tells OneSignal is what kind of
-          attachment a message carried.
+          back in on your phone, from its own copy. To do that, each notification carries the
+          account identifier of whoever sent the message or placed the call, and, for a group, the
+          group&rsquo;s identifier and the identifiers of the members being notified. OneSignal can
+          therefore see who contacts whom, and when, as the server can. Beyond that it learns what
+          kind of attachment a message carried, and whether a call is voice or video.
         </p>
         <p>
           Cloudflare provides the relay that carries a call when the two phones cannot reach each

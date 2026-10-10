@@ -36,6 +36,10 @@ import { t } from '../lib/i18n';
  */
 const OFFLINE_RECHECK_MS = 30_000;
 
+/** How long one insert may take before it is abandoned and retried. Well past
+ *  a slow mobile round trip, well short of an OS socket timeout. */
+const SEND_TIMEOUT_MS = 30_000;
+
 export interface Outbox {
   /** Sends not yet acknowledged by the server. Rendered after `messages`
    *  rather than merged into it — see `ChatRoom`. */
@@ -180,24 +184,35 @@ export function useOutbox({
    * the retry collides, and the collision is read here as the delivery it was.
    */
   async function attemptSend(msg: PendingMessage): Promise<Message | null> {
+    // Writes get no timeout from `lib/supabase.ts` — a retried write is a
+    // duplicate there. Here it is safe, because of the uuid above, and needed:
+    // a request stranded on a dead connection after a network change held the
+    // whole conversation's flush until the OS gave up on the socket.
+    let timer: ReturnType<typeof setTimeout> | undefined;
     try {
+      // Sealed first, so the key lookup does not eat into the write's budget.
+      const body = await sealBody(
+        identity,
+        await peerPublicKey(msg.receiver_id),
+        msg.user_id,
+        msg.receiver_id,
+        msg.text
+      );
+      const timeout = new AbortController();
+      timer = setTimeout(() => timeout.abort(), SEND_TIMEOUT_MS);
       const { data: inserted, error: insertError } = await supabase
         .from('messages')
         .insert({
           id: msg.id,
           user_id: msg.user_id,
           receiver_id: msg.receiver_id,
-          ...(await sealBody(
-            identity,
-            await peerPublicKey(msg.receiver_id),
-            msg.user_id,
-            msg.receiver_id,
-            msg.text
-          )),
+          ...body,
           reply_to_id: msg.reply_to_id,
         })
         .select('*')
+        .abortSignal(timeout.signal)
         .single();
+      clearTimeout(timer);
 
       if (isDuplicateSend(insertError)) {
         const row = await fetchOwnMessageRow(me, msg.id);
@@ -219,6 +234,8 @@ export function useOutbox({
       return opened;
     } catch {
       return null;
+    } finally {
+      clearTimeout(timer);
     }
   }
 

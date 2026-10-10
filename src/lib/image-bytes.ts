@@ -325,9 +325,13 @@ export function imageOrientation(bytes: Uint8Array, type: string): number {
  *
  *   JPEG — every APPn except APP0 (JFIF), APP2 carrying an ICC profile, and
  *   APP14 (the Adobe colour transform, without which a CMYK file inverts), plus
- *   COM. That takes EXIF and XMP, IPTC, vendor blocks, and the MPF segment,
- *   which on several phones embeds a *second complete copy* of the photo.
- *   Nothing that affects how the pixels decode is touched.
+ *   COM. That takes EXIF and XMP, IPTC and vendor blocks. And everything after
+ *   the first image's EOI: the MPF segment is only an index, and the second
+ *   complete copy of the photo it points at — with its own EXIF — sits after
+ *   the first image, as does the video a motion photo appends. Nothing that
+ *   affects how the first image decodes is touched. A rotated photo keeps one
+ *   thing: a fresh EXIF block holding the Orientation tag and nothing else,
+ *   because on this path the tag is the only thing keeping it upright.
  *
  *   PNG — eXIf and the text chunks. APNG control chunks are kept, so an
  *   animation survives.
@@ -336,18 +340,71 @@ export function imageOrientation(bytes: Uint8Array, type: string): number {
  *   length rewritten to match. A WebP this app encoded has neither; one that
  *   arrived as an animation and is being sent untouched may.
  *
- * Refuses, and returns the input, whenever the file declares an orientation
- * other than upright. The pixels are not being re-encoded on this path, so the
- * tag is the only thing keeping the picture the right way up.
+ * A PNG or WebP that declares an orientation other than upright is returned as
+ * it is. ponytail: rotated PNG/WebP keep their EXIF; they would need the same
+ * Orientation-only rebuild as JPEG (plus a CRC for PNG), add it if one turns up.
  */
 export function stripImageMetadata(bytes: Uint8Array, type: string): Uint8Array {
   const mime = type.toLowerCase();
-  if (imageOrientation(bytes, mime) !== UPRIGHT) return bytes;
+  const orientation = imageOrientation(bytes, mime);
 
-  if (mime === 'image/jpeg') return stripJpeg(bytes);
+  if (mime === 'image/jpeg') return stripJpeg(bytes, orientation);
+  if (orientation !== UPRIGHT) return bytes;
   if (mime === 'image/png' && isPng(bytes)) return stripPng(bytes);
   if (mime === 'image/webp' && isWebp(bytes)) return stripWebp(bytes);
   return bytes;
+}
+
+/**
+ * An APP1 segment holding EXIF with the Orientation tag and nothing else:
+ * "Exif\0\0", a little-endian TIFF header, one IFD with one SHORT entry, and no
+ * next IFD. What a rotated JPEG keeps in place of the camera's block.
+ */
+function orientationApp1(orientation: number): Uint8Array {
+  const body = [
+    0x45, 0x78, 0x69, 0x66, 0x00, 0x00, // Exif\0\0
+    0x49, 0x49, 0x2a, 0x00, 0x08, 0x00, 0x00, 0x00, // II*, IFD0 at 8
+    0x01, 0x00, // one entry
+    0x12, 0x01, 0x03, 0x00, 0x01, 0x00, 0x00, 0x00, // Orientation, SHORT, count 1
+    orientation, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, // no next IFD
+  ];
+  const length = body.length + 2;
+  return Uint8Array.from([0xff, 0xe1, length >> 8, length & 0xff, ...body]);
+}
+
+/**
+ * One past the EOI that ends the first image, or null when the file ends
+ * before one.
+ *
+ * Walked rather than searched for: `FF D9` can sit inside a quantisation or
+ * Huffman table between progressive scans, and cutting there would truncate
+ * the picture. Inside entropy-coded data a literal 0xFF is always followed by
+ * 0x00, a restart marker or more fill, so any other marker is structure — a
+ * segment with a length to skip, or the EOI.
+ */
+function firstImageEnd(bytes: Uint8Array, scan: Segment): number | null {
+  // `dataStart` is three past the marker byte, as `jpegSegments` reports it.
+  const markerAt = scan.dataStart - 3;
+  if (scan.marker === 0xd9) return markerAt + 1;
+  let at = markerAt + 1 + ((bytes[markerAt + 1] << 8) | bytes[markerAt + 2]);
+  while (at + 1 < bytes.length) {
+    if (bytes[at] !== 0xff) {
+      at += 1;
+      continue;
+    }
+    const marker = bytes[at + 1];
+    if (marker === 0xff) at += 1;
+    else if (marker === 0x00 || marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) at += 2;
+    else if (marker === 0xd9) return at + 2;
+    else {
+      if (at + 4 > bytes.length) return null;
+      const length = (bytes[at + 2] << 8) | bytes[at + 3];
+      if (length < 2) return null;
+      at += 2 + length;
+    }
+  }
+  return null;
 }
 
 /** APPn segments worth keeping, by marker. */
@@ -362,33 +419,46 @@ function jpegSegmentSurvives(bytes: Uint8Array, segment: Segment): boolean {
   return false;
 }
 
-function stripJpeg(bytes: Uint8Array): Uint8Array {
-  const keep: Segment[] = [];
+function stripJpeg(bytes: Uint8Array, orientation: number): Uint8Array {
+  const keep: Uint8Array[] = [bytes.subarray(0, 2)]; // SOI
   let scan: Segment | null = null;
-  let dropped = 0;
+  let dropped = false;
+  let rotated = orientation !== UPRIGHT;
 
   for (const segment of jpegSegments(bytes)) {
     if (segment.marker === 0xda || segment.marker === 0xd9) {
       scan = segment;
       break;
     }
-    if (jpegSegmentSurvives(bytes, segment)) keep.push(segment);
-    else dropped += segment.end - segment.start;
+    if (jpegSegmentSurvives(bytes, segment)) {
+      keep.push(bytes.subarray(segment.start, segment.end));
+      continue;
+    }
+    dropped = true;
+    // The camera's block goes; the one tag the viewer needs takes its place.
+    if (rotated && isExifApp1(bytes, segment)) {
+      keep.push(orientationApp1(orientation));
+      rotated = false;
+    }
   }
   // No scan found means the walk desynced before the end of the file. Rebuilding
   // from a partial read would truncate the image.
-  if (!scan || !dropped) return bytes;
+  if (!scan) return bytes;
 
-  const out = new Uint8Array(bytes.length - dropped);
-  out.set(bytes.subarray(0, 2), 0); // SOI
-  let at = 2;
-  for (const segment of keep) {
-    out.set(bytes.subarray(segment.start, segment.end), at);
-    at += segment.end - segment.start;
+  // A file with no EOI is cut short or not one this understands; everything
+  // from the scan is copied as before rather than guessed at.
+  const end = firstImageEnd(bytes, scan) ?? bytes.length;
+  if (!dropped && end === bytes.length) return bytes;
+
+  // The entropy-coded data and anything structural between progressive scans,
+  // up to and including the first image's EOI.
+  keep.push(bytes.subarray(scan.start, end));
+  const out = new Uint8Array(keep.reduce((sum, part) => sum + part.length, 0));
+  let at = 0;
+  for (const part of keep) {
+    out.set(part, at);
+    at += part.length;
   }
-  // Everything from the start of scan is entropy-coded data with no marker
-  // structure, and is copied whole.
-  out.set(bytes.subarray(scan.start), at);
   return out;
 }
 

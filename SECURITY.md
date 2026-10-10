@@ -80,10 +80,14 @@ transparency screen and in [README.md](README.md#where-the-protection-stops):
   is sealed `crypto_box` over a Realtime broadcast topic, SDP *and* ICE
   candidates, because a candidate carries the device's LAN address and public
   IP. Broadcast persists nothing, so there is no `calls` table by
-  construction.
+  construction. The call id, the sender and the time are sealed inside every
+  signal and checked against the clear ones, so a signal recorded off the topic
+  cannot ring a phone or end a call later.
 - **Notifications** carry neither content nor a name. Not as a policy: after
   `0023` the push function has no body it could leak, and after `0061` no name
-  either. The Android app fills in names it already holds, on the phone.
+  either. The Android app fills in names it already holds, on the phone, which
+  is why a push does carry the sender's account id (and a group's id): OneSignal
+  can see who contacts whom, as the server can, and the privacy policy says so.
 - **Sealed exchange.** A question whose two answers are released only once both
   exist. Fair exchange between parties who distrust each other is impossible
   without a referee, so there is one: the RLS policy on `sealed_answers`
@@ -107,9 +111,12 @@ transparency screen and in [README.md](README.md#where-the-protection-stops):
   exposure that mirror already has, and nothing more.
 
 Two tests are load-bearing and should be treated as part of the product's
-claims, not as coverage: `src/lib/no-plaintext.test.ts` (no body ever reaches an
-insert payload) and `src/lib/no-ads.test.ts` (no advertising SDK in
-`package.json` or the Gradle build).
+claims, not as coverage: `src/lib/no-plaintext.test.ts` (the builders seal, and
+no write anywhere in the source names a plaintext column) and
+`src/lib/no-ads.test.ts` (no advertising SDK anywhere in the npm lockfile or in
+what the Gradle build declares, and the advertising-ID permission stripped from
+the manifest — RevenueCat pulls in Google's advertising-ID library, which a node
+test cannot see in the resolved Gradle tree).
 
 ## Cryptography
 
@@ -121,7 +128,7 @@ for the app-lock verifier. Nonces are random per seal. No primitive here is
 home-made, and a report that one is being used incorrectly is exactly the kind
 this file is asking for.
 
-Three limits of that design, stated here so nobody has to find them:
+Limits of that design, stated here so nobody has to find them:
 
 - **No forward secrecy.** Peer messages are `crypto_box` between long-lived
   identity keys, with no ratchet. Someone who records ciphertext today and
@@ -136,12 +143,20 @@ Three limits of that design, stated here so nobody has to find them:
   `room_messages` compares against their `joined_at` (0057), and both
   timestamps are the server's. A server that handed them the older rows would
   hand them rows they can open.
-- **Room keys are not pinned.** A 1:1 chat records a peer's key on first use and
-  refuses to seal to a different one until it is verified again. Rooms read
-  members' encryption and signing keys from `profiles` each session, and the
-  safety number covers the encryption key only, so a server that substituted
-  keys could read a room created afterwards or sign a message as a member. This
-  is in scope, and pinning both keys is the fix.
+- **Keys are trusted on first use.** A peer's encryption key, and for groups
+  their signing key, is recorded the first time this device sees it; a
+  different key later is refused — not sealed to, and not accepted on a group
+  message — until a human verifies again (`pinnedKeys` in
+  `src/lib/verification.ts`). The first sighting itself is the server's word,
+  which is what comparing safety numbers is for.
+- **A 1:1 row proves less than a group row.** `crypto_box` shows a body came
+  from one of the two people in the conversation, not which one, and the
+  columns beside it (`reply_to_id`, `forwarded`, which attachment goes with
+  which row) are not signed. A server could show your own message back to you
+  as the other person's, or re-pair rows within the same conversation. It could
+  not invent or read a body. Group rows are signed over every column a client
+  renders, and the version they claim cannot be used to sign less
+  (`versionCovers` in `src/lib/crypto/seal.ts`).
 
 ## Supported versions
 

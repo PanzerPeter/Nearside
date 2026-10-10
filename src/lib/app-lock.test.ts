@@ -144,3 +144,29 @@ describe('lock storage', () => {
     expect(await loadLock('user-a')).toBeNull();
   });
 });
+
+describe('failure count', () => {
+  beforeEach(() => store.clear());
+
+  it('survives a restart, so killing the app does not reset the backoff', async () => {
+    const { loadFailures, remainingWaitMs, saveFailures } = await import('./app-lock');
+    const at = Date.parse('2026-10-10T12:00:00Z');
+    await saveFailures('user-a', { count: 5, at });
+    const restored = await loadFailures('user-a');
+    expect(restored).toEqual({ count: 5, at });
+    // Fifth miss: 10 s, counted from the miss rather than from the relaunch.
+    expect(remainingWaitMs(restored, at + 4_000)).toBe(6_000);
+    expect(remainingWaitMs(restored, at + 10_000)).toBe(0);
+  });
+
+  it('starts clean, and goes with the lock', async () => {
+    const { clearLock, deriveVerifier, loadFailures, saveFailures, saveLock } = await import(
+      './app-lock'
+    );
+    expect(await loadFailures('user-a')).toEqual({ count: 0, at: 0 });
+    await saveLock('user-a', await deriveVerifier('correct horse'), '1m');
+    await saveFailures('user-a', { count: 3, at: 1 });
+    await clearLock('user-a');
+    expect(await loadFailures('user-a')).toEqual({ count: 0, at: 0 });
+  });
+});

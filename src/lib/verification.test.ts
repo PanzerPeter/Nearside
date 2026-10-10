@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { clearLocalDb, openLocalDb } from './localdb';
-import { markVerified, recordPeerKey, verificationState } from './verification';
+import { markVerified, pinnedKeys, recordPeerKey, verificationState } from './verification';
 
 const ME = '11111111-1111-1111-1111-111111111111';
 const PEER = '22222222-2222-2222-2222-222222222222';
@@ -50,5 +50,59 @@ describe('verification', () => {
     await markVerified(PEER, 'keyA');
     await clearLocalDb();
     expect(await verificationState(PEER, 'keyA')).toBe('unverified');
+  });
+});
+
+describe('pinned keys for a group', () => {
+  // Groups took both keys exactly as the server published them. The pin is
+  // what makes a swap after first sight come back unusable instead.
+  beforeEach(async () => {
+    await openLocalDb(ME);
+    await clearLocalDb();
+  });
+
+  it('takes the first pair it sees', async () => {
+    const first = { public_key: 'box-1', signing_key: 'sign-1' };
+    expect(await pinnedKeys(PEER, first)).toEqual(first);
+    expect(await pinnedKeys(PEER, first)).toEqual(first);
+  });
+
+  it('refuses a swapped signing key', async () => {
+    await pinnedKeys(PEER, { public_key: 'box-1', signing_key: 'sign-1' });
+    expect(await pinnedKeys(PEER, { public_key: 'box-1', signing_key: 'sign-evil' })).toEqual({
+      public_key: 'box-1',
+      signing_key: null,
+    });
+  });
+
+  it('refuses both keys when the box key changed', async () => {
+    await pinnedKeys(PEER, { public_key: 'box-1', signing_key: 'sign-1' });
+    expect(await pinnedKeys(PEER, { public_key: 'box-evil', signing_key: 'sign-1' })).toEqual({
+      public_key: null,
+      signing_key: null,
+    });
+  });
+
+  it('pins a signing key for a contact the 1:1 path recorded without one', async () => {
+    await recordPeerKey(PEER, 'box-1');
+    await pinnedKeys(PEER, { public_key: 'box-1', signing_key: 'sign-1' });
+    expect(
+      (await pinnedKeys(PEER, { public_key: 'box-1', signing_key: 'sign-evil' })).signing_key
+    ).toBeNull();
+  });
+
+  it('keeps the signing pin through a verification of the same key', async () => {
+    await pinnedKeys(PEER, { public_key: 'box-1', signing_key: 'sign-1' });
+    await markVerified(PEER, 'box-1');
+    expect(
+      (await pinnedKeys(PEER, { public_key: 'box-1', signing_key: 'sign-evil' })).signing_key
+    ).toBeNull();
+  });
+
+  it('re-pins after a human verifies a new key', async () => {
+    await pinnedKeys(PEER, { public_key: 'box-1', signing_key: 'sign-1' });
+    await markVerified(PEER, 'box-2');
+    const next = { public_key: 'box-2', signing_key: 'sign-2' };
+    expect(await pinnedKeys(PEER, next)).toEqual(next);
   });
 });

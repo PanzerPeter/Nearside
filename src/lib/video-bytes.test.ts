@@ -234,4 +234,55 @@ describe('stripVideoMetadata', () => {
     expect([...out.subarray(at + 8, at + 16)]).toEqual([...large.subarray(8, 16)]);
     expect(holds(out, '+51.5074')).toBe(false);
   });
+
+  describe('a metadata track\u2019s own samples', () => {
+    const u32 = (n: number) => [(n >>> 24) & 0xff, (n >>> 16) & 0xff, (n >>> 8) & 0xff, n & 0xff];
+    const VIDEO = text('VIDEOFRAME');
+    const TRACE = [text('GPS5-A'), text('GPS5-BB')];
+
+    /** A `meta` track whose one chunk holds both trace samples, after the
+     *  picture's frame in `mdat`. `sampleCount` lets a test lie in `stsz`. */
+    function withTrace(sampleCount = TRACE.length): { file: Uint8Array; mdatData: number } {
+      const build = (chunkAt: number) =>
+        box(
+          'moov',
+          trak('vide'),
+          box(
+            'trak',
+            box('mdia', hdlr('meta'), box('minf', box('stbl',
+              box('stsz', [0, 0, 0, 0], u32(0), u32(sampleCount), ...TRACE.map((t) => u32(t.length))),
+              box('stsc', [0, 0, 0, 0], u32(1), u32(1), u32(TRACE.length), u32(1)),
+              box('stco', [0, 0, 0, 0], u32(1), u32(chunkAt))
+            )))
+          )
+        );
+      const mdatData = FTYP.length + build(0).length + 8;
+      const moov = build(mdatData + VIDEO.length);
+      return {
+        file: concat(FTYP, moov, box('mdat', VIDEO, ...TRACE)),
+        mdatData,
+      };
+    }
+
+    it('zeroes the trace where it sits in mdat and leaves the picture', () => {
+      const { file, mdatData } = withTrace();
+      expect(holds(file, 'GPS5')).toBe(true);
+
+      const out = stripVideoMetadata(file, 'video/mp4');
+
+      expect(out.length).toBe(file.length);
+      expect(holds(out, 'GPS5')).toBe(false);
+      expect(String.fromCharCode(...out.subarray(mdatData, mdatData + VIDEO.length))).toBe('VIDEOFRAME');
+    });
+
+    it('zeroes nothing in mdat when the tables do not add up', () => {
+      // Blanking bytes the tables cannot account for would be a corrupted
+      // video; the track is still unlinked.
+      const { file } = withTrace(3);
+      const out = stripVideoMetadata(file, 'video/mp4');
+      expect(holds(out, 'GPS5')).toBe(true);
+      expect(holds(out, 'VIDEOFRAME')).toBe(true);
+      expect(holds(out, 'hdlr\0\0\0\0\0\0\0\0meta')).toBe(false);
+    });
+  });
 });

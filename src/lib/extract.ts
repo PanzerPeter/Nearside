@@ -14,6 +14,7 @@
 
 import { linkify } from './linkify';
 import { formatTime } from './time';
+import { localeTag } from './i18n';
 
 /** A decrypted message, as the mirror holds it. */
 export interface InsightSource {
@@ -155,7 +156,8 @@ const TIME_GAP = /^[\s,–—-]*(?:at|by|from|around|@)?[\s,]*$/i;
 interface DayAnchor {
   start: number;
   end: number;
-  resolve: (base: Date) => Date;
+  /** Null for a date the calendar does not have. */
+  resolve: (base: Date) => Date | null;
   /** Set by "tonight", which names an hour without naming a clock. */
   impliedHour?: number;
 }
@@ -214,12 +216,15 @@ function dayAnchors(masked: string): DayAnchor[] {
   }
 
   const named = (month: number, day: number) => (base: Date) => {
-    const candidate = new Date(base.getFullYear(), month, day);
+    let candidate = new Date(base.getFullYear(), month, day);
     // A month already behind us is next year's: "January 5" said in December
     // is three weeks away, not eleven months back. Plans point forward; a past
     // date somebody is reminiscing about is the cost of that assumption.
-    if (candidate < startOfDay(base, 0)) candidate.setFullYear(base.getFullYear() + 1);
-    return candidate;
+    if (candidate < startOfDay(base, 0)) candidate = new Date(base.getFullYear() + 1, month, day);
+    // A day the month does not have — "April 31", or "Feb 29" in a year with
+    // none — rolls over silently in `Date` and would land on a day nobody
+    // named. Dropped instead.
+    return candidate.getDate() === day ? candidate : null;
   };
 
   for (const m of masked.matchAll(MONTH_FIRST)) {
@@ -301,6 +306,7 @@ export function extractDates(messages: InsightSource[]): DateInsight[] {
         (t) => t.start >= anchor.end && TIME_GAP.test(masked.slice(anchor.end, t.start))
       );
       const when = anchor.resolve(base);
+      if (!when) continue;
       const hour = paired?.hours ?? anchor.impliedHour;
       if (hour !== undefined) when.setHours(hour, paired?.minutes ?? 0, 0, 0);
       push(
@@ -353,8 +359,6 @@ function endOfDay(ms: number): number {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1).getTime() - 1;
 }
 
-const DAY_LABELS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-
 /**
  * How the panel says when. Relative near today, absolute past that: "Friday"
  * is only useful for the Friday a few days out, and a plan four months away
@@ -372,12 +376,15 @@ export function formatWhen(event: DateInsight, nowMs: number): string {
       86_400_000
   );
 
+  // In the app's language, not English and not the device's: the words come
+  // from Intl under `localeTag()`, as every other date in the app does.
+  const tag = localeTag();
   let day: string;
-  if (days === 0) day = 'Today';
-  else if (days === 1) day = 'Tomorrow';
-  else if (days === -1) day = 'Yesterday';
-  else if (days > 1 && days < 7) day = DAY_LABELS[when.getDay()];
-  else day = when.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  if (Math.abs(days) <= 1) {
+    const word = new Intl.RelativeTimeFormat(tag, { numeric: 'auto' }).format(days, 'day');
+    day = word.charAt(0).toLocaleUpperCase(tag) + word.slice(1);
+  } else if (days > 1 && days < 7) day = when.toLocaleDateString(tag, { weekday: 'long' });
+  else day = when.toLocaleDateString(tag, { month: 'short', day: 'numeric' });
 
   return event.hasTime ? `${day}, ${formatTime(when.toISOString())}` : day;
 }

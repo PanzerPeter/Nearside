@@ -2,13 +2,18 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { App } from '@capacitor/app';
 import {
   backoffMs,
+  clearFailures,
   clearLock,
   deriveVerifier,
+  loadFailures,
   loadLock,
   matchesRecoveryPhrase,
   RELOCK_MS,
+  remainingWaitMs,
+  saveFailures,
   saveLock,
   verifyPassphrase,
+  type LockFailures,
   type RelockAfter,
 } from '../lib/app-lock';
 import { loadSeed } from '../lib/keystore';
@@ -37,17 +42,23 @@ export interface AppLock {
  * conversation list before the lock screen replaces it, which is the whole
  * thing the lock exists to prevent.
  *
- * Failure counts live in memory only. Persisting them would let a locked-out
- * owner sit out a five-minute backoff they cannot escape, and the way past a
- * forgotten passphrase — the recovery phrase — is throttled by the same
- * counter.
+ * Wrong passphrases are counted in secure storage, not in memory, so killing
+ * the app does not reset the backoff (`loadFailures`). The recovery phrase is
+ * not throttled: twelve words with a checksum cannot be guessed, and it is the
+ * owner's way out while the passphrase is waiting.
  */
 export function useAppLock(userId: string | null): AppLock {
   const [state, setState] = useState<LockState>('loading');
   const [relock, setRelockState] = useState<RelockAfter>('1m');
   const [waitMs, setWaitMs] = useState(0);
-  const failures = useRef(0);
+  const failures = useRef<LockFailures>({ count: 0, at: 0 });
   const backgroundedAt = useRef<number | null>(null);
+
+  /** Show whatever is left of the current backoff, and clear it when done. */
+  const showWait = useCallback((ms: number) => {
+    setWaitMs(ms);
+    if (ms > 0) window.setTimeout(() => setWaitMs(0), ms);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -56,12 +67,14 @@ export function useAppLock(userId: string | null): AppLock {
       return;
     }
     setState('loading');
-    void loadLock(userId).then((stored) => {
+    void Promise.all([loadLock(userId), loadFailures(userId)]).then(([stored, missed]) => {
       if (cancelled) return;
       if (!stored) {
         setState('off');
         return;
       }
+      failures.current = missed;
+      showWait(remainingWaitMs(missed, Date.now()));
       setRelockState(stored.relock);
       // Locked on every cold start. A lock that only engages after the first
       // background is not a lock on a phone that was rebooted.
@@ -70,7 +83,7 @@ export function useAppLock(userId: string | null): AppLock {
     return () => {
       cancelled = true;
     };
-  }, [userId]);
+  }, [userId, showWait]);
 
   // Re-lock on return from the background, once the configured time has passed.
   // The clock is read on the way out and compared on the way back rather than
@@ -94,19 +107,27 @@ export function useAppLock(userId: string | null): AppLock {
     };
   }, [relock]);
 
-  /** One counter for both routes in, so the phrase field is not a way around
-   *  the throttle on the passphrase field. */
-  const registerFailure = useCallback(() => {
-    failures.current += 1;
-    const wait = backoffMs(failures.current);
-    setWaitMs(wait);
-    if (wait > 0) window.setTimeout(() => setWaitMs(0), wait);
-  }, []);
+  /** A wrong passphrase: counted, written down before the wait is shown, so a
+   *  kill during the wait cannot lose it. */
+  const registerFailure = useCallback(async () => {
+    if (!userId) return;
+    const next = { count: failures.current.count + 1, at: Date.now() };
+    failures.current = next;
+    await saveFailures(userId, next).catch(() => {});
+    showWait(backoffMs(next.count));
+  }, [userId, showWait]);
+
+  /** Back to a clean slate, in memory and on disk. */
+  const resetFailures = useCallback(async () => {
+    failures.current = { count: 0, at: 0 };
+    setWaitMs(0);
+    if (userId) await clearFailures(userId).catch(() => {});
+  }, [userId]);
 
   const unlock = useCallback(
     async (passphrase: string) => {
       if (!userId) return false;
-      if (backoffMs(failures.current) > 0) return false;
+      if (remainingWaitMs(failures.current, Date.now()) > 0) return false;
       const stored = await loadLock(userId);
       if (!stored) {
         setState('off');
@@ -114,28 +135,23 @@ export function useAppLock(userId: string | null): AppLock {
       }
       const ok = await verifyPassphrase(passphrase, stored.verifier);
       if (!ok) {
-        registerFailure();
+        await registerFailure();
         return false;
       }
-      failures.current = 0;
-      setWaitMs(0);
+      await resetFailures();
       setState('unlocked');
       return true;
     },
-    [userId, registerFailure]
+    [userId, registerFailure, resetFailures]
   );
 
   const unlockWithRecoveryPhrase = useCallback(
     async (phrase: string) => {
       if (!userId) return false;
-      if (backoffMs(failures.current) > 0) return false;
+      // Not throttled and not counted: see the note on the hook.
       const ok = await matchesRecoveryPhrase(phrase, await loadSeed(userId));
-      if (!ok) {
-        registerFailure();
-        return false;
-      }
-      failures.current = 0;
-      setWaitMs(0);
+      if (!ok) return false;
+      await resetFailures();
       // The lock comes off rather than merely opening: the passphrase behind it
       // is the one the user has just told us they no longer have, and leaving
       // it in place would lock them out again at the next cold start.
@@ -143,7 +159,7 @@ export function useAppLock(userId: string | null): AppLock {
       setState('off');
       return true;
     },
-    [userId, registerFailure]
+    [userId, resetFailures]
   );
 
   const enable = useCallback(
@@ -160,10 +176,9 @@ export function useAppLock(userId: string | null): AppLock {
   const disable = useCallback(async () => {
     if (!userId) return;
     await clearLock(userId);
-    failures.current = 0;
-    setWaitMs(0);
+    await resetFailures();
     setState('off');
-  }, [userId]);
+  }, [userId, resetFailures]);
 
   const setRelock = useCallback(
     async (next: RelockAfter) => {

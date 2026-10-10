@@ -2,7 +2,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { Reaction } from '../lib/types';
 import { useConnection } from '../lib/connection';
-import { reactionEmoji, type ReactionColumns, type ReactionSeal } from '../lib/reaction-seal';
+import {
+  reactionEmoji,
+  sealedReactionColumns,
+  type ReactionColumns,
+  type ReactionSeal,
+} from '../lib/reaction-seal';
 
 /** A row as the server holds it: the emoji sealed, or plaintext on a row from
  *  before 0059. */
@@ -173,21 +178,16 @@ export function useReactions(
         // rule a message body follows.
         const current = sealerRef.current;
         if (!current) return;
-        let sealed;
+        let columns;
         try {
-          sealed = await current.seal(emoji);
+          columns = await sealedReactionColumns(current, emoji);
         } catch (error) {
           console.error('reaction seal failed', error);
           return;
         }
         const { data } = await supabase
           .from(table)
-          .insert({
-            message_id: messageId,
-            user_id: me,
-            emoji_ciphertext: sealed.ciphertext,
-            emoji_nonce: sealed.nonce,
-          })
+          .insert({ message_id: messageId, user_id: me, ...columns })
           .select('id, message_id, user_id, created_at')
           .single();
         if (data) {

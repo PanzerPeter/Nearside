@@ -4,6 +4,7 @@ import { generateMnemonic, seedFromMnemonic } from '../lib/crypto/mnemonic';
 import { identityFromSeed } from '../lib/crypto/keys';
 import { isSeedConfirmed, loadSeed, markSeedConfirmed, storeSeed } from '../lib/keystore';
 import { setRecoveryConfirmed } from '../lib/notifications';
+import { publishedBoxKey } from '../lib/identity-sync';
 import {
   scopedIdentity,
   scopedStatus,
@@ -33,7 +34,7 @@ export function useIdentity(session: Session | null) {
 
     let cancelled = false;
     void (async () => {
-      const seed = await loadSeed(userId);
+      const seed = await loadSeed(userId, publishedBoxKey);
       if (cancelled) return;
       if (!seed) {
         setHeld({ userId, identity: null, status: 'missing' });

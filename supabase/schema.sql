@@ -88,6 +88,27 @@ $$;
 -- trigger context.
 REVOKE ALL ON FUNCTION public.set_updated_at() FROM PUBLIC, anon, authenticated;
 
+/*
+  `created_at` is the server's on every table a rate limit counts (0062).
+  Each flood guard counts rows with `created_at > now() - interval`, so a
+  client that could date its own inserts to 2000 was never counted. On
+  `messages` and `room_messages` it is also what read receipts, the thread's
+  order and a group's join boundary compare. Attached BEFORE INSERT beside each
+  table below.
+*/
+CREATE OR REPLACE FUNCTION public.stamp_created_at()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = ''
+AS $$
+BEGIN
+  NEW.created_at := now();
+  RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.stamp_created_at() FROM PUBLIC, anon, authenticated;
+
 -- ===========================================================================
 -- 3. Identity
 -- ===========================================================================
@@ -563,6 +584,12 @@ CREATE TRIGGER friendships_rate_limit
   BEFORE INSERT ON public.friendships
   FOR EACH ROW EXECUTE FUNCTION public.enforce_friendship_rate();
 
+-- What the count above reads, so it cannot be dated out of the window (0062).
+DROP TRIGGER IF EXISTS friendships_stamp_created ON public.friendships;
+CREATE TRIGGER friendships_stamp_created
+  BEFORE INSERT ON public.friendships
+  FOR EACH ROW EXECUTE FUNCTION public.stamp_created_at();
+
 /*
   Connect codes — how two people find each other now that there is no
   directory. Short-lived, single-use, and reachable only through the two
@@ -799,8 +826,11 @@ CREATE TABLE IF NOT EXISTS public.messages (
   -- attachment would open the moment the prompt did — a prompt that reveals
   -- half of itself early is worse than no prompt. The self-chat is excluded
   -- for the obvious reason: an exchange with yourself withholds nothing.
+  -- A tombstone is exempt (0062): withdrawing a question is the ordinary
+  -- delete, which strips the body, and without this every cancel was refused.
   CONSTRAINT sealed_prompt_shape CHECK (
     NOT sealed_prompt
+    OR deleted_at IS NOT NULL
     OR (ciphertext IS NOT NULL AND media_path IS NULL AND user_id <> receiver_id)
   ),
 
@@ -941,6 +971,14 @@ BEGIN
   END IF;
   IF NEW.sealed_prompt IS DISTINCT FROM OLD.sealed_prompt THEN
     RAISE EXCEPTION 'messages.sealed_prompt is immutable';
+  END IF;
+  -- The answers beneath a question answer the text it had. Withdrawing it is a
+  -- tombstone, and stays allowed.
+  IF OLD.sealed_prompt
+     AND NEW.deleted_at IS NULL
+     AND (NEW.ciphertext IS DISTINCT FROM OLD.ciphertext
+          OR NEW.nonce IS DISTINCT FROM OLD.nonce) THEN
+    RAISE EXCEPTION 'a sealed question cannot be edited';
   END IF;
   IF NEW.reply_to_id IS DISTINCT FROM OLD.reply_to_id THEN
     RAISE EXCEPTION 'messages.reply_to_id is immutable';
@@ -1108,6 +1146,14 @@ CREATE TRIGGER messages_rate_limit
   BEFORE INSERT ON public.messages
   FOR EACH ROW EXECUTE FUNCTION public.enforce_message_rate();
 
+-- The count above, read receipts and the thread's order all compare this
+-- column, and the body guard freezes it on UPDATE; this is the INSERT half
+-- (0062).
+DROP TRIGGER IF EXISTS messages_stamp_created ON public.messages;
+CREATE TRIGGER messages_stamp_created
+  BEFORE INSERT ON public.messages
+  FOR EACH ROW EXECUTE FUNCTION public.stamp_created_at();
+
 -- ---------------------------------------------------------------------------
 -- 5a. Reactions
 -- ---------------------------------------------------------------------------
@@ -1203,6 +1249,11 @@ DROP TRIGGER IF EXISTS message_reactions_rate_limit ON public.message_reactions;
 CREATE TRIGGER message_reactions_rate_limit
   BEFORE INSERT ON public.message_reactions
   FOR EACH ROW EXECUTE FUNCTION public.enforce_reaction_rate();
+
+DROP TRIGGER IF EXISTS message_reactions_stamp_created ON public.message_reactions;
+CREATE TRIGGER message_reactions_stamp_created
+  BEFORE INSERT ON public.message_reactions
+  FOR EACH ROW EXECUTE FUNCTION public.stamp_created_at();
 
 -- ---------------------------------------------------------------------------
 -- 5b. Delivery and read receipts
@@ -2603,6 +2654,11 @@ CREATE TRIGGER room_message_reactions_rate_limit
   BEFORE INSERT ON public.room_message_reactions
   FOR EACH ROW EXECUTE FUNCTION public.enforce_room_reaction_rate();
 
+DROP TRIGGER IF EXISTS room_message_reactions_stamp_created ON public.room_message_reactions;
+CREATE TRIGGER room_message_reactions_stamp_created
+  BEFORE INSERT ON public.room_message_reactions
+  FOR EACH ROW EXECUTE FUNCTION public.stamp_created_at();
+
 -- ---------------------------------------------------------------------------
 -- 7b. Room read receipts
 -- ---------------------------------------------------------------------------
@@ -2846,23 +2902,10 @@ CREATE TRIGGER room_messages_stamp_expiry
 -- The other side of that comparison (0057). The app never sent `created_at`,
 -- but the column was writable on insert, so a member could date a message to
 -- before a newer member joined and keep it out of their view.
-CREATE OR REPLACE FUNCTION public.room_messages_stamp_created()
-RETURNS trigger
-LANGUAGE plpgsql
-SET search_path = ''
-AS $$
-BEGIN
-  NEW.created_at := now();
-  RETURN NEW;
-END;
-$$;
-
-REVOKE ALL ON FUNCTION public.room_messages_stamp_created() FROM PUBLIC, anon, authenticated;
-
 DROP TRIGGER IF EXISTS room_messages_stamp_created ON public.room_messages;
 CREATE TRIGGER room_messages_stamp_created
   BEFORE INSERT ON public.room_messages
-  FOR EACH ROW EXECUTE FUNCTION public.room_messages_stamp_created();
+  FOR EACH ROW EXECUTE FUNCTION public.stamp_created_at();
 
 CREATE OR REPLACE FUNCTION public.set_conversation_timer(peer uuid, ttl integer)
 RETURNS void
@@ -2989,6 +3032,72 @@ END;
 $$;
 
 REVOKE ALL ON FUNCTION public.expire_messages() FROM PUBLIC, anon, authenticated;
+
+/*
+  An attachment leaves with its message (0062). A delete, the media trim and
+  any other write that takes `media_path` or `media_thumb_path` off a row
+  deletes the object it named, in the same transaction. The 1:1 client used to
+  remove the full-size file and forget the preview; a group removed neither,
+  and a room folder has no DELETE policy, so every deleted group attachment
+  stayed in the bucket for good.
+
+  Only an object the row's sender uploaded. That is what keeps this from being
+  a way round the room folder's missing DELETE policy: a member who repoints
+  their own row at somebody else's file and then clears it deletes nothing.
+  `owner` and `owner_id` are both checked because the platform writes both,
+  and which one an old object carries depends on when it was uploaded.
+*/
+CREATE OR REPLACE FUNCTION public.drop_replaced_media()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+  sender uuid;
+  doomed text[];
+  previous text;
+BEGIN
+  -- Two statements rather than one expression: plpgsql resolves a record's
+  -- field when the statement runs, and `messages` has no `sender_id`.
+  IF TG_TABLE_NAME = 'messages' THEN
+    sender := OLD.user_id;
+  ELSE
+    sender := OLD.sender_id;
+  END IF;
+
+  doomed := array_remove(ARRAY[
+    CASE WHEN NEW.media_path IS DISTINCT FROM OLD.media_path THEN OLD.media_path END,
+    CASE WHEN NEW.media_thumb_path IS DISTINCT FROM OLD.media_thumb_path
+         THEN OLD.media_thumb_path END
+  ], NULL);
+  IF cardinality(doomed) = 0 THEN
+    RETURN NULL;
+  END IF;
+
+  -- The Storage API's own flag (0054), transaction-local, and put back after.
+  previous := current_setting('storage.allow_delete_query', true);
+  PERFORM set_config('storage.allow_delete_query', 'true', true);
+  DELETE FROM storage.objects o
+   WHERE o.bucket_id = 'chat-media'
+     AND o.name = ANY (doomed)
+     AND (o.owner = sender OR o.owner_id = sender::text);
+  PERFORM set_config('storage.allow_delete_query', coalesce(previous, 'false'), true);
+  RETURN NULL;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.drop_replaced_media() FROM PUBLIC, anon, authenticated;
+
+DROP TRIGGER IF EXISTS messages_drop_replaced_media ON public.messages;
+CREATE TRIGGER messages_drop_replaced_media
+  AFTER UPDATE OF media_path, media_thumb_path ON public.messages
+  FOR EACH ROW EXECUTE FUNCTION public.drop_replaced_media();
+
+DROP TRIGGER IF EXISTS room_messages_drop_replaced_media ON public.room_messages;
+CREATE TRIGGER room_messages_drop_replaced_media
+  AFTER UPDATE OF media_path, media_thumb_path ON public.room_messages
+  FOR EACH ROW EXECUTE FUNCTION public.drop_replaced_media();
 
 /*
   One pinned message per conversation.

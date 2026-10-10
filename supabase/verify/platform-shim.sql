@@ -101,6 +101,9 @@ CREATE TABLE IF NOT EXISTS storage.objects (
   bucket_id text REFERENCES storage.buckets(id),
   name      text,
   owner     uuid,
+  -- The platform's text successor to `owner`; 0062's policy and trigger read
+  -- both.
+  owner_id  text,
   UNIQUE (bucket_id, name)
 );
 ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;

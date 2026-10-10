@@ -64,5 +64,62 @@ export async function recordPeerKey(peerId: string, key: string): Promise<void> 
  * after a legitimate key change does.
  */
 export async function markVerified(peerId: string, key: string): Promise<void> {
-  await putContact({ peer_id: peerId, public_key: key, verified_at: new Date().toISOString() });
+  // The pinned signing key survives a verification of the same box key. After
+  // a key change it is dropped, and the next group read pins the new one — the
+  // two keys come from one seed and change together.
+  const known = await cachedContact(peerId);
+  await putContact({
+    peer_id: peerId,
+    public_key: key,
+    verified_at: new Date().toISOString(),
+    signing_key: known?.public_key === key ? (known.signing_key ?? null) : null,
+  });
+}
+
+export interface PublishedKeyPair {
+  public_key: string | null;
+  signing_key: string | null;
+}
+
+/**
+ * What a group may use of the keys the server published for `peerId`.
+ *
+ * Groups used to take both keys exactly as `profiles` returned them, so the one
+ * check that makes a 1:1 send refuse a swapped key — `keyChanged` in
+ * `sealBody` — never ran for a group. A server that answered with its own box
+ * key got the room key sealed to it; one that answered with its own signing key
+ * could write messages that rendered as verified under somebody else's name.
+ *
+ * Trust on first use, the same rule as `recordPeerKey`, extended to the signing
+ * key: the first pair seen is written down, and afterwards a key that differs
+ * from the record comes back null — unreachable for sealing, unverifiable for
+ * reading — until a human re-verifies. A changed box key nulls both, since the
+ * two come from one seed and a signing key that stayed put beside a swapped box
+ * key is not evidence of anything.
+ */
+export async function pinnedKeys(
+  peerId: string,
+  published: PublishedKeyPair
+): Promise<PublishedKeyPair> {
+  if (!published.public_key) return published;
+  const known = await cachedContact(peerId);
+  if (!known) {
+    await putContact({
+      peer_id: peerId,
+      public_key: published.public_key,
+      verified_at: null,
+      signing_key: published.signing_key,
+    });
+    return published;
+  }
+  if (known.public_key !== published.public_key) return { public_key: null, signing_key: null };
+  if (!known.signing_key) {
+    // A contact recorded by the 1:1 path, which never asked for this key.
+    if (published.signing_key) await putContact({ ...known, signing_key: published.signing_key });
+    return published;
+  }
+  return {
+    public_key: published.public_key,
+    signing_key: known.signing_key === published.signing_key ? published.signing_key : null,
+  };
 }
