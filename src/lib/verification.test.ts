@@ -16,7 +16,7 @@ describe('verification', () => {
   });
 
   it('becomes verified after marking', async () => {
-    await markVerified(PEER, 'keyA');
+    await markVerified(PEER, 'keyA', null);
     expect(await verificationState(PEER, 'keyA')).toBe('verified');
   });
 
@@ -24,7 +24,7 @@ describe('verification', () => {
     // The distinction is the whole security property: "we never verified" is
     // routine, "the key you verified is not the key you are talking to now"
     // is what an interception looks like.
-    await markVerified(PEER, 'keyA');
+    await markVerified(PEER, 'keyA', null);
     expect(await verificationState(PEER, 'keyB')).toBe('changed');
   });
 
@@ -41,13 +41,13 @@ describe('verification', () => {
     // recordPeerKey runs on every key fetch. If it adopted whatever the server
     // just handed over, a swapped key would rewrite the record it was supposed
     // to be caught by, and 'changed' would be unreachable.
-    await markVerified(PEER, 'keyA');
+    await markVerified(PEER, 'keyA', null);
     await recordPeerKey(PEER, 'keyB');
     expect(await verificationState(PEER, 'keyA')).toBe('verified');
   });
 
   it('forgets everything on clear, so a signed-out device trusts nothing', async () => {
-    await markVerified(PEER, 'keyA');
+    await markVerified(PEER, 'keyA', null);
     await clearLocalDb();
     expect(await verificationState(PEER, 'keyA')).toBe('unverified');
   });
@@ -93,7 +93,7 @@ describe('pinned keys for a group', () => {
 
   it('keeps the signing pin through a verification of the same key', async () => {
     await pinnedKeys(PEER, { public_key: 'box-1', signing_key: 'sign-1' });
-    await markVerified(PEER, 'box-1');
+    await markVerified(PEER, 'box-1', null);
     expect(
       (await pinnedKeys(PEER, { public_key: 'box-1', signing_key: 'sign-evil' })).signing_key
     ).toBeNull();
@@ -101,8 +101,20 @@ describe('pinned keys for a group', () => {
 
   it('re-pins after a human verifies a new key', async () => {
     await pinnedKeys(PEER, { public_key: 'box-1', signing_key: 'sign-1' });
-    await markVerified(PEER, 'box-2');
+    await markVerified(PEER, 'box-2', null);
     const next = { public_key: 'box-2', signing_key: 'sign-2' };
     expect(await pinnedKeys(PEER, next)).toEqual(next);
+  });
+
+  it('replaces a signing key the server chose with the one a human compared', async () => {
+    // First sight pinned whatever the server served. The safety number covers
+    // the signing key now, so verifying is what corrects a bad first pin.
+    await pinnedKeys(PEER, { public_key: 'box-1', signing_key: 'sign-evil' });
+    await markVerified(PEER, 'box-1', 'sign-1');
+    const honest = { public_key: 'box-1', signing_key: 'sign-1' };
+    expect(await pinnedKeys(PEER, honest)).toEqual(honest);
+    expect(
+      (await pinnedKeys(PEER, { public_key: 'box-1', signing_key: 'sign-evil' })).signing_key
+    ).toBeNull();
   });
 });

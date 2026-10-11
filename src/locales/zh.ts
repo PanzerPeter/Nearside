@@ -571,6 +571,8 @@ export const zh: Catalog = {
     '这两个码不一样。在它们一致之前，别把{name}标记为已验证。等你们两边都打开了正确的联系人，再扫一次。',
   'verify.compared': '我和{name}核对过了，两边一模一样。',
   'verify.notASafetyCode': '这不是安全码。',
+  'verify.otherVersion':
+    '这个码来自不同版本的 Nearside。你们都需要更新到最新版本，号码才能一致。',
   'verify.mismatchToast': '两边对不上。对上之前别往下走。',
   'verify.matchToast': '数字一致。',
   'support.intro':
@@ -634,6 +636,8 @@ export const zh: Catalog = {
     '语音和视频在两台手机之间直连，端到端加密，没有任何服务器持有音频或它的密钥。通话不会在任何地方留下记录：没发生过什么、打给谁、打了多久，都没有。直连的代价是两台手机各自知道了对方的 IP 地址，大致相当于一座城市和一家运营商。你已经接受这个人成为联系人了，但这仍然比一条消息透露得更多。',
   'limits.callRelayBody':
     '直连建立不起来的时候，在移动网络上这很常见，通话会改走 Cloudflare 中转。中转只负责搬运它打不开的加密数据包，看到的也只是两个地址之间有流量往来。',
+  'limits.callRelayOnlyBody':
+    '如果不想让通话对象知道你的地址，请在 设置 → 通话 中开启“通话始终经由中继”。之后你这一端的每次通话都会经过中继，延迟会略高。',
   'limits.oneAccountTitle': '来电只找得到你当前登录的那个账号',
   'limits.oneAccountBody':
     '一通来电的两半，唤醒手机的那条通知，和通话本身所走的那条通道，都属于手机上当前登录的账号。如果你在这台手机上留了两个账号，而别人打给另一个，手机不会响，你要切回去之后才看得到这通来电。消息也是一样的道理。这是账号密钥从不离开账号所付的代价：不解锁另一个账号，就无法替它守候。',
@@ -893,7 +897,10 @@ export const zh: Catalog = {
   'calls.ringOutLoudOn':
     '有电话进来时在应用里响一声。和消息提示音是分开的。',
   'calls.leavesBehind': '一通电话留下什么',
-  'calls.leavesBehindBody': '什么也不留。通话在两台手机之间直连，不留记录。每台手机确实会知道对方的 IP 地址。',
+  'calls.leavesBehindBody': '什么也不留。通话在两台手机之间直连，不留记录。每台手机确实会知道对方的 IP 地址，除非开启了“通话始终经由中继”。',
+  'calls.relayOnly': '通话始终经由中继',
+  'calls.relayOnlyHint':
+    '你这一端的每次通话都经过 Cloudflare 中继，对方永远不会知道你的 IP 地址。延迟会略高。如果无法连上中继，通话会失败，而不是改为直连。',
 
   'privacy.onThisDevice': '在这台设备上',
   'privacy.appLock': '应用锁',

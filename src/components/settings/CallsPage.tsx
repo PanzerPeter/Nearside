@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { BellRing, PhoneCall, ShieldCheck } from 'lucide-react';
+import { BellRing, Network, PhoneCall, ShieldCheck } from 'lucide-react';
+import { isRelayOnly, setRelayOnly } from '../../lib/call/ice';
 import { fullScreenRingAllowed, openFullScreenRingSettings } from '../../lib/call/native';
 import { isRingtoneMuted, setRingtoneMuted } from '../../lib/call/ringtone';
 import { isMobileNative } from '../../lib/platform';
@@ -24,6 +25,7 @@ export function CallsPage() {
   // this page.
   const [ringAllowed, setRingAllowed] = useState<boolean | null>(null);
   const [ringMuted, setMuted] = useState(isRingtoneMuted());
+  const [relayOnly, setRelay] = useState(isRelayOnly());
 
   // Re-read on every mount rather than once per session: the user leaves for
   // Android's settings to grant it and comes straight back here, and a cached
@@ -80,6 +82,17 @@ export function CallsPage() {
             }}
           />
         )}
+        <ToggleRow
+          icon={Network}
+          label={t('calls.relayOnly')}
+          hint={t('calls.relayOnlyHint')}
+          checked={relayOnly}
+          onChange={() => {
+            const next = !relayOnly;
+            setRelay(next);
+            setRelayOnly(next);
+          }}
+        />
       </Card>
 
       <Card title={t('calls.leavesBehind')}>

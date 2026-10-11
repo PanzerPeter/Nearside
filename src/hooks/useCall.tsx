@@ -35,7 +35,7 @@ import { verificationState } from '../lib/verification';
 import { nicknameFor } from '../lib/nicknames';
 import { t } from '../lib/i18n';
 import { tapWarning } from '../lib/haptics';
-import { iceServers } from '../lib/call/ice';
+import { iceServers, isRelayOnly } from '../lib/call/ice';
 import { openSignalHub, type SignalHub } from '../lib/call/signaling';
 import { CallSession, mediaConstraints } from '../lib/call/session';
 import {
@@ -260,6 +260,7 @@ export function CallProvider({
         onConnected: () => dispatch({ type: 'connected', at: Date.now() }),
         onFailed: () => dispatch({ type: 'end', reason: 'failed' }),
         iceServers: servers,
+        relayOnly: isRelayOnly(),
         kind,
         polite: isPolite(me, peerId),
       });

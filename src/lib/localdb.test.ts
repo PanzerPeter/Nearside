@@ -3,6 +3,7 @@ import {
   cacheMessage,
   cachedConversation,
   cachedPreview,
+  cipherMode,
   clearLocalDb,
   openLocalDb,
   searchCached,
@@ -207,5 +208,16 @@ describe('searchEverywhere', () => {
     await cacheMessage(elsewhere('a', PEER, 'private', '2026-08-06T10:00:00Z'));
     await openLocalDb(OTHER_ACCOUNT);
     expect(await searchEverywhere('private')).toEqual([]);
+  });
+});
+
+describe('cipherMode', () => {
+  // The one decision that keeps an upgrade from locking somebody out of their
+  // own mirror: 'secret' on a plaintext file, or 'encryption' on an encrypted
+  // one, both fail the open as "file is not a database".
+  it('rewrites a plaintext store an older build left, and opens everything else with the secret', () => {
+    expect(cipherMode(true, false)).toBe('encryption');
+    expect(cipherMode(true, true)).toBe('secret');
+    expect(cipherMode(false, false)).toBe('secret');
   });
 });

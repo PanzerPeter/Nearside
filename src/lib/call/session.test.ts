@@ -119,7 +119,7 @@ interface Harness {
 }
 
 function harness(
-  options: { kind?: CallKind; polite?: boolean; flipFails?: boolean } = {}
+  options: { kind?: CallKind; polite?: boolean; flipFails?: boolean; relayOnly?: boolean } = {}
 ): Harness {
   const kind = options.kind ?? 'voice';
   const stream = new FakeStream(
@@ -155,6 +155,7 @@ function harness(
     onConnected: () => state.connected++,
     onFailed: () => state.failed++,
     iceServers: [{ urls: 'turn:relay:3478', username: 'u', credential: 'c' }],
+    relayOnly: options.relayOnly ?? false,
     kind,
     polite: options.polite ?? true,
   };
@@ -216,6 +217,15 @@ describe('placing a call', () => {
     expect(h.peer.config.iceServers).toEqual([
       { urls: 'turn:relay:3478', username: 'u', credential: 'c' },
     ]);
+    expect(h.peer.config.iceTransportPolicy).toBe('all');
+  });
+
+  it('gathers relay candidates only when relay-only is on', async () => {
+    // The whole point of the setting: no host or reflexive candidate, so no
+    // LAN address and no public IP ever reaches the signalling channel.
+    const h = harness({ relayOnly: true });
+    await h.session.startOutgoing();
+    expect(h.peer.config.iceTransportPolicy).toBe('relay');
   });
 });
 

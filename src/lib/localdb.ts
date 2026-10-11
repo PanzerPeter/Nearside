@@ -1,7 +1,8 @@
 // Decrypted message text, on the device only. This is what search and the
 // conversation list read from once 0023 takes those capabilities away from
-// Postgres. It holds plaintext at rest in app-private storage, which spec §7
-// discloses rather than hides.
+// Postgres. The file is SQLCipher-encrypted under a passphrase the plugin keeps
+// in the Keystore/Keychain (`cipherMode`, `ensureSecret`); the rows inside it
+// are the decrypted text, so anything running as this app can still read them.
 //
 // One store per account, never one per device: two people sharing a phone must
 // not find each other's decrypted messages in their own search results.
@@ -62,9 +63,8 @@ export interface PinnedMedia {
    *  a copy here the bubble has nothing left to render the kept bytes from —
    *  see `lib/pin-restore.ts`. Null on pins written before this was recorded.
    *
-   *  `caption` is plaintext, like everything else in this store: it is the
-   *  body this device had already decrypted, and spec §7 discloses that the
-   *  mirror holds decrypted text at rest. */
+   *  `caption` is the decrypted body, like everything else in this store; the
+   *  file around it is what SQLCipher encrypts. */
   media_path: string | null;
   media_type: MediaType | null;
   caption: string | null;
@@ -266,6 +266,53 @@ function native(): boolean {
   return isMobileNative();
 }
 
+/**
+ * How the SQLite plugin should open one account's store.
+ *
+ * The mirror holds every message this device ever decrypted, so it is
+ * SQLCipher-encrypted at rest. A store an older build wrote is still plaintext,
+ * and opening it with `'secret'` fails as "file is not a database" — so that
+ * one opens with `'encryption'`, which has the plugin rewrite it encrypted in
+ * place before the open. A new store, or one already rewritten, opens with
+ * `'secret'`; asking for `'encryption'` on a file that is already encrypted
+ * fails the same way in the other direction.
+ */
+export function cipherMode(exists: boolean, encrypted: boolean): 'secret' | 'encryption' {
+  return exists && !encrypted ? 'encryption' : 'secret';
+}
+
+/**
+ * The plugin's passphrase, set once per install.
+ *
+ * Random rather than derived from the seed: the seed must never have a second
+ * home, and this key only has to outlive the app's own data, which is exactly
+ * how long the Keystore entry the plugin keeps it in (EncryptedSharedPreferences
+ * on Android, the Keychain on iOS) lasts. One passphrase for every account's
+ * file is not a crossing between accounts — the files are already separate,
+ * and the process that could read one could always read the other.
+ *
+ * `setEncryptionSecret` also walks every database file and throws on one it
+ * cannot classify — after it has stored the passphrase. So a throw is followed
+ * by asking again, not by giving up: a stored passphrase is all this needs.
+ */
+let secretReady: Promise<void> | null = null;
+function ensureSecret(sqlite: SQLiteConnection): Promise<void> {
+  secretReady ??= (async () => {
+    if ((await sqlite.isSecretStored()).result) return;
+    const bytes = crypto.getRandomValues(new Uint8Array(32));
+    const passphrase = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+    try {
+      await sqlite.setEncryptionSecret(passphrase);
+    } catch (e) {
+      if (!(await sqlite.isSecretStored()).result) throw e;
+    }
+  })().catch((e) => {
+    secretReady = null;
+    throw e;
+  });
+  return secretReady;
+}
+
 function scoped<T>(stores: Map<string, Map<string, T>>): Map<string, T> | null {
   if (!owner) return null;
   let store = stores.get(owner);
@@ -310,13 +357,19 @@ export async function openLocalDb(userId: string): Promise<void> {
 
   if (native()) {
     const sqlite = new SQLiteConnection(CapacitorSQLite);
+    // Before any connection exists: setting the passphrase closes every open
+    // one on the native side, which would leave `db` below a dead handle.
+    await ensureSecret(sqlite);
     if (db && owner) {
       await db.close();
       await sqlite.closeConnection(dbName(owner), false);
       db = null;
     }
     owner = userId;
-    db = await sqlite.createConnection(dbName(userId), false, 'no-encryption', 1, false);
+    const name = dbName(userId);
+    const exists = (await sqlite.isDatabase(name)).result ?? false;
+    const encrypted = exists && ((await sqlite.isDatabaseEncrypted(name)).result ?? false);
+    db = await sqlite.createConnection(name, true, cipherMode(exists, encrypted), 1, false);
     await db.open();
     // A DELETE otherwise only unlinks the page: the text of a deleted,
     // expired or "cleared" message stays in the file's free pages until

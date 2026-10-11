@@ -50,12 +50,18 @@ transparency screen and in [README.md](README.md#where-the-protection-stops):
   opening and blocks screenshots while it is shown. A modified client can keep
   the bytes, and a second camera defeats any screenshot block.
 - **A compromised device.** The seed lives in the Android Keystore or the iOS
-  Keychain, but a rooted or jailbroken phone can reach what runs on it.
+  Keychain, but a rooted or jailbroken phone can reach what runs on it. The
+  local mirror of decrypted messages is a SQLCipher file whose passphrase is in
+  the same Keystore/Keychain (`ensureSecret` in `src/lib/localdb.ts`); pinned
+  and cached media files beside it are not encrypted.
 - **A recipient keeping a copy.** Screenshots, a camera pointed at a screen, and
   messages held by someone removed from a room afterwards. Disappearing messages
   are a convenience, not an enforcement.
 - **IP exposure to the person you are calling.** WebRTC is peer-to-peer by
-  design; the privacy policy says so in those words.
+  design; the privacy policy says so in those words. Settings → Calls → Always
+  relay calls (`iceTransportPolicy: 'relay'`) gathers relay candidates only, so
+  your side is reached through TURN instead; with no TURN credentials the call
+  fails rather than going direct.
 - **A TURN relay seeing that two addresses exchanged packets.** It forwards SRTP
   it cannot read, and credentials are minted per call with a short life.
 - Denial of service against Supabase, rate-limit brute forcing, and reports
@@ -132,7 +138,9 @@ Limits of that design, stated here so nobody has to find them:
 
 - **No forward secrecy.** Peer messages are `crypto_box` between long-lived
   identity keys, with no ratchet. Someone who records ciphertext today and
-  obtains a seed later can open what was sealed to or from it.
+  obtains a seed later can open what was sealed to or from it. A move to MLS
+  (RFC 9420), which would also rotate room keys, is designed but not yet
+  implemented.
 - **Removing someone from a room does not rotate its key.** They stop receiving
   rows because RLS stops serving them, not because they can no longer decrypt.
   Messages sent afterwards are kept from them by the server, not by the
@@ -148,7 +156,10 @@ Limits of that design, stated here so nobody has to find them:
   different key later is refused — not sealed to, and not accepted on a group
   message — until a human verifies again (`pinnedKeys` in
   `src/lib/verification.ts`). The first sighting itself is the server's word,
-  which is what comparing safety numbers is for.
+  which is what comparing safety numbers is for. The safety number (version 2,
+  `src/lib/crypto/safety.ts`) covers each side's account id, box key **and**
+  signing key, and verifying pins the signing key that was compared, replacing
+  one the server chose at first sight. Version 1 covered box keys only.
 - **A 1:1 row proves less than a group row.** `crypto_box` shows a body came
   from one of the two people in the conversation, not which one, and the
   columns beside it (`reply_to_id`, `forwarded`, which attachment goes with

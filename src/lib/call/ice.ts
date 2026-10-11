@@ -42,6 +42,32 @@ export interface IceBundle {
 
 let cache: IceBundle | null = null;
 
+const RELAY_ONLY_KEY = 'nearside.calls.relayOnly';
+
+/**
+ * Always relay calls.
+ *
+ * A direct call hands the other phone this one's IP address, which is roughly a
+ * city and an internet provider. Relayed, it sees Cloudflare's instead, at the
+ * cost of a little latency. Per device rather than per account: it is a fact
+ * about the network this phone is on and who should learn where it is.
+ */
+export function isRelayOnly(): boolean {
+  try {
+    return localStorage.getItem(RELAY_ONLY_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+export function setRelayOnly(on: boolean): void {
+  try {
+    localStorage.setItem(RELAY_ONLY_KEY, on ? '1' : '0');
+  } catch {
+    // Storage denied: nothing persists, so calls stay as they were.
+  }
+}
+
 /**
  * Coerce whatever the provider returned into the array `RTCPeerConnection`
  * wants.

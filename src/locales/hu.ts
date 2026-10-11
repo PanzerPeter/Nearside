@@ -571,6 +571,8 @@ export const hu: Catalog = {
     'Ezek a kódok nem egyeznek. Amíg nem egyeznek, ne jelöld ellenőrzöttnek: {name}. Olvasd be újra, ha mindketten a megfelelő partnernél vagytok.',
   'verify.compared': 'Összehasonlítottam ezeket vele: {name}. Azonosak.',
   'verify.notASafetyCode': 'Ez nem biztonsági szám kódja.',
+  'verify.otherVersion':
+    'Ez a kód a Nearside egy másik verziójából származik. Mindkettőtöknek a legújabb frissítés kell, mielőtt a számok egyezhetnek.',
   'verify.mismatchToast': 'Ezek nem egyeznek. Ne folytassátok, amíg nem egyeznek.',
   'verify.matchToast': 'A számok egyeznek.',
   'support.intro':
@@ -634,6 +636,8 @@ export const hu: Catalog = {
     'A hang és a videó közvetlenül a két telefon között megy, végponttól végpontig titkosítva, és a hangot vagy a hozzá tartozó kulcsot soha egyetlen szerver sem tárolja. A hívásról semmi nem marad sehol: sem az, hogy megtörtént, sem az, hogy kivel, sem az, hogy meddig tartott. A közvetlen kapcsolat ára, hogy mindkét telefon megtudja a másik IP-címét, ami nagyjából egy várost és egy internetszolgáltatót jelent. Ezt az embert már ismerősnek fogadtad, de ez akkor is több, mint amit egy üzenet elárul.',
   'limits.callRelayBody':
     'Ha nem jön létre közvetlen kapcsolat, ami mobilhálózaton gyakori, a hívás a Cloudflare-en keresztül megy. A továbbító olyan titkosított csomagokat visz, amiket nem tud megnyitni, és csak annyit lát, hogy két cím forgalmat váltott.',
+  'limits.callRelayOnlyBody':
+    'Hogy a hívott fél ne tudja meg a címedet, kapcsold be a „Hívások mindig továbbítással” opciót a Beállítások → Hívások alatt. Ekkor minden hívás a te oldaladon a továbbítón megy át, kicsit nagyobb késéssel.',
   'limits.oneAccountTitle': 'A hívás csak ahhoz a fiókhoz ér el, amelyikbe be vagy jelentkezve',
   'limits.oneAccountBody':
     'A bejövő hívás mindkét fele, az értesítés, ami felébreszti a telefont, és a csatorna, amin maga a hívás érkezik, ahhoz a fiókhoz tartozik, amelyik éppen be van jelentkezve. Ha két fiókot tartasz ezen a telefonon, és valaki a másikat hívja, a telefon nem csörög, és a hívást csak visszaváltás után látod. Az üzenetek ugyanígy viselkednek. Ez az ára annak, hogy egy fiók kulcsa soha nem hagyja el a fiókot: a másikra nem lehet figyelni anélkül, hogy fel lenne oldva.',
@@ -893,7 +897,10 @@ export const hu: Catalog = {
   'calls.ringOutLoudOn':
     'Szóljon hang az alkalmazásban, ha hívás érkezik. Az üzenetcsilingeléstől független.',
   'calls.leavesBehind': 'Mit hagy maga után egy hívás',
-  'calls.leavesBehindBody': 'Semmit. A hívások közvetlenül a két telefon között mennek, és nem hagynak nyomot. Mindkét telefon megtudja a másik IP-címét.',
+  'calls.leavesBehindBody': 'Semmit. A hívások közvetlenül a két telefon között mennek, és nem hagynak nyomot. Mindkét telefon megtudja a másik IP-címét, hacsak a „Hívások mindig továbbítással” nincs bekapcsolva.',
+  'calls.relayOnly': 'Hívások mindig továbbítással',
+  'calls.relayOnlyHint':
+    'Minden hívás a te oldaladon a Cloudflare továbbítóján megy át, így a másik fél sosem tudja meg az IP-címedet. Kicsit nagyobb késés. Ha a továbbító nem érhető el, a hívás sikertelen lesz, és nem megy közvetlenül.',
 
   'privacy.onThisDevice': 'Ezen a készüléken',
   'privacy.appLock': 'Alkalmazászár',

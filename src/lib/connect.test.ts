@@ -8,10 +8,21 @@ import {
 
 describe('connect payload', () => {
   it('round-trips a well-formed payload', () => {
+    const text = 'nearside:v2:11111111-1111-1111-1111-111111111111:cHVia2V5:c2lnbg==:ABCDEFGH';
+    expect(parseConnectPayload(text)).toEqual({
+      userId: '11111111-1111-1111-1111-111111111111',
+      publicKey: 'cHVia2V5',
+      signingKey: 'c2lnbg==',
+      token: 'ABCDEFGH',
+    });
+  });
+
+  it('still reads a version-1 code from an older build, without a signing key', () => {
     const text = 'nearside:v1:11111111-1111-1111-1111-111111111111:cHVia2V5:ABCDEFGH';
     expect(parseConnectPayload(text)).toEqual({
       userId: '11111111-1111-1111-1111-111111111111',
       publicKey: 'cHVia2V5',
+      signingKey: null,
       token: 'ABCDEFGH',
     });
   });
@@ -21,6 +32,7 @@ describe('connect payload', () => {
   });
 
   it('rejects a future version rather than guessing', () => {
+    expect(parseConnectPayload('nearside:v3:11111111-1111-1111-1111-111111111111:a:b:c')).toBeNull();
     expect(parseConnectPayload('nearside:v2:a:b:c')).toBeNull();
   });
 
@@ -31,7 +43,14 @@ describe('connect payload', () => {
 
 describe('safety payload', () => {
   it('round-trips a grouped number, ignoring the grouping', () => {
-    expect(parseSafetyPayload(safetyPayload('12345 67890'))).toBe('1234567890');
+    expect(parseSafetyPayload(safetyPayload('12345 67890'))).toEqual({
+      version: 2,
+      digits: '1234567890',
+    });
+  });
+
+  it('reports the version of an older code instead of failing it as a mismatch', () => {
+    expect(parseSafetyPayload('nearside-safety:v1:12345')).toEqual({ version: 1, digits: '12345' });
   });
 
   it('rejects a connect QR, so scanning the wrong code cannot verify anyone', () => {

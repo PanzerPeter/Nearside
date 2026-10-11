@@ -212,7 +212,7 @@ function AddSomeone({ me, onConnected, toastError, toastSuccess }: AddSomeonePro
    * here rather than left as a chore nobody comes back to.
    */
   const connect = useCallback(
-    async (code: string, publicKey: string | null) => {
+    async (code: string, publicKey: string | null, signingKey: string | null) => {
       setBusy(true);
       try {
         const peerId = await redeemConnectCode(code);
@@ -228,7 +228,7 @@ function AddSomeone({ me, onConnected, toastError, toastSuccess }: AddSomeonePro
         const prior = existing?.[0];
         // The key is recorded either way. A code redeemed for someone already
         // in the list is still a key handed over in person.
-        if (publicKey) await markVerified(peerId, publicKey);
+        if (publicKey) await markVerified(peerId, publicKey, signingKey);
 
         // Holding their code is consent, so it also lifts whatever hid them.
         // Declining a request hides the person (`declineRequest`), and a
@@ -312,7 +312,7 @@ function AddSomeone({ me, onConnected, toastError, toastSuccess }: AddSomeonePro
         toastError(t('connect.notNearsideCode'));
         return;
       }
-      await connect(parsed.token, parsed.publicKey);
+      await connect(parsed.token, parsed.publicKey, parsed.signingKey);
     } finally {
       if (alive.current) setBusy(false);
     }
@@ -353,12 +353,12 @@ function AddSomeone({ me, onConnected, toastError, toastSuccess }: AddSomeonePro
             className="input join-item flex-1 bg-base-200/50 border border-hairline focus:border-primary font-mono tracking-[0.2em] uppercase"
             value={typed}
             onChange={(e) => setTyped(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && cleaned.length === 8 && void connect(cleaned, null)}
+            onKeyDown={(e) => e.key === 'Enter' && cleaned.length === 8 && void connect(cleaned, null, null)}
           />
           <button
             className="btn btn-primary join-item"
             disabled={busy || cleaned.length !== 8}
-            onClick={() => void connect(cleaned, null)}
+            onClick={() => void connect(cleaned, null, null)}
           >
             {busy ? <span className="loading loading-spinner loading-xs" /> : t('connect.add')}
           </button>

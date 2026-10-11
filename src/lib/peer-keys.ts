@@ -74,6 +74,24 @@ async function recordedKey(peerId: string): Promise<Uint8Array | null> {
   return key;
 }
 
+/**
+ * The signing key the server publishes for a peer right now, before any pin.
+ *
+ * Only the verify screen asks: it is the key the safety number is computed
+ * over, and comparing that number in person is what pins it. Offline, it falls
+ * back to the key already pinned, so two people at a table without signal can
+ * still verify what this device will actually check group messages against.
+ */
+export async function publishedSigningKey(peerId: string): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('signing_key')
+    .eq('id', peerId)
+    .maybeSingle();
+  if (error) return (await cachedContact(peerId))?.signing_key ?? null;
+  return (data?.signing_key as string | null | undefined) ?? null;
+}
+
 export function forgetPeerKey(peerId: string): void {
   cache.delete(peerId);
 }

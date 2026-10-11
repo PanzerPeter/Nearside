@@ -680,7 +680,9 @@ export function ChatRoom({ session, friend, identity, openAt, onBack }: ChatRoom
         <VerifyContact
           peerId={friend.id}
           peerLabel={peerLabel}
+          myId={me}
           myPublic={identity.boxPublic}
+          mySigning={identity.signPublic}
           theirPublic={peerKey}
           onVerified={() => {
             void tapSuccess();

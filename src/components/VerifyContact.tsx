@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { Camera, ShieldCheck } from 'lucide-react';
 import { scanMessage, scanQr } from '../lib/scan';
-import { safetyNumber } from '../lib/crypto/safety';
+import { SAFETY_VERSION, safetyNumber } from '../lib/crypto/safety';
 import { safetyArt, type SafetyArt } from '../lib/crypto/safety-art';
-import { toBase64 } from '../lib/crypto/keys';
+import { fromBase64, toBase64 } from '../lib/crypto/keys';
 import { parseSafetyPayload, safetyPayload } from '../lib/connect';
-import { forgetPeerKey } from '../lib/peer-keys';
+import { forgetPeerKey, publishedSigningKey } from '../lib/peer-keys';
+import { forgetAllPublishedKeys } from '../lib/rooms';
 import { markVerified } from '../lib/verification';
 import { useToast } from '../hooks/useToast';
 import { Modal } from './Modal';
@@ -17,7 +18,9 @@ import type { MessageKey } from '../lib/i18n';
 interface VerifyContactProps {
   peerId: string;
   peerLabel: string;
+  myId: string;
   myPublic: Uint8Array;
+  mySigning: Uint8Array;
   theirPublic: Uint8Array;
   /** Fired after the contact has been marked verified, so the caller can
    *  re-read the state it was blocking on. */
@@ -42,13 +45,17 @@ const PAGES: MessageKey[] = ['verify.pagePicture', 'verify.pageDigits', 'verify.
 export function VerifyContact({
   peerId,
   peerLabel,
+  myId,
   myPublic,
+  mySigning,
   theirPublic,
   onVerified,
   onClose,
 }: VerifyContactProps) {
   const t = useT();
   const [number, setNumber] = useState<string | null>(null);
+  /** Base64, as compared — what `confirm` pins. */
+  const [theirSigning, setTheirSigning] = useState<string | null>(null);
   const [art, setArt] = useState<SafetyArt | null>(null);
   const [compared, setCompared] = useState(false);
   const [scanMatched, setScanMatched] = useState(false);
@@ -71,15 +78,20 @@ export function VerifyContact({
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const n = await safetyNumber(myPublic, theirPublic);
+      const signing = await publishedSigningKey(peerId);
+      const n = await safetyNumber(
+        { id: myId, box: myPublic, sign: mySigning },
+        { id: peerId, box: theirPublic, sign: signing ? await fromBase64(signing) : null }
+      );
       if (cancelled) return;
+      setTheirSigning(signing);
       setNumber(n);
       setArt(await safetyArt(n));
     })();
     return () => {
       cancelled = true;
     };
-  }, [myPublic, theirPublic]);
+  }, [peerId, myId, myPublic, mySigning, theirPublic]);
 
   function goTo(index: number) {
     const el = track.current;
@@ -102,7 +114,14 @@ export function VerifyContact({
         toast.error(t('verify.notASafetyCode'));
         return;
       }
-      if (scanned !== number.replace(/\s+/g, '')) {
+      // A build that hashes differently produces different digits for the
+      // same keys. That is a reason to update, not evidence of an interception,
+      // and latching it as a mismatch would teach people to ignore the real one.
+      if (scanned.version !== SAFETY_VERSION) {
+        toast.error(t('verify.otherVersion'));
+        return;
+      }
+      if (scanned.digits !== number.replace(/\s+/g, '')) {
         // Not a soft failure. Either one of you is looking at the wrong
         // contact, or someone is sitting between you.
         setScanMatched(false);
@@ -122,11 +141,12 @@ export function VerifyContact({
   async function confirm() {
     setBusy(true);
     try {
-      await markVerified(peerId, await toBase64(theirPublic));
-      // Drop the session cache so the next read comes back from the server —
+      await markVerified(peerId, await toBase64(theirPublic), theirSigning);
+      // Drop the session caches so the next read comes back from the server —
       // re-verifying after a key change is pointless if the old key is still
-      // the one being sealed to.
+      // the one being sealed to, or the old signing key the one groups check.
       forgetPeerKey(peerId);
+      forgetAllPublishedKeys();
       onVerified();
       onClose();
     } finally {

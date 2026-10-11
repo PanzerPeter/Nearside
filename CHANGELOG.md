@@ -14,6 +14,34 @@ one of them drifts.
 
 ## [Unreleased]
 
+## [1.23.0] — 2026-10-11
+
+### Security
+
+- **The copy of your messages kept on this phone is now encrypted.** Search,
+  previews and offline reading all come from a local copy of what this phone
+  decrypted, and until now that file was readable by anything that could reach
+  the app's storage. It is now encrypted with a key kept in the phone's secure
+  hardware. Your existing copy is converted the first time the app opens after
+  the update, with nothing to re-download. Photos and videos you chose to keep
+  on the phone are not covered yet.
+- **Verifying a contact now covers your groups as well.** The safety number
+  used to cover only the key messages are sealed to, not the key that proves
+  who wrote a group message, so a contact could show as verified while the
+  server had chosen that second key. Both keys and the account are in the
+  number now, and verifying fixes a bad pick. The numbers are different from
+  before, and both of you need this update for them to match. Scanning a code
+  from an older version says so instead of warning about a mismatch. Connect
+  codes carry both keys too; codes from older versions still work.
+
+### Added
+
+- **Always relay calls** (Settings → Calls). A direct call shows the other
+  phone your IP address, which is roughly your city and internet provider. With
+  this on, your side of every call goes through the relay and they see its
+  address instead. Calls take slightly longer to connect, and if the relay
+  can't be reached the call fails rather than quietly going direct.
+
 ## [1.22.0] — 2026-10-10
 
 A security release. Most of it closes things a hostile server, or someone who

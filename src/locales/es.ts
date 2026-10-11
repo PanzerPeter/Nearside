@@ -562,6 +562,8 @@ export const es: Catalog = {
     'Estos códigos no son el mismo. No verifiques a {name} hasta que lo sean. Escanea otra vez cuando los dos estéis en el contacto correcto.',
   'verify.compared': 'Los he comparado con {name} y son idénticos.',
   'verify.notASafetyCode': 'Eso no es un código de número de seguridad.',
+  'verify.otherVersion':
+    'Ese código viene de otra versión de Nearside. Los dos necesitáis la última actualización para que los números coincidan.',
   'verify.mismatchToast': 'No coinciden. No sigáis hasta que lo hagan.',
   'verify.matchToast': 'Los números coinciden.',
   'support.intro':
@@ -625,6 +627,8 @@ export const es: Catalog = {
     'La voz y el vídeo van directos entre los dos teléfonos, cifrados de extremo a extremo, y ningún servidor guarda el audio ni una clave para abrirlo. De una llamada no se guarda nada en ninguna parte: ni que ocurrió, ni con quién, ni cuánto duró. El precio de conectar directamente es que cada teléfono conoce la IP del otro, que viene a ser una ciudad y un proveedor de internet. Ya aceptaste a esta persona como contacto, pero es más de lo que revela un mensaje.',
   'limits.callRelayBody':
     'Cuando no se puede establecer una conexión directa —algo habitual en redes móviles— la llamada se retransmite a través de Cloudflare. El relé transporta paquetes cifrados que no puede abrir, y solo ve que dos direcciones intercambiaron tráfico.',
+  'limits.callRelayOnlyBody':
+    'Para ocultar tu dirección a quien llamas, activa «Retransmitir siempre las llamadas» en Ajustes → Llamadas. Tu lado de cada llamada pasará por el relé, con algo más de retraso.',
   'limits.oneAccountTitle': 'Una llamada solo llega a la cuenta con la que has entrado',
   'limits.oneAccountBody':
     'Las dos mitades de una llamada entrante —la notificación que despierta el teléfono y el canal por el que llega la llamada— pertenecen a la cuenta que tiene la sesión iniciada. Si guardas dos cuentas en este teléfono y alguien llama a la otra, el teléfono no suena, y verás la llamada solo al volver a esa cuenta. Con los mensajes pasa lo mismo. Es el precio de que la clave de una cuenta nunca salga de ella: no se puede estar a la escucha de una segunda sin desbloquearla.',
@@ -892,7 +896,10 @@ export const es: Catalog = {
   'calls.ringOutLoudOn':
     'Reproduce un tono en la app cuando entra una llamada. Independiente del sonido de mensajes.',
   'calls.leavesBehind': 'Qué deja atrás una llamada',
-  'calls.leavesBehindBody': 'Nada. Las llamadas van directamente entre los dos teléfonos y no dejan registro. Eso sí, cada teléfono conoce la IP del otro.',
+  'calls.leavesBehindBody': 'Nada. Las llamadas van directamente entre los dos teléfonos y no dejan registro. Eso sí, cada teléfono conoce la IP del otro, salvo que «Retransmitir siempre las llamadas» esté activado.',
+  'calls.relayOnly': 'Retransmitir siempre las llamadas',
+  'calls.relayOnlyHint':
+    'Tu lado de cada llamada pasa por el relé de Cloudflare, así la otra persona nunca conoce tu dirección IP. Algo más de retraso. Si no se puede llegar al relé, la llamada falla en lugar de ir directa.',
 
   'privacy.onThisDevice': 'En este dispositivo',
   'privacy.appLock': 'Bloqueo de la app',

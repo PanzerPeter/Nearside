@@ -571,6 +571,8 @@ export const fr: Catalog = {
     'Ces codes ne sont pas les mêmes. Ne vérifie pas {name} tant que ce n’est pas le cas. Scanne à nouveau une fois que vous êtes bien sur le bon contact tous les deux.',
   'verify.compared': 'J’ai comparé avec {name} et c’est identique.',
   'verify.notASafetyCode': 'Ce n’est pas un code de numéro de sécurité.',
+  'verify.otherVersion':
+    'Ce code vient d’une autre version de Nearside. Vous devez tous les deux installer la dernière mise à jour pour que les numéros puissent correspondre.',
   'verify.mismatchToast': 'Ça ne correspond pas. N’allez pas plus loin tant que ce n’est pas le cas.',
   'verify.matchToast': 'Les numéros correspondent.',
   'support.intro':
@@ -634,6 +636,8 @@ export const fr: Catalog = {
     'La voix et la vidéo passent directement d’un téléphone à l’autre, chiffrées de bout en bout, et aucun serveur ne détient jamais l’audio ni une clé pour l’ouvrir. Rien d’un appel n’est stocké où que ce soit : ni qu’il a eu lieu, ni avec qui, ni combien de temps. Le prix de la connexion directe, c’est que chaque téléphone apprend l’adresse IP de l’autre, ce qui revient à peu près à une ville et un fournisseur d’accès. Tu as déjà accepté cette personne comme contact, mais c’est plus que ce que révèle un message.',
   'limits.callRelayBody':
     'Quand aucune connexion directe n’est possible, ce qui est fréquent sur les réseaux mobiles, l’appel passe par un relais Cloudflare. Le relais transporte des paquets chiffrés qu’il ne peut pas ouvrir, et ne voit que deux adresses qui échangent du trafic.',
+  'limits.callRelayOnlyBody':
+    'Pour cacher votre adresse à la personne que vous appelez, activez « Toujours relayer les appels » dans Réglages → Appels. Votre côté de chaque appel passe alors par le relais, avec un peu plus de latence.',
   'limits.oneAccountTitle': 'Un appel n’atteint que le compte auquel tu es connecté',
   'limits.oneAccountBody':
     'Les deux moitiés d’un appel entrant, la notification qui réveille le téléphone et le canal par lequel l’appel arrive, appartiennent au compte actuellement connecté dessus. Si tu gardes deux comptes sur ce téléphone et que quelqu’un appelle l’autre, le téléphone ne sonne pas, et tu ne verras l’appel qu’après avoir rebasculé. Les messages fonctionnent pareil. C’est le prix d’une clé de compte qui ne quitte jamais son compte : on ne peut pas écouter pour un deuxième sans l’avoir déverrouillé.',
@@ -893,7 +897,10 @@ export const fr: Catalog = {
   'calls.ringOutLoudOn':
     'Jouer une tonalité dans l’application quand un appel arrive. Indépendant du carillon des messages.',
   'calls.leavesBehind': 'Ce qu’un appel laisse derrière lui',
-  'calls.leavesBehindBody': 'Rien. Les appels vont directement d’un téléphone à l’autre et ne laissent aucune trace. Chaque téléphone apprend en revanche l’adresse IP de l’autre.',
+  'calls.leavesBehindBody': 'Rien. Les appels vont directement d’un téléphone à l’autre et ne laissent aucune trace. Chaque téléphone apprend en revanche l’adresse IP de l’autre, sauf si « Toujours relayer les appels » est activé.',
+  'calls.relayOnly': 'Toujours relayer les appels',
+  'calls.relayOnlyHint':
+    'Votre côté de chaque appel passe par le relais de Cloudflare, donc l’autre personne n’apprend jamais votre adresse IP. Un peu plus de latence. Si le relais est injoignable, l’appel échoue au lieu de passer en direct.',
 
   'privacy.onThisDevice': 'Sur cet appareil',
   'privacy.appLock': 'Verrou de l’application',

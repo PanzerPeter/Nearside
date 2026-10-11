@@ -585,6 +585,8 @@ export const en = {
     'These codes are not the same. Do not verify {name} until they are. Scan again once you are both on the right contact.',
   'verify.compared': 'I compared these with {name} and they are identical.',
   'verify.notASafetyCode': 'That is not a safety-number code.',
+  'verify.otherVersion':
+    'That code came from a different version of Nearside. You both need the latest update before the numbers can match.',
   'verify.mismatchToast': 'These do not match. Do not carry on until they do.',
   'verify.matchToast': 'The numbers match.',
   'support.intro':
@@ -650,6 +652,8 @@ export const en = {
     'Voice and video go straight between the two phones, encrypted end to end, and no server ever holds the audio or a key to it. Nothing about a call is stored anywhere — not that it happened, not who to, not how long. The cost of connecting directly is that each phone learns the other’s IP address, which is roughly a city and an internet provider. You already accepted this person as a contact, but it is more than a message reveals.',
   'limits.callRelayBody':
     'When a direct connection cannot be made — common on mobile networks — the call is relayed through Cloudflare instead. The relay carries encrypted packets it cannot open, and sees only that two addresses exchanged traffic.',
+  'limits.callRelayOnlyBody':
+    'To keep your address from the person you call, turn on Always relay calls in Settings → Calls. Your side of every call then goes through the relay, at the cost of a little delay.',
   'limits.oneAccountTitle': 'A call only reaches the account you are signed into',
   'limits.oneAccountBody':
     'Both halves of an incoming call — the notification that wakes the phone and the channel the call itself arrives on — belong to the account currently signed in on it. If you keep two accounts on this phone and someone calls the other one, that phone does not ring, and you will see the call only after switching back. Messages behave the same way. This is the price of an account’s key never leaving the account: a second one cannot be listened for without being unlocked.',
@@ -915,7 +919,10 @@ export const en = {
   'calls.ringOutLoudOn':
     'Play a tone in the app when a call comes in. Separate from the message chime.',
   'calls.leavesBehind': 'What a call leaves behind',
-  'calls.leavesBehindBody': 'Nothing. Calls go directly between the two phones and leave no record. Each phone does learn the other’s IP address.',
+  'calls.leavesBehindBody': 'Nothing. Calls go directly between the two phones and leave no record. Each phone does learn the other’s IP address, unless Always relay calls is on.',
+  'calls.relayOnly': 'Always relay calls',
+  'calls.relayOnlyHint':
+    'Your side of every call goes through Cloudflare’s relay, so the other person never learns your IP address. A little more delay. If the relay cannot be reached, the call fails rather than going direct.',
 
   // ---------------------------------------------------- settings: privacy
   'privacy.onThisDevice': 'On this device',

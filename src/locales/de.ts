@@ -573,6 +573,8 @@ export const de: Catalog = {
     'Diese Codes sind nicht gleich. Verifiziere {name} nicht, bevor sie es sind. Scanne erneut, sobald ihr beide beim richtigen Kontakt seid.',
   'verify.compared': 'Ich habe sie mit {name} verglichen und sie sind identisch.',
   'verify.notASafetyCode': 'Das ist kein Sicherheitsnummern-Code.',
+  'verify.otherVersion':
+    'Dieser Code stammt aus einer anderen Version von Nearside. Ihr braucht beide das neueste Update, bevor die Nummern übereinstimmen können.',
   'verify.mismatchToast': 'Die stimmen nicht überein. Macht nicht weiter, bis sie es tun.',
   'verify.matchToast': 'Die Nummern stimmen überein.',
   'support.intro':
@@ -636,6 +638,8 @@ export const de: Catalog = {
     'Ton und Bild gehen direkt zwischen den beiden Telefonen, Ende-zu-Ende verschlüsselt, und kein Server hält je den Ton oder einen Schlüssel dazu. Von einem Anruf wird nirgends etwas gespeichert — nicht, dass er stattfand, nicht mit wem, nicht wie lange. Der Preis der direkten Verbindung ist, dass jedes Telefon die IP-Adresse des anderen erfährt, also ungefähr eine Stadt und einen Internetanbieter. Du hast diese Person bereits als Kontakt angenommen, aber es ist mehr, als eine Nachricht verrät.',
   'limits.callRelayBody':
     'Wenn keine direkte Verbindung zustande kommt — in Mobilfunknetzen häufig — läuft der Anruf stattdessen über Cloudflare. Das Relay transportiert verschlüsselte Pakete, die es nicht öffnen kann, und sieht nur, dass zwei Adressen Daten ausgetauscht haben.',
+  'limits.callRelayOnlyBody':
+    'Um deine Adresse vor der angerufenen Person zu verbergen, schalte „Anrufe immer weiterleiten“ unter Einstellungen → Anrufe ein. Deine Seite jedes Anrufs läuft dann über das Relay, mit etwas mehr Verzögerung.',
   'limits.oneAccountTitle': 'Ein Anruf erreicht nur das Konto, in dem du angemeldet bist',
   'limits.oneAccountBody':
     'Beide Hälften eines eingehenden Anrufs — die Mitteilung, die das Telefon weckt, und der Kanal, über den der Anruf ankommt — gehören zu dem Konto, das gerade angemeldet ist. Hast du zwei Konten auf diesem Telefon und jemand ruft das andere an, klingelt es nicht, und du siehst den Anruf erst nach dem Wechsel. Bei Nachrichten ist es genauso. Das ist der Preis dafür, dass der Schlüssel eines Kontos das Konto nie verlässt: ein zweites lässt sich nicht abhören, ohne entsperrt zu sein.',
@@ -903,7 +907,10 @@ export const de: Catalog = {
   'calls.ringOutLoudOn':
     'Spielt in der App einen Ton ab, wenn ein Anruf eingeht. Unabhängig vom Nachrichtenton.',
   'calls.leavesBehind': 'Was ein Anruf hinterlässt',
-  'calls.leavesBehindBody': 'Nichts. Anrufe laufen direkt zwischen den beiden Telefonen und hinterlassen keine Spur. Jedes Telefon erfährt allerdings die IP-Adresse des anderen.',
+  'calls.leavesBehindBody': 'Nichts. Anrufe laufen direkt zwischen den beiden Telefonen und hinterlassen keine Spur. Jedes Telefon erfährt allerdings die IP-Adresse des anderen, außer „Anrufe immer weiterleiten“ ist an.',
+  'calls.relayOnly': 'Anrufe immer weiterleiten',
+  'calls.relayOnlyHint':
+    'Deine Seite jedes Anrufs läuft über das Relay von Cloudflare, sodass die andere Person deine IP-Adresse nie erfährt. Etwas mehr Verzögerung. Ist das Relay nicht erreichbar, schlägt der Anruf fehl, statt direkt zu laufen.',
 
   'privacy.onThisDevice': 'Auf diesem Gerät',
   'privacy.appLock': 'App-Sperre',

@@ -149,6 +149,8 @@ The app shows this list on its own screen as well.
 - A rooted or jailbroken phone can reach the seed.
 - A video keeps its capture timestamp, which sits in a structural part of the
   file. Location and device details are removed.
+- A direct call shows each phone the other's IP address. Always relay calls
+  (Settings → Calls) hides yours behind the TURN relay.
 - A relayed call passes through a TURN provider, which sees two addresses
   exchanging packets but not their content.
 - Removing someone from a room does not take back what they already have, and

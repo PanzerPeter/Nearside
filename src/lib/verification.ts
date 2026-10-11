@@ -59,20 +59,29 @@ export async function recordPeerKey(peerId: string, key: string): Promise<void> 
 }
 
 /**
- * A human compared safety numbers, or scanned the key off the other person's
- * screen. Writes the key as well as the timestamp, which is what re-verifying
+ * A human compared safety numbers, or scanned the keys off the other person's
+ * screen. Writes the keys as well as the timestamp, which is what re-verifying
  * after a legitimate key change does.
+ *
+ * `signingKey` is the one the human just compared, and it replaces whatever was
+ * pinned: the safety number covers it, so it is the only signing key here that
+ * a person rather than the server vouched for. Null — a version-1 connect code,
+ * which never carried one — falls back to the old rule: kept across a
+ * verification of the same box key, dropped after a key change so the next
+ * group read pins the new one.
  */
-export async function markVerified(peerId: string, key: string): Promise<void> {
-  // The pinned signing key survives a verification of the same box key. After
-  // a key change it is dropped, and the next group read pins the new one — the
-  // two keys come from one seed and change together.
+export async function markVerified(
+  peerId: string,
+  key: string,
+  signingKey: string | null
+): Promise<void> {
   const known = await cachedContact(peerId);
   await putContact({
     peer_id: peerId,
     public_key: key,
     verified_at: new Date().toISOString(),
-    signing_key: known?.public_key === key ? (known.signing_key ?? null) : null,
+    signing_key:
+      signingKey ?? (known?.public_key === key ? (known.signing_key ?? null) : null),
   });
 }
 

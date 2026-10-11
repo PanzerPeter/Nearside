@@ -25,6 +25,10 @@ export interface SessionDeps {
   onConnected: () => void;
   onFailed: () => void;
   iceServers: RTCIceServer[];
+  /** Gather relay candidates only, so the far end learns the TURN server's
+   *  address instead of this phone's. Fails closed: with no TURN credentials
+   *  the call does not connect rather than quietly going direct. */
+  relayOnly: boolean;
   kind: CallKind;
   /**
    * The tie-break from `isPolite`. Only consulted for a collision, which with
@@ -328,7 +332,10 @@ export class CallSession {
       return;
     }
 
-    const pc = this.deps.createPeer({ iceServers: this.deps.iceServers });
+    const pc = this.deps.createPeer({
+      iceServers: this.deps.iceServers,
+      iceTransportPolicy: this.deps.relayOnly ? 'relay' : 'all',
+    });
     this.pc = pc;
 
     for (const track of this.local.getTracks()) pc.addTrack(track, this.local);

@@ -62,7 +62,7 @@ const SECTIONS: { tone: Tone; icon: LucideIcon; title: MessageKey; body: Message
     tone: 'plain',
     icon: PhoneCall,
     title: 'limits.callIpTitle',
-    body: ['limits.callIpBody', 'limits.callRelayBody'],
+    body: ['limits.callIpBody', 'limits.callRelayBody', 'limits.callRelayOnlyBody'],
   },
   { tone: 'plain', icon: Users, title: 'limits.oneAccountTitle', body: ['limits.oneAccountBody'] },
   { tone: 'plain', icon: PhoneOff, title: 'limits.declineTitle', body: ['limits.declineBody'] },

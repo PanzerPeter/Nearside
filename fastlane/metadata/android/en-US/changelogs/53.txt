@@ -1,0 +1,1 @@
+Your messages on this phone are now stored encrypted. New setting: Always relay calls, so the person you call never learns your IP address. Safety numbers now also cover the key group messages are checked against, so verifying a contact protects your groups too (both phones need this update for the numbers to match).

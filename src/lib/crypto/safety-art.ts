@@ -26,9 +26,9 @@ export interface SafetyArt {
  * number and no stronger — matching art means matching digits, and the UI must
  * not imply it is a second, independent check.
  *
- * The digits are hashed again rather than read positionally: `safetyNumber`
- * renders 16-bit values zero-padded to five characters, so every fifth digit
- * only ever reaches 6 and art read straight off the string inherits that bias.
+ * The digits are hashed again rather than read positionally, so the picture
+ * does not inherit any shape the digit encoding has (version 1 rendered 16-bit
+ * values, and every fifth digit only ever reached 6).
  *
  * Mirroring is what makes the grid read as an object rather than noise, which
  * is what makes a mismatch obvious across a table.

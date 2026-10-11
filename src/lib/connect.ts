@@ -5,6 +5,7 @@
 // server never learns who was looking for whom, because nobody was looking.
 import type { Session } from '@supabase/supabase-js';
 import { toBase64, type Identity } from './crypto/keys';
+import { SAFETY_VERSION } from './crypto/safety';
 import { supabase } from './supabase';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -12,27 +13,38 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export interface ConnectPayload {
   userId: string;
   publicKey: string;
+  /** Null from a version-1 code, which predates carrying it. */
+  signingKey: string | null;
   token: string;
 }
 
-/** The QR carries the public key as well as the token, so verification can
+/** The QR carries both public keys as well as the token, so verification can
  *  happen at the moment of connection rather than as a later chore nobody
- *  does. */
+ *  does. Version 2 added the signing key: a code held up in person verifies
+ *  the key group messages are checked against, not only the one sealed to. */
 export async function connectPayload(
   session: Session,
   identity: Identity,
   token: string
 ): Promise<string> {
-  return `nearside:v1:${session.user.id}:${await toBase64(identity.boxPublic)}:${token}`;
+  const box = await toBase64(identity.boxPublic);
+  const sign = await toBase64(identity.signPublic);
+  return `nearside:v2:${session.user.id}:${box}:${sign}:${token}`;
 }
 
+/** Version 1 is still read: a friend on an older build holds one up. Base64
+ *  (ORIGINAL) has no colon in its alphabet, so splitting on one is safe. */
 export function parseConnectPayload(text: string): ConnectPayload | null {
   const parts = text.split(':');
-  if (parts.length !== 5) return null;
-  const [scheme, version, userId, publicKey, token] = parts;
-  if (scheme !== 'nearside' || version !== 'v1') return null;
-  if (!UUID.test(userId) || !publicKey || !token) return null;
-  return { userId, publicKey, token };
+  if (parts[0] !== 'nearside') return null;
+  const v1 = parts.length === 5 && parts[1] === 'v1';
+  const v2 = parts.length === 6 && parts[1] === 'v2';
+  if (!v1 && !v2) return null;
+  const [userId, publicKey] = [parts[2], parts[3]];
+  const signingKey = v2 ? parts[4] : null;
+  const token = parts[parts.length - 1];
+  if (!UUID.test(userId) || !publicKey || !token || signingKey === '') return null;
+  return { userId, publicKey, signingKey, token };
 }
 
 export async function mintConnectCode(): Promise<string> {
@@ -52,22 +64,21 @@ export async function redeemConnectCode(code: string): Promise<string> {
   return data as string;
 }
 
-const SAFETY_PREFIX = 'nearside-safety:v1:';
-
 /** The safety number as a QR, so two people can compare sixty digits by
  *  holding up a phone instead of reading them out. Spaces are stripped: the
  *  grouping is for the eye, and a scanner should not have to agree with it. */
 export function safetyPayload(number: string): string {
-  return `${SAFETY_PREFIX}${number.replace(/\s+/g, '')}`;
+  return `nearside-safety:v${SAFETY_VERSION}:${number.replace(/\s+/g, '')}`;
 }
 
-/** The digits from a scanned safety QR, or null if it was some other code.
- *  Deliberately not a boolean "matches": the caller compares against its own
- *  number, so this cannot be tricked into answering yes. */
-export function parseSafetyPayload(text: string): string | null {
-  if (!text.startsWith(SAFETY_PREFIX)) return null;
-  const digits = text.slice(SAFETY_PREFIX.length);
-  return /^\d+$/.test(digits) ? digits : null;
+/** The digits from a scanned safety QR and the version that made them, or
+ *  null if it was some other code. Deliberately not a boolean "matches": the
+ *  caller compares against its own number, so this cannot be tricked into
+ *  answering yes. The version is returned so a code from a build that hashes
+ *  differently reads as "update", not as somebody sitting between you. */
+export function parseSafetyPayload(text: string): { version: number; digits: string } | null {
+  const m = /^nearside-safety:v(\d+):(\d+)$/.exec(text);
+  return m ? { version: Number(m[1]), digits: m[2] } : null;
 }
 
 /** How long a minted code lives, mirroring the interval in

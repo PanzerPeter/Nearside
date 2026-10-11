@@ -234,7 +234,7 @@ describe('a changed key', () => {
     const me = await identity();
     const swapped = await identity();
     await recordPeerKey(PEER, await toBase64((await identity()).boxPublic));
-    await markVerified(PEER, await toBase64(swapped.boxPublic));
+    await markVerified(PEER, await toBase64(swapped.boxPublic), null);
 
     await expect(sealBody(me, swapped.boxPublic, ME, PEER, 'hello')).resolves.toBeTruthy();
   });

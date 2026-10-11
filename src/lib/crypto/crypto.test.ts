@@ -206,10 +206,18 @@ describe('sealing to a peer', () => {
 });
 
 describe('safety number', () => {
+  const A = '11111111-1111-4111-8111-111111111111';
+  const B = '22222222-2222-4222-8222-222222222222';
+  const party = (id: string, k: Awaited<ReturnType<typeof identityFromSeed>>) => ({
+    id,
+    box: k.boxPublic,
+    sign: k.signPublic,
+  });
+
   it('is 12 groups of 5 digits', async () => {
     const a = await identityFromSeed(await seedFromMnemonic(PHRASE));
     const b = await identityFromSeed(await seedFromMnemonic(generateMnemonic()));
-    const n = await safetyNumber(a.boxPublic, b.boxPublic);
+    const n = await safetyNumber(party(A, a), party(B, b));
     expect(n.split(' ')).toHaveLength(12);
     expect(n.replace(/ /g, '')).toMatch(/^\d{60}$/);
   });
@@ -219,14 +227,53 @@ describe('safety number', () => {
     // knows which of them "goes first".
     const a = await identityFromSeed(await seedFromMnemonic(PHRASE));
     const b = await identityFromSeed(await seedFromMnemonic(generateMnemonic()));
-    expect(await safetyNumber(a.boxPublic, b.boxPublic)).toBe(await safetyNumber(b.boxPublic, a.boxPublic));
+    expect(await safetyNumber(party(A, a), party(B, b))).toBe(
+      await safetyNumber(party(B, b), party(A, a))
+    );
   });
 
   it('changes when a key changes', async () => {
     const a = await identityFromSeed(await seedFromMnemonic(PHRASE));
     const b = await identityFromSeed(await seedFromMnemonic(generateMnemonic()));
     const c = await identityFromSeed(await seedFromMnemonic(generateMnemonic()));
-    expect(await safetyNumber(a.boxPublic, b.boxPublic)).not.toBe(await safetyNumber(a.boxPublic, c.boxPublic));
+    expect(await safetyNumber(party(A, a), party(B, b))).not.toBe(
+      await safetyNumber(party(A, a), party(B, c))
+    );
+  });
+
+  it('covers the signing key, not only the box key', async () => {
+    // Version 1 did not, so a server could pair the right box key with its own
+    // signing key and the contact would still verify — under a key that then
+    // checked every group message signed in their name.
+    const a = await identityFromSeed(await seedFromMnemonic(PHRASE));
+    const b = await identityFromSeed(await seedFromMnemonic(generateMnemonic()));
+    const forged = await identityFromSeed(await seedFromMnemonic(generateMnemonic()));
+    const honest = await safetyNumber(party(A, a), party(B, b));
+    const swapped = await safetyNumber(party(A, a), { ...party(B, b), sign: forged.signPublic });
+    const missing = await safetyNumber(party(A, a), { ...party(B, b), sign: null });
+    expect(swapped).not.toBe(honest);
+    expect(missing).not.toBe(honest);
+  });
+
+  it('binds the account id', async () => {
+    const a = await identityFromSeed(await seedFromMnemonic(PHRASE));
+    const b = await identityFromSeed(await seedFromMnemonic(generateMnemonic()));
+    const C = '33333333-3333-4333-8333-333333333333';
+    expect(await safetyNumber(party(A, a), party(B, b))).not.toBe(
+      await safetyNumber(party(A, a), party(C, b))
+    );
+  });
+
+  it('keeps your own half the same in every conversation', async () => {
+    const a = await identityFromSeed(await seedFromMnemonic(PHRASE));
+    const b = await identityFromSeed(await seedFromMnemonic(generateMnemonic()));
+    const c = await identityFromSeed(await seedFromMnemonic(generateMnemonic()));
+    const C = '33333333-3333-4333-8333-333333333333';
+    // A sorts first against both B and C, so its half leads both numbers.
+    const withB = (await safetyNumber(party(A, a), party(B, b))).replace(/ /g, '');
+    const withC = (await safetyNumber(party(A, a), party(C, c))).replace(/ /g, '');
+    expect(withB.slice(0, 30)).toBe(withC.slice(0, 30));
+    expect(withB.slice(30)).not.toBe(withC.slice(30));
   });
 });
 

@@ -569,6 +569,8 @@ export const pl: Catalog = {
     'Te kody nie są takie same. Dopóki się nie zgodzą, nie weryfikuj: {name}. Zeskanuj ponownie, gdy oboje będziecie przy właściwym kontakcie.',
   'verify.compared': 'Porównano to z: {name} i jest identyczne.',
   'verify.notASafetyCode': 'To nie jest kod numeru bezpieczeństwa.',
+  'verify.otherVersion':
+    'Ten kod pochodzi z innej wersji Nearside. Oboje potrzebujecie najnowszej aktualizacji, zanim numery będą mogły się zgadzać.',
   'verify.mismatchToast': 'To się nie zgadza. Nie idźcie dalej, dopóki się nie zgodzi.',
   'verify.matchToast': 'Numery się zgadzają.',
   'support.intro':
@@ -632,6 +634,8 @@ export const pl: Catalog = {
     'Głos i obraz idą prosto między dwoma telefonami, zaszyfrowane od końca do końca, i żaden serwer nigdy nie trzyma dźwięku ani klucza do niego. Nic z rozmowy nigdzie nie zostaje: ani to, że się odbyła, ani z kim, ani jak długo trwała. Ceną bezpośredniego połączenia jest to, że każdy telefon poznaje adres IP drugiego, co z grubsza oznacza miasto i dostawcę internetu. Ta osoba jest już twoim kontaktem, ale to i tak więcej, niż zdradza wiadomość.',
   'limits.callRelayBody':
     'Kiedy bezpośrednie połączenie nie dochodzi do skutku, co w sieciach komórkowych jest częste, rozmowa idzie przez przekaźnik Cloudflare. Przekaźnik niesie zaszyfrowane pakiety, których nie umie otworzyć, i widzi tylko, że dwa adresy wymieniły ruch.',
+  'limits.callRelayOnlyBody':
+    'Aby ukryć swój adres przed osobą, do której dzwonisz, włącz „Zawsze przekazuj połączenia” w Ustawienia → Połączenia. Twoja strona każdego połączenia pójdzie wtedy przez przekaźnik, kosztem nieco większego opóźnienia.',
   'limits.oneAccountTitle': 'Połączenie dociera tylko do konta, na które jesteś zalogowany',
   'limits.oneAccountBody':
     'Obie połowy przychodzącego połączenia, powiadomienie budzące telefon i kanał, którym przychodzi sama rozmowa, należą do konta aktualnie na nim zalogowanego. Jeśli trzymasz na tym telefonie dwa konta i ktoś dzwoni na to drugie, telefon nie zadzwoni, a połączenie zobaczysz dopiero po przełączeniu. Wiadomości działają tak samo. To cena tego, że klucz konta nigdy nie opuszcza konta: drugiego nie da się nasłuchiwać bez odblokowania go.',
@@ -891,7 +895,10 @@ export const pl: Catalog = {
   'calls.ringOutLoudOn':
     'Odtwarzaj sygnał w aplikacji, gdy przychodzi połączenie. Osobno od dźwięku wiadomości.',
   'calls.leavesBehind': 'Co zostaje po rozmowie',
-  'calls.leavesBehindBody': 'Nic. Połączenia idą prosto między dwoma telefonami i nie zostawiają śladu. Każdy telefon poznaje za to adres IP drugiego.',
+  'calls.leavesBehindBody': 'Nic. Połączenia idą prosto między dwoma telefonami i nie zostawiają śladu. Każdy telefon poznaje za to adres IP drugiego, chyba że włączono „Zawsze przekazuj połączenia”.',
+  'calls.relayOnly': 'Zawsze przekazuj połączenia',
+  'calls.relayOnlyHint':
+    'Twoja strona każdego połączenia idzie przez przekaźnik Cloudflare, więc druga osoba nigdy nie pozna twojego adresu IP. Trochę większe opóźnienie. Gdy przekaźnik jest nieosiągalny, połączenie się nie uda, zamiast pójść bezpośrednio.',
 
   'privacy.onThisDevice': 'Na tym urządzeniu',
   'privacy.appLock': 'Blokada aplikacji',
