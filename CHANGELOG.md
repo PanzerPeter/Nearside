@@ -14,6 +14,51 @@ one of them drifts.
 
 ## [Unreleased]
 
+## [1.23.1] — 2026-10-11
+
+### Security
+
+- **A group's key is only accepted from the person who made the group.** Your
+  copy of a group's key says who sealed it, and the app used to believe
+  whoever the server named. That let the server give everyone in a group a key
+  of its own, from an account none of you had seen, and read the group while
+  every safety number still matched. Now a key from anybody but the group's
+  creator is refused, and for the server to try it, a stranger would have to
+  appear in the member list where everyone can see them.
+- **A group message can no longer be shown twice.** The signature on a group
+  message now covers which message it is and which group it belongs to, so the
+  server cannot post a copy of something you said as if you had said it again.
+  Older installs will show messages sent by an updated app as unverified until
+  they update, because they do not yet know how to check the new signature.
+- **Nobody can delete your photos through a disappearing timer.** Someone in a
+  group, or the other person in a chat, could set a one-second timer, post a
+  message pointing at a picture you sent, and the expiry would delete your
+  picture from the server. A view-once message pointing at one of your own
+  photos did the same when you opened it. Only the person who uploaded a file
+  can make it go now.
+- **A friend request no longer shows its sender anything about you.** Sending
+  a request takes only your account id, which anyone in a group with you has.
+  Until you answered, it let them see when you were last online, and your
+  phone sent them your name, bio and picture. Now they see nothing until you
+  accept. Anyone who already received your profile that way loses it from
+  here on: your profile gets a new key they do not have, so nothing you change
+  reaches them, though what they saw before stays seen. You still see who a
+  request is from.
+- **Online status and typing are only visible to the people they are meant
+  for.** They used to travel on channels anyone with the app could join if
+  they knew two account ids, which was enough to watch whether someone was
+  online, or to make someone look online or typing when they were not. The
+  server now lets in only the two people in a conversation, or the members of
+  a group.
+- **Who is friends with whom can no longer be asked of the server** about
+  anybody but yourself.
+- **A new group can no longer say someone else set its timer or named it.**
+
+### Fixed
+
+- Typing in a group stopped showing on other phones after either one had been
+  asleep, because each phone joined a channel named after its own wake count.
+
 ## [1.23.0] — 2026-10-11
 
 ### Security

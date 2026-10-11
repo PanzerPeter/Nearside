@@ -111,19 +111,17 @@ export function PresenceProvider({
       return;
     }
 
-    const channels: RealtimeChannel[] = [];
+    const channels: [friendId: string, channel: RealtimeChannel][] = [];
 
     const rebuild = () => {
-      // Everyone presence currently lists, with every device they hold open.
+      // Every device the friend holds open, read off that friend's own channel
+      // and under their own id only. A presence key is whatever the client
+      // that tracked it said it was, so reading every key on every channel let
+      // one friend make anybody else look online.
       const present = new Map<string, PeerMeta[]>();
-      for (const channel of channels) {
-        const state = channel.presenceState<PeerMeta>();
-        for (const [userId, metas] of Object.entries(state)) {
-          if (userId === me) continue;
-          const devices = present.get(userId);
-          if (devices) devices.push(...metas);
-          else present.set(userId, [...metas]);
-        }
+      for (const [friendId, channel] of channels) {
+        const metas = channel.presenceState<PeerMeta>()[friendId];
+        if (metas?.length) present.set(friendId, [...metas]);
       }
       const now = Date.now();
       tracks.current = trackPeers(tracks.current, present, now);
@@ -132,12 +130,15 @@ export function PresenceProvider({
 
     const pushSelf = () => {
       const payload = { status: selfStatus(), updated_at: Date.now() };
-      for (const channel of channels) channel.track(payload).catch(() => {});
+      for (const [, channel] of channels) channel.track(payload).catch(() => {});
     };
 
     for (const friendId of peers) {
+      // Private, so only the two people the topic names may join it
+      // (`may_join_topic`, 0063). Public, anyone with the anon key and both ids
+      // could watch somebody's status or track a fake one under their id.
       const channel = supabase.channel(`presence:${conversationKey(me, friendId)}`, {
-        config: { presence: { key: me } },
+        config: { presence: { key: me }, private: true },
       });
       channel
         .on('presence', { event: 'sync' }, rebuild)
@@ -151,7 +152,7 @@ export function PresenceProvider({
             .track({ status: selfStatus(), updated_at: Date.now() })
             .catch(() => {});
         });
-      channels.push(channel);
+      channels.push([friendId, channel]);
     }
 
     const unwatchActive = subscribeAppActive(pushSelf);
@@ -171,7 +172,7 @@ export function PresenceProvider({
       window.clearInterval(heartbeat);
       window.clearInterval(tick);
       unwatchActive();
-      for (const channel of channels) supabase.removeChannel(channel);
+      for (const [, channel] of channels) supabase.removeChannel(channel);
     };
   }, [me, peerKey, generation, presenceOn]);
 

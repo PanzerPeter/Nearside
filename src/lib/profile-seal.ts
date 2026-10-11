@@ -17,11 +17,12 @@ import { supabase } from './supabase';
 import { fromBase64, toBase64, type Identity } from './crypto/keys';
 import { openBytesFrom, openForSelf, sealBytesFor, sealForSelf } from './crypto/seal';
 import { openFile, sealFile } from './media-crypto';
-import { peerPublicKey } from './peer-keys';
+import { peerPublicKey, requestedPeerKey } from './peer-keys';
 import { keyChanged } from './verification';
 import {
   decodeProfile,
   encodeProfile,
+  grantAudience,
   grantPlan,
   normalizeDisplayName,
   type ProfilePlain,
@@ -302,17 +303,16 @@ async function doSync(): Promise<void> {
   const [{ data: friendships, error: fError }, { data: grants, error: gError }] = await Promise.all([
     supabase
       .from('friendships')
-      .select('requester_id, addressee_id')
+      .select('requester_id, addressee_id, status')
       .or(`requester_id.eq.${me},addressee_id.eq.${me}`),
     supabase.from('profile_keys').select('reader_id').eq('owner_id', me),
   ]);
   if (fError || gError) return;
 
-  const audience = new Set<string>();
-  for (const f of friendships ?? []) {
-    const other = f.requester_id === me ? f.addressee_id : f.requester_id;
-    if (other !== me) audience.add(other);
-  }
+  // Grants already handed to somebody outside this set are withdrawn by the
+  // rotation `grantPlan` asks for, which is what takes them back from anyone
+  // who received one under the old, wider rule.
+  const audience = grantAudience(friendships ?? [], me);
   const plan = grantPlan(audience, new Set((grants ?? []).map((g) => g.reader_id as string)));
 
   let key = await ownProfileKey();
@@ -326,9 +326,18 @@ async function doSync(): Promise<void> {
   }
   if (!plan.add.length) return;
 
+  // Whose rows we can read: a friend's. Anybody else in the audience is a
+  // request this account sent, and only their public key is ours to ask for.
+  const friends = new Set(
+    (friendships ?? [])
+      .filter((f) => f.status === 'accepted')
+      .map((f) => (f.requester_id === me ? f.addressee_id : f.requester_id))
+  );
   const rows = [];
   for (const reader of plan.add) {
-    const theirs = await peerPublicKey(reader);
+    const theirs = friends.has(reader)
+      ? await peerPublicKey(reader)
+      : await requestedPeerKey(reader);
     // Not to a key the app is already warning about: a profile handed to an
     // interceptor is a profile handed out, whatever the composer then refuses.
     if (!theirs || (await keyChanged(reader, theirs))) continue;

@@ -122,13 +122,18 @@ ALTER TABLE public.room_messages DISABLE TRIGGER room_messages_stamp_expiry;
 -- Real folders, not a made-up one: since 0055 a row may only name an object
 -- in its own conversation's folder (or its own room's), which is what stops a
 -- row pointing the sweep at somebody else's file.
-INSERT INTO storage.objects (bucket_id, name) VALUES
-  ('chat-media', 'aaaaaaaa-0000-0000-0000-000000000001_bbbbbbbb-0000-0000-0000-000000000002/full.bin'),
-  ('chat-media', 'aaaaaaaa-0000-0000-0000-000000000001_bbbbbbbb-0000-0000-0000-000000000002/thumb.bin'),
-  ('chat-media', 'dddddddd-0000-0000-0000-000000000004/room-full.bin'),
-  ('chat-media', 'dddddddd-0000-0000-0000-000000000004/room-thumb.bin'),
+-- Uploaded by Alice, who sends both expiring rows: since 0063 the sweep takes
+-- only the sender's own objects.
+INSERT INTO storage.objects (bucket_id, name, owner) VALUES
+  ('chat-media', 'aaaaaaaa-0000-0000-0000-000000000001_bbbbbbbb-0000-0000-0000-000000000002/full.bin', 'aaaaaaaa-0000-0000-0000-000000000001'),
+  ('chat-media', 'aaaaaaaa-0000-0000-0000-000000000001_bbbbbbbb-0000-0000-0000-000000000002/thumb.bin', 'aaaaaaaa-0000-0000-0000-000000000001'),
+  ('chat-media', 'dddddddd-0000-0000-0000-000000000004/room-full.bin', 'aaaaaaaa-0000-0000-0000-000000000001'),
+  ('chat-media', 'dddddddd-0000-0000-0000-000000000004/room-thumb.bin', 'aaaaaaaa-0000-0000-0000-000000000001'),
   -- A bystander: proof the sweep deletes what expired and not the bucket.
-  ('chat-media', 'aaaaaaaa-0000-0000-0000-000000000001_bbbbbbbb-0000-0000-0000-000000000002/keep.bin');
+  ('chat-media', 'aaaaaaaa-0000-0000-0000-000000000001_bbbbbbbb-0000-0000-0000-000000000002/keep.bin', 'aaaaaaaa-0000-0000-0000-000000000001'),
+  -- Bob's upload, named by an expiring row of Alice's below. A short timer on
+  -- a row naming somebody else's file was a way to delete it (0063).
+  ('chat-media', 'aaaaaaaa-0000-0000-0000-000000000001_bbbbbbbb-0000-0000-0000-000000000002/bobs.bin', 'bbbbbbbb-0000-0000-0000-000000000002');
 
 INSERT INTO public.messages
   (id, user_id, receiver_id, media_path, media_thumb_path, media_type, expires_at)
@@ -137,7 +142,11 @@ VALUES
    'aaaaaaaa-0000-0000-0000-000000000001',
    'bbbbbbbb-0000-0000-0000-000000000002',
    'aaaaaaaa-0000-0000-0000-000000000001_bbbbbbbb-0000-0000-0000-000000000002/full.bin',
-   'aaaaaaaa-0000-0000-0000-000000000001_bbbbbbbb-0000-0000-0000-000000000002/thumb.bin', 'image', now() - interval '1 minute');
+   'aaaaaaaa-0000-0000-0000-000000000001_bbbbbbbb-0000-0000-0000-000000000002/thumb.bin', 'image', now() - interval '1 minute'),
+  ('cccccccc-0000-0000-0000-0000000000e2',
+   'aaaaaaaa-0000-0000-0000-000000000001',
+   'bbbbbbbb-0000-0000-0000-000000000002',
+   'aaaaaaaa-0000-0000-0000-000000000001_bbbbbbbb-0000-0000-0000-000000000002/bobs.bin', NULL, 'image', now() - interval '1 minute');
 
 INSERT INTO public.room_messages
   (id, room_id, sender_id, signature, media_path, media_thumb_path, media_type, expires_at)
@@ -173,6 +182,11 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM storage.objects
                   WHERE bucket_id = 'chat-media' AND name = 'aaaaaaaa-0000-0000-0000-000000000001_bbbbbbbb-0000-0000-0000-000000000002/keep.bin') THEN
     RAISE EXCEPTION 'expire_messages() deleted an object no expired row named';
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM storage.objects
+                  WHERE bucket_id = 'chat-media' AND name = 'aaaaaaaa-0000-0000-0000-000000000001_bbbbbbbb-0000-0000-0000-000000000002/bobs.bin') THEN
+    RAISE EXCEPTION 'expire_messages() deleted an object the expiring row''s sender did not upload';
   END IF;
 END;
 $$;
@@ -531,8 +545,10 @@ RESET ROLE;
 -- key and deletes the object, and nobody can write `viewed_at` by hand.
 -- ---------------------------------------------------------------------------
 
-INSERT INTO storage.objects (bucket_id, name) VALUES
-  ('chat-media', 'aaaaaaaa-0000-0000-0000-000000000001_bbbbbbbb-0000-0000-0000-000000000002/once.bin');
+INSERT INTO storage.objects (bucket_id, name, owner) VALUES
+  ('chat-media', 'aaaaaaaa-0000-0000-0000-000000000001_bbbbbbbb-0000-0000-0000-000000000002/once.bin', 'aaaaaaaa-0000-0000-0000-000000000001'),
+  -- Bob's own photo, which a view-once from Alice names below (0063).
+  ('chat-media', 'aaaaaaaa-0000-0000-0000-000000000001_bbbbbbbb-0000-0000-0000-000000000002/bob-photo.bin', 'bbbbbbbb-0000-0000-0000-000000000002');
 
 INSERT INTO public.messages
   (id, user_id, receiver_id, media_path, media_type, media_key_ciphertext, media_key_nonce, view_once)
@@ -541,6 +557,11 @@ VALUES
    'aaaaaaaa-0000-0000-0000-000000000001',
    'bbbbbbbb-0000-0000-0000-000000000002',
    'aaaaaaaa-0000-0000-0000-000000000001_bbbbbbbb-0000-0000-0000-000000000002/once.bin',
+   'image', 'k', 'n', true),
+  ('cccccccc-0000-0000-0000-000000000063',
+   'aaaaaaaa-0000-0000-0000-000000000001',
+   'bbbbbbbb-0000-0000-0000-000000000002',
+   'aaaaaaaa-0000-0000-0000-000000000001_bbbbbbbb-0000-0000-0000-000000000002/bob-photo.bin',
    'image', 'k', 'n', true);
 
 DO $$
@@ -587,6 +608,7 @@ END;
 $$;
 
 SET LOCAL request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000002';
+SELECT public.consume_view_once('cccccccc-0000-0000-0000-000000000063');
 SELECT public.consume_view_once('cccccccc-0000-0000-0000-000000000058');
 -- Twice, as a retry after a lost response would.
 SELECT public.consume_view_once('cccccccc-0000-0000-0000-000000000058');
@@ -604,6 +626,10 @@ BEGIN
               WHERE bucket_id = 'chat-media'
                 AND name = 'aaaaaaaa-0000-0000-0000-000000000001_bbbbbbbb-0000-0000-0000-000000000002/once.bin') THEN
     RAISE EXCEPTION 'consume_view_once() left the object in Storage';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM storage.objects
+                  WHERE bucket_id = 'chat-media' AND name = 'aaaaaaaa-0000-0000-0000-000000000001_bbbbbbbb-0000-0000-0000-000000000002/bob-photo.bin') THEN
+    RAISE EXCEPTION 'consume_view_once() deleted an object the sender did not upload';
   END IF;
 END;
 $$;
@@ -785,5 +811,98 @@ BEGIN
   END IF;
 END;
 $$;
+
+-- ---------------------------------------------------------------------------
+-- 0063: who-knows-whom is the caller's own question, a request shows its
+-- sender and nothing to them, a new group's attribution is the server's, and
+-- a private topic admits the people its name says.
+-- ---------------------------------------------------------------------------
+
+-- Dana sends Alice a request: an id is all it takes, no connect code.
+INSERT INTO auth.users (id, email) VALUES
+  ('dada0000-0000-0000-0000-000000000063', 'd@verify.test');
+INSERT INTO public.friendships (requester_id, addressee_id) VALUES
+  ('dada0000-0000-0000-0000-000000000063', 'aaaaaaaa-0000-0000-0000-000000000001');
+
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claim.sub = 'dada0000-0000-0000-0000-000000000063';
+
+DO $$
+BEGIN
+  IF public.has_friendship('aaaaaaaa-0000-0000-0000-000000000001', 'bbbbbbbb-0000-0000-0000-000000000002') IS NOT FALSE THEN
+    RAISE EXCEPTION 'has_friendship: told a stranger who is friends with whom';
+  END IF;
+  IF EXISTS (SELECT 1 FROM public.profiles WHERE id = 'aaaaaaaa-0000-0000-0000-000000000001') THEN
+    RAISE EXCEPTION 'profiles: an unanswered request showed its sender the addressee';
+  END IF;
+  IF public.requested_public_key('aaaaaaaa-0000-0000-0000-000000000001') IS DISTINCT FROM 'pk-a' THEN
+    RAISE EXCEPTION 'requested_public_key: withheld the key a request needs';
+  END IF;
+  IF public.requested_public_key('bbbbbbbb-0000-0000-0000-000000000002') IS NOT NULL THEN
+    RAISE EXCEPTION 'requested_public_key: answered about somebody never asked';
+  END IF;
+  IF NOT public.may_join_topic('presence:dada0000-0000-0000-0000-000000000063_aaaaaaaa-0000-0000-0000-000000000001')
+     OR public.may_join_topic('presence:aaaaaaaa-0000-0000-0000-000000000001_bbbbbbbb-0000-0000-0000-000000000002')
+     OR public.may_join_topic('dm:aaaaaaaa-0000-0000-0000-000000000001_bbbbbbbb-0000-0000-0000-000000000002')
+     OR public.may_join_topic('room:dddddddd-0000-0000-0000-000000000004')
+     OR public.may_join_topic('room:not-a-uuid')
+     OR public.may_join_topic('call:aaaaaaaa-0000-0000-0000-000000000001_bbbbbbbb-0000-0000-0000-000000000002') THEN
+    RAISE EXCEPTION 'may_join_topic: wrong answer for a stranger';
+  END IF;
+END;
+$$;
+
+-- Through the policy itself, as Realtime asks it: tracking presence on
+-- somebody else's pair topic is refused.
+SELECT set_config('realtime.topic', 'presence:aaaaaaaa-0000-0000-0000-000000000001_bbbbbbbb-0000-0000-0000-000000000002', true);
+DO $$
+DECLARE
+  refused boolean := false;
+BEGIN
+  BEGIN
+    INSERT INTO realtime.messages (topic, extension) VALUES ('presence:aaaaaaaa-0000-0000-0000-000000000001_bbbbbbbb-0000-0000-0000-000000000002', 'presence');
+  EXCEPTION WHEN insufficient_privilege THEN
+    refused := true;
+  END;
+  IF NOT refused THEN
+    RAISE EXCEPTION 'realtime: a stranger tracked presence on somebody else''s pair';
+  END IF;
+END;
+$$;
+
+SET LOCAL request.jwt.claim.sub = 'aaaaaaaa-0000-0000-0000-000000000001';
+SELECT set_config('realtime.topic', 'presence:aaaaaaaa-0000-0000-0000-000000000001_bbbbbbbb-0000-0000-0000-000000000002', true);
+INSERT INTO realtime.messages (topic, extension) VALUES ('presence:aaaaaaaa-0000-0000-0000-000000000001_bbbbbbbb-0000-0000-0000-000000000002', 'presence');
+
+DO $$
+BEGIN
+  IF NOT public.has_friendship('aaaaaaaa-0000-0000-0000-000000000001', 'dada0000-0000-0000-0000-000000000063') THEN
+    RAISE EXCEPTION 'has_friendship: refused the caller their own answer';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM public.profiles
+                  WHERE id = 'dada0000-0000-0000-0000-000000000063') THEN
+    RAISE EXCEPTION 'profiles: a request no longer shows who sent it';
+  END IF;
+  IF NOT public.may_join_topic('dm:aaaaaaaa-0000-0000-0000-000000000001_bbbbbbbb-0000-0000-0000-000000000002')
+     OR NOT public.may_join_topic('room:dddddddd-0000-0000-0000-000000000004') THEN
+    RAISE EXCEPTION 'may_join_topic: refused a participant';
+  END IF;
+
+  INSERT INTO public.rooms (id, title, created_by, ttl_seconds, ttl_set_by, title_set_by, title_set_at)
+  VALUES ('63636363-0000-0000-0000-000000000063', 'blame room', 'aaaaaaaa-0000-0000-0000-000000000001', 60,
+          'bbbbbbbb-0000-0000-0000-000000000002', 'bbbbbbbb-0000-0000-0000-000000000002', now() - interval '1 day');
+  -- A room is read through its member list, so the creator joins it first.
+  INSERT INTO public.room_participants (room_id, user_id) VALUES
+    ('63636363-0000-0000-0000-000000000063', 'aaaaaaaa-0000-0000-0000-000000000001');
+  IF NOT EXISTS (SELECT 1 FROM public.rooms
+                  WHERE id = '63636363-0000-0000-0000-000000000063'
+                    AND ttl_set_by = 'aaaaaaaa-0000-0000-0000-000000000001'
+                    AND title_set_by IS NULL AND title_set_at IS NULL) THEN
+    RAISE EXCEPTION 'rooms: a new group kept the attribution its creator wrote';
+  END IF;
+END;
+$$;
+
+RESET ROLE;
 
 ROLLBACK;

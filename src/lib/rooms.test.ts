@@ -7,6 +7,7 @@ import {
   signedPayload,
   signedPayloadV2,
   signedPayloadV3,
+  signedPayloadV4,
 } from './crypto/seal';
 import {
   ROOM_COLOURS,
@@ -19,6 +20,7 @@ import {
   roomMediaPath,
   sealRoomFileKey,
   sealRoomMessage,
+  trustedKeySealer,
   type RoomDraft,
   type RoomMessage,
 } from './rooms';
@@ -33,17 +35,21 @@ async function aRoomKey(): Promise<Uint8Array> {
   return sodium.crypto_secretbox_keygen();
 }
 
+/** The row the sealing tests sign for. Since v5 the signature names it. */
+const REF = { id: 'm1', roomId: 'r1' };
+
 /** A row as the database would hand it back. */
 async function aRow(
   roomKey: Uint8Array,
   sender: Identity,
   senderId: string,
   text: string,
-  draft: RoomDraft = {}
+  draft: RoomDraft = {},
+  id = 'm1'
 ): Promise<RoomMessage> {
-  const sealed = await sealRoomMessage(roomKey, sender, text, draft);
+  const sealed = await sealRoomMessage(roomKey, sender, { id, roomId: 'r1' }, text, draft);
   return {
-    id: 'm1',
+    id,
     room_id: 'r1',
     sender_id: senderId,
     created_at: '2026-08-07T00:00:00.000Z',
@@ -261,8 +267,8 @@ describe('room messages', () => {
   it('uses a fresh nonce for every message', async () => {
     const roomKey = await aRoomKey();
     const alice = await anIdentity();
-    const a = await sealRoomMessage(roomKey, alice, 'same text');
-    const b = await sealRoomMessage(roomKey, alice, 'same text');
+    const a = await sealRoomMessage(roomKey, alice, REF, 'same text');
+    const b = await sealRoomMessage(roomKey, alice, REF, 'same text');
     expect(a.nonce).not.toEqual(b.nonce);
     expect(a.ciphertext).not.toEqual(b.ciphertext);
   });
@@ -346,8 +352,8 @@ describe('room signature v2', () => {
   it('always writes the current sig_v on send, text-only included', async () => {
     const roomKey = await aRoomKey();
     const alice = await anIdentity();
-    expect((await sealRoomMessage(roomKey, alice, 'plain')).sig_v).toBe(4);
-    expect((await sealRoomMessage(roomKey, alice, null, { media })).sig_v).toBe(4);
+    expect((await sealRoomMessage(roomKey, alice, REF, 'plain')).sig_v).toBe(5);
+    expect((await sealRoomMessage(roomKey, alice, REF, null, { media })).sig_v).toBe(5);
   });
 
   // The thumbnail is the picture a reader actually looks at, so it is the one
@@ -423,7 +429,7 @@ describe('room signature v2', () => {
   it('leaves the body columns null when an attachment has no caption', async () => {
     const roomKey = await aRoomKey();
     const alice = await anIdentity();
-    const sealed = await sealRoomMessage(roomKey, alice, '', { media });
+    const sealed = await sealRoomMessage(roomKey, alice, REF, '', { media });
     // Not an empty ciphertext: sealing '' would put a known plaintext under
     // every caption-less attachment in every room.
     expect(sealed.ciphertext).toBeNull();
@@ -489,7 +495,7 @@ describe('room signature v4', () => {
   it('defaults to false, and an ordinary message is not marked', async () => {
     const roomKey = await aRoomKey();
     const alice = await anIdentity();
-    expect((await sealRoomMessage(roomKey, alice, 'plain')).forwarded).toBe(false);
+    expect((await sealRoomMessage(roomKey, alice, REF, 'plain')).forwarded).toBe(false);
   });
 
   // The column is NOT NULL DEFAULT false, so a select that omitted it and a row
@@ -548,11 +554,82 @@ describe('room signature v4', () => {
     const row = await aRow(roomKey, alice, 'alice', 'from the future');
 
     const [opened] = await openRoomRows(
-      [{ ...row, sig_v: 5 }],
+      [{ ...row, sig_v: 6 }],
       roomKey,
       new Map([['alice', await toBase64(alice.signPublic)]])
     );
     expect(opened.sender).toBe('unverified');
+  });
+});
+
+describe('room signature v5', () => {
+  // Signed over what a message said and not which message it was, a row could
+  // be inserted again under a fresh id and read as the sender saying it twice.
+  it('refuses a signed row replayed under another id', async () => {
+    const roomKey = await aRoomKey();
+    const alice = await anIdentity();
+    const signing = new Map([['alice', await toBase64(alice.signPublic)]]);
+    const row = await aRow(roomKey, alice, 'alice', 'yes');
+
+    const [honest, replayed] = await openRoomRows([row, { ...row, id: 'm9' }], roomKey, signing);
+    expect(honest.sender).toBe('verified');
+    expect(replayed.sender).toBe('unverified');
+    expect(replayed.text).toBeNull();
+  });
+
+  it('refuses a signed row moved to another room', async () => {
+    const roomKey = await aRoomKey();
+    const alice = await anIdentity();
+    const row = await aRow(roomKey, alice, 'alice', 'yes');
+
+    const [opened] = await openRoomRows(
+      [{ ...row, room_id: 'r2' }],
+      roomKey,
+      new Map([['alice', await toBase64(alice.signPublic)]])
+    );
+    expect(opened.sender).toBe('unverified');
+  });
+
+  // Rows written before v5 keep meaning what they meant.
+  it('still verifies a v4 row under the v4 payload', async () => {
+    const roomKey = await aRoomKey();
+    const alice = await anIdentity();
+    const row = await aRow(roomKey, alice, 'alice', 'sent before ids were signed');
+    const fields = { ...row, signature: undefined, sig_v: undefined };
+    const v4 = {
+      ...row,
+      signature: await signBytes(alice.signPrivate, signedPayloadV4(fields)),
+      sig_v: 4,
+    };
+
+    const [opened] = await openRoomRows(
+      [v4],
+      roomKey,
+      new Map([['alice', await toBase64(alice.signPublic)]])
+    );
+    expect(opened.sender).toBe('verified');
+    expect(opened.text).toBe('sent before ids were signed');
+  });
+});
+
+describe('trustedKeySealer', () => {
+  // Only the creator may seal a room key (keys_insert_sealer), and the creator
+  // cannot leave. Anything else is a key the server chose.
+  it('accepts the creator, while they are in the room', () => {
+    expect(trustedKeySealer('alice', 'alice', true)).toBe(true);
+  });
+
+  it('refuses a key sealed by anybody but the creator', () => {
+    expect(trustedKeySealer('mallory', 'alice', true)).toBe(false);
+  });
+
+  it('refuses a creator who is not in the member list', () => {
+    expect(trustedKeySealer('alice', 'alice', false)).toBe(false);
+  });
+
+  it('refuses when the room could not be read', () => {
+    expect(trustedKeySealer('alice', null, true)).toBe(false);
+    expect(trustedKeySealer('alice', undefined, true)).toBe(false);
   });
 });
 
@@ -695,7 +772,7 @@ describe('the local mirror of a group', () => {
       ['bob', await toBase64(bob.signPublic)],
     ]);
     const first = await aRow(roomKey, alice, 'alice', 'first light');
-    const second = { ...(await aRow(roomKey, bob, 'bob', 'second light')), id: 'm2' };
+    const second = await aRow(roomKey, bob, 'bob', 'second light', {}, 'm2');
 
     await openRoomRows([first, second], roomKey, signing);
 

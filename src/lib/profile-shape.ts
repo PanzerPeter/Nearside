@@ -66,6 +66,28 @@ export function decodeProfile(text: string, ownerId: string): ProfilePlain | nul
 }
 
 /**
+ * Who should be able to open this account's profile.
+ *
+ * A friend, and somebody this account has asked: the request has to show them
+ * who is asking. Not somebody who has asked *this* account. A request needs
+ * nothing but an account id, no connect code — anyone in a group with you has
+ * yours — so granting on any row in either direction handed your name, bio and
+ * picture to whoever sent one, whether or not you ever accepted.
+ */
+export function grantAudience(
+  friendships: readonly { requester_id: string; addressee_id: string; status: string }[],
+  me: string
+): Set<string> {
+  const audience = new Set<string>();
+  for (const f of friendships) {
+    if (f.status !== 'accepted' && f.requester_id !== me) continue;
+    const other = f.requester_id === me ? f.addressee_id : f.requester_id;
+    if (other !== me) audience.add(other);
+  }
+  return audience;
+}
+
+/**
  * What a sync has to do to make the grants match the people who should hold
  * them.
  *

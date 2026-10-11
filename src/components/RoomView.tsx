@@ -858,11 +858,17 @@ export function RoomView({ session, room, identity, openAt, onBack, onLeft }: Ro
   // Realtime, with the same channel-status reporting every other subscription
   // in the app uses, so `lib/connection.ts`'s wake and reconnect handling
   // applies here unchanged.
+  //
+  // The topic is the room and nothing else. `generation` is this device's own
+  // wake counter, so a topic carrying it put two phones on the same channel
+  // only until one of them woke, and typing stopped reaching the other.
+  // Private, so the server checks `may_join_topic` (0063): a public topic is
+  // open to anyone holding the app's anon key, and typing is a broadcast.
   useEffect(() => {
     if (!roomKey) return;
-    const channelKey = `room:${room.id}:${generation}`;
+    const channelKey = `room:${room.id}`;
     const channel = supabase
-      .channel(channelKey, { config: { broadcast: { self: false } } })
+      .channel(channelKey, { config: { broadcast: { self: false }, private: true } })
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'room_messages', filter: `room_id=eq.${room.id}` },

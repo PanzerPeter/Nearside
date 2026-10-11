@@ -4,6 +4,7 @@ import {
   DISPLAY_NAME_MAX,
   decodeProfile,
   encodeProfile,
+  grantAudience,
   grantPlan,
   normalizeDisplayName,
 } from './profile-shape';
@@ -63,5 +64,30 @@ describe('grantPlan', () => {
       remove: ['b'],
       rotate: true,
     });
+  });
+});
+
+describe('grantAudience', () => {
+  const me = 'me';
+
+  it('includes friends in either direction and requests I sent', () => {
+    expect(
+      grantAudience(
+        [
+          { requester_id: me, addressee_id: 'a', status: 'accepted' },
+          { requester_id: 'b', addressee_id: me, status: 'accepted' },
+          { requester_id: me, addressee_id: 'c', status: 'pending' },
+        ],
+        me
+      )
+    ).toEqual(new Set(['a', 'b', 'c']));
+  });
+
+  // A request needs no connect code, only an id, so answering one with your
+  // profile would hand it to anybody who asked.
+  it('leaves out somebody whose request I have not accepted', () => {
+    expect(
+      grantAudience([{ requester_id: 'stranger', addressee_id: me, status: 'pending' }], me)
+    ).toEqual(new Set());
   });
 });

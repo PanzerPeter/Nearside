@@ -74,7 +74,8 @@ SELECT '## index ' || pg_get_indexdef(i.indexrelid)
  WHERE n.nspname = 'public'
  ORDER BY 1;
 
--- Policies for both schemas: storage.objects is where the media perimeter is.
+-- Policies for three schemas: storage.objects is where the media perimeter is,
+-- and realtime.messages is who may join a private topic (0063).
 SELECT '## policy ' || schemaname || '.' || tablename || '.' || policyname
        || ' ' || permissive
        || ' cmd=' || cmd
@@ -82,7 +83,7 @@ SELECT '## policy ' || schemaname || '.' || tablename || '.' || policyname
        || ' using=' || coalesce(qual, '-')
        || ' check=' || coalesce(with_check, '-')
   FROM pg_policies
- WHERE schemaname IN ('public', 'storage')
+ WHERE schemaname IN ('public', 'storage', 'realtime')
  ORDER BY 1;
 
 -- Function bodies included: a policy is only as good as the SECURITY DEFINER

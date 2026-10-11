@@ -675,9 +675,12 @@ export function useChatThread({
      */
     const senders = isSelf ? [me] : [peerId, me];
 
+    // Private: typing is a broadcast, and on a public topic anyone holding the
+    // anon key and both ids could join, watch it and send their own. The
+    // server lets in the two people the topic names (`may_join_topic`, 0063).
     let channel = supabase
       .channel(channelKey, {
-        config: { broadcast: { self: false } },
+        config: { broadcast: { self: false }, private: true },
       })
       .on('broadcast', { event: 'typing' }, ({ payload }) => {
         // Not subscribed-and-ignored for show: with the setting off this

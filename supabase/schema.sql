@@ -271,11 +271,16 @@ REVOKE ALL ON public.blocks FROM PUBLIC, anon, authenticated;
 GRANT SELECT, INSERT, DELETE ON public.blocks TO authenticated;
 
 /*
-  There is no directory. SELECT reaches yourself and anyone you have a
-  friendship row with in either direction — including a pending one, so a
-  request can show who sent it — and anyone you have blocked, so Settings can
-  still name them after the chat was deleted. A window with no SELECT policy fails closed,
+  There is no directory. SELECT reaches yourself, anyone you have an accepted
+  friendship with, anyone who has sent you a request — so the request can show
+  who sent it — and anyone you have blocked, so Settings can still name them
+  after the chat was deleted. A window with no SELECT policy fails closed,
   which is the correct direction to fail.
+
+  Not somebody you have sent a request to (0063). Sending one takes nothing but
+  an id, no connect code, so a pending row in that direction let a stranger
+  read the target's `last_seen_at`, keys and any profile column still in
+  plaintext before the target had said anything at all.
 
   The single UPDATE policy covers the key columns too: RLS is per row, not per
   column. A second permissive UPDATE policy would be OR'd with this one and
@@ -289,7 +294,11 @@ CREATE POLICY "profiles_select_connected" ON public.profiles
     id = (select auth.uid())
     OR EXISTS (
       SELECT 1 FROM public.friendships f
-      WHERE (f.requester_id = (select auth.uid()) AND f.addressee_id = profiles.id)
+      -- Asked by me and accepted, or asked of me at any status: the person who
+      -- received a request sees who sent it; the sender sees nobody until the
+      -- answer is yes.
+      WHERE (f.requester_id = (select auth.uid()) AND f.addressee_id = profiles.id
+             AND f.status = 'accepted')
          OR (f.addressee_id = (select auth.uid()) AND f.requester_id = profiles.id)
     )
     OR EXISTS (
@@ -312,6 +321,34 @@ DROP POLICY IF EXISTS "profiles_delete_own" ON public.profiles;
 CREATE POLICY "profiles_delete_own" ON public.profiles
   FOR DELETE TO authenticated USING ((select auth.uid()) = id);
 
+/*
+  The one thing a pending request's sender still needs: the addressee's public
+  key, to seal their own profile key to them so the request shows who it is
+  from. A connect code scanned off a screen carries it already; one typed in by
+  hand does not, and the profile row is no longer theirs to read. A public key
+  and nothing beside it — no `last_seen_at`, no profile column.
+*/
+CREATE OR REPLACE FUNCTION public.requested_public_key(peer uuid)
+RETURNS text
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+  SELECT p.public_key
+    FROM public.profiles p
+   WHERE p.id = peer
+     AND EXISTS (
+       SELECT 1 FROM public.friendships f
+        WHERE f.requester_id = (SELECT auth.uid())
+          AND f.addressee_id = peer
+          AND f.status = 'pending'
+     );
+$$;
+
+REVOKE ALL ON FUNCTION public.requested_public_key(uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.requested_public_key(uuid) TO authenticated;
+
 -- Exactly the verbs there are policies for (0052). A grant wider than the
 -- policies beneath it is a second gate that has stopped describing the first.
 REVOKE ALL ON public.profiles FROM PUBLIC, anon, authenticated;
@@ -323,8 +360,12 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON public.profiles TO authenticated;
 
 /*
   Whether `a` and `b` have a friendship row in either direction, at any
-  status. The same test `profiles_select_connected` makes, as a function so the
-  grant policy below can ask it about somebody other than the caller.
+  status, as a function so the grant policy below can ask it about somebody
+  other than the caller.
+
+  Only when one of the two is the caller (0063). Definer rights and a grant put
+  it at /rpc/has_friendship, and it answered for any pair: who is friends with
+  whom, to anyone who asked. The grant policy passes the caller as `owner_id`.
 */
 CREATE OR REPLACE FUNCTION public.has_friendship(a uuid, b uuid)
 RETURNS boolean
@@ -333,7 +374,7 @@ SECURITY DEFINER
 STABLE
 SET search_path = ''
 AS $$
-  SELECT EXISTS (
+  SELECT (SELECT auth.uid()) IN (a, b) AND EXISTS (
     SELECT 1 FROM public.friendships f
      WHERE (f.requester_id = a AND f.addressee_id = b)
         OR (f.requester_id = b AND f.addressee_id = a)
@@ -1082,9 +1123,10 @@ SECURITY DEFINER
 SET search_path = ''
 AS $$
 DECLARE
-  path text;
+  path   text;
+  sender uuid;
 BEGIN
-  SELECT m.media_path INTO path
+  SELECT m.media_path, m.user_id INTO path, sender
     FROM public.messages m
    WHERE m.id = target
      AND m.receiver_id = (SELECT auth.uid())
@@ -1105,10 +1147,15 @@ BEGIN
   PERFORM set_config('nearside.consume_view_once', 'off', true);
 
   -- The key is gone from the row above, so the bytes are already unopenable;
-  -- this takes them off the server too. Same flag as expire_messages() (0054).
+  -- this takes them off the server too. Same flag as expire_messages() (0054),
+  -- and the same rule (0063): only an object the sender uploaded, or a
+  -- view-once naming the recipient's own photo deleted it when they opened it.
   IF path IS NOT NULL THEN
     PERFORM set_config('storage.allow_delete_query', 'true', true);
-    DELETE FROM storage.objects WHERE bucket_id = 'chat-media' AND name = path;
+    DELETE FROM storage.objects o
+     WHERE o.bucket_id = 'chat-media'
+       AND o.name = path
+       AND (o.owner = sender OR o.owner_id = sender::text);
   END IF;
 END;
 $$;
@@ -2018,6 +2065,7 @@ CREATE TABLE IF NOT EXISTS public.room_messages (
       2  the same, plus the media and reply columns
       3  the same, plus media_thumb_path           — 0044
       4  the same, plus forwarded                  — 0046
+      5  the same, plus the row's id and room_id   — 0063
 
     The signature is the only thing in a room that establishes authorship to a
     *client*. RLS says only the sender may UPDATE a row, but RLS is enforced by
@@ -2063,7 +2111,7 @@ CREATE TABLE IF NOT EXISTS public.room_messages (
 
   -- A row claiming a version no builder exists for would verify against
   -- nothing at all.
-  CONSTRAINT room_messages_sig_v_known CHECK (sig_v IN (1, 2, 3, 4)),
+  CONSTRAINT room_messages_sig_v_known CHECK (sig_v IN (1, 2, 3, 4, 5)),
 
   -- The room's own folder only, for the reason `messages_media_in_conversation`
   -- gives (0055): room folders have no DELETE policy so that no member can clear
@@ -2166,6 +2214,37 @@ CREATE POLICY rooms_delete_creator ON public.rooms
 -- columns they write, which is the whole reason `rooms` has no UPDATE policy.
 REVOKE ALL ON public.rooms FROM PUBLIC, anon, authenticated;
 GRANT SELECT, INSERT, DELETE ON public.rooms TO authenticated;
+
+/*
+  A new group's attribution is the server's (0063). `ttl_set_by` and
+  `title_set_by` are what the thread names in "X set disappearing messages" and
+  "X renamed the group", and on INSERT they were whatever the creator wrote, so
+  a group could open blaming somebody else for its timer. `created_at` with
+  them, as on every table since 0062.
+*/
+CREATE OR REPLACE FUNCTION public.rooms_stamp_insert()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = ''
+AS $$
+BEGIN
+  NEW.created_at   := now();
+  -- A timer set at creation was set by the creator; a group still carrying the
+  -- name it was made with has nobody to credit for renaming it.
+  NEW.ttl_set_by   := CASE WHEN NEW.ttl_seconds IS NULL THEN NULL ELSE NEW.created_by END;
+  NEW.ttl_set_at   := CASE WHEN NEW.ttl_seconds IS NULL THEN NULL ELSE now() END;
+  NEW.title_set_by := NULL;
+  NEW.title_set_at := NULL;
+  RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.rooms_stamp_insert() FROM PUBLIC, anon, authenticated;
+
+DROP TRIGGER IF EXISTS rooms_stamp_insert ON public.rooms;
+CREATE TRIGGER rooms_stamp_insert
+  BEFORE INSERT ON public.rooms
+  FOR EACH ROW EXECUTE FUNCTION public.rooms_stamp_insert();
 
 DROP POLICY IF EXISTS participants_select_member ON public.room_participants;
 CREATE POLICY participants_select_member ON public.room_participants
@@ -2988,19 +3067,19 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-  doomed text[];
+  doomed_paths   text[];
+  doomed_senders uuid[];
 BEGIN
-  -- Both objects per row (0051). `unnest` rather than four UNION branches, so
-  -- the pair stays written once per table and a third object — if one is ever
-  -- added — is one more element rather than one more branch.
-  SELECT coalesce(array_agg(path), '{}')
-    INTO doomed
+  -- Both objects per row (0051), each with the account that sent the row: the
+  -- delete below takes an object only if that account uploaded it (0063).
+  SELECT coalesce(array_agg(path), '{}'), coalesce(array_agg(sender), '{}')
+    INTO doomed_paths, doomed_senders
     FROM (
-      SELECT unnest(ARRAY[media_path, media_thumb_path]) AS path
+      SELECT unnest(ARRAY[media_path, media_thumb_path]) AS path, user_id AS sender
         FROM public.messages
        WHERE expires_at IS NOT NULL AND expires_at <= now() AND media_path IS NOT NULL
       UNION ALL
-      SELECT unnest(ARRAY[media_path, media_thumb_path])
+      SELECT unnest(ARRAY[media_path, media_thumb_path]), sender_id
         FROM public.room_messages
        WHERE expires_at IS NOT NULL AND expires_at <= now() AND media_path IS NOT NULL
     ) expiring
@@ -3023,10 +3102,16 @@ BEGIN
   -- platform's `protect_delete` trigger raises, and the raise rolls back every
   -- delete above: expired messages stayed on the server, retried every minute.
   -- Transaction-local, so it opens nothing beyond this call.
-  IF array_length(doomed, 1) > 0 THEN
+  --
+  -- The sender's uploads only, for the reason `drop_replaced_media()` gives: a
+  -- row naming somebody else's file on a short timer was a way to delete it.
+  IF array_length(doomed_paths, 1) > 0 THEN
     PERFORM set_config('storage.allow_delete_query', 'true', true);
-    DELETE FROM storage.objects
-     WHERE bucket_id = 'chat-media' AND name = ANY (doomed);
+    DELETE FROM storage.objects o
+     USING unnest(doomed_paths, doomed_senders) AS d(path, sender)
+     WHERE o.bucket_id = 'chat-media'
+       AND o.name = d.path
+       AND (o.owner = d.sender OR o.owner_id = d.sender::text);
   END IF;
 END;
 $$;
@@ -3914,6 +3999,63 @@ BEGIN
   END LOOP;
 END;
 $$;
+
+/*
+  Private topics (0063). Presence (`presence:{a}_{b}`), 1:1 typing
+  (`dm:{a}_{b}`) and a group's channel (`room:{id}`) are joined with
+  `private: true`, so Realtime asks the policies below before it lets anyone
+  in. Joined in public they were open to anyone holding the anon key that ships
+  in the app: two ids were enough to watch somebody's status, track a fake one
+  under their id, or broadcast typing into their conversation.
+
+  Postgres changes on those channels are unaffected — they are authorised per
+  row by the table's own SELECT policy, as before. The call topic stays public
+  on purpose: its signals are sealed and checked (`openSignal`), and the
+  lock-screen answer path joins it before the rest of the app has started.
+*/
+/*
+  Whether the caller may join a private topic, read off its name. A pair topic
+  admits the two people it names and a group topic the group's members; a name
+  of any other shape admits nobody. The CASE orders the shape check before the
+  uuid cast, so a malformed topic is refused rather than raising.
+*/
+CREATE OR REPLACE FUNCTION public.may_join_topic(topic text)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SET search_path = ''
+AS $$
+  SELECT CASE
+    WHEN topic ~ '^(presence|dm):[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+      THEN (SELECT auth.uid())::text IN (
+             split_part(split_part(topic, ':', 2), '_', 1),
+             split_part(split_part(topic, ':', 2), '_', 2))
+    WHEN topic ~ '^room:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+      THEN public.is_room_member(split_part(topic, ':', 2)::uuid)
+    ELSE false
+  END;
+$$;
+
+REVOKE ALL ON FUNCTION public.may_join_topic(text) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.may_join_topic(text) TO authenticated;
+
+-- Receiving (SELECT) and sending or tracking (INSERT), for broadcast and
+-- presence. Nothing else is carried on these topics.
+DROP POLICY IF EXISTS "nearside_topics_receive" ON realtime.messages;
+CREATE POLICY "nearside_topics_receive" ON realtime.messages
+  FOR SELECT TO authenticated
+  USING (
+    realtime.messages.extension IN ('broadcast', 'presence')
+    AND public.may_join_topic((SELECT realtime.topic()))
+  );
+
+DROP POLICY IF EXISTS "nearside_topics_send" ON realtime.messages;
+CREATE POLICY "nearside_topics_send" ON realtime.messages
+  FOR INSERT TO authenticated
+  WITH CHECK (
+    realtime.messages.extension IN ('broadcast', 'presence')
+    AND public.may_join_topic((SELECT realtime.topic()))
+  );
 
 -- ===========================================================================
 -- 13. Schema cache

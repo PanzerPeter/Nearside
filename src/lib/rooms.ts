@@ -19,6 +19,7 @@ import {
   signedPayloadV2,
   signedPayloadV3,
   signedPayloadV4,
+  signedPayloadV5,
   verifyBytes,
   versionCovers,
   openForSelf,
@@ -548,6 +549,27 @@ export function forgetAllRoomKeys(): void {
 }
 
 /**
+ * Whether a room key row came from the one account that may write it.
+ *
+ * `keys_insert_sealer` lets only the room's creator seal keys, and the creator
+ * cannot leave, so an honest row is always sealed by a current member who is
+ * also `created_by`. `sealed_by` itself is the server's word, though, and the
+ * box opens against whichever key that account published: trusting any name
+ * there let a server seal every member a key of its own choosing, from an
+ * account nobody had seen, and read the whole group with every signature still
+ * valid and every safety number still matching. Requiring the creator, and
+ * the creator in the member list, means a server wanting that has to put a
+ * stranger in the group where everybody can see them.
+ */
+export function trustedKeySealer(
+  sealedBy: string,
+  createdBy: string | null | undefined,
+  sealerIsMember: boolean
+): boolean {
+  return !!createdBy && sealedBy === createdBy && sealerIsMember;
+}
+
+/**
  * This account's copy of the room key, or null when no row exists: they are
  * not a member, or were removed. The UI must render null as the error it is,
  * because an empty room would be a lie.
@@ -556,12 +578,22 @@ export async function roomKeyFor(roomId: string, identity: Identity): Promise<Ui
   const hit = keyCache.get(roomId);
   if (hit) return hit;
 
-  const { data } = await supabase
-    .from('room_keys')
-    .select('key_ciphertext, key_nonce, sealed_by')
-    .eq('room_id', roomId)
-    .maybeSingle();
+  const [{ data }, { data: room }] = await Promise.all([
+    supabase
+      .from('room_keys')
+      .select('key_ciphertext, key_nonce, sealed_by')
+      .eq('room_id', roomId)
+      .maybeSingle(),
+    supabase.from('rooms').select('created_by').eq('id', roomId).maybeSingle(),
+  ]);
   if (!data) return null;
+  const { data: sealerRow } = await supabase
+    .from('room_participants')
+    .select('user_id')
+    .eq('room_id', roomId)
+    .eq('user_id', data.sealed_by)
+    .maybeSingle();
+  if (!trustedKeySealer(data.sealed_by, room?.created_by, !!sealerRow)) return null;
 
   const sealers = await publishedKeys([data.sealed_by]);
   const sealerPublic = sealers.get(data.sealed_by)?.public_key;
@@ -663,7 +695,13 @@ export interface SealedRoomRow {
   reply_to_id: string | null;
   forwarded: boolean;
   signature: string;
-  sig_v: 4;
+  sig_v: 5;
+}
+
+/** Which row a signature is about, signed since v5 — see `signedPayloadV5`. */
+export interface RoomRowRef {
+  id: string;
+  roomId: string;
 }
 
 /**
@@ -682,6 +720,7 @@ export interface SealedRoomRow {
 export async function sealRoomMessage(
   roomKey: Uint8Array,
   identity: Identity,
+  ref: RoomRowRef,
   text: string | null,
   draft: RoomDraft = {}
 ): Promise<SealedRoomRow> {
@@ -715,8 +754,11 @@ export async function sealRoomMessage(
 
   return {
     ...row,
-    signature: await signBytes(identity.signPrivate, signedPayloadV4(row)),
-    sig_v: 4,
+    signature: await signBytes(
+      identity.signPrivate,
+      signedPayloadV5({ ...row, id: ref.id, room_id: ref.roomId })
+    ),
+    sig_v: 5,
   };
 }
 
@@ -738,8 +780,9 @@ export async function sendRoomMessage(
   text: string | null,
   draft: RoomDraft = {}
 ): Promise<RoomMessage> {
-  const sealed = await sealRoomMessage(roomKey, identity, text, draft);
+  // Generated here rather than by the database, so the signature can name it.
   const id = crypto.randomUUID();
+  const sealed = await sealRoomMessage(roomKey, identity, { id, roomId }, text, draft);
   const { data, error } = await supabase
     .from('room_messages')
     .insert({ id, room_id: roomId, sender_id: me, ...sealed })
@@ -781,6 +824,7 @@ export async function editRoomMessage(
     | 'media_thumb_path'
     | 'reply_to_id'
     | 'forwarded'
+    | 'room_id'
   >
 ): Promise<void> {
   await sodium.ready;
@@ -809,8 +853,11 @@ export async function editRoomMessage(
     .update({
       ciphertext: row.ciphertext,
       nonce: row.nonce,
-      signature: await signBytes(identity.signPrivate, signedPayloadV4(row)),
-      sig_v: 4,
+      signature: await signBytes(
+        identity.signPrivate,
+        signedPayloadV5({ ...row, id, room_id: existing.room_id })
+      ),
+      sig_v: 5,
     })
     .eq('id', id);
   if (error) throw error;
@@ -852,12 +899,19 @@ export async function deleteRoomMessage(id: string, identity: Identity): Promise
 
   const { data: current } = await supabase
     .from('room_messages')
-    .select('reply_to_id, forwarded')
+    .select('reply_to_id, forwarded, room_id')
     .eq('id', id)
     .single();
-  const frozen = current as { reply_to_id: string | null; forwarded: boolean | null } | null;
-  emptied.reply_to_id = frozen?.reply_to_id ?? null;
-  emptied.forwarded = frozen?.forwarded ?? false;
+  const frozen = current as {
+    reply_to_id: string | null;
+    forwarded: boolean | null;
+    room_id: string;
+  } | null;
+  // No row, no signature: re-signing a tombstone for a room we cannot name
+  // would write one that every member reads as forged.
+  if (!frozen) throw new Error('message not found');
+  emptied.reply_to_id = frozen.reply_to_id ?? null;
+  emptied.forwarded = frozen.forwarded ?? false;
 
   const { error } = await supabase
     .from('room_messages')
@@ -870,8 +924,11 @@ export async function deleteRoomMessage(id: string, identity: Identity): Promise
       media_key_ciphertext: null,
       media_key_nonce: null,
       media_thumb_path: null,
-      signature: await signBytes(identity.signPrivate, signedPayloadV4(emptied)),
-      sig_v: 4,
+      signature: await signBytes(
+        identity.signPrivate,
+        signedPayloadV5({ ...emptied, id, room_id: frozen.room_id })
+      ),
+      sig_v: 5,
     })
     .eq('id', id);
   if (error) throw error;
@@ -931,7 +988,7 @@ export async function openRoomRows(
       // mean trying the shorter payload, which is the downgrade the version
       // exists to prevent.
       const version = row.sig_v ?? 1;
-      if (version !== 1 && version !== 2 && version !== 3 && version !== 4) {
+      if (version < 1 || version > 5 || !Number.isInteger(version)) {
         return { ...row, text: null, sender: 'unverified' };
       }
       // The downgrade: an older version claimed for a row carrying fields that
@@ -944,7 +1001,9 @@ export async function openRoomRows(
             ? signedPayloadV2(row)
             : version === 3
               ? signedPayloadV3(row)
-              : signedPayloadV4(row);
+              : version === 4
+                ? signedPayloadV4(row)
+                : signedPayloadV5(row);
 
       const ok = await verifyBytes(await fromBase64(signing), row.signature, payload);
       if (!ok) return { ...row, text: null, sender: 'unverified' };

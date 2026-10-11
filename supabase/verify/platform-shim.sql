@@ -165,6 +165,35 @@ LANGUAGE sql
 AS $$ SELECT 0::bigint; $$;
 
 -- ---------------------------------------------------------------------------
+-- realtime. 0063 puts policies on realtime.messages, which is what Realtime
+-- asks before it lets a client join a private topic, and they read the topic
+-- through realtime.topic(). The platform's version reads the same setting.
+-- ---------------------------------------------------------------------------
+CREATE SCHEMA IF NOT EXISTS realtime;
+
+CREATE TABLE IF NOT EXISTS realtime.messages (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  topic       text NOT NULL,
+  extension   text NOT NULL,
+  payload     jsonb,
+  event       text,
+  private     boolean DEFAULT false,
+  inserted_at timestamp NOT NULL DEFAULT now()
+);
+ALTER TABLE realtime.messages ENABLE ROW LEVEL SECURITY;
+
+CREATE OR REPLACE FUNCTION realtime.topic()
+RETURNS text
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT nullif(current_setting('realtime.topic', true), '')::text;
+$$;
+
+GRANT USAGE ON SCHEMA realtime TO anon, authenticated, service_role;
+GRANT SELECT, INSERT ON realtime.messages TO authenticated;
+
+-- ---------------------------------------------------------------------------
 -- Realtime publication. Several migrations add tables to it, each guarded by a
 -- pg_publication_tables check that needs the publication to exist to be false.
 -- ---------------------------------------------------------------------------

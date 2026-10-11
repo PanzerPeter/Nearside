@@ -166,8 +166,22 @@ Limits of that design, stated here so nobody has to find them:
   which row) are not signed. A server could show your own message back to you
   as the other person's, or re-pair rows within the same conversation. It could
   not invent or read a body. Group rows are signed over every column a client
-  renders, and the version they claim cannot be used to sign less
-  (`versionCovers` in `src/lib/crypto/seal.ts`).
+  renders except the server's own timestamps, and the version they claim
+  cannot be used to sign less (`versionCovers` in `src/lib/crypto/seal.ts`).
+  Since version 5 the signature also names the row's id and its group, so a
+  signed message cannot be inserted a second time as something said again.
+  `created_at` and `edited_at` are the server's clock and no client can sign
+  them: a server could still reorder group messages, or keep serving the
+  version of an edited one from before the edit.
+- **A group's key is accepted only from its creator.** Each member's copy of
+  the room key names who sealed it, and that name is the server's. It used to
+  be taken on trust, so a server could hand every member a key of its own,
+  sealed by an account nobody had seen, and read the group with every safety
+  number still matching. The app now opens a key only when the group's creator
+  sealed it and the creator is in the member list (`trustedKeySealer` in
+  `src/lib/rooms.ts`). Who the creator and the members are is still the
+  server's word, so this does not make the attack impossible: it makes a
+  server attempting it put a stranger in the group, in front of everyone in it.
 
 ## Supported versions
 

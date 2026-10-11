@@ -92,6 +92,25 @@ export async function publishedSigningKey(peerId: string): Promise<string | null
   return (data?.signing_key as string | null | undefined) ?? null;
 }
 
+/**
+ * The public key of somebody this account has sent a request to, while it is
+ * still unanswered.
+ *
+ * Their profile row is not ours to read until they accept (0063), but the
+ * request has to show them who it is from, and that means sealing our profile
+ * key to them. A code scanned off their screen already recorded the key; one
+ * typed in by hand did not. Recorded here like any first sighting, so the
+ * row they publish once they accept is compared against it.
+ */
+export async function requestedPeerKey(peerId: string): Promise<Uint8Array | null> {
+  const recorded = await recordedKey(peerId);
+  if (recorded) return recorded;
+  const { data, error } = await supabase.rpc('requested_public_key', { peer: peerId });
+  if (error || typeof data !== 'string' || !data) return null;
+  await recordPeerKey(peerId, data);
+  return fromBase64(data);
+}
+
 export function forgetPeerKey(peerId: string): void {
   cache.delete(peerId);
 }

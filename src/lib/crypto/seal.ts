@@ -146,6 +146,10 @@ export interface RoomSignedFields {
   /** Version 4 and later. The column is NOT NULL DEFAULT false, so absent and
    *  false are the same fact and must encode identically — see below. */
   forwarded?: boolean | null;
+  /** Version 5 and later. Always present on a row; absent only on a draft that
+   *  is not being signed under v5. */
+  id?: string | null;
+  room_id?: string | null;
 }
 
 /**
@@ -238,6 +242,38 @@ export function signedPayloadV4(f: RoomSignedFields): Uint8Array {
     f.reply_to_id,
     f.media_thumb_path,
     f.forwarded ? '1' : '',
+  ]);
+}
+
+/**
+ * What a room message's signature covers, version 5.
+ *
+ * Version 4 with the row's own `id` and `room_id` appended. Every earlier
+ * version signed what a message says and not which message it is, so a server
+ * could insert a second copy of somebody's signed row under a fresh id and
+ * every client drew it as a new message from them, at a new time — "yes" sent
+ * once, shown again under a later question. The id is generated on the
+ * sending device, so it can be signed before the insert; the room id is
+ * there because the id alone does not say where the row belongs.
+ *
+ * `created_at` and `edited_at` are the server's clock and cannot be signed by
+ * a client, so a server can still reorder rows or serve an older, still
+ * validly signed version of an edited one. SECURITY.md says so.
+ */
+export function signedPayloadV5(f: RoomSignedFields): Uint8Array {
+  return encodeFields([
+    f.nonce,
+    f.ciphertext,
+    f.media_path,
+    f.media_type,
+    f.media_duration_ms,
+    f.media_key_nonce,
+    f.media_key_ciphertext,
+    f.reply_to_id,
+    f.media_thumb_path,
+    f.forwarded ? '1' : '',
+    f.id,
+    f.room_id,
   ]);
 }
 

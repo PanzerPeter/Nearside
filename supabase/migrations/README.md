@@ -93,6 +93,7 @@ current state; this table is about what each file *does*.
 | 62 | `0060_sealed_room_titles.sql` | A group's name sealed under the room key; `set_room_title_sealed()`, the no-notice reseal `seal_room_title()`, and `rooms_for_me()` returning the sealed columns. **Not yet applied** |
 | 63 | `0061_sealed_profiles.sql` | Name, bio and picture sealed under a per-account profile key; `profile_keys` grants it to connected readers; signup no longer derives a name from the email; avatars bucket takes octet-stream. **Not yet applied; redeploy `send-push` and `call-ring` after it** |
 | 64 | `0062_write_integrity.sql` | `created_at` stamped on insert wherever a rate limit counts it; a sealed question cannot be re-sealed; a message's objects are deleted with it (sender's uploads only); a 1:1 participant deletes only their own uploads. **Not yet applied; apply before shipping 1.22.0, which stops deleting attachments from the client** |
+| 65 | `0063_ownership_and_topics.sql` | The expiry sweep and view-once opening delete only the sender's own uploads; `has_friendship()` answers only about the caller; a pending request shows its sender to the addressee and nothing the other way (`requested_public_key()` for the one key the sender needs); a new group's attribution columns stamped by the server; `sig_v` 5; presence, typing and group channels admitted by `may_join_topic()` on `realtime.messages`. **Not yet applied; apply before shipping 1.23.1, whose private channels are refused until it is** |
 
 ## The two files that do not follow the numbering
 
